@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { CalendarCheck, Loader2, AlertTriangle, Clock, Check } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { assinarRealtime } from '../lib/realtimeAgrupado';
 import { EmptyState } from '../components/ui';
 import { PONTO_HORARIOS } from '../lib/pontoHorarios';
 import type { UserProfile } from '../hooks/useUserProfile';
@@ -74,15 +75,16 @@ export function FrequenciaFiliaisCard({ competicaoId, profile, showToast }: {
 
   useEffect(() => { setLoading(true); carregar(); }, [carregar]);
 
-  // Ponto lançado durante a competição muda a nota; a tela acompanha.
+  // Ponto lançado durante a competição muda a nota; a tela acompanha. A janela
+  // do `assinarRealtime` importa aqui mais que em qualquer outra tela: a turma
+  // bate ponto junta, na entrada e na saída, e cada batida refazia a conta em
+  // todas as telas abertas.
   useEffect(() => {
-    const canal = supabase
-      .channel(`freq-filiais-${competicaoId}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'ponto_eletronico' }, () => carregar())
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'ponto_jornada' }, () => carregar())
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'ponto_calendario_excecoes' }, () => carregar())
-      .subscribe();
-    return () => { supabase.removeChannel(canal); };
+    return assinarRealtime({
+      nome: `freq-filiais-${competicaoId}`,
+      alvos: ['ponto_eletronico', 'ponto_jornada', 'ponto_calendario_excecoes'],
+      aoMudar: () => carregar(),
+    });
   }, [competicaoId, carregar]);
 
   // A jornada é a mesma em todas as linhas (uma por projeto).

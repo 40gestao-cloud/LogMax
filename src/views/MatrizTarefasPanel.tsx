@@ -7,6 +7,7 @@ import {
   EyeOff,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { assinarRealtime } from '../lib/realtimeAgrupado';
 import { LoadingSpinner, EmptyState } from '../components/ui';
 import { useConfirm } from '../contexts/ConfirmContext';
 import { todayBR } from '../lib/dates';
@@ -501,13 +502,15 @@ function PainelTipoTarefa({ tipoConfig, competicao, profile, podeAvaliar, ehAval
   // tarefa (que revela as notas seladas) ou um participante entrando pela
   // sessão do admin só apareciam com F5.
   useEffect(() => {
-    const canal = supabase
-      .channel(`matriz-tarefas-${competicao.id}-${tipoConfig.id}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'matriz_tarefas', filter: `competicao_id=eq.${competicao.id}` }, () => carregar(false))
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'matriz_tarefa_participantes' }, () => carregar(false))
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'avaliacoes_matriz', filter: `competicao_id=eq.${competicao.id}` }, () => carregar(false))
-      .subscribe();
-    return () => { supabase.removeChannel(canal); };
+    return assinarRealtime({
+      nome: `matriz-tarefas-${competicao.id}-${tipoConfig.id}`,
+      alvos: [
+        { tabela: 'matriz_tarefas', filtro: `competicao_id=eq.${competicao.id}` },
+        'matriz_tarefa_participantes',
+        { tabela: 'avaliacoes_matriz', filtro: `competicao_id=eq.${competicao.id}` },
+      ],
+      aoMudar: () => carregar(false),
+    });
   }, [competicao.id, tipoConfig.id, carregar]);
 
   const participantesPorTarefa = useMemo(() => {

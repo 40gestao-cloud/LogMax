@@ -4,6 +4,7 @@ import { Plus, X, Star, CheckCircle2, Lock, LockOpen, ClipboardList, Eye, Send, 
 import type { FilialOp } from '../components/FilialSelector';
 import { useFilial } from '../contexts/FilialContext';
 import { supabase } from '../lib/supabase';
+import { assinarRealtime } from '../lib/realtimeAgrupado';
 import { LoadingSpinner, EmptyState, NeuButtonAccent, StatusBadge, FilialBadge } from '../components/ui';
 import { PDISection } from '../components/PDISection';
 import { useFetchData } from '../hooks/useSupabaseData';
@@ -869,12 +870,15 @@ const AvaliacoesViewInner = ({ showToast, profile, filial }: { showToast: any; p
       setAlvosDemanda(new Set((ps ?? []).map((p: any) => p.user_profile_id).filter(Boolean)));
     };
     carregar();
-    const canal = supabase
-      .channel(`aval-alvos-demanda-${cicloId}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'ciclo_tarefas', filter: `ciclo_id=eq.${cicloId}` }, carregar)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'ciclo_tarefa_participantes' }, carregar)
-      .subscribe();
-    return () => { cancelou = true; supabase?.removeChannel(canal); };
+    const parar = assinarRealtime({
+      nome: `aval-alvos-demanda-${cicloId}`,
+      alvos: [
+        { tabela: 'ciclo_tarefas', filtro: `ciclo_id=eq.${cicloId}` },
+        'ciclo_tarefa_participantes',
+      ],
+      aoMudar: () => { carregar(); },
+    });
+    return () => { cancelou = true; parar(); };
   }, [cicloMatrizAberto?.id]);
 
   // Pendentes: quem o usuário deve avaliar. Em Matriz agrega todos os ciclos de filial abertos
@@ -2107,11 +2111,11 @@ function PodioFilialCard({ filial }: { filial: string }) {
   // é a Matriz (ou o cron das 03:10), nunca a tela da filial. `competicoes_matriz`
   // já está na publicação realtime (migr. 350).
   useEffect(() => {
-    const canal = supabase
-      ?.channel('podio-filial-competicao')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'competicoes_matriz' }, () => setTick(t => t + 1))
-      .subscribe();
-    return () => { if (canal) supabase?.removeChannel(canal); };
+    return assinarRealtime({
+      nome: 'podio-filial-competicao',
+      alvos: ['competicoes_matriz'],
+      aoMudar: () => setTick(t => t + 1),
+    });
   }, []);
 
   if (loading || !comp || !placar) return null;
@@ -2209,13 +2213,14 @@ function PodioPadraoCard({ filial }: { filial: string }) {
   useEffect(() => {
     const bump = () => setTick(t => t + 1);
     window.addEventListener('avaliacao-matriz:changed', bump);
-    const canal = supabase
-      ?.channel('podio-padrao-ciclos')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'ciclos_avaliacao' }, bump)
-      .subscribe();
+    const parar = assinarRealtime({
+      nome: 'podio-padrao-ciclos',
+      alvos: ['ciclos_avaliacao'],
+      aoMudar: bump,
+    });
     return () => {
       window.removeEventListener('avaliacao-matriz:changed', bump);
-      if (canal) supabase?.removeChannel(canal);
+      parar();
     };
   }, []);
 

@@ -22,6 +22,7 @@ import {
   ClipboardCheck, Check, RefreshCw, ChevronDown, Users, Clock, AlertCircle,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { assinarRealtime } from '../lib/realtimeAgrupado';
 import { LoadingSpinner, EmptyState } from '../components/ui';
 import { formatDataHoraBR } from '../lib/dates';
 import { atividadeAlcanca } from '../hooks/useAulaAtividades';
@@ -99,12 +100,11 @@ export const AulaPainelControle: React.FC<Props> = ({ showToast, recarregarEm })
   // acompanha. Silencioso: trocar a matriz pelo spinner a cada clique faria a
   // tela piscar na parede.
   useEffect(() => {
-    if (!supabase) return;
-    const canal = supabase
-      .channel('aula-painel-controle')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'aula_tarefas_realizadas' }, () => { carregar(true); })
-      .subscribe();
-    return () => { supabase!.removeChannel(canal); };
+    return assinarRealtime({
+      nome: 'aula-painel-controle',
+      alvos: ['aula_tarefas_realizadas'],
+      aoMudar: () => { carregar(true); },
+    });
   }, [carregar]);
 
   // A mais recente é a aula de agora; escolher à mão toda vez seria um clique

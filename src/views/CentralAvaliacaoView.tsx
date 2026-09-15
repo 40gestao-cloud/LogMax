@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Star, Trophy, Target, Megaphone } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { assinarRealtime } from '../lib/realtimeAgrupado';
 import { isConselheiro } from '../lib/rbac';
 import { useFilial } from '../contexts/FilialContext';
 import { LoadingSpinner } from '../components/ui';
@@ -55,14 +56,13 @@ export function CentralAvaliacaoView({ profile, showToast, initialTab = 'padrao'
     verificar();
 
     // Realtime: aba aparece/some sem precisar recarregar quando admin cria/encerra.
-    const canal = supabase
-      .channel('central-avaliacao-competicao')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'competicoes_matriz' }, () => {
-        verificar();
-      })
-      .subscribe();
+    const parar = assinarRealtime({
+      nome: 'central-avaliacao-competicao',
+      alvos: ['competicoes_matriz'],
+      aoMudar: () => { verificar(); },
+    });
 
-    return () => { cancelou = true; supabase!.removeChannel(canal); };
+    return () => { cancelou = true; parar(); };
   }, [podeCompeticao]);
 
   if (loading) return <div className="flex items-center justify-center py-24"><LoadingSpinner /></div>;

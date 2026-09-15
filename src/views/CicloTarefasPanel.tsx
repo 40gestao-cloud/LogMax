@@ -5,6 +5,7 @@ import {
   Lock, Unlock, Pencil, Trash2, ChevronDown, ChevronRight, EyeOff,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { assinarRealtime } from '../lib/realtimeAgrupado';
 import { LoadingSpinner, EmptyState, FilialBadge, NeuButtonAccent } from '../components/ui';
 import { useConfirm } from '../contexts/ConfirmContext';
 import { todayBR } from '../lib/dates';
@@ -148,14 +149,15 @@ export function CicloTarefasPanel({ ciclo, profile, showToast }: {
   useEffect(() => { carregar(); }, [carregar]);
 
   useEffect(() => {
-    if (!supabase) return;
-    const canal = supabase
-      .channel(`ciclo-tarefas-${ciclo.id}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'ciclo_tarefas', filter: `ciclo_id=eq.${ciclo.id}` }, () => carregar(false))
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'ciclo_tarefa_participantes' }, () => carregar(false))
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'ciclo_tarefa_avaliadores' }, () => carregar(false))
-      .subscribe();
-    return () => { supabase!.removeChannel(canal); };
+    return assinarRealtime({
+      nome: `ciclo-tarefas-${ciclo.id}`,
+      alvos: [
+        { tabela: 'ciclo_tarefas', filtro: `ciclo_id=eq.${ciclo.id}` },
+        'ciclo_tarefa_participantes',
+        'ciclo_tarefa_avaliadores',
+      ],
+      aoMudar: () => carregar(false),
+    });
   }, [ciclo.id, carregar]);
 
   const partPorTarefa = useMemo(() => {

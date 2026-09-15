@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { motion } from 'motion/react';
 import { Trophy, Loader2, FileDown, FileSpreadsheet, Presentation, BarChart3, ChevronDown, ChevronRight, Users, Building2, ArrowLeft, TrendingUp, TrendingDown, Minus, Lock } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { assinarRealtime } from '../lib/realtimeAgrupado';
 import { LoadingSpinner, EmptyState } from '../components/ui';
 import { isConselheiro } from '../lib/rbac';
 import type { UserProfile } from '../hooks/useUserProfile';
@@ -98,13 +99,12 @@ export function MatrizAvaliacoesView({ profile, showToast }: { profile: UserProf
     };
     carregar();
     // Realtime: se admin cria/encerra uma competição em outra sessão, este painel reflete sem F5.
-    const canal = supabase
-      .channel('matriz-avaliacoes-competicao')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'competicoes_matriz' }, () => {
-        carregar(false);
-      })
-      .subscribe();
-    return () => { cancelou = true; supabase.removeChannel(canal); };
+    const parar = assinarRealtime({
+      nome: 'matriz-avaliacoes-competicao',
+      alvos: ['competicoes_matriz'],
+      aoMudar: () => { carregar(false); },
+    });
+    return () => { cancelou = true; parar(); };
   }, []);
 
   if (!podeAcessar) {
@@ -543,19 +543,15 @@ function VisaoCicloPorParticipante({ competicao, ehAdmin }: { competicao: Compet
   // recriava o canal (com janela cega entre um e outro) só pra refazer a
   // consulta.
   useEffect(() => {
-    const canal = supabase
-      .channel(`visao-ciclo-participante-${competicao.id}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'avaliacoes_matriz', filter: `competicao_id=eq.${competicao.id}` }, () => {
-        setRefreshTick(t => t + 1);
-      })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'matriz_tarefa_participantes' }, () => {
-        setRefreshTick(t => t + 1);
-      })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'matriz_tarefas', filter: `competicao_id=eq.${competicao.id}` }, () => {
-        setRefreshTick(t => t + 1);
-      })
-      .subscribe();
-    return () => { supabase.removeChannel(canal); };
+    return assinarRealtime({
+      nome: `visao-ciclo-participante-${competicao.id}`,
+      alvos: [
+        { tabela: 'avaliacoes_matriz', filtro: `competicao_id=eq.${competicao.id}` },
+        'matriz_tarefa_participantes',
+        { tabela: 'matriz_tarefas', filtro: `competicao_id=eq.${competicao.id}` },
+      ],
+      aoMudar: () => setRefreshTick(t => t + 1),
+    });
   }, [competicao.id]);
 
   const porFilial = useMemo(() => {

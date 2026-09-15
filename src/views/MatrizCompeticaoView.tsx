@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Trophy, Calendar, Sparkles, Loader2, Plus, Award, ThumbsUp, ThumbsDown, MessageCircle, X, Crown, StopCircle, Pencil, Trash2, FileDown, Presentation, Star, Users, Unlock } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import { supabase } from '../lib/supabase';
+import { assinarRealtime } from '../lib/realtimeAgrupado';
 import { todayBR } from '../lib/dates';
 import { freshToken } from '../lib/authFetch';
 import { LoadingSpinner, EmptyState, NeuButtonAccent, FormField, FilialBadge } from '../components/ui';
@@ -415,26 +416,20 @@ export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToa
   // Debounce: o conselho avalia em rajada (um participante atrás do outro), e
   // `calcular_placar_competicao` varre ponto_eletronico + avaliações a cada
   // chamada. Sem isto, 20 notas seguidas viram 20 recálculos.
-  const refetchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
-    if (!supabase || !competicaoAtual) return;
+    if (!competicaoAtual) return;
     const id = competicaoAtual.id;
-    const agendar = () => {
-      if (refetchTimer.current !== null) clearTimeout(refetchTimer.current);
-      refetchTimer.current = setTimeout(() => {
-        refetchTimer.current = null;
-        carregarPlacar(competicaoAtual);
-      }, 500);
-    };
-    const canal = supabase
-      .channel(`placar-competicao-${id}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'avaliacoes_matriz', filter: `competicao_id=eq.${id}` }, agendar)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'matriz_tarefas', filter: `competicao_id=eq.${id}` }, agendar)
-      .subscribe();
-    return () => {
-      if (refetchTimer.current !== null) { clearTimeout(refetchTimer.current); refetchTimer.current = null; }
-      supabase!.removeChannel(canal);
-    };
+    // A janela do `assinarRealtime` substitui o debounce de 500ms daqui: numa
+    // rodada de avaliação a turma toda envia nota junto, e o placar da Matriz
+    // fica aberto no projetor de várias salas ao mesmo tempo.
+    return assinarRealtime({
+      nome: `placar-competicao-${id}`,
+      alvos: [
+        { tabela: 'avaliacoes_matriz', filtro: `competicao_id=eq.${id}` },
+        { tabela: 'matriz_tarefas', filtro: `competicao_id=eq.${id}` },
+      ],
+      aoMudar: () => { carregarPlacar(competicaoAtual); },
+    });
   }, [competicaoAtual, carregarPlacar]);
 
   // Quem já avaliou × média que deu por filial. Nota de admin aparece

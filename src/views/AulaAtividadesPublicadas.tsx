@@ -19,6 +19,7 @@ import {
   Download, FileText,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { assinarRealtime } from '../lib/realtimeAgrupado';
 import { LoadingSpinner, EmptyState, FilialBadge } from '../components/ui';
 import { useConfirm } from '../contexts/ConfirmContext';
 import { formatDataHoraBR } from '../lib/dates';
@@ -134,13 +135,11 @@ export const AulaAtividadesPublicadas: React.FC<Props> = ({ showToast, profile, 
   // como forçar do que ficar olhando para um número parado sem saber se é a
   // turma que não abriu ou o canal que morreu.
   useEffect(() => {
-    if (!supabase) return;
-    const canal = supabase
-      .channel('aula-atividades-acompanhamento')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'aula_atividades_ciencia' }, () => { carregar(true); })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'aula_atividades' }, () => { carregar(true); })
-      .subscribe();
-    return () => { supabase!.removeChannel(canal); };
+    return assinarRealtime({
+      nome: 'aula-atividades-acompanhamento',
+      alvos: ['aula_atividades_ciencia', 'aula_atividades'],
+      aoMudar: () => { carregar(true); },
+    });
   }, [carregar]);
 
   // O PDF é remontado do `roteiro` jsonb, igual ao do aluno — o professor baixa

@@ -20,6 +20,7 @@ import {
   History, Clock, Workflow, Pencil, Check, X, RefreshCw, ClipboardList, ClipboardCheck, Radio, Link2,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { assinarRealtime } from '../lib/realtimeAgrupado';
 import { LoadingSpinner, EmptyState } from '../components/ui';
 import { AULA_FLUXOS, etapaCoberta, etapasObrigatorias } from '../lib/aulaFluxos';
 import { AULA_MODULOS } from '../lib/aulaModulos';
@@ -131,12 +132,11 @@ export const AulaHistorico: React.FC<Props> = ({ showToast }) => {
   // A sessão em curso aparece e some com o interruptor, que é o mesmo gesto
   // que o professor dá na frente da turma.
   useEffect(() => {
-    if (!supabase) return;
-    const canal = supabase
-      .channel('aula-historico')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'aula_sessoes' }, () => { carregar(true); })
-      .subscribe();
-    return () => { supabase!.removeChannel(canal); };
+    return assinarRealtime({
+      nome: 'aula-historico',
+      alvos: ['aula_sessoes'],
+      aoMudar: () => { carregar(true); },
+    });
   }, [carregar]);
 
   // Quantos marcos caíram dentro de cada sessão. Uma passada por sessão sobre
