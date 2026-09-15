@@ -166,6 +166,10 @@ const BADGE_DEFS: BadgeDef[] = [
   // cada sessão para pintar bolinha em item invisível. Removidas 2026-07-28.
 ];
 
+const REALTIME_JANELA_MS = 4_000;
+const REALTIME_JITTER_MS = 6_000;
+const FOCO_INTERVALO_MIN_MS = 60_000;
+
 /**
  * Retorna `Record<viewId, count>` com a contagem de itens pendentes por
  * submódulo. Cada entry vira UM `head:true count` no Supabase — não traz
@@ -174,9 +178,12 @@ const BADGE_DEFS: BadgeDef[] = [
  * Disparos de query:
  *   - **Mount** / mudança de usuário: full fetch (todos os badges elegíveis).
  *   - **Realtime granular**: evento em UMA tabela → re-fetcha só os badges
- *     dessa tabela. Debounced em 500ms pra agrupar bursts.
+ *     dessa tabela. Janela de 4s + até 6s sorteados por máquina, pra agrupar
+ *     bursts e não pôr a turma inteira contando no mesmo instante.
  *   - **Window focus**: full fetch como fallback se realtime perdeu eventos
- *     durante sleep do device.
+ *     durante sleep do device. No máximo uma vez por minuto.
+ *   - Contagens idênticas no mesmo lote (duas portas pra mesma fila) viram
+ *     uma requisição só.
  *   - **Navegação (activeView)**: NÃO dispara fetch. Realtime + focus já
  *     cobrem; re-fetchar a cada clique de menu era overhead desnecessário.
  *
@@ -240,7 +247,26 @@ export function useSidebarBadges(
     }
     if (eligible.length === 0) return;
 
-    const results = await Promise.all(eligible.map(async def => {
+    // Duas portas para a mesma fila (aprovacoes_estoque em Requisições e em
+    // Estoque) faziam a MESMA contagem duas vezes por máquina. No pico de
+    // 15/09 aprovacoes_estoque foi a tabela mais contada da turma. A chave
+    // junta tudo o que muda a resposta; a promessa é compartilhada no lote.
+    const fAtivaLote = filialAtivaRef.current;
+    const emVoo = new Map<string, Promise<number>>();
+    const contar = (def: BadgeDef): Promise<number> => {
+      const chave = JSON.stringify([
+        def.table, def.select ?? '*', def.filters, def.isNull ?? [], def.neq ?? {}, def.inList ?? {},
+        def.filialColumn && fAtivaLote ? fAtivaLote : null,
+      ]);
+      let p = emVoo.get(chave);
+      if (!p) {
+        p = contarUm(def);
+        emVoo.set(chave, p);
+      }
+      return p;
+    };
+
+    const contarUm = async (def: BadgeDef): Promise<number> => {
       try {
         let q = supabase!
           .from(def.table)
@@ -262,21 +288,24 @@ export function useSidebarBadges(
         }
         // Filial-aware: em modo filial, só conta pendências da filial ativa.
         // Em modo Matriz (filialAtiva=null), vê tudo.
-        const fAtiva = filialAtivaRef.current;
-        if (def.filialColumn && fAtiva) {
-          q = q.eq(def.filialColumn, fAtiva);
+        if (def.filialColumn && fAtivaLote) {
+          q = q.eq(def.filialColumn, fAtivaLote);
         }
         const { count, error } = await q;
         if (error) {
           console.warn(`[useSidebarBadges] ${def.viewId} (${def.table}):`, error.message);
-          return [def.viewId, 0] as const;
+          return 0;
         }
-        return [def.viewId, count ?? 0] as const;
+        return count ?? 0;
       } catch (err: any) {
         console.warn(`[useSidebarBadges] ${def.viewId} (${def.table}) threw:`, err?.message ?? err);
-        return [def.viewId, 0] as const;
+        return 0;
       }
-    }));
+    };
+
+    const results = await Promise.all(
+      eligible.map(async def => [def.viewId, await contar(def)] as const),
+    );
 
     if (myId !== reqIdRef.current) return; // resposta obsoleta — ignora
 
@@ -316,20 +345,30 @@ export function useSidebarBadges(
         .flatMap(d => d.listenTables ?? [d.table]),
     ));
 
-    // Set acumula tabelas alteradas dentro da janela de debounce. Sem ele,
-    // 2 eventos em tabelas diferentes em < 500ms perderiam o primeiro.
+    // Set acumula tabelas alteradas dentro da janela. Sem ele, 2 eventos em
+    // tabelas diferentes na mesma janela perderiam o primeiro.
+    //
+    // Janela, não debounce. Com 500ms e reinício a cada evento, um único INSERT
+    // fazia TODAS as máquinas da turma contarem juntas meio segundo depois — a
+    // manada inteira no mesmo instante. Em 15/09 isso somou ~4 mil contagens em
+    // 10 minutos na logmax-contabilidade e a API respondeu 504 por seis minutos,
+    // login incluído. Agora o primeiro evento abre uma janela de 4s mais um
+    // atraso sorteado por máquina (até 6s); os eventos seguintes entram no mesmo
+    // lote sem empurrar o prazo — senão uma sala escrevendo sem parar nunca
+    // deixaria o badge atualizar. O número chega até 10s depois: é bolinha de
+    // menu, não saldo de caixa.
     const pendingTables = new Set<string>();
-    let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+    let janelaTimer: ReturnType<typeof setTimeout> | null = null;
 
     const triggerFor = (table: string) => {
       pendingTables.add(table);
-      if (debounceTimer !== null) clearTimeout(debounceTimer);
-      debounceTimer = setTimeout(() => {
-        debounceTimer = null;
+      if (janelaTimer !== null) return;
+      janelaTimer = setTimeout(() => {
+        janelaTimer = null;
         const batch = new Set(pendingTables);
         pendingTables.clear();
         fetchBadges(batch);
-      }, 500);
+      }, REALTIME_JANELA_MS + Math.random() * REALTIME_JITTER_MS);
     };
 
     const channels = tables.map(table => {
@@ -343,7 +382,7 @@ export function useSidebarBadges(
     });
 
     return () => {
-      if (debounceTimer !== null) clearTimeout(debounceTimer);
+      if (janelaTimer !== null) clearTimeout(janelaTimer);
       channels.forEach(c => supabase!.removeChannel(c));
     };
   }, [profile?.id, setoresKey, fetchBadges]);
@@ -351,10 +390,22 @@ export function useSidebarBadges(
   // Effect 3: fallback — re-fetcha quando o tab/window recupera foco. Cobre
   // o caso de realtime ter desconectado durante sleep do device (mobile/laptop
   // fechado), em que eventos foram perdidos e os badges ficaram stale.
+  //
+  // Com intervalo mínimo. `focus` e `visibilitychange` disparam os dois na
+  // mesma volta à aba, e o aluno alterna de janela o tempo todo (MaxPOS,
+  // planilha, MaxID) — cada Alt+Tab refazia a contagem completa. O fallback só
+  // precisa cobrir o realtime que caiu, e isso não muda em menos de um minuto.
+  const ultimoFocoRef = useRef(0);
   useEffect(() => {
-    const onFocus = () => { fetchBadges(); };
+    const refazer = () => {
+      const agora = Date.now();
+      if (agora - ultimoFocoRef.current < FOCO_INTERVALO_MIN_MS) return;
+      ultimoFocoRef.current = agora;
+      fetchBadges();
+    };
+    const onFocus = () => { refazer(); };
     const onVisibility = () => {
-      if (document.visibilityState === 'visible') fetchBadges();
+      if (document.visibilityState === 'visible') refazer();
     };
     window.addEventListener('focus', onFocus);
     document.addEventListener('visibilitychange', onVisibility);
