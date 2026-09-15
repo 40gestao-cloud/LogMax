@@ -32,6 +32,8 @@ const ESTATICOS = [
   'tests/precificacao.test.ts',
   'tests/produtoBusca.test.ts',
   'tests/realtimeAgrupado.test.ts',
+  'tests/reguaRealtime.test.ts',
+  'tests/reguaRls.test.ts',
   'tests/reservasTrabalho.test.ts',
   'tests/schemaDrift.test.ts',
   'tests/sectorAccess.test.ts',
