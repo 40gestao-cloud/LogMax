@@ -12,6 +12,7 @@ import { groupCadastrosParaSelect } from '../lib/cadastrosSelect';
 import { numeroCotacao, numeroPedido, numeroRequisicao } from '../lib/documentos';
 import { ehContratado } from '../lib/naturezaServico';
 import { supabase } from '../lib/supabase';
+import { acompanharReservas, RESERVA_COLUNAS, type ReservaLinha } from '../lib/reservasTrabalho';
 import { hasAnySetor, hasSetor, isConselheiro } from '../lib/rbac';
 import { podeVerModulo } from '../lib/sectorAccess';
 import type { UserProfile } from '../hooks/useUserProfile';
@@ -239,35 +240,34 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode, onNavigate }: { s
   const [reservasDaReq, setReservasDaReq] = useState<Record<string, { usuario_id: string; usuario_nome: string }>>({});
   useEffect(() => {
     if (!supabase || !form.requisicao_id) { setReservasDaReq({}); return; }
-    let cancelado = false;
-    const carregar = async () => {
-      // `expira_em > agora` é obrigatório: a reserva morre pelo relógio, e
-      // relógio não emite evento. Sem este filtro, quem fechou o notebook
-      // deixaria o fornecedor travado na tela dos colegas para sempre — e
-      // travado é mentira, porque o banco liberaria a reserva na hora.
-      const { data } = await supabase!.from('trabalho_reservas')
-        .select('chave, usuario_id, usuario_nome')
-        .eq('escopo', 'cotacao')
-        .like('chave', `${form.requisicao_id}:%`)
-        .gt('expira_em', new Date().toISOString());
-      if (cancelado) return;
-      const mapa: Record<string, { usuario_id: string; usuario_nome: string }> = {};
-      for (const r of data ?? []) {
-        const fornId = String(r.chave).slice(form.requisicao_id.length + 1);
-        mapa[fornId] = { usuario_id: r.usuario_id, usuario_nome: r.usuario_nome };
-      }
-      setReservasDaReq(mapa);
-    };
-    void carregar();
-    const canalId = typeof crypto !== 'undefined' && crypto.randomUUID
-      ? crypto.randomUUID() : Math.random().toString(36).slice(2);
-    const ch = supabase.channel(`cotacao_reservas_${canalId}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'trabalho_reservas' }, () => { void carregar(); })
-      .subscribe();
-    // Releitura periódica pela mesma razão do filtro acima: o cadeado do
-    // colega tem de sumir sozinho quando o prazo vence, sem F5.
-    const relogio = window.setInterval(() => { void carregar(); }, 30_000);
-    return () => { cancelado = true; window.clearInterval(relogio); ch.unsubscribe(); };
+    const prefixo = `${form.requisicao_id}:`;
+    // Evento, vencimento e janela de releitura moram em `acompanharReservas`:
+    // renovação de colega não relê, e o cadeado vencido some pela conferência
+    // local do prazo, sem F5.
+    const acompanhamento = acompanharReservas<ReservaLinha>({
+      nome: 'cotacao_reservas',
+      ler: async () => {
+        // `expira_em > agora` é obrigatório: a reserva morre pelo relógio, e
+        // relógio não emite evento. Sem este filtro, quem fechou o notebook
+        // deixaria o fornecedor travado na tela dos colegas para sempre — e
+        // travado é mentira, porque o banco liberaria a reserva na hora.
+        const { data, error } = await supabase!.from('trabalho_reservas')
+          .select(RESERVA_COLUNAS)
+          .eq('escopo', 'cotacao')
+          .like('chave', `${prefixo}%`)
+          .gt('expira_em', new Date().toISOString());
+        return error ? null : (data ?? []) as ReservaLinha[];
+      },
+      relevante: r => r.escopo === 'cotacao' && String(r.chave ?? '').startsWith(prefixo),
+      aoMudar: linhas => {
+        const mapa: Record<string, { usuario_id: string; usuario_nome: string }> = {};
+        for (const r of linhas) {
+          mapa[String(r.chave).slice(prefixo.length)] = { usuario_id: r.usuario_id, usuario_nome: r.usuario_nome };
+        }
+        setReservasDaReq(mapa);
+      },
+    });
+    return () => acompanhamento.parar();
   }, [form.requisicao_id]);
 
   // A requisição do formulário aberto. O `data_necessidade` dela é o alvo do

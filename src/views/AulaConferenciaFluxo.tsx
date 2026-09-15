@@ -25,6 +25,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { AlertTriangle, RefreshCw, ChevronDown, FileWarning, CheckCircle2, Sparkles, GitBranch } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { acompanharReservas, RESERVA_COLUNAS, type ReservaLinha } from '../lib/reservasTrabalho';
 import { authFetch } from '../lib/authFetch';
 import { LoadingSpinner } from '../components/ui';
 import { formatDataHoraBR } from '../lib/dates';
@@ -155,31 +156,29 @@ export const AulaConferenciaFluxo: React.FC<Props> = ({ showToast }) => {
 
   // Reservas de trabalho vivas (migr. 537) — o professor solta a que ficou
   // presa (notebook fechado antes do prazo de 3 minutos vencer) sem esperar.
-  type Reserva = { id: string; escopo: string; chave: string; filial: string; usuario_nome: string; criado_em: string };
+  type Reserva = ReservaLinha & { criado_em: string };
   const [reservas, setReservas] = useState<Reserva[]>([]);
-  const carregarReservas = useCallback(async () => {
-    if (!supabase) return;
-    // Só as vivas: reserva vencida já não trava ninguém, e listá-la daria ao
-    // professor um botão "soltar" para um problema que não existe mais.
-    const { data } = await supabase.from('trabalho_reservas')
-      .select('id, escopo, chave, filial, usuario_nome, criado_em')
-      .gt('expira_em', new Date().toISOString())
-      .order('criado_em', { ascending: false });
-    setReservas((data ?? []) as Reserva[]);
-  }, []);
   useEffect(() => {
     if (modo !== 'cadeia' || !supabase) return;
-    void carregarReservas();
-    const canalId = typeof crypto !== 'undefined' && crypto.randomUUID
-      ? crypto.randomUUID() : Math.random().toString(36).slice(2);
-    const ch = supabase.channel(`aula_conferencia_reservas_${canalId}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'trabalho_reservas' }, () => { void carregarReservas(); })
-      .subscribe();
-    // Vencimento não emite evento — sem esta releitura a lista continuaria
-    // mostrando reserva morta até o professor trocar de aba.
-    const relogio = window.setInterval(() => { void carregarReservas(); }, 30_000);
-    return () => { window.clearInterval(relogio); ch.unsubscribe(); };
-  }, [modo, carregarReservas]);
+    // O vencimento não emite evento: a conferência local do prazo em
+    // `acompanharReservas` tira a reserva morta da lista sem o professor
+    // trocar de aba.
+    const acompanhamento = acompanharReservas<Reserva>({
+      nome: 'aula_conferencia_reservas',
+      ler: async () => {
+        // Só as vivas: reserva vencida já não trava ninguém, e listá-la daria
+        // ao professor um botão "soltar" para um problema que não existe mais.
+        const { data, error } = await supabase!.from('trabalho_reservas')
+          .select(`${RESERVA_COLUNAS}, criado_em`)
+          .gt('expira_em', new Date().toISOString())
+          .order('criado_em', { ascending: false });
+        return error ? null : (data ?? []) as Reserva[];
+      },
+      relevante: () => true,
+      aoMudar: setReservas,
+    });
+    return () => acompanhamento.parar();
+  }, [modo]);
   const soltarReserva = useCallback(async (r: Reserva) => {
     if (!supabase) return;
     const { error } = await supabase.rpc('liberar_trabalho_forcado', { p_escopo: r.escopo, p_chave: r.chave });

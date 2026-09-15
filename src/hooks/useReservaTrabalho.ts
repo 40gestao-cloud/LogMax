@@ -12,6 +12,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { supabase } from '../lib/supabase';
+import { acompanharReservas, RESERVA_COLUNAS, type ReservaLinha } from '../lib/reservasTrabalho';
 import { useTravaAtualizacao } from './useTravaAtualizacao';
 
 type Dono = { usuario_id: string; usuario_nome: string; minha: boolean } | null;
@@ -52,23 +53,6 @@ export function useReservaTrabalho(
     setDono(linha ?? null);
   }, [escopo, chave, filial]);
 
-  // Leitura pura, para reagir ao que os colegas fizeram. Separada de
-  // `reservar` de propósito: aquela ESCREVE, e como o canal ouve a tabela
-  // inteira, reservar a cada evento alheio faria 45 alunos disparar 45
-  // escritas a cada movimento de qualquer um deles.
-  const lerDono = useCallback(async () => {
-    if (!supabase || !chave) return;
-    const { data } = await supabase.from('trabalho_reservas')
-      .select('usuario_id, usuario_nome')
-      .eq('escopo', escopo).eq('chave', chave)
-      .gt('expira_em', new Date().toISOString())
-      .maybeSingle();
-    setDono(data
-      ? { usuario_id: data.usuario_id, usuario_nome: data.usuario_nome,
-          minha: !!meuId.current && data.usuario_id === meuId.current }
-      : null);
-  }, [escopo, chave]);
-
   useEffect(() => {
     // Trocou de chave (ou zerou): solta a anterior antes de reservar a nova —
     // sem isso, trocar de fornecedor no meio do preenchimento deixaria a
@@ -79,38 +63,51 @@ export function useReservaTrabalho(
     if (!chave || !filial) { setDono(null); return; }
 
     chaveAtiva.current = chave;
-    void reservar();
+
+    // Leitura pura, para reagir ao que os colegas fizeram. Separada de
+    // `reservar` de propósito: aquela ESCREVE, e como o canal ouve a tabela
+    // inteira, reservar a cada evento alheio faria 45 alunos disparar 45
+    // escritas a cada movimento de qualquer um deles.
+    //
+    // SEM `filter: chave=eq.…` no canal de propósito: a chave do cadastro de
+    // produto é `desc:<descrição do item>`, texto livre com espaço e às vezes
+    // vírgula, e vírgula é separador na sintaxe de filtro do PostgREST — a
+    // inscrição morreria calada justamente nas chaves mais compridas. O filtro
+    // fica em `relevante`, no payload, antes de virar leitura.
+    const acompanhamento = acompanharReservas<ReservaLinha>({
+      nome: 'trabalho_reservas',
+      lerAoIniciar: false,
+      ler: async () => {
+        if (!supabase) return null;
+        const { data, error } = await supabase.from('trabalho_reservas')
+          .select(RESERVA_COLUNAS)
+          .eq('escopo', escopo).eq('chave', chave)
+          .gt('expira_em', new Date().toISOString())
+          .limit(1);
+        return error ? null : (data ?? []) as ReservaLinha[];
+      },
+      relevante: r => r.escopo === escopo && r.chave === chave,
+      aoMudar: linhas => {
+        const d = linhas[0];
+        setDono(d
+          ? { usuario_id: d.usuario_id, usuario_nome: d.usuario_nome,
+              minha: !!meuId.current && d.usuario_id === meuId.current }
+          : null);
+      },
+    });
+    // A leitura depois da reserva dá ao acompanhamento o `id` e o prazo da
+    // linha — sem eles a soltura forçada pelo professor (DELETE só traz o id)
+    // e o vencimento passariam despercebidos.
+    void reservar().then(() => acompanhamento.reler());
 
     const batimento = window.setInterval(() => {
       if (!supabase || !chaveAtiva.current) return;
       void supabase.rpc('renovar_trabalho', { p_escopo: escopo, p_chave: chaveAtiva.current });
     }, 60_000);
 
-    // Canal com nome único por instância — dois componentes montados ao
-    // mesmo tempo (ou StrictMode remontando) não competem pelo mesmo canal.
-    //
-    // SEM `filter: chave=eq.…` de propósito: a chave do cadastro de produto é
-    // `desc:<descrição do item>`, texto livre com espaço e às vezes vírgula, e
-    // vírgula é separador na sintaxe de filtro do PostgREST — a inscrição
-    // morreria calada justamente nas chaves mais compridas. Ouvir a tabela
-    // inteira e filtrar na leitura custa pouco: ela tem uma linha por pessoa
-    // trabalhando agora.
-    const canalId = typeof crypto !== 'undefined' && crypto.randomUUID
-      ? crypto.randomUUID() : Math.random().toString(36).slice(2);
-    const ch = supabase?.channel(`trabalho_reservas_${canalId}`)
-      .on('postgres_changes',
-        { event: '*', schema: 'public', table: 'trabalho_reservas' },
-        () => { void lerDono(); })
-      .subscribe();
-
-    // Vencimento não emite evento: sem esta releitura o cadeado do colega
-    // ficaria na tela depois de a reserva dele já ter morrido pelo relógio.
-    const relogio = window.setInterval(() => { void lerDono(); }, 30_000);
-
     return () => {
       window.clearInterval(batimento);
-      window.clearInterval(relogio);
-      ch?.unsubscribe();
+      acompanhamento.parar();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [escopo, chave, filial]);

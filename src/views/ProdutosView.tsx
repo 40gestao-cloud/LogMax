@@ -47,6 +47,7 @@ import { ATRIBUTOS_PRODUTO, rotuloVariante, atributosPadrao, rotuloAtributo, typ
 import { calcMarkup, calcMargem, precoPorMarkup, corDoMarkup, fmtPct, EXPLICA_MARKUP_MARGEM } from '../lib/precificacao';
 import { TIPOS_PRODUTO, TIPO_LABEL, TIPO_AJUDA, normalizarTipo, ehVendavel, temEstoque, type TipoProduto } from '../lib/tipoProduto';
 import { supabase } from '../lib/supabase';
+import { acompanharReservas, RESERVA_COLUNAS, type ReservaLinha } from '../lib/reservasTrabalho';
 import { useReservaTrabalho } from '../hooks/useReservaTrabalho';
 
 /**
@@ -615,32 +616,31 @@ const ProdutosViewInner = ({ showToast, filial, profile }: { showToast: any; fil
   const [reservasOrigem, setReservasOrigem] = useState<Record<string, { usuario_id: string; usuario_nome: string }>>({});
   useEffect(() => {
     if (!supabase || !filial) { setReservasOrigem({}); return; }
-    let cancelado = false;
-    const carregar = async () => {
-      // `expira_em > agora` é obrigatório: a reserva morre pelo relógio, e
-      // relógio não emite evento. Sem este filtro, quem fechou o notebook
-      // deixaria a origem travada na tela dos colegas para sempre — e travado
-      // é mentira, porque o banco liberaria a reserva na hora.
-      const { data } = await supabase!.from('trabalho_reservas')
-        .select('chave, usuario_id, usuario_nome')
-        .eq('escopo', 'cadastro_produto')
-        .eq('filial', filial)
-        .gt('expira_em', new Date().toISOString());
-      if (cancelado) return;
-      const mapa: Record<string, { usuario_id: string; usuario_nome: string }> = {};
-      for (const r of data ?? []) mapa[String(r.chave)] = { usuario_id: r.usuario_id, usuario_nome: r.usuario_nome };
-      setReservasOrigem(mapa);
-    };
-    void carregar();
-    const canalId = typeof crypto !== 'undefined' && crypto.randomUUID
-      ? crypto.randomUUID() : Math.random().toString(36).slice(2);
-    const ch = supabase.channel(`cadastro_produto_reservas_${canalId}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'trabalho_reservas' }, () => { void carregar(); })
-      .subscribe();
-    // Releitura periódica pela mesma razão do filtro acima: o cadeado do
-    // colega tem de sumir sozinho quando o prazo vence, sem F5.
-    const relogio = window.setInterval(() => { void carregar(); }, 30_000);
-    return () => { cancelado = true; window.clearInterval(relogio); ch.unsubscribe(); };
+    // Evento, vencimento e janela de releitura moram em `acompanharReservas`:
+    // renovação de colega não relê, e o cadeado vencido some pela conferência
+    // local do prazo, sem F5.
+    const acompanhamento = acompanharReservas<ReservaLinha>({
+      nome: 'cadastro_produto_reservas',
+      ler: async () => {
+        // `expira_em > agora` é obrigatório: a reserva morre pelo relógio, e
+        // relógio não emite evento. Sem este filtro, quem fechou o notebook
+        // deixaria a origem travada na tela dos colegas para sempre — e travado
+        // é mentira, porque o banco liberaria a reserva na hora.
+        const { data, error } = await supabase!.from('trabalho_reservas')
+          .select(RESERVA_COLUNAS)
+          .eq('escopo', 'cadastro_produto')
+          .eq('filial', filial)
+          .gt('expira_em', new Date().toISOString());
+        return error ? null : (data ?? []) as ReservaLinha[];
+      },
+      relevante: r => r.escopo === 'cadastro_produto' && r.filial === filial,
+      aoMudar: linhas => {
+        const mapa: Record<string, { usuario_id: string; usuario_nome: string }> = {};
+        for (const r of linhas) mapa[String(r.chave)] = { usuario_id: r.usuario_id, usuario_nome: r.usuario_nome };
+        setReservasOrigem(mapa);
+      },
+    });
+    return () => acompanhamento.parar();
   }, [filial]);
   const chaveDeOrigem = (valor: string) => valor.startsWith(REQ_PREFIX)
     ? `req:${valor.slice(REQ_PREFIX.length)}` : `desc:${valor.trim().toLowerCase()}`;
