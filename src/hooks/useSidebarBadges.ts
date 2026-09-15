@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { supabase, TABLES_WITH_ATIVO } from '../lib/supabase';
+import { freshToken } from '../lib/authFetch';
 import { SETOR_MODULES } from '../lib/sectorAccess';
 import { allSetores } from '../lib/rbac';
 import type { UserProfile } from './useUserProfile';
@@ -214,6 +215,10 @@ export function useSidebarBadges(
   // do Promise.all). Sem isto, fetchBadges antigo poderia sobrescrever o novo.
   const reqIdRef = useRef(0);
 
+  // Última contagem achou a sessão perdida. Decide se o retorno do login
+  // (Effect 4) precisa recontar.
+  const semSessaoRef = useRef(false);
+
   /**
    * Conta os badges elegíveis. Se `onlyTables` for passado, conta SÓ os
    * badges cujas tabelas estão no set (fetch parcial — usado pelo realtime).
@@ -226,6 +231,18 @@ export function useSidebarBadges(
       return;
     }
     const myId = ++reqIdRef.current;
+
+    // Sem sessão não conta. O `profile` fica em memória depois que o refresh
+    // do token falha — em 15/09, na logmax-contabilidade, as máquinas que
+    // perderam a sessão nos 504 do login seguiram contando como anon, e cada
+    // contagem voltava 401 (42501). Badge sem usuário não tem o que mostrar:
+    // zera e espera o login voltar (Effect 4 refaz no SIGNED_IN).
+    if (!(await freshToken())) {
+      semSessaoRef.current = true;
+      if (myId === reqIdRef.current) setBadges({});
+      return;
+    }
+    semSessaoRef.current = false;
 
     const allowedModulos = new Set(
       allSetores(p).flatMap(s => SETOR_MODULES[String(s)] ?? []),
@@ -413,6 +430,27 @@ export function useSidebarBadges(
       window.removeEventListener('focus', onFocus);
       document.removeEventListener('visibilitychange', onVisibility);
     };
+  }, [fetchBadges]);
+
+  // Effect 4: a sessão manda. Saiu (ou o refresh falhou de vez) → badges
+  // somem na hora, sem esperar a próxima contagem descobrir. Voltou depois de
+  // uma queda → conta de novo.
+  //
+  // Só recontar se a sessão TINHA caído: TOKEN_REFRESHED chega de hora em hora
+  // em toda máquina, e SIGNED_IN o supabase-js também emite quando a aba volta
+  // ao foco — recontar em todos furaria o intervalo mínimo do Effect 3.
+  useEffect(() => {
+    if (!supabase) return;
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(event => {
+      if (event === 'SIGNED_OUT') {
+        semSessaoRef.current = true;
+        ++reqIdRef.current;
+        setBadges({});
+      } else if ((event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') && semSessaoRef.current) {
+        void fetchBadges();
+      }
+    });
+    return () => subscription.unsubscribe();
   }, [fetchBadges]);
 
   return badges;
