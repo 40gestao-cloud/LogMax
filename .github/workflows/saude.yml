@@ -1,0 +1,47 @@
+name: saude-turmas
+
+# Vigia as 4 turmas durante a aula. Job vermelho = alguém precisa olhar.
+#
+# Em 15/09 a logmax-contabilidade ficou seis minutos respondendo 504 em tudo,
+# login incluído, e quem percebeu foi o professor no meio da aula. Nada estava
+# olhando. O cron mora aqui, e não na Vercel, porque o plano Hobby está em 12/12
+# funções.
+#
+# Horários (Acre, UTC−5), com margem nas pontas:
+#   manhã  07:40–11:20  →  12:40–16:20 UTC
+#   tarde  13:20–16:50  →  18:20–21:50 UTC
+#
+# O agendamento do GitHub é best-effort: em horário de pico a fila atrasa alguns
+# minutos. Para o que isto mede (aula travando), atraso de minutos é aceitável —
+# e a janela de 25 min que o script olha cobre a folga entre execuções.
+
+on:
+  schedule:
+    - cron: '*/15 12-16 * * 1-5'   # turma da manhã
+    - cron: '*/15 18-21 * * 1-5'   # turma da tarde
+  workflow_dispatch:
+    inputs:
+      minutos:
+        description: 'Janela a olhar, em minutos'
+        required: false
+        default: '20'
+
+jobs:
+  saude:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      # Sem `npm ci` de propósito: o script não tem dependência nenhuma (usa
+      # fetch nativo), e instalar o repo inteiro a cada 15 minutos seria minuto
+      # de runner gasto à toa.
+      - name: Medir as 4 turmas
+        run: node scripts/saude-turmas.mjs --minutos=${{ github.event.inputs.minutos || '25' }}
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}

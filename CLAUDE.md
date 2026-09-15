@@ -34,6 +34,7 @@ Endpoints Vercel (Node). Tudo precisa de service-role + checagem RBAC manual:
 
 ### Config e infra
 - **`package.json`** — scripts (`dev`, `build`, `lint` = `tsc --noEmit`, `test` = vitest, `drift` = checador de schema).
+- **`scripts/saude-turmas.mjs`** — `npm run saude` olha os logs da API das 4 turmas na última janela (padrão 20 min) e reprova com 504, 5xx acima de 1%, p95 acima de 2s ou 401 em série. Turma sem tráfego não reprova. Roda sozinho em `.github/workflows/saude.yml` nas janelas de aula (manhã 12:40–16:20 UTC, tarde 18:20–21:50 UTC); job vermelho é o aviso. Não virou cron da Vercel porque o Hobby está em 12/12 funções.
 - **`scripts/rls-check.mjs`** — `npm run rls:check` procura nos 4 bancos policy que recalcula a identidade a cada linha (o que derrubou a contabilidade em 15/09). O `drift` não pega: ele compara as turmas entre si, e policy crua nas quatro está "igual". Conserto = reaplicar as migr. 597/598, idempotentes. Rodar depois de migração que mexa em policy.
 - **`scripts/schema-drift.mjs`** — `npm run drift` compara o schema das 4 turmas (tabelas, colunas, views, funções, triggers, policies, RLS, grants, constraints, índices, realtime) e sai 1 se algo divergir. Rodar **antes** de escrever migração que dependa de estrutura existente e **depois** de aplicar nos 4. Precisa de `SUPABASE_ACCESS_TOKEN` no `.env`.
 - **`vite.config.ts`** — PWA, code-splitting, plugin React, visualizer.
