@@ -27,6 +27,7 @@ import { setViewAtual } from './lib/viewAtual';
 import { DesligamentoAviso } from './components/DesligamentoAviso';
 import { Toast, LoadingSpinner, PageLoadingFallback } from './components/ui';
 import { ErrorBoundary } from './components/ErrorBoundary';
+import { FaixaEtapaFluxo } from './components/FaixaEtapaFluxo';
 import { motion, AnimatePresence } from 'motion/react';
 import { ThemeProvider, useTheme } from './contexts/ThemeContext';
 import { FilialProvider, useFilial } from './contexts/FilialContext';
@@ -1797,6 +1798,10 @@ function LogMaxAppInner() {
           desde={blackout.iniciado_em}
           isento={profile?.role === 'admin' || profile?.role === 'ceo' || isConselheiro(profile)}
         />
+        {/* Onde esta tela está na cadeia (Requisição → Cotação → Pedido →
+            Recebimento). Lê a mesma lista do diagrama do Modo Aula. Só aparece
+            em tela que pertence a uma cadeia. */}
+        <FaixaEtapaFluxo activeView={activeView} onNavigate={navigate} />
         <div className="flex-1 min-h-0">
           <ErrorBoundary key={activeView}>
             <Suspense fallback={<PageLoadingFallback />}>
