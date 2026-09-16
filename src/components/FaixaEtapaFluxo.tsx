@@ -11,10 +11,22 @@
 // MESMA lista — se fosse uma segunda cópia, as duas divergiriam na primeira
 // mudança e a tela passaria a ensinar o que a projeção desmente.
 //
-// Fica fechada numa linha, porque o aluno passa o dia inteiro nestas telas e
-// um bloco de texto permanente vira mobília que ninguém lê. Aberta, mostra a
-// cadeia inteira numerada, quem executa cada etapa e o que ela exige de
-// cadastro — e cada etapa é clicável, que é a resposta prática ao "e agora?".
+// Nasce ABERTA e lembra quem a fechou.
+//
+// A primeira versão nascia fechada, pela razão certa: aberta ela ocupa uns
+// 200px, e nas telas de 768px de altura da turma isso é um terço da área de
+// trabalho — bloco de texto permanente vira mobília que ninguém lê. Só que
+// quem mais precisa da faixa é exatamente quem não clicaria para abri-la, e o
+// problema que ela resolve é de quem está vendo a cadeia pela primeira vez.
+//
+// Então o padrão serve a turma nova (o fluxo inteiro à vista no primeiro
+// acesso) e o `localStorage` serve a quem já pegou o jeito: fechou, fica
+// fechada naquela máquina. Só `'0'` fecha — ausência é primeira visita.
+//
+// Aberta, mostra a cadeia inteira numerada, quem executa cada etapa e o que
+// ela exige de cadastro; cada etapa é clicável, que é a resposta prática ao
+// "e agora?". Fechada, a linha única continua respondendo as duas perguntas
+// que mais travam: em que passo estou e qual é o próximo.
 
 import { useMemo, useState } from 'react';
 import { ChevronDown, ChevronRight, ArrowRight, Info } from 'lucide-react';
@@ -65,7 +77,9 @@ export function FaixaEtapaFluxo({ activeView, onNavigate }: {
   onNavigate: (view: string) => void;
 }) {
   const [aberta, setAberta] = useState<boolean>(() => {
-    try { return localStorage.getItem(CHAVE_ABERTA) === '1'; } catch { return false; }
+    // `catch` devolve true pelo mesmo motivo do default: em janela anônima ou
+    // com storage bloqueado, a turma continua vendo o fluxo.
+    try { return localStorage.getItem(CHAVE_ABERTA) !== '0'; } catch { return true; }
   });
 
   const posicoes = useMemo(() => posicoesDaView(activeView), [activeView]);
