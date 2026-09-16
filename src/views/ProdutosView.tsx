@@ -44,7 +44,7 @@ import {
   rotuloUnidade,
 } from '../lib/unidades';
 import { ATRIBUTOS_PRODUTO, rotuloVariante, atributosPadrao, rotuloAtributo, type AtributoDef } from '../lib/atributosProduto';
-import { calcMarkup, calcMargem, precoPorMarkup, corDoMarkup, fmtPct, EXPLICA_MARKUP_MARGEM } from '../lib/precificacao';
+import { calcMarkup, calcMargem, precoPorMarkup, corDoMarkup, fmtPct, vendaAbaixoDoCusto, EXPLICA_MARKUP_MARGEM } from '../lib/precificacao';
 import { TIPOS_PRODUTO, TIPO_LABEL, TIPO_AJUDA, normalizarTipo, ehVendavel, temEstoque, type TipoProduto } from '../lib/tipoProduto';
 import { supabase } from '../lib/supabase';
 import { acompanharReservas, RESERVA_COLUNAS, type ReservaLinha } from '../lib/reservasTrabalho';
@@ -79,6 +79,8 @@ const EMPTY_EXTRAS = {
   categoria_id:           '' as string,
   subcategoria_id:        '' as string,
   preco_custo:            '',
+  /** Exceção consciente ao bloqueio de preço abaixo do custo (migr. 601). */
+  venda_abaixo_custo:     false,
   estoque:                '',
   estoque_minimo:         '',
   unidade:                'UN' as string,
@@ -1196,6 +1198,9 @@ const ProdutosViewInner = ({ showToast, filial, profile }: { showToast: any; fil
       categoria_id:           item.categoria_id   ?? '',
       subcategoria_id:        item.subcategoria_id ?? '',
       preco_custo:            item.preco_custo != null && item.preco_custo !== '' ? formatBRL(Number(item.preco_custo)) : '',
+      // Exceção já registrada (migr. 601): reabrir o produto não pode cobrar de
+      // novo a decisão que alguém já tomou.
+      venda_abaixo_custo:     !!item.venda_abaixo_custo,
       // numeric chega com escala fixa ("12.500"); `Number()` derruba o padding e
       // a máscara devolve a vírgula. Sem isso o campo mostrava 12.500 e o
       // operador lia doze mil e quinhentos.
@@ -1478,6 +1483,19 @@ const ProdutosViewInner = ({ showToast, filial, profile }: { showToast: any; fil
     // Cobrar aqui só produzia nome escolhido no chute — o mesmo defeito que o
     // preço de custo obrigatório tinha.
     if (custoObrigatorio && !extras.preco_custo.trim()) ee.preco_custo = 'Obrigatório';
+    // Custo acima do preço de venda. Em 15/09 a turma da contabilidade lançou os
+    // dois campos trocados e o catálogo ficou vendendo com prejuízo por unidade —
+    // o markup já ficava vermelho na tela e ninguém leu, porque vermelho aqui
+    // também significa "markup baixo", que é normal. Bloquear é o que separa o
+    // erro de digitação da promoção-isca: quem quer mesmo vender abaixo do custo
+    // marca a caixa ao lado do preço, e a escolha fica gravada no produto.
+    if (vendavel && !extras.venda_abaixo_custo
+        && vendaAbaixoDoCusto(parseBRL(form.preco), parseBRL(extras.preco_custo))) {
+      const mk = calcMarkup(parseBRL(form.preco), parseBRL(extras.preco_custo));
+      ee.preco_custo = `Custo R$ ${formatBRL(parseBRL(extras.preco_custo))} acima do preço de venda `
+        + `R$ ${formatBRL(parseBRL(form.preco))} — markup ${fmtPct(mk)}, prejuízo por unidade. `
+        + 'Confira se os dois campos não estão trocados. Se a venda abaixo do custo for proposital, marque a caixa ao lado do preço de venda.';
+    }
     // Patrimônio não tem ponto de reposição — não se repõe um freezer.
     if (temEstoque(extras.tipo) && extras.estoque_minimo === '') {
       ee.estoque_minimo = 'Obrigatório';
@@ -1615,6 +1633,11 @@ const ProdutosViewInner = ({ showToast, filial, profile }: { showToast: any; fil
         // depois trocou o tipo para consumo, persistir o valor deixaria a resma
         // com etiqueta de venda. A coluna é NOT NULL DEFAULT 0.
         preco:                  vendavel ? parseBRL(form.preco) : 0,
+        // Só faz sentido em quem se vende, e só fica marcado enquanto o preço
+        // estiver mesmo abaixo do custo: corrigiu o preço, a exceção se apaga
+        // sozinha — senão ela sobrevive esquecida e libera o próximo erro.
+        venda_abaixo_custo:     vendavel && extras.venda_abaixo_custo
+                                 && vendaAbaixoDoCusto(parseBRL(form.preco), parseBRL(extras.preco_custo)),
         categoria:              extras.categoria,
         // preco_custo saiu daqui: vai para produtos_custo via salvarPrecoCusto().
         // numeric(15,3) desde a migr. 438 — mínimo de 2,5 KG é legítimo numa
@@ -1820,6 +1843,8 @@ const ProdutosViewInner = ({ showToast, filial, profile }: { showToast: any; fil
   };
 
   // Margem calculada ao vivo no formulário (parseBRL desempacota a máscara)
+  const precoAbaixoDoCusto = ehVendavel(extras.tipo)
+    && vendaAbaixoDoCusto(parseBRL(form.preco), parseBRL(extras.preco_custo));
   const markupAoVivo = calcMarkup(parseBRL(form.preco), parseBRL(extras.preco_custo));
   const margemAoVivo = calcMargem(parseBRL(form.preco), parseBRL(extras.preco_custo));
   const isFormOpen = showForm || !!editItem;
@@ -2765,6 +2790,23 @@ const ProdutosViewInner = ({ showToast, filial, profile }: { showToast: any; fil
                       <p className="text-[10px] text-gray-500 mt-1">
                         Vendido por <span className="font-bold text-accent">{extras.unidade}</span> — no PDV, o caixa digita a quantidade fracionária ao pesar.
                       </p>
+                    )}
+                    {/* A exceção só aparece quando o caso existe. Caixa sempre
+                        visível seria um convite a marcar e seguir — aqui ela
+                        surge junto com o problema, com o número na frente. */}
+                    {precoAbaixoDoCusto && (
+                      <label className="mt-2 flex items-start gap-2 text-[10px] leading-snug text-gray-400 cursor-pointer">
+                        <input type="checkbox" className="mt-0.5 accent-amber-500"
+                          checked={extras.venda_abaixo_custo}
+                          onChange={e => {
+                            setExtras(x => ({ ...x, venda_abaixo_custo: e.target.checked }));
+                            setExtrasErrors(ev => ({ ...ev, preco_custo: '' }));
+                          }} />
+                        <span>
+                          <span className="text-amber-400 font-bold">Venda abaixo do custo, de propósito</span> — promoção-isca ou
+                          queima de validade. Sem marcar, o cadastro não salva: custo maior que a venda costuma ser os dois campos trocados.
+                        </span>
+                      </label>
                     )}
                   </FormField>
                   )}

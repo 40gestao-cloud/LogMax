@@ -17,7 +17,33 @@ import {
   precoPorMarkup,
   corDoMarkup,
   fmtPct,
+  vendaAbaixoDoCusto,
 } from '../src/lib/precificacao';
+
+// 2026-09-15: a turma da contabilidade preencheu custo e venda trocados. O
+// markup ficava vermelho e ninguém leu — vermelho ali também é markup baixo,
+// que é normal. Virou bloqueio no cadastro (migr. 601), com exceção explícita
+// para promoção-isca.
+describe('preço de venda abaixo do custo', () => {
+  it('pega os campos trocados', () => {
+    expect(vendaAbaixoDoCusto(10, 25)).toBe(true);
+    expect(calcMarkup(10, 25)!).toBeLessThan(0);
+  });
+
+  it('preço acima ou igual ao custo passa', () => {
+    expect(vendaAbaixoDoCusto(25, 10)).toBe(false);
+    // Igual não é prejuízo: é markup zero, que a régua de cor já denuncia.
+    expect(vendaAbaixoDoCusto(10, 10)).toBe(false);
+  });
+
+  it('cadastro antecipado não vira prejuízo', () => {
+    // Pós-migr. 480 o produto nasce sem custo: ausência não é zero a pagar, e
+    // tratá-la como prejuízo devolveria o número inventado que a 480 tirou.
+    expect(vendaAbaixoDoCusto(25, 0)).toBe(false);
+    expect(vendaAbaixoDoCusto(0, 25)).toBe(false);
+    expect(vendaAbaixoDoCusto(0, 0)).toBe(false);
+  });
+});
 
 describe('o caso que abriu o assunto', () => {
   it('custo 10 e venda 20 são 100% de markup e 50% de margem', () => {

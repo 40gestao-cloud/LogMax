@@ -51,6 +51,25 @@ export const corDoMarkup = (markup: number | null): string =>
   : markup >= 10  ? 'text-yellow-400'
   :                 'text-red-400';
 
+/**
+ * Preço de venda abaixo do custo — o erro que a turma da contabilidade cometeu
+ * em 2026-09-15 lançando os dois campos trocados.
+ *
+ * Não é "quase certo": o markup nasce negativo, o catálogo mostra prejuízo por
+ * unidade e o CMV do DRE fica maior que a receita. Como é digitação em dois
+ * campos vizinhos, a chance de acontecer de novo é alta.
+ *
+ * Vender abaixo do custo EXISTE no varejo (promoção-isca, queima de validade),
+ * então isto não é uma regra de negócio proibida — é a diferença entre a pessoa
+ * ter decidido isso e ter trocado os campos de lugar. Quem decide marca a
+ * exceção; quem errou vê o bloqueio.
+ *
+ * Zero e branco não entram: cadastro antecipado nasce sem custo (migr. 480), e
+ * tratar ausência como prejuízo devolveria o número inventado que a 480 tirou.
+ */
+export const vendaAbaixoDoCusto = (venda: number, custo: number): boolean =>
+  custo > 0 && venda > 0 && venda < custo;
+
 export const fmtPct = (v: number | null, casas = 1): string =>
   v === null ? '—' : `${v.toFixed(casas).replace('.', ',')}%`;
 
