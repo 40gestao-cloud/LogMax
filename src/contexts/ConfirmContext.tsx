@@ -43,9 +43,14 @@ export function ConfirmProvider({ children }: { children: React.ReactNode }) {
   }, [state]);
 
   const answer = (v: boolean) => {
-    state?.resolve(v);
+    const atual = state;
+    atual?.resolve(v);
     setVisible(false);
-    setTimeout(() => setState(null), 180);
+    // Só fecha se ainda for a MESMA pergunta. Quem confirma em duas etapas
+    // abre a segunda logo após responder a primeira — o setState(null) cego
+    // apagava a segunda antes do clique, a promessa nunca resolvia e a ação
+    // (ex.: excluir competição em votação) morria em silêncio.
+    setTimeout(() => setState(s => (s === atual ? null : s)), 180);
   };
 
   return (
