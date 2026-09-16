@@ -28,7 +28,7 @@
 // abre, e a escolha fica gravada naquela máquina.
 
 import { useMemo, useState } from 'react';
-import { ChevronDown, ChevronRight, ArrowRight, Info } from 'lucide-react';
+import { ChevronDown, ChevronRight, ArrowLeft, ArrowRight, Info } from 'lucide-react';
 import { AULA_FLUXOS, type AulaEtapa, type AulaFluxo } from '../lib/aulaFluxos';
 
 type Estado = 'fechada' | 'resumo' | 'completa';
@@ -85,7 +85,19 @@ function resumirNomes(fluxos: AulaFluxo[]): string {
   return `${nomes.slice(0, 3).join(', ')} e mais ${nomes.length - 3}`;
 }
 
-/** Uma etapa na lista: número, título, quem executa — e leva até ela. */
+/**
+ * Uma etapa na lista: número, título, quem executa — e leva até ela.
+ *
+ * A primeira versão era um `button` com cara de texto corrido. O professor viu
+ * na aula o que isso produz: "o aluno nem sabe que pode clicar ali". Botão que
+ * não se anuncia é botão que não existe — e aqui ele é a resposta ao "e
+ * agora?", justamente o que a faixa veio resolver.
+ *
+ * Então a linha clicável usa o mesmo `neu-button` do resto do chrome, ganha
+ * seta de direção (para trás em Antes, para frente em Depois) e um "abrir" à
+ * direita. A etapa ATUAL fica com `neu-pressed` e cursor normal: ela não é
+ * destino, é onde a pessoa está — e fingir que é clicável ensinaria errado.
+ */
 function LinhaEtapa({ etapa, numero, atual, rotulo, activeView, onNavigate }: {
   etapa: AulaEtapa;
   numero: number;
@@ -95,21 +107,41 @@ function LinhaEtapa({ etapa, numero, atual, rotulo, activeView, onNavigate }: {
   onNavigate: (view: string) => void;
 }) {
   const podeIr = !!etapa.view && etapa.view !== activeView;
+  const Seta = rotulo === 'Antes' ? ArrowLeft : ArrowRight;
+
   return (
     <button type="button"
       onClick={() => { if (podeIr) onNavigate(etapa.view); }}
       disabled={!podeIr}
-      className={`w-full text-left flex items-start gap-2 rounded-lg px-2 py-1 text-[11px] leading-snug
-        ${atual ? 'neu-pressed text-accent' : 'text-gray-400 hover:text-gray-200'}`}>
-      <span className={`shrink-0 tabular-nums font-bold ${atual ? 'text-accent' : 'text-gray-600'}`}>
-        {rotulo ? `${rotulo}:` : `${numero}.`}
+      title={podeIr ? `Ir para ${etapa.titulo}` : undefined}
+      className={`w-full text-left flex items-start gap-2 rounded-lg px-2 py-1.5 text-[11px] leading-snug transition-colors
+        ${atual
+          ? 'neu-pressed text-accent cursor-default'
+          : podeIr
+            ? 'neu-button text-gray-300 hover:text-accent cursor-pointer'
+            : 'text-gray-500 cursor-default'}`}>
+      <span className={`shrink-0 flex items-center gap-1 font-bold ${atual ? 'text-accent' : 'text-gray-500'}`}>
+        {rotulo && !atual && <Seta size={11} />}
+        <span className="tabular-nums">{rotulo ? `${rotulo}:` : `${numero}.`}</span>
       </span>
-      <span className="min-w-0">
-        <span className={atual ? 'font-bold' : ''}>{etapa.titulo}</span>
+      <span className="min-w-0 flex-1">
+        <span className={atual ? 'font-bold' : 'font-semibold'}>{etapa.titulo}</span>
         {etapa.opcional && <span className="text-gray-600"> (opcional)</span>}
         <span className="text-gray-600"> — {etapa.quem}</span>
-        {atual && <span className="block text-gray-400 mt-0.5">{etapa.detalhe}</span>}
+        {atual && <span className="block text-gray-400 mt-0.5 font-normal">{etapa.detalhe}</span>}
       </span>
+      {/* O convite dito com todas as letras. Sem ele, a seta sozinha ainda se
+          lê como enfeite de lista. */}
+      {podeIr && (
+        <span className="shrink-0 self-center text-[10px] text-accent font-bold hidden sm:inline">
+          abrir ›
+        </span>
+      )}
+      {atual && (
+        <span className="shrink-0 self-center text-[10px] text-gray-600 hidden sm:inline">
+          você está aqui
+        </span>
+      )}
     </button>
   );
 }
@@ -216,15 +248,20 @@ export function FaixaEtapaFluxo({ activeView, onNavigate }: {
                     pedido sem produto no catálogo (migr. 480). Fica nos dois
                     níveis — é o que destrava quem está parado agora. */}
                 {pos.fluxo.prerequisitos.some(p => p.view) && (
-                  <p className="text-[10px] text-gray-500 flex flex-wrap items-center gap-x-2 gap-y-1">
-                    <Info size={11} className="text-gray-600" /> Antes de começar, precisa existir:
+                  <div className="text-[10px] text-gray-500 flex flex-wrap items-center gap-x-2 gap-y-1">
+                    <span className="flex items-center gap-1">
+                      <Info size={11} className="text-gray-600" /> Antes de começar, precisa existir:
+                    </span>
+                    {/* Chip, não texto colorido: estes levam para a tela que
+                        destrava quem está parado, e precisam parecer botão. */}
                     {pos.fluxo.prerequisitos.filter(p => p.view).map(p => (
                       <button key={p.id} type="button" onClick={() => onNavigate(p.view!)}
-                        className="text-accent hover:underline">
-                        {p.label} ({p.onde})
+                        title={`Ir para ${p.onde}`}
+                        className="neu-button rounded-lg px-2 py-0.5 text-accent hover:text-accent font-bold">
+                        {p.label} ›
                       </button>
                     ))}
-                  </p>
+                  </div>
                 )}
 
                 {/* Prosa longa só no nível completo: é ela que fazia a faixa
@@ -244,9 +281,14 @@ export function FaixaEtapaFluxo({ activeView, onNavigate }: {
                   <div key={f.id}>
                     {f.etapas[0]?.view ? (
                       <button type="button" onClick={() => onNavigate(f.etapas[0].view)}
-                        className="w-full text-left text-[11px] text-gray-400 hover:text-gray-200 rounded-lg px-2 py-1">
-                        <span className="text-gray-300">{f.nome.split('—')[0].trim()}</span>
-                        <span className="text-gray-600"> — começa em: {f.etapas[0].titulo}</span>
+                        title={`Ir para ${f.etapas[0].titulo}`}
+                        className="neu-button w-full text-left flex items-center gap-2 text-[11px] text-gray-300 hover:text-accent rounded-lg px-2 py-1.5 transition-colors">
+                        <ArrowRight size={11} className="shrink-0 text-gray-500" />
+                        <span className="min-w-0 flex-1">
+                          <span className="font-semibold">{f.nome.split('—')[0].trim()}</span>
+                          <span className="text-gray-600"> — começa em: {f.etapas[0].titulo}</span>
+                        </span>
+                        <span className="shrink-0 text-[10px] text-accent font-bold hidden sm:inline">abrir ›</span>
                       </button>
                     ) : (
                       <p className="text-[11px] text-gray-500 px-2 py-1">{f.nome}</p>
