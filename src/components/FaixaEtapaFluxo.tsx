@@ -170,11 +170,22 @@ export function FaixaEtapaFluxo({ activeView, onNavigate }: {
   const posicoes = useMemo(() => posicoesDaView(activeView), [activeView]);
   const apoios   = useMemo(() => fluxosQueSeApoiamEm(activeView), [activeView]);
 
+  // Qual cadeia está aberta quando a tela pertence a mais de uma. Requisições
+  // abre compra E material: expandir as duas levava o resumo a 374px (47% da
+  // tela). A segunda vira uma linha — e continua ali, porque o contraste entre
+  // "o que já existe sai do Estoque" e "o que falta vai para Compras" é metade
+  // da aula. Um clique troca o foco.
+  const [foco, setFoco] = useState<string | null>(null);
+
   // Tela fora de qualquer cadeia não ganha faixa: a maior parte do ERP não é
   // fluxo, e uma faixa que aparece em tudo deixa de significar alguma coisa.
   if (posicoes.length === 0 && apoios.length === 0) return null;
 
-  const principal = posicoes[0] ?? null;
+  // A cadeia em foco manda também na linha fechada: quem trocou para "material"
+  // não pode ver "Compra · etapa 1 de 9" no cabeçalho.
+  const focada = posicoes.find(p => p.fluxo.id === foco) ?? posicoes[0] ?? null;
+  const outras = posicoes.filter(p => p.fluxo.id !== focada?.fluxo.id);
+  const principal = focada;
 
   return (
     <div className="px-3 sm:px-4 pt-3">
@@ -208,7 +219,7 @@ export function FaixaEtapaFluxo({ activeView, onNavigate }: {
 
         {aberta && (
           <div className="px-3 pb-3 pt-1 border-t border-white/5 space-y-3">
-            {posicoes.map(pos => (
+            {(estado === 'completa' ? posicoes : [focada!].filter(Boolean)).map(pos => (
               <div key={pos.fluxo.id} className="space-y-2">
                 {/* No resumo o nome da cadeia já está na linha de cima, a um
                     palmo daqui — repetido, só ocupava altura. Volta no nível
@@ -270,6 +281,21 @@ export function FaixaEtapaFluxo({ activeView, onNavigate }: {
                   <p className="text-[10px] text-gray-500 leading-snug">{pos.fluxo.notaApoio}</p>
                 )}
               </div>
+            ))}
+
+            {/* A outra cadeia que passa por esta tela, em uma linha. Some no
+                nível completo, onde as duas aparecem inteiras. */}
+            {estado === 'resumo' && outras.map(pos => (
+              <button key={pos.fluxo.id} type="button" onClick={() => setFoco(pos.fluxo.id)}
+                title={`Ver ${pos.fluxo.nome}`}
+                className="neu-button w-full text-left flex items-center gap-2 rounded-lg px-2 py-1.5 text-[11px] text-gray-300 hover:text-accent transition-colors">
+                <ArrowRight size={11} className="shrink-0 text-gray-500" />
+                <span className="min-w-0 flex-1">
+                  Esta tela também é a etapa {pos.indice} de {pos.total} de{' '}
+                  <span className="font-semibold">{pos.fluxo.nome.split('—')[0].trim()}</span>
+                </span>
+                <span className="shrink-0 text-[10px] text-accent font-bold hidden sm:inline">ver ›</span>
+              </button>
             ))}
 
             {/* Tela de apoio (Cadastros). No resumo é uma linha por cadeia com
