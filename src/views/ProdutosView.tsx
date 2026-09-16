@@ -1085,8 +1085,18 @@ const ProdutosViewInner = ({ showToast, filial, profile }: { showToast: any; fil
       d.ean ?? '', d.status ?? '',
     ];
   });
-  // PDF combinado: tabela com todos os campos (igual ao Excel) + páginas de
-  // etiquetas EAN-13 escaneáveis ao final, uma para cada produto com EAN válido.
+  // PDF é a lista de preços: só o que se lê no papel. As 15 colunas do Excel
+  // espremidas em A4 retrato viravam ruído, e as etiquetas têm botão próprio.
+  const pdfCols = ['Nome', 'Categoria', 'P. Custo', 'P. Venda', 'Markup %'];
+  const buildPdfRows = (rows: any[]) => rows.map((d: any) => {
+    const mk = calcMarkup(parseNum(d.preco), parseNum(d.preco_custo));
+    return [
+      d.nome ?? '', d.categoria ?? '',
+      d.preco_custo ? fmtBRL(parseNum(d.preco_custo)) : '',
+      d.preco ? fmtBRL(parseNum(d.preco)) : '',
+      mk !== null ? fmtPct(mk) : '',
+    ];
+  });
   const handleExportPDF = async () => {
     try {
       const todos = await fetchAllForExport();
@@ -1103,25 +1113,17 @@ const ProdutosViewInner = ({ showToast, filial, profile }: { showToast: any; fil
 
       autoTable(doc, {
         startY: 40,
-        head: [exportCols],
-        body: buildExportRows(todos),
+        head: [pdfCols],
+        body: buildPdfRows(todos),
         theme: 'grid',
         headStyles: { fillColor: BLACK, textColor: GOLD, fontStyle: 'bold', fontSize: 9 },
-        bodyStyles: { textColor: GRAY_INK, fontSize: 8 },
+        bodyStyles: { textColor: GRAY_INK, fontSize: 9 },
         alternateRowStyles: { fillColor: GOLD_TINT },
-      });
-
-      const etiquetaInput = todos.map((p: any) => ({
-        nome:     p.nome,
-        ean:      p.ean,
-        codigo:   p.codigo,
-        preco:    p.preco != null ? parseNum(p.preco) : null,
-        // Sem tamanho/cor, as 6 etiquetas de uma grade saem iguais (migr. 445).
-        variante: rotuloVariante(p),
-      }));
-      drawEtiquetasGridOnDoc(doc, etiquetaInput, {
-        titulo: 'Etiquetas EAN-13 — Produtos',
-        startOnNewPage: true,
+        columnStyles: {
+          2: { halign: 'right' },
+          3: { halign: 'right' },
+          4: { halign: 'right' },
+        },
       });
 
       doc.save('logmax-produtos.pdf');
