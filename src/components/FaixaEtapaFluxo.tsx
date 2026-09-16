@@ -11,28 +11,29 @@
 // MESMA lista — se fosse uma segunda cópia, as duas divergiriam na primeira
 // mudança e a tela passaria a ensinar o que a projeção desmente.
 //
-// Nasce ABERTA e lembra quem a fechou.
+// ── Três estados, e por quê ────────────────────────────────────────────────
 //
-// A primeira versão nascia fechada, pela razão certa: aberta ela ocupa uns
-// 200px, e nas telas de 768px de altura da turma isso é um terço da área de
-// trabalho — bloco de texto permanente vira mobília que ninguém lê. Só que
-// quem mais precisa da faixa é exatamente quem não clicaria para abri-la, e o
-// problema que ela resolve é de quem está vendo a cadeia pela primeira vez.
+// Medido no dev com a janela em 1280x800, que é o tamanho das máquinas da
+// turma:
+//   fechada   34px  (4% da tela)  — só a linha: etapa, quem faz, próxima
+//   resumo   ~130px (16%)         — anterior · atual · próxima + pré-requisitos
+//   completa  404px (51%)         — a cadeia inteira e a nota de apoio
 //
-// Então o padrão serve a turma nova (o fluxo inteiro à vista no primeiro
-// acesso) e o `localStorage` serve a quem já pegou o jeito: fechou, fica
-// fechada naquela máquina. Só `'0'` fecha — ausência é primeira visita.
+// A versão completa como padrão empurrava o título da tela para 565px: meio
+// ecrã de moldura permanente, que é exatamente a mobília que ninguém lê.
 //
-// Aberta, mostra a cadeia inteira numerada, quem executa cada etapa e o que
-// ela exige de cadastro; cada etapa é clicável, que é a resposta prática ao
-// "e agora?". Fechada, a linha única continua respondendo as duas perguntas
-// que mais travam: em que passo estou e qual é o próximo.
+// O padrão é FECHADA, decidido com esses números na mão: em 34px a linha única
+// já responde "em que etapa estou, quem faz, qual é a próxima" — que é o que
+// trava a turma — sem comer a tela de trabalho o dia inteiro. Quem quiser mais
+// abre, e a escolha fica gravada naquela máquina.
 
 import { useMemo, useState } from 'react';
 import { ChevronDown, ChevronRight, ArrowRight, Info } from 'lucide-react';
 import { AULA_FLUXOS, type AulaEtapa, type AulaFluxo } from '../lib/aulaFluxos';
 
-const CHAVE_ABERTA = 'logmax:faixa-fluxo-aberta';
+type Estado = 'fechada' | 'resumo' | 'completa';
+
+const CHAVE_ESTADO = 'logmax:faixa-fluxo';
 
 type Posicao = {
   fluxo: AulaFluxo;
@@ -72,15 +73,67 @@ export function fluxosQueSeApoiamEm(view: string): AulaFluxo[] {
     || f.prerequisitos.some(p => p.view === view));
 }
 
+/**
+ * Nomes de cadeia numa frase que se lê. Cadastros é apoio de CINCO fluxos, e
+ * juntá-los com "e" produzia "Compra e Material do almoxarifado e Venda no PDV
+ * e Orçamento vira pedido e sai da loja e Promoção aprovada chega ao PDV" —
+ * uma linha que ninguém termina de ler.
+ */
+function resumirNomes(fluxos: AulaFluxo[]): string {
+  const nomes = fluxos.map(f => f.nome.split('—')[0].trim());
+  if (nomes.length <= 3) return nomes.join(', ');
+  return `${nomes.slice(0, 3).join(', ')} e mais ${nomes.length - 3}`;
+}
+
+/** Uma etapa na lista: número, título, quem executa — e leva até ela. */
+function LinhaEtapa({ etapa, numero, atual, rotulo, activeView, onNavigate }: {
+  etapa: AulaEtapa;
+  numero: number;
+  atual?: boolean;
+  rotulo?: string;
+  activeView: string;
+  onNavigate: (view: string) => void;
+}) {
+  const podeIr = !!etapa.view && etapa.view !== activeView;
+  return (
+    <button type="button"
+      onClick={() => { if (podeIr) onNavigate(etapa.view); }}
+      disabled={!podeIr}
+      className={`w-full text-left flex items-start gap-2 rounded-lg px-2 py-1 text-[11px] leading-snug
+        ${atual ? 'neu-pressed text-accent' : 'text-gray-400 hover:text-gray-200'}`}>
+      <span className={`shrink-0 tabular-nums font-bold ${atual ? 'text-accent' : 'text-gray-600'}`}>
+        {rotulo ? `${rotulo}:` : `${numero}.`}
+      </span>
+      <span className="min-w-0">
+        <span className={atual ? 'font-bold' : ''}>{etapa.titulo}</span>
+        {etapa.opcional && <span className="text-gray-600"> (opcional)</span>}
+        <span className="text-gray-600"> — {etapa.quem}</span>
+        {atual && <span className="block text-gray-400 mt-0.5">{etapa.detalhe}</span>}
+      </span>
+    </button>
+  );
+}
+
 export function FaixaEtapaFluxo({ activeView, onNavigate }: {
   activeView: string;
   onNavigate: (view: string) => void;
 }) {
-  const [aberta, setAberta] = useState<boolean>(() => {
-    // `catch` devolve true pelo mesmo motivo do default: em janela anônima ou
-    // com storage bloqueado, a turma continua vendo o fluxo.
-    try { return localStorage.getItem(CHAVE_ABERTA) !== '0'; } catch { return true; }
+  const [estado, setEstado] = useState<Estado>(() => {
+    // Ausência = primeira visita: começa FECHADA (decisão do professor depois
+    // de ver a medição). Fechada a faixa não é muda — a linha única já diz a
+    // etapa, quem executa e qual é a próxima, que são as perguntas que travam
+    // a turma; o resumo e a cadeia inteira ficam a um e a dois cliques.
+    try {
+      const v = localStorage.getItem(CHAVE_ESTADO);
+      return v === 'resumo' || v === 'completa' ? v : 'fechada';
+    } catch { return 'fechada'; }
   });
+  const aberta = estado !== 'fechada';
+
+  const gravar = (novo: Estado) => {
+    setEstado(novo);
+    try { localStorage.setItem(CHAVE_ESTADO, novo); } catch { /* modo privado */ }
+  };
 
   const posicoes = useMemo(() => posicoesDaView(activeView), [activeView]);
   const apoios   = useMemo(() => fluxosQueSeApoiamEm(activeView), [activeView]);
@@ -89,19 +142,12 @@ export function FaixaEtapaFluxo({ activeView, onNavigate }: {
   // fluxo, e uma faixa que aparece em tudo deixa de significar alguma coisa.
   if (posicoes.length === 0 && apoios.length === 0) return null;
 
-  const alternar = () => {
-    setAberta(v => {
-      try { localStorage.setItem(CHAVE_ABERTA, v ? '0' : '1'); } catch { /* modo privado */ }
-      return !v;
-    });
-  };
-
   const principal = posicoes[0] ?? null;
 
   return (
     <div className="px-3 sm:px-4 pt-3">
       <div className="neu-flat rounded-2xl border border-white/5 overflow-hidden">
-        <button type="button" onClick={alternar}
+        <button type="button" onClick={() => gravar(aberta ? 'fechada' : 'resumo')}
           className="w-full flex items-center gap-2 px-3 py-2 text-left">
           {aberta ? <ChevronDown size={14} className="text-accent shrink-0" />
                   : <ChevronRight size={14} className="text-accent shrink-0" />}
@@ -116,8 +162,8 @@ export function FaixaEtapaFluxo({ activeView, onNavigate }: {
             </span>
           ) : (
             <span className="flex-1 min-w-0 text-[11px] sm:text-xs text-gray-300 truncate">
-              <span className="text-accent font-bold">Apoio da cadeia</span>
-              {' — '}esta tela prepara o que {apoios.map(f => f.nome.split('—')[0].trim()).join(' e ')} consome.
+              <span className="text-accent font-bold">Apoio das cadeias</span>
+              {' — '}o que se cadastra aqui é o que {resumirNomes(apoios)} consomem.
             </span>
           )}
 
@@ -132,40 +178,43 @@ export function FaixaEtapaFluxo({ activeView, onNavigate }: {
           <div className="px-3 pb-3 pt-1 border-t border-white/5 space-y-3">
             {posicoes.map(pos => (
               <div key={pos.fluxo.id} className="space-y-2">
-                <p className="text-[10px] uppercase tracking-widest font-bold text-gray-600">
-                  {pos.fluxo.nome}
-                </p>
+                {/* No resumo o nome da cadeia já está na linha de cima, a um
+                    palmo daqui — repetido, só ocupava altura. Volta no nível
+                    completo, onde separa uma cadeia da outra. */}
+                {(estado === 'completa' || posicoes.length > 1) && (
+                  <p className="text-[10px] uppercase tracking-widest font-bold text-gray-600">
+                    {pos.fluxo.nome}
+                  </p>
+                )}
 
-                <ol className="space-y-1">
-                  {pos.fluxo.etapas.map((e, i) => {
-                    const atual = e.view === activeView;
-                    return (
+                {estado === 'resumo' ? (
+                  <div className="space-y-1">
+                    {pos.anterior && (
+                      <LinhaEtapa etapa={pos.anterior} numero={pos.indice - 1} rotulo="Antes"
+                        activeView={activeView} onNavigate={onNavigate} />
+                    )}
+                    <LinhaEtapa etapa={pos.etapa} numero={pos.indice} rotulo="Agora" atual
+                      activeView={activeView} onNavigate={onNavigate} />
+                    {pos.proxima && (
+                      <LinhaEtapa etapa={pos.proxima} numero={pos.indice + 1} rotulo="Depois"
+                        activeView={activeView} onNavigate={onNavigate} />
+                    )}
+                  </div>
+                ) : (
+                  <ol className="space-y-1">
+                    {pos.fluxo.etapas.map((e, i) => (
                       <li key={`${pos.fluxo.id}-${e.view}-${i}`}>
-                        <button type="button"
-                          onClick={() => { if (e.view && !atual) onNavigate(e.view); }}
-                          disabled={!e.view || atual}
-                          className={`w-full text-left flex items-start gap-2 rounded-lg px-2 py-1 text-[11px] leading-snug
-                            ${atual ? 'neu-pressed text-accent' : 'text-gray-400 hover:text-gray-200'}`}>
-                          <span className={`shrink-0 tabular-nums font-bold ${atual ? 'text-accent' : 'text-gray-600'}`}>
-                            {i + 1}.
-                          </span>
-                          <span className="min-w-0">
-                            <span className={atual ? 'font-bold' : ''}>{e.titulo}</span>
-                            {e.opcional && <span className="text-gray-600"> (opcional)</span>}
-                            <span className="text-gray-600"> — {e.quem}</span>
-                            {atual && (
-                              <span className="block text-gray-400 mt-0.5">{e.detalhe}</span>
-                            )}
-                          </span>
-                        </button>
+                        <LinhaEtapa etapa={e} numero={i + 1} atual={e.view === activeView}
+                          activeView={activeView} onNavigate={onNavigate} />
                       </li>
-                    );
-                  })}
-                </ol>
+                    ))}
+                  </ol>
+                )}
 
                 {/* O que a cadeia exige de cadastro. É aqui que mora a dúvida
                     que mais trava a turma: cotação sem fornecedor cadastrado e
-                    pedido sem produto no catálogo (migr. 480). */}
+                    pedido sem produto no catálogo (migr. 480). Fica nos dois
+                    níveis — é o que destrava quem está parado agora. */}
                 {pos.fluxo.prerequisitos.some(p => p.view) && (
                   <p className="text-[10px] text-gray-500 flex flex-wrap items-center gap-x-2 gap-y-1">
                     <Info size={11} className="text-gray-600" /> Antes de começar, precisa existir:
@@ -178,28 +227,52 @@ export function FaixaEtapaFluxo({ activeView, onNavigate }: {
                   </p>
                 )}
 
-                {pos.fluxo.notaApoio && (
+                {/* Prosa longa só no nível completo: é ela que fazia a faixa
+                    ocupar meia tela. */}
+                {estado === 'completa' && pos.fluxo.notaApoio && (
                   <p className="text-[10px] text-gray-500 leading-snug">{pos.fluxo.notaApoio}</p>
                 )}
               </div>
             ))}
 
-            {posicoes.length === 0 && apoios.map(f => (
-              <div key={f.id} className="space-y-1">
-                <p className="text-[10px] uppercase tracking-widest font-bold text-gray-600">{f.nome}</p>
-                <p className="text-[11px] text-gray-400 leading-snug">{f.notaApoio ?? f.resumo}</p>
-                {/* Etapa pode não ter tela própria (`view` vazio) — aí o texto
-                    fica, o botão não: link morto ensina a desconfiar da faixa. */}
-                {f.etapas[0]?.view ? (
-                  <button type="button" onClick={() => onNavigate(f.etapas[0].view)}
-                    className="text-[10px] text-accent hover:underline">
-                    Começa em: {f.etapas[0].titulo}
-                  </button>
-                ) : (
-                  <p className="text-[10px] text-gray-500">Começa em: {f.etapas[0]?.titulo}</p>
-                )}
+            {/* Tela de apoio (Cadastros). No resumo é uma linha por cadeia com
+                o ponto de partida — a prosa de cinco fluxos levava a faixa a
+                470px aqui, mais alta que na própria cadeia. */}
+            {posicoes.length === 0 && (
+              <div className="space-y-1">
+                {apoios.map(f => (
+                  <div key={f.id}>
+                    {f.etapas[0]?.view ? (
+                      <button type="button" onClick={() => onNavigate(f.etapas[0].view)}
+                        className="w-full text-left text-[11px] text-gray-400 hover:text-gray-200 rounded-lg px-2 py-1">
+                        <span className="text-gray-300">{f.nome.split('—')[0].trim()}</span>
+                        <span className="text-gray-600"> — começa em: {f.etapas[0].titulo}</span>
+                      </button>
+                    ) : (
+                      <p className="text-[11px] text-gray-500 px-2 py-1">{f.nome}</p>
+                    )}
+                    {estado === 'completa' && f.notaApoio && (
+                      <p className="text-[10px] text-gray-500 leading-snug px-2">{f.notaApoio}</p>
+                    )}
+                  </div>
+                ))}
+                <button type="button"
+                  onClick={() => gravar(estado === 'completa' ? 'resumo' : 'completa')}
+                  className="text-[10px] text-accent hover:underline px-2">
+                  {estado === 'completa' ? 'mostrar só o essencial' : 'por que esta tela importa para cada cadeia'}
+                </button>
               </div>
-            ))}
+            )}
+
+            {posicoes.length > 0 && (
+              <button type="button"
+                onClick={() => gravar(estado === 'completa' ? 'resumo' : 'completa')}
+                className="text-[10px] text-accent hover:underline">
+                {estado === 'completa'
+                  ? 'mostrar só o essencial'
+                  : `ver a cadeia inteira (${principal?.total} etapas)`}
+              </button>
+            )}
           </div>
         )}
       </div>
