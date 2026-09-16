@@ -48,9 +48,9 @@
 --    tabela explica a intenção.
 --
 -- FORA DESTA MIGRAÇÃO, e por quê:
---   - "Leaked password protection desligada": é chave do Auth, não do banco, e
---     ligar passa a recusar senha que já vazou na internet. Num ambiente onde o
---     professor cria as contas da turma, isso é decisão de quem dá a aula.
+--   - "Leaked password protection desligada": NÃO DÁ para ligar. É recurso de
+--     plano pago no Supabase, e as 4 turmas rodam no Free. O linter vai seguir
+--     apontando enquanto for assim — é ruído conhecido, não pendência.
 --   - "Extension pg_trgm in public": mover extensão de schema é operação de
 --     risco (índices GIN dependem dela) para um ganho de organização.
 
