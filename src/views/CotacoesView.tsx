@@ -63,6 +63,20 @@ const emDias = (n: number): string => {
   return base.toISOString().slice(0, 10);
 };
 
+// Preço unitário é RESULTADO, não entrada — e nem sempre cabe em centavos:
+// fardo de 12 a R$ 100,00 dá 8,3333 por unidade. Mostrar 8,33 e depois
+// reconstruir o total a partir desse número é como a tela chegava a dizer
+// "8,33 × 60 = 500,00", conta que não fecha por R$ 0,20. Aqui ele só é
+// exibido, com as casas que a divisão pedir (2 quando fecha, 4 quando não),
+// e nunca volta para o total.
+const precoUnitario = (total: number, qtd: number): string => {
+  if (!(qtd > 0) || !Number.isFinite(total) || total <= 0) return '';
+  const v = total / qtd;
+  const exato = Math.abs(v * 100 - Math.round(v * 100)) < 1e-9;
+  const casas = exato ? 2 : 4;
+  return v.toLocaleString('pt-BR', { minimumFractionDigits: casas, maximumFractionDigits: casas });
+};
+
 // Validade padrão da proposta. 15 dias é o costume do mercado para cotação de
 // material — e o ponto pedagógico é que a data nasce preenchida em vez de
 // virar campo em branco que ninguém entende para que serve.
@@ -219,7 +233,7 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode, onNavigate }: { s
   // form.fornecedor_tipo permite os 2 selects (PF/PJ) compartilharem fornecedor_id
   // mantendo apenas um ativo de cada vez. Valores espelham pessoa_tipo do CRM.
   const [form, setForm] = useState({ requisicao_id: '', fornecedor_id: '', fornecedor_tipo: '' as '' | 'Empresa' | 'Pessoa Física' });
-  const [extras, setExtras] = useState({ valor_unitario: '', valor_embalagem: '', valor_total: '', prazo_entrega: '', validade: '', marca: '', observacao: '', condicao_pagamento: 'À vista' });
+  const [extras, setExtras] = useState({ valor_fonte: '', valor_total: '', prazo_entrega: '', validade: '', marca: '', observacao: '', condicao_pagamento: 'À vista' });
   // `useFormValidation` só cobre `form` (requisição e fornecedor) — era por
   // isso que valor e validade passavam em branco. Estes campos têm régua
   // própria: valor precisa ser positivo, validade precisa existir e estar viva.
@@ -315,41 +329,41 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode, onNavigate }: { s
     return nome !== '' && fator > 1 && qtdE > 0 ? { nome, fator, qtd: qtdE } : null;
   }, [reqSelecionada]);
 
-  // As duas direções da mesma conta. Unitário é o que o fornecedor informa;
-  // total continua editável porque frete e desconto entram lá — e nesse caso o
-  // unitário passa a ser o preço médio real, não o de tabela.
+  // UMA fonte de preço por proposta — a medida em que o fornecedor dá o número.
   //
-  // Com fardo são três direções da mesma conta, e a do fardo é a que o
-  // fornecedor fala. Só `valor_total` é gravado — o resto é derivável, e
-  // guardar cópia de conta é como se cria divergência.
-  const setUnitario = (v: string) => setExtras(x => {
-    const unit = formatBRL(v);
-    return {
-      ...x,
-      valor_unitario: unit,
-      valor_total: temQtd ? formatBRL(parseBRL(unit) * qtdReq) : x.valor_total,
-      valor_embalagem: embReq ? formatBRL(parseBRL(unit) * embReq.fator) : x.valor_embalagem,
-    };
+  // Antes eram três campos editáveis que se reescreviam a cada tecla, e isso
+  // não fechava: `formatBRL` arredonda para o centavo, então fardo de 12 a
+  // R$ 100,00 virava unitário 8,33 (real 8,3333). O total nascia certo em
+  // R$ 500,00 vindo do fardo, mas ENCOSTAR no campo de unitário reescrevia o
+  // total para 8,33 × 60 = 499,80 e ninguém era avisado. O custo errado seguia
+  // para o pedido e para o DRE (migr. 425).
+  //
+  // Agora só a fonte é digitada; o total sai da multiplicação, e o unitário é
+  // resultado exibido, nunca entrada. Com embalagem fechada (migr. 589) a fonte
+  // é o preço do fardo, que é como o fornecedor fala ao telefone; sem ela, é o
+  // preço da unidade. Sem requisição escolhida não há por quanto multiplicar —
+  // aí o total volta a ser digitado direto.
+  const fonte = useMemo(() => {
+    if (embReq) return { label: `Valor por ${embReq.nome} (R$)`, mult: embReq.qtd };
+    if (temQtd) return { label: `Valor Unitário (R$ / ${unidadeReq})`, mult: qtdReq };
+    return null;
+  }, [embReq, temQtd, qtdReq, unidadeReq]);
+
+  const setFonte = (v: string) => setExtras(x => {
+    const f = formatBRL(v);
+    return { ...x, valor_fonte: f, valor_total: fonte ? formatBRL(parseBRL(f) * fonte.mult) : x.valor_total };
   });
-  const setTotal = (v: string) => setExtras(x => {
-    const total = formatBRL(v);
-    return {
-      ...x,
-      valor_total: total,
-      valor_unitario: temQtd ? formatBRL(parseBRL(total) / qtdReq) : x.valor_unitario,
-      valor_embalagem: embReq ? formatBRL(parseBRL(total) / embReq.qtd) : x.valor_embalagem,
-    };
-  });
-  const setPorEmbalagem = (v: string) => setExtras(x => {
-    const porEmb = formatBRL(v);
-    if (!embReq) return { ...x, valor_embalagem: porEmb };
-    return {
-      ...x,
-      valor_embalagem: porEmb,
-      valor_unitario: formatBRL(parseBRL(porEmb) / embReq.fator),
-      valor_total:    formatBRL(parseBRL(porEmb) * embReq.qtd),
-    };
-  });
+  // Total continua editável porque frete e desconto fechado entram nele — mas
+  // digitar aqui não volta para a fonte: o preço de tabela do fornecedor
+  // continua sendo o que ele disse, e a diferença aparece anunciada.
+  const setTotal = (v: string) => setExtras(x => ({ ...x, valor_total: formatBRL(v) }));
+
+  const totalBase = fonte ? parseBRL(extras.valor_fonte) * fonte.mult : 0;
+  // Tolerância = meio centavo por multiplicando, que é o arredondamento máximo
+  // que a própria fonte carrega. Sem isso, reabrir uma proposta cuja divisão
+  // não fecha exata acenderia o aviso de "ajustado à mão" por 1 centavo.
+  const ajusteTotal = totalBase > 0 ? parseBRL(extras.valor_total) - totalBase : 0;
+  const temAjuste = !!fonte && totalBase > 0 && Math.abs(ajusteTotal) > fonte.mult * 0.005 + 1e-9;
 
   // MIGR 582: a requisição eventual agora diz a marca pedida. Ela entra
   // preenchida na proposta porque o caso comum é cotar o que foi pedido — e
@@ -361,12 +375,14 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode, onNavigate }: { s
     setExtras(x => (x.marca ? x : { ...x, marca: pedida }));
   }, [reqSelecionada]);
 
-  // Trocar de requisição troca a quantidade: o total tem de acompanhar, senão
-  // fica o valor da requisição anterior parecendo conferido.
+  // Trocar de requisição troca a quantidade E a medida: "R$ 135,00" que era o
+  // preço de um fardo de 30 não é preço de nada na requisição seguinte. Antes
+  // o total era recalculado e o preço por embalagem ficava parado, com o
+  // número da requisição anterior sob o rótulo da nova. Preço de proposta não
+  // se aproveita de uma requisição para outra — limpa.
   useEffect(() => {
-    if (!temQtd) return;
-    setExtras(x => (x.valor_unitario ? { ...x, valor_total: formatBRL(parseBRL(x.valor_unitario) * qtdReq) } : x));
-  }, [qtdReq, temQtd]);
+    setExtras(x => (x.valor_fonte || x.valor_total ? { ...x, valor_fonte: '', valor_total: '' } : x));
+  }, [form.requisicao_id]);
 
   // Prazo prometido depois da data em que o item é necessário: não é erro de
   // preenchimento (o fornecedor pode mesmo não dar conta), é informação de
@@ -426,7 +442,7 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode, onNavigate }: { s
   // Fornecedor e requisição ficam de fora — trocar fornecedor é outra
   // proposta, não correção desta.
   const [correcao, setCorrecao] = useState<any | null>(null);
-  const [correcaoForm, setCorrecaoForm] = useState({ valor_unitario: '', valor_embalagem: '', valor_total: '', prazo_entrega: '', validade: '', marca: '', observacao: '', condicao_pagamento: 'À vista' });
+  const [correcaoForm, setCorrecaoForm] = useState({ valor_fonte: '', valor_total: '', prazo_entrega: '', validade: '', marca: '', observacao: '', condicao_pagamento: 'À vista' });
 
   // Mesma régua do formulário de nova cotação: a quantidade é da requisição, e
   // é ela que liga unitário e total. Aqui a requisição não muda (trocar de
@@ -455,29 +471,26 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode, onNavigate }: { s
     return nome !== '' && fator > 1 && qtdE > 0 ? { nome, fator, qtd: qtdE } : null;
   }, [correcao, requisicoes]);
 
-  const setCorrecaoUnitario = (v: string) => setCorrecaoForm(x => {
-    const unit = formatBRL(v);
-    return {
-      ...x,
-      valor_unitario: unit,
-      valor_total: qtdCorrecao ? formatBRL(parseBRL(unit) * qtdCorrecao) : x.valor_total,
-      valor_embalagem: embCorrecao ? formatBRL(parseBRL(unit) * embCorrecao.fator) : x.valor_embalagem,
-    };
+  // Mesma régua do formulário de nova proposta: uma fonte só. Aqui a
+  // assimetria era pior — `setCorrecaoTotal` atualizava o unitário e deixava o
+  // preço por embalagem parado na tela, de modo que corrigir o total exibia um
+  // preço de fardo que não correspondia a proposta nenhuma.
+  const fonteCorrecao = useMemo(() => {
+    if (embCorrecao) return { label: `Valor por ${embCorrecao.nome} (R$)`, mult: embCorrecao.qtd };
+    if (qtdCorrecao > 0) return { label: `Valor Unitário (R$ / ${unidadeCorrecao})`, mult: qtdCorrecao };
+    return null;
+  }, [embCorrecao, qtdCorrecao, unidadeCorrecao]);
+
+  const setCorrecaoFonte = (v: string) => setCorrecaoForm(x => {
+    const f = formatBRL(v);
+    return { ...x, valor_fonte: f, valor_total: fonteCorrecao ? formatBRL(parseBRL(f) * fonteCorrecao.mult) : x.valor_total };
   });
-  const setCorrecaoPorEmbalagem = (v: string) => setCorrecaoForm(x => {
-    const porEmb = formatBRL(v);
-    if (!embCorrecao) return { ...x, valor_embalagem: porEmb };
-    return {
-      ...x,
-      valor_embalagem: porEmb,
-      valor_unitario: formatBRL(parseBRL(porEmb) / embCorrecao.fator),
-      valor_total:    formatBRL(parseBRL(porEmb) * embCorrecao.qtd),
-    };
-  });
-  const setCorrecaoTotal = (v: string) => setCorrecaoForm(x => {
-    const total = formatBRL(v);
-    return { ...x, valor_total: total, valor_unitario: qtdCorrecao ? formatBRL(parseBRL(total) / qtdCorrecao) : x.valor_unitario };
-  });
+  const setCorrecaoTotal = (v: string) => setCorrecaoForm(x => ({ ...x, valor_total: formatBRL(v) }));
+
+  const totalBaseCorrecao = fonteCorrecao ? parseBRL(correcaoForm.valor_fonte) * fonteCorrecao.mult : 0;
+  const ajusteCorrecao = totalBaseCorrecao > 0 ? parseBRL(correcaoForm.valor_total) - totalBaseCorrecao : 0;
+  const temAjusteCorrecao = !!fonteCorrecao && totalBaseCorrecao > 0
+    && Math.abs(ajusteCorrecao) > fonteCorrecao.mult * 0.005 + 1e-9;
   const [reenviando, setReenviando] = useState(false);
 
   // RBAC: Compras (e Logística, que opera junto no módulo de Compras — igual
@@ -804,7 +817,7 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode, onNavigate }: { s
   const closeForm = () => {
     setShowForm(false);
     setForm({ requisicao_id: '', fornecedor_id: '', fornecedor_tipo: '' });
-    setExtras({ valor_unitario: '', valor_embalagem: '', valor_total: '', prazo_entrega: '', validade: '', marca: '', observacao: '', condicao_pagamento: 'À vista' });
+    setExtras({ valor_fonte: '', valor_total: '', prazo_entrega: '', validade: '', marca: '', observacao: '', condicao_pagamento: 'À vista' });
     setErrors({});
     setErrosExtras({});
   };
@@ -1193,16 +1206,18 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode, onNavigate }: { s
   // 'Em correção'); aqui é só o formulário.
   const abrirCorrecao = (cot: any) => {
     setCorrecao(cot);
-    // O unitário nasce da divisão porque o banco só guarda o total: é o preço
-    // que a proposta devolvida de fato praticou, não o de tabela.
+    // A fonte nasce da divisão porque o banco só guarda o total: é o preço que
+    // a proposta devolvida de fato praticou, não o de tabela. O total gravado
+    // entra intocado — recompor a fonte arredonda, e é o total que vale.
     const req = cot.req ?? requisicoes.find((r: any) => r.id === cot.requisicao_id);
     const qtd = Number(req?.qtd ?? 0);
     const total = Number(cot.valor_total ?? 0);
+    // Migr. 589: com embalagem fechada, a fonte é o preço do fardo.
+    const multFonte = Number(req?.qtd_embalagens ?? 0) > 0 && Number(req?.embalagem_fator ?? 0) > 1
+      ? Number(req.qtd_embalagens)
+      : (Number.isFinite(qtd) && qtd > 0 ? qtd : 0);
     setCorrecaoForm({
-      valor_unitario: Number.isFinite(qtd) && qtd > 0 ? formatBRL(total / qtd) : '',
-      // Migr. 589: também derivado, pelo número de embalagens do pedido.
-      valor_embalagem: Number(req?.qtd_embalagens ?? 0) > 0
-        ? formatBRL(total / Number(req.qtd_embalagens)) : '',
+      valor_fonte:   multFonte > 0 ? formatBRL(total / multFonte) : '',
       valor_total:   formatBRL(total),
       prazo_entrega: cot.prazo_entrega ?? '',
       // Proposta devolvida costuma voltar com a validade já vencida — e o
@@ -1546,40 +1561,39 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode, onNavigate }: { s
                         </p>
                       </FormField>
                     )}
-                    {/* Migr. 589: o preço como o fornecedor o diz.
-                        "R$ 135,00 o fardo" digitado no campo de unitário
-                        comparava fardo com unidade na hora de escolher a
-                        proposta — 30× de diferença, e o custo errado seguia
-                        para o DRE. Aqui o número entra na medida da conversa e
-                        o sistema faz a divisão. */}
-                    {embReq && (
-                      <FormField label={`Valor por ${embReq.nome} (R$)`}>
+                    {/* O ÚNICO campo de preço que se digita, na medida em que o
+                        fornecedor fala: "R$ 135,00 o fardo" com embalagem
+                        fechada (migr. 589), "R$ 4,50 a unidade" sem ela. O
+                        resto é conta, e conta não se digita. */}
+                    {fonte && (
+                      <FormField label={fonte.label}>
                         <input type="text" inputMode="numeric" className="neu-input py-2 px-3 rounded-xl text-sm"
-                          value={extras.valor_embalagem}
-                          onChange={e => setPorEmbalagem(e.target.value)}
+                          value={extras.valor_fonte}
+                          onChange={e => { setFonte(e.target.value); setErrosExtras(x => ({ ...x, valor_total: undefined })); }}
                           onKeyDown={handleMoneyKeyDown}
                           placeholder="0,00" />
                         <p className="text-[10px] text-gray-500 mt-1 leading-relaxed">
                           {/* Sem adjetivo: "caixa" é feminino e "fardo" masculino. */}
-                          O que o fornecedor cobra por 1 {embReq.nome} de {qtdBR(embReq.fator)} {unidadeReq}. Vira{' '}
-                          <span className="text-gray-400">R$ {extras.valor_embalagem
-                            ? formatBRL(parseBRL(extras.valor_embalagem) / embReq.fator)
-                            : '0,00'} por {unidadeReq}</span> — é assim que duas propostas se comparam.
+                          {embReq
+                            ? `O que o fornecedor cobra por 1 ${embReq.nome} de ${qtdBR(embReq.fator)} ${unidadeReq}. O total sai daqui × ${qtdBR(embReq.qtd)}.`
+                            : `O preço de uma ${unidadeReq}. O total sai daqui × ${qtdBR(qtdReq)}.`}
                         </p>
                       </FormField>
                     )}
-                    <FormField label={`Valor Unitário (R$${temQtd ? ` / ${unidadeReq}` : ''})`}>
-                      <input type="text" inputMode="numeric" className="neu-input py-2 px-3 rounded-xl text-sm"
-                        value={extras.valor_unitario}
-                        onChange={e => setUnitario(e.target.value)}
-                        onKeyDown={handleMoneyKeyDown}
-                        placeholder="0,00" />
-                      <p className="text-[10px] text-gray-500 mt-1 leading-relaxed">
-                        {temQtd
-                          ? `O preço de uma ${unidadeReq}. O total sai da multiplicação por ${qtdBR(qtdReq)}.`
-                          : 'Escolha a requisição para o total ser calculado pela quantidade.'}
-                      </p>
-                    </FormField>
+                    {/* Unitário só aparece quando NÃO é a fonte — senão seria o
+                        mesmo campo duas vezes. É leitura: sai do total, com as
+                        casas que a divisão pedir, e é o número que compara duas
+                        propostas de embalagens diferentes. */}
+                    {embReq && (
+                      <FormField label={`Valor Unitário (R$ / ${unidadeReq})`}>
+                        <div className="neu-pressed py-2 px-3 rounded-xl text-sm text-gray-300 tabular-nums">
+                          {precoUnitario(parseBRL(extras.valor_total), qtdReq) || '—'}
+                        </div>
+                        <p className="text-[10px] text-gray-500 mt-1 leading-relaxed">
+                          Resultado, não campo: o total dividido por {qtdBR(qtdReq)} {unidadeReq}. É assim que duas propostas se comparam.
+                        </p>
+                      </FormField>
+                    )}
                     <FormField label="Valor Total (R$) *" error={errosExtras.valor_total}>
                       <input type="text" inputMode="numeric"
                         className={`neu-input py-2 px-3 rounded-xl text-sm ${errosExtras.valor_total ? 'border border-red-500/40' : ''}`}
@@ -1587,12 +1601,21 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode, onNavigate }: { s
                         onChange={e => { setTotal(e.target.value); setErrosExtras(x => ({ ...x, valor_total: undefined })); }}
                         onKeyDown={handleMoneyKeyDown}
                         placeholder="0,00" />
-                      {temQtd && (
+                      {/* Mexer no total é legítimo (frete, desconto fechado),
+                          mas deixa de ser a conta da fonte — e isso tem de
+                          estar dito na tela, não descoberto depois no pedido. */}
+                      {temAjuste ? (
+                        <p className="text-[10px] text-amber-400 mt-1 leading-relaxed">
+                          Ajustado à mão: a conta dava R$ {formatBRL(totalBase)} ({extras.valor_fonte} × {qtdBR(fonte!.mult)}),
+                          {' '}{ajusteTotal > 0 ? 'com R$ ' : 'menos R$ '}{formatBRL(Math.abs(ajusteTotal))}{ajusteTotal > 0 ? ' a mais' : ''}.
+                          {' '}Frete ou desconto fechado entram assim — na prática o total sai a
+                          {' '}R$ {precoUnitario(parseBRL(extras.valor_total), qtdReq)} por {unidadeReq}.
+                        </p>
+                      ) : (
                         <p className="text-[10px] text-gray-500 mt-1 leading-relaxed">
-                          {extras.valor_unitario
-                            ? `${extras.valor_unitario} × ${qtdBR(qtdReq)} ${unidadeReq}. É este valor que vai ao Financeiro.`
-                            : 'É este valor que vai ao Financeiro.'}
-                          {' '}Frete ou desconto fechado entram aqui — o unitário se ajusta ao preço médio.
+                          {fonte
+                            ? 'Calculado pela quantidade da requisição. É este valor que vai ao Financeiro — frete ou desconto fechado você digita aqui.'
+                            : 'Escolha a requisição para o total ser calculado pela quantidade.'}
                         </p>
                       )}
                     </FormField>
@@ -2199,33 +2222,47 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode, onNavigate }: { s
                     </div>
                   </FormField>
                 )}
-                {/* Migr. 589: o preço na medida em que o fornecedor fala. */}
-                {embCorrecao && (
-                  <FormField label={`Valor por ${embCorrecao.nome} (R$)`}>
+                {/* Migr. 589: o preço na medida em que o fornecedor fala — e o
+                    único campo de preço digitável. */}
+                {fonteCorrecao && (
+                  <FormField label={fonteCorrecao.label}>
                     <input type="text" inputMode="numeric" className="neu-input py-2 px-3 rounded-xl text-sm"
-                      value={correcaoForm.valor_embalagem}
-                      onChange={e => setCorrecaoPorEmbalagem(e.target.value)}
+                      value={correcaoForm.valor_fonte}
+                      onChange={e => setCorrecaoFonte(e.target.value)}
                       onKeyDown={handleMoneyKeyDown}
                       placeholder="0,00" />
+                    <p className="text-[10px] text-gray-500 mt-1 leading-relaxed">
+                      {embCorrecao
+                        ? `Por 1 ${embCorrecao.nome} de ${qtdBR(embCorrecao.fator)} ${unidadeCorrecao}. O total sai daqui × ${qtdBR(embCorrecao.qtd)}.`
+                        : `O preço de uma ${unidadeCorrecao}. O total sai daqui × ${qtdBR(qtdCorrecao)}.`}
+                    </p>
                   </FormField>
                 )}
-                <FormField label={`Valor Unitário (R$${qtdCorrecao > 0 ? ` / ${unidadeCorrecao}` : ''})`}>
-                  <input type="text" inputMode="numeric" className="neu-input py-2 px-3 rounded-xl text-sm"
-                    value={correcaoForm.valor_unitario}
-                    onChange={e => setCorrecaoUnitario(e.target.value)}
-                    onKeyDown={handleMoneyKeyDown}
-                    placeholder="0,00" />
-                </FormField>
+                {embCorrecao && (
+                  <FormField label={`Valor Unitário (R$ / ${unidadeCorrecao})`}>
+                    <div className="neu-pressed py-2 px-3 rounded-xl text-sm text-gray-300 tabular-nums">
+                      {precoUnitario(parseBRL(correcaoForm.valor_total), qtdCorrecao) || '—'}
+                    </div>
+                    <p className="text-[10px] text-gray-500 mt-1 leading-relaxed">
+                      Resultado, não campo: o total dividido por {qtdBR(qtdCorrecao)} {unidadeCorrecao}.
+                    </p>
+                  </FormField>
+                )}
                 <FormField label="Valor Total (R$)">
                   <input type="text" inputMode="numeric" className="neu-input py-2 px-3 rounded-xl text-sm"
                     value={correcaoForm.valor_total}
                     onChange={e => setCorrecaoTotal(e.target.value)}
                     onKeyDown={handleMoneyKeyDown}
                     placeholder="0,00" />
-                  {qtdCorrecao > 0 && (
+                  {temAjusteCorrecao ? (
+                    <p className="text-[10px] text-amber-400 mt-1 leading-relaxed">
+                      Ajustado à mão: a conta dava R$ {formatBRL(totalBaseCorrecao)} ({correcaoForm.valor_fonte} × {qtdBR(fonteCorrecao!.mult)}),
+                      {' '}{ajusteCorrecao > 0 ? 'com R$ ' : 'menos R$ '}{formatBRL(Math.abs(ajusteCorrecao))}{ajusteCorrecao > 0 ? ' a mais' : ''}.
+                      {' '}Na prática o total sai a R$ {precoUnitario(parseBRL(correcaoForm.valor_total), qtdCorrecao)} por {unidadeCorrecao}.
+                    </p>
+                  ) : qtdCorrecao > 0 && (
                     <p className="text-[10px] text-gray-500 mt-1 leading-relaxed">
-                      É este valor que volta ao Financeiro. Frete ou desconto fechado entram aqui — o
-                      unitário se ajusta ao preço médio.
+                      É este valor que volta ao Financeiro. Frete ou desconto fechado você digita aqui.
                     </p>
                   )}
                 </FormField>
