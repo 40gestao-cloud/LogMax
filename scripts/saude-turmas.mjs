@@ -28,6 +28,13 @@
 //
 // Turma sem tráfego na janela = "sem aula agora", não reprova.
 //
+// Erro AO MEDIR é outra coisa: rede caindo entre o runner e a api.supabase.com
+// não diz nada sobre a aula. Esses (e 429/5xx da API) são tentados 3 vezes e,
+// se persistirem, saem como INDET — aparecem no relatório e não reprovam.
+// Token recusado (401/403) e consulta malformada continuam FALHA: é problema
+// do vigia, e vigia quebrado em silêncio é como este script passou dois dias
+// sem medir nada.
+//
 // Requisitos: Node 18+ e SUPABASE_ACCESS_TOKEN (ambiente ou .env) — o mesmo do
 // `npm run drift`. O token NUNCA é impresso, nem em erro.
 //
@@ -104,16 +111,65 @@ cross join unnest(metadata) as m
 cross join unnest(m.response) as response
 `;
 
-async function medir(ref, inicio, fim) {
+// Um erro AO MEDIR não é a mesma coisa que uma turma doente, e tratar os dois
+// igual estraga o alarme. Blip de rede do runner ("fetch failed") pintava o job
+// de vermelho como se a aula estivesse caindo — aconteceu aqui em 17/09, duas
+// turmas "FALHA" numa execução e as mesmas duas OK na seguinte, segundos
+// depois. Alarme que às vezes mente é alarme que se aprende a ignorar, que é
+// exatamente o que este script existe para não ser.
+//
+// A divisão é entre o que melhora sozinho e o que não melhora:
+//   transporte, 429, 5xx da própria api.supabase.com → tenta de novo;
+//   401/403 (token errado) e consulta recusada       → não adianta insistir.
+// O segundo grupo continua reprovando o job, e tem de continuar: foi um token
+// ausente que deixou este vigia cego por dois dias sem ninguém notar.
+const TENTATIVAS = 3;
+const ESPERA_MS  = [800, 2500];
+
+function transitorio(err) {
+  return err?.transitorio === true;
+}
+
+async function medirUmaVez(ref, inicio, fim) {
   const url = new URL(`https://api.supabase.com/v1/projects/${ref}/analytics/endpoints/logs.all`);
   url.searchParams.set('sql', SQL);
   url.searchParams.set('iso_timestamp_start', inicio);
   url.searchParams.set('iso_timestamp_end', fim);
-  const res = await fetch(url, { headers: { Authorization: `Bearer ${TOKEN}` } });
-  if (!res.ok) throw new Error(`HTTP ${res.status} em ${ref}: ${(await res.text()).slice(0, 300)}`);
+
+  let res;
+  try {
+    res = await fetch(url, { headers: { Authorization: `Bearer ${TOKEN}` } });
+  } catch (err) {
+    // DNS, TLS, socket derrubado: nada disso fala sobre a turma.
+    const e = new Error(`falha de rede ao falar com a API (${err?.message ?? 'fetch failed'})`);
+    e.transitorio = true;
+    throw e;
+  }
+
+  if (!res.ok) {
+    const corpo = (await res.text()).slice(0, 300);
+    const e = new Error(`HTTP ${res.status} em ${ref}: ${corpo}`);
+    e.transitorio = res.status === 429 || res.status >= 500;
+    throw e;
+  }
+
   const corpo = await res.json();
   if (corpo.error) throw new Error(`Consulta recusada em ${ref}: ${String(corpo.error).slice(0, 200)}`);
   return corpo.result?.[0] ?? { n: 0 };
+}
+
+async function medir(ref, inicio, fim) {
+  let ultimo;
+  for (let i = 0; i < TENTATIVAS; i++) {
+    try {
+      return await medirUmaVez(ref, inicio, fim);
+    } catch (err) {
+      ultimo = err;
+      if (!transitorio(err) || i === TENTATIVAS - 1) throw err;
+      await new Promise(r => setTimeout(r, ESPERA_MS[i] ?? 2500));
+    }
+  }
+  throw ultimo;
 }
 
 function avaliar(m) {
@@ -149,7 +205,19 @@ for (const p of PROJETOS) {
     const m = await medir(p.ref, inicio.toISOString(), fim.toISOString());
     relatorio.push({ turma: p.nome, periodo: p.periodo, metricas: m, problemas: avaliar(m) });
   } catch (err) {
-    relatorio.push({ turma: p.nome, periodo: p.periodo, erro: err.message, problemas: [{ nivel: 'FALHA', texto: `não deu para medir: ${err.message}` }] });
+    // Depois de 3 tentativas ainda sem resposta: continua sendo ignorância
+    // sobre a turma, não diagnóstico dela. Aparece no relatório em voz alta,
+    // mas não reprova — só o que fala da AULA reprova.
+    const indet = transitorio(err);
+    relatorio.push({
+      turma: p.nome, periodo: p.periodo, erro: err.message, indeterminado: indet,
+      problemas: [{
+        nivel: indet ? 'INDET' : 'FALHA',
+        texto: indet
+          ? `não deu para medir depois de ${TENTATIVAS} tentativas: ${err.message}. Nada se pode afirmar sobre esta turma.`
+          : `não deu para medir: ${err.message}`,
+      }],
+    });
   }
 }
 
@@ -164,6 +232,7 @@ if (JSON_OUT) {
       continue;
     }
     const pior = r.problemas.some(p => p.nivel === 'FALHA') ? 'FALHA'
+      : r.indeterminado ? 'INDET'
       : r.problemas.length > 0 ? 'ALERTA' : 'OK  ';
     const m = r.metricas ?? {};
     const resumo = r.erro
@@ -174,7 +243,7 @@ if (JSON_OUT) {
   }
 }
 
-const reprovou = relatorio.some(r => r.problemas.length > 0);
+const reprovou = relatorio.some(r => !r.indeterminado && r.problemas.length > 0);
 if (reprovou && !JSON_OUT) {
   console.log(`
 O que olhar primeiro:
