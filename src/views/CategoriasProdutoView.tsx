@@ -123,10 +123,53 @@ function IconePicker({ value, onChange }: { value: string; onChange: (i: string)
   );
 }
 
+// Anexa a imagem DEPOIS que o cadastro já existe.
+//
+// A ordem importa: enquanto o upload vinha primeiro, uma recusa do storage
+// (policy de setor, migr. 479) levava o cadastro junto e não sobrava linha
+// nenhuma no banco — nem para o admin ver. Agora o registro está salvo quando
+// esta função roda, então falha de imagem é aviso, e o aluno reanexa editando.
+//
+// O upload usa o id REAL do registro como pasta, inclusive na criação: antes,
+// categoria nova caía num uuid aleatório, e o arquivo ficava sem dono
+// rastreável no bucket.
+async function anexarImagem(
+  endpoint: 'categorias_produto' | 'subcategorias_produto',
+  id: string | null,
+  novaImagem: File | null,
+  imagemAntiga: string,
+  imagemNoForm: string,
+  reload: () => void,
+  showToast: any,
+  rotulo: string,
+): Promise<void> {
+  // Imagem removida na edição: o registro já gravou `null`, resta o arquivo.
+  if (!novaImagem) {
+    if (!imagemNoForm && imagemAntiga) removerImagem(CATEGORIA_IMAGEM_BUCKET, imagemAntiga);
+    return;
+  }
+  if (!id) {
+    showToast?.(`A ${rotulo} foi salva, mas a imagem não pôde ser anexada. Edite-a para enviar de novo.`, 'error');
+    return;
+  }
+  try {
+    const url = await uploadImagem(CATEGORIA_IMAGEM_BUCKET, novaImagem, id);
+    await dbUpdate(endpoint, id, { imagem_url: url });
+    // Só depois que a nova está gravada: apagar antes deixaria o registro
+    // apontando para arquivo inexistente se o update falhasse.
+    if (imagemAntiga) removerImagem(CATEGORIA_IMAGEM_BUCKET, imagemAntiga);
+    reload();
+  } catch (e: any) {
+    showToast?.(`A ${rotulo} foi salva, mas a imagem não subiu: ${e?.message ?? 'falha no envio'} Edite-a para tentar de novo.`, 'error');
+  }
+}
+
 // ── Form inline ───────────────────────────────────────────────────────────────
-function InlineForm({ initial, onSave, onCancel, saving, itemId, comMargem, nomesEmUso, titulo }: {
-  initial: FormData; onSave: (v: FormData) => Promise<void>;
-  onCancel: () => void; saving: boolean; itemId?: string;
+function InlineForm({ initial, onSave, onCancel, saving, comMargem, nomesEmUso, titulo }: {
+  initial: FormData;
+  /** Grava o cadastro e, só depois, anexa `novaImagem` — ver handleSubmit. */
+  onSave: (v: FormData, novaImagem: File | null) => Promise<void>;
+  onCancel: () => void; saving: boolean;
   /** Só categoria tem markup — subcategoria herda o da mãe. */
   comMargem?: boolean;
   /** Nomes já cadastrados no mesmo nível, para barrar duplicata antes do save. */
@@ -154,30 +197,23 @@ function InlineForm({ initial, onSave, onCancel, saving, itemId, comMargem, nome
     setF(p => ({ ...p, imagem_url: '' }));
   };
 
-  const handleSubmit = async () => {
+  // O upload NÃO acontece aqui, e essa é a inversão de 17/09/2026.
+  //
+  // Antes a imagem subia antes do save: uma recusa do storage abortava a
+  // gravação inteira e o cadastro não nascia. A mensagem que sobrava começava
+  // com "Sem permissão para enviar imagem", e chega ao professor como "o aluno
+  // não consegue salvar a categoria" — com a categoria inexistente no banco,
+  // invisível até para o admin. A imagem é ANEXO do cadastro, não requisito
+  // dele: o nome, a cor e o markup gravam sozinhos.
+  //
+  // `imagem_url` do formulário carrega um blob: local enquanto há arquivo
+  // pendente (é o que alimenta a prévia). Esse valor nunca pode ir para o
+  // banco, então o que se persiste agora é a imagem que JÁ existia — trocada
+  // depois, se e quando o upload der certo.
+  const handleSubmit = () => {
     if (!podeSalvar) return;
-    let finalImagemUrl = f.imagem_url;
-    let urlUpada: string | null = null;
-
-    if (pendingFile) {
-      // Faz upload primeiro; se onSave falhar, remove o arquivo upado (rollback best-effort)
-      finalImagemUrl = await uploadImagem(CATEGORIA_IMAGEM_BUCKET, pendingFile, itemId);
-      urlUpada = finalImagemUrl;
-    } else if (!f.imagem_url && initial.imagem_url) {
-      // Usuário limpou a imagem
-      finalImagemUrl = '';
-    }
-
-    try {
-      await onSave({ ...f, imagem_url: finalImagemUrl });
-      // Só remove a imagem antiga depois que o save confirmou
-      if (pendingFile && initial.imagem_url) removerImagem(CATEGORIA_IMAGEM_BUCKET, initial.imagem_url);
-      if (!f.imagem_url && initial.imagem_url) removerImagem(CATEGORIA_IMAGEM_BUCKET, initial.imagem_url);
-    } catch (err) {
-      // Save falhou — remove a imagem que acabou de ser upada para não deixar órfã
-      if (urlUpada) removerImagem(CATEGORIA_IMAGEM_BUCKET, urlUpada);
-      throw err;
-    }
+    const urlPersistida = pendingFile ? initial.imagem_url : f.imagem_url;
+    void onSave({ ...f, imagem_url: urlPersistida }, pendingFile);
   };
 
   return (
@@ -321,18 +357,26 @@ function PainelCategorias({
   const nomesEmUso = (excetoId?: string) =>
     data.filter((c: any) => c.id !== excetoId).map((c: any) => normalizar(c.nome ?? ''));
 
-  const handleSave = async (f: FormData) => {
+  const handleSave = async (f: FormData, novaImagem: File | null) => {
     if (!filial) return;
     setSaving(true);
+    const imagemAntiga = editItem?.imagem_url ?? '';
     try {
       // String vazia vira NULL: "sem markup" é ausência de regra, não zero por
       // cento — zero faria o produto sugerir preço igual ao custo.
       const margem = f.margem_alvo.trim() === '' ? null : Number(f.margem_alvo.replace(',', '.'));
       const base = { nome: f.nome.trim(), cor: f.cor, icone: f.icone, imagem_url: f.imagem_url || null, margem_alvo: margem };
-      if (editItem) await dbUpdate('categorias_produto', editItem.id, base);
-      else          await dbInsert('categorias_produto', { ...base, filial });
+      const salvo = editItem
+        ? await dbUpdate<any>('categorias_produto', editItem.id, base)
+        : await dbInsert<any>('categorias_produto', { ...base, filial });
+      const id = salvo?.id ?? editItem?.id ?? null;
       reload(); setEditItem(null); setShowForm(false);
       showToast?.(editItem ? 'Categoria atualizada.' : 'Categoria criada.', 'success');
+
+      // A partir daqui o cadastro já está no banco. Qualquer coisa que dê
+      // errado com a imagem é aviso, não perda: a categoria está salva e o
+      // aluno reanexa editando.
+      await anexarImagem('categorias_produto', id, novaImagem, imagemAntiga, f.imagem_url, reload, showToast, 'categoria');
     } catch (e: any) {
       // Antes o erro subia e morria como unhandled rejection: o formulário
       // ficava aberto e o usuário não sabia se salvou.
@@ -412,7 +456,6 @@ function PainelCategorias({
                   {editItem?.id === cat.id && (
                     <InlineForm
                       titulo={`Editando "${cat.nome}"`}
-                      itemId={cat.id}
                       comMargem
                       nomesEmUso={nomesEmUso(cat.id)}
                       initial={{
@@ -491,14 +534,18 @@ function PainelSubcategorias({ categoria, canEdit, data, error, reload, showToas
   const nomesEmUso = (excetoId?: string) =>
     data.filter((s: any) => s.id !== excetoId).map((s: any) => normalizar(s.nome ?? ''));
 
-  const handleSave = async (f: FormData) => {
+  const handleSave = async (f: FormData, novaImagem: File | null) => {
     setSaving(true);
+    const imagemAntiga = editItem?.imagem_url ?? '';
     try {
       const payload = { nome: f.nome.trim(), cor: f.cor, icone: f.icone, imagem_url: f.imagem_url || null };
-      if (editItem) await dbUpdate('subcategorias_produto', editItem.id, payload);
-      else          await dbInsert('subcategorias_produto', { ...payload, categoria_id: categoria.id });
+      const salvo = editItem
+        ? await dbUpdate<any>('subcategorias_produto', editItem.id, payload)
+        : await dbInsert<any>('subcategorias_produto', { ...payload, categoria_id: categoria.id });
+      const id = salvo?.id ?? editItem?.id ?? null;
       reload(); setEditItem(null); setShowForm(false);
       showToast?.(editItem ? 'Subcategoria atualizada.' : 'Subcategoria criada.', 'success');
+      await anexarImagem('subcategorias_produto', id, novaImagem, imagemAntiga, f.imagem_url, reload, showToast, 'subcategoria');
     } catch (e: any) {
       showToast?.(e?.message ?? 'Não foi possível salvar a subcategoria.', 'error');
     } finally { setSaving(false); }
@@ -564,7 +611,6 @@ function PainelSubcategorias({ categoria, canEdit, data, error, reload, showToas
                 {editItem?.id === sub.id && (
                   <InlineForm
                     titulo={`Editando "${sub.nome}"`}
-                    itemId={sub.id}
                     nomesEmUso={nomesEmUso(sub.id)}
                     initial={{
                       nome: sub.nome, cor: sub.cor ?? '#6b7280', icone: sub.icone ?? '📦',
