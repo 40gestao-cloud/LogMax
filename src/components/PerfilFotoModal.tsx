@@ -12,6 +12,7 @@ import {
 } from '../lib/perfilFoto';
 import type { UserProfile } from '../hooks/useUserProfile';
 import { useConfirm } from '../contexts/ConfirmContext';
+import { ColarImagem } from './ColarImagem';
 
 type Props = {
   open: boolean;
@@ -34,13 +35,18 @@ export function PerfilFotoModal({ open, profile, onClose, onUpdated, showToast }
 
   const onFileChange = (e: ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0];
-    if (!f) return;
+    e.target.value = '';
+    if (f) escolher(f);
+  };
+
+  // Upload e Ctrl+V caem aqui; o resize para WebP 512 px acontece no salvar.
+  const escolher = (f: File) => {
     const v = validarFotoPerfil(f);
     if (!v.ok) {
       showToast(v.motivo, 'error');
-      e.target.value = '';
       return;
     }
+    if (preview) URL.revokeObjectURL(preview);
     setArquivo(f);
     setPreview(URL.createObjectURL(f));
   };
@@ -139,6 +145,8 @@ export function PerfilFotoModal({ open, profile, onClose, onUpdated, showToast }
                 JPG, PNG ou WEBP — até {PERFIL_FOTO_MAX_LABEL}.<br />
                 Redimensionada automaticamente para WebP 512 px.
               </p>
+
+              <ColarImagem onImagem={escolher} disabled={salvando} />
 
               <input
                 ref={fileInputRef}

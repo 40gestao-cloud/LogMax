@@ -6,6 +6,7 @@ import { MatrizConsolidado } from '../components/MatrizConsolidado';
 import { motion, AnimatePresence } from 'motion/react';
 import { Search, Edit2, Trash2, Plus, Save, FileDown, Sheet, Tag, TrendingUp, AlertTriangle, Barcode, Check, AlertCircle, ImagePlus, X as XIcon, Loader2, Percent, Grid3x3, Upload, Lock, Pencil } from 'lucide-react';
 import { HistoricoOperacoes } from '../components/HistoricoOperacoes';
+import { ColarImagem, useColarImagemGlobal } from '../components/ColarImagem';
 import { BotaoModeloPlanilha } from '../components/BotaoModeloPlanilha';
 import { ImportarProdutosModal } from '../components/ImportarProdutosModal';
 import { useFetchData, dbInsert, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
@@ -1284,13 +1285,18 @@ const ProdutosViewInner = ({ showToast, filial, profile }: { showToast: any; fil
   // Upload de imagem: valida formato/tamanho bruto ANTES de decodificar.
   // Se aceito, faz upload para o bucket e guarda a URL pública no slot;
   // resolução baixa não bloqueia, só rende um aviso no slot.
-  const handleImagemChange = async (slotIdx: number, e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImagemChange = (slotIdx: number, e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file) return;
+    e.target.value = '';
+    if (file) enviarImagemSlot(slotIdx, file);
+  };
+
+  // Upload e Ctrl+V caem aqui: a imagem colada passa pela mesma validação e
+  // compressão do arquivo escolhido.
+  const enviarImagemSlot = async (slotIdx: number, file: File) => {
     const validacao = validarImagemProduto(file);
     if (!validacao.ok) {
       showToast(validacao.motivo, 'error', true);
-      e.target.value = '';
       return;
     }
     setImagemUploading(slotIdx);
@@ -1308,9 +1314,20 @@ const ProdutosViewInner = ({ showToast, filial, profile }: { showToast: any; fil
       showToast(err?.message ?? 'Falha ao enviar imagem.', 'error', true);
     } finally {
       setImagemUploading(null);
-      e.target.value = '';
     }
   };
+
+  // Ctrl+V solto no formulário vai para o primeiro slot vazio — a capa, se
+  // ainda não tiver. Com os três cheios não troca nenhum às cegas: para
+  // substituir, cola-se na área do slot escolhido.
+  useColarImagemGlobal(file => {
+    const vazio = imagens.findIndex(u => !u);
+    if (vazio < 0) {
+      showToast('As três fotos já estão preenchidas. Para trocar uma, clique com o botão direito em "Colar" no slot desejado.', 'info', true);
+      return;
+    }
+    enviarImagemSlot(vazio, file);
+  }, showForm && imagemUploading === null);
 
   const handleRemoverImagem = (slotIdx: number) => {
     setImagens(prev => prev.map((u, i) => i === slotIdx ? '' : u));
@@ -2656,6 +2673,8 @@ const ProdutosViewInner = ({ showToast, filial, profile }: { showToast: any; fil
                           </button>
                         )}
                       </div>
+                      <ColarImagem global={false} disabled={imagemUploading !== null}
+                        onImagem={file => enviarImagemSlot(slotIdx, file)} />
                       {imagensAviso[slotIdx] && (
                         <p className="text-[10px] text-amber-400/90 leading-snug text-center flex items-start gap-1">
                           <AlertTriangle size={11} className="shrink-0 mt-px" />
@@ -2676,7 +2695,9 @@ const ProdutosViewInner = ({ showToast, filial, profile }: { showToast: any; fil
                   automaticamente para WebP até <span className="font-bold text-gray-300">{PRODUTO_IMAGEM_OUTPUT_MAX_LABEL}</span>,
                   então pode enviar direto da câmera. Use imagens de pelo menos{' '}
                   <span className="font-bold text-gray-300">{PRODUTO_IMAGEM_RES_IDEAL} px</span> no menor lado: miniatura
-                  baixada da web fica borrada, porque o sistema reduz mas nunca amplia. A capa é a que aparece no PDV, Catálogo e vitrine — e por isso é obrigatória; as duas extras são opcionais.
+                  baixada da web fica borrada, porque o sistema reduz mas nunca amplia. Também dá para colar: no Google, abra
+                  a imagem, botão direito → <span className="font-bold text-gray-300">Copiar imagem</span> e Ctrl+V aqui
+                  (vai para o primeiro slot vazio). A capa é a que aparece no PDV, Catálogo e vitrine — e por isso é obrigatória; as duas extras são opcionais.
                 </p>
               </div>
 
