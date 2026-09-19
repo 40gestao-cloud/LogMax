@@ -2020,10 +2020,38 @@ main.main-scrollbar,
   }
 }
 
-/* ── Frequência de Trabalho — botões de status com glass + shimmer ──
-   Três variantes: presente (verde), falta (vermelho), atraso (amarelo).
+/* ── Frequência de Trabalho — botões de status ──
+   Quatro variantes: presente (verde), falta (vermelho), atraso (amarelo),
+   justificada (azul).
    Estado inativo: fundo e borda na cor, mas mais transparentes.
-   Estado ativo (.freq-status-btn--active): opacidade total, borda mais viva. */
+   Estado ativo (.freq-status-btn--active): opacidade total, borda mais viva.
+
+   ── Por que aqui NÃO tem shimmer ──────────────────────────────────────────
+   Tinha, e saiu em 2026-09-19. Estes quatro botões não aparecem uma vez na
+   tela: aparecem uma vez POR FUNCIONÁRIO. Uma turma de 32 põe 128 brilhos
+   correndo em laço infinito atrás justamente do que o operador precisa ler
+   para lançar o dia, e cada um é uma camada que o compositor nunca deixa
+   dormir.
+
+   Medido nesta grade, rolando, numa máquina de 4 núcleos:
+
+     128 botões (32 funcionários) — 60 fps com shimmer, 60 fps sem
+     256 botões (64 funcionários) — 46 fps com shimmer, 57 fps sem
+     768 botões                   — 26 fps com shimmer, 55 fps sem
+
+   Ou seja: no tamanho de hoje não custava nada, mas o custo é linear no
+   número de botões e a conta já vira em turma dobrada. (O `backdrop-filter`
+   do Justificada foi testado no mesmo banco e não é o peso: 26,0 contra 26,5.)
+
+   O que decidiu não foi o fps, foi o `prefers-reduced-motion`: o bloco lá
+   em cima desliga `btn-shimmer` e companhia, mas não alcançava um `::before`
+   com nome próprio — quem desliga animação no Windows seguia com os 128
+   correndo. Mesma lição das pílulas de lista: animação decorativa que se
+   repete dezenas de vezes por tela sai de vez, não fica dependendo do
+   interruptor do sistema.
+
+   O hover e o estado ativo (borda viva, glow e `scale(1.04)`) continuam
+   dizendo tudo o que o shimmer não dizia. */
 
 .freq-status-btn {
   position: relative;
@@ -2040,17 +2068,6 @@ main.main-scrollbar,
   white-space: nowrap;
   cursor: pointer;
   transition: background 0.15s, border-color 0.15s, opacity 0.15s;
-}
-
-.freq-status-btn::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  width: 50%;
-  background: linear-gradient(to right, transparent 0%, rgba(255,255,255,0.18) 50%, transparent 100%);
-  transform: translateX(-150%) skewX(-18deg);
-  animation: action-bar-shimmer 4s ease-in-out infinite;
-  pointer-events: none;
 }
 
 /* Verde — Presente */

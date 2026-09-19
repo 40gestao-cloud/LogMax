@@ -348,9 +348,16 @@ export function HubView({
               const total = macroBadge(macro);
               const Icon = macro.icon;
               const tint = pickTint(macro.color);
+              // Sem repetir rótulo: o card junta os submenus de TODOS os
+              // módulos do grupo, e vários nomes se repetem entre eles —
+              // Logística tem 'Gerenciamento' e 'Relatórios' em Compras E em
+              // Estoque. Duplicado, o chip não informava nada (é prévia do
+              // que há dentro, não contagem), gastava duas das cinco vagas
+              // visíveis empurrando os outros para o '+N', e o React ainda
+              // reclamava de chave repetida, já que a chave é o rótulo.
               const chips = macro.kind === 'leaf'
                 ? []
-                : macro.modulos.flatMap(m => m.submenus.filter(s => subPermitido(s, profile)).map(subLabel));
+                : [...new Set(macro.modulos.flatMap(m => m.submenus.filter(s => subPermitido(s, profile)).map(subLabel)))];
               return (
                 <button
                   key={macro.id}

@@ -386,50 +386,65 @@ const FrequenciaTrabalhoViewInner = ({ showToast, profile, filial, embedded }: a
     }));
   };
 
+  /** O que impede este rascunho de virar linha no banco, ou null se nada
+   *  impede. Separado da gravação porque o lote precisa da mesma régua ANTES
+   *  de começar a gravar — descobrir no meio deixaria metade lançada. */
+  const recusaDoRascunho = (edit: { status: StatusFreq; justificativa: string; entrada: string }): string | null => {
+    // Atraso sem horário não é quantificável — e é exatamente o que a folha
+    // precisa para descontar. Pedir aqui evita gravar um rótulo que não vira
+    // nada, que era o defeito do modelo antigo.
+    if (edit.status === 'Presente com Atraso' && !edit.entrada) {
+      return 'Informe o horário de entrada para registrar o atraso.';
+    }
+    // Falta justificada sem motivo é falta com nome bonito: a RPC recusa
+    // (migr. 303) e aqui a recusa chega antes do round-trip.
+    if (edit.status === 'Justificado' && !edit.justificativa.trim()) {
+      return 'Escreva a justificativa antes de salvar a falta justificada.';
+    }
+    return null;
+  };
+
+  /** Uma linha, sem toast e sem reload: quem chama decide o que dizer e quando
+   *  recarregar. O lote grava dezenas destas e não pode disparar dezenas de
+   *  toasts nem dezenas de refetches. */
+  const gravarLinha = useCallback(async (
+    funcId: string,
+    edit: { status: StatusFreq; justificativa: string; entrada: string },
+  ) => {
+    // 'Presente com Atraso' vai como Normal + entrada real; o desconto sai do
+    // recalcular_folha_do_ponto comparando com o horário-alvo da turma.
+    // 'Justificado' vai como está: a folha já o trata como zero desconto.
+    const statusPonto = edit.status === 'Falta' || edit.status === 'Justificado' ? edit.status : 'Normal';
+    const entrada = edit.status === 'Falta' || edit.status === 'Justificado'
+      ? null
+      : (edit.status === 'Presente com Atraso' ? edit.entrada : jornada.entrada);
+
+    const { error } = await supabase!.rpc('registrar_ponto_manual', {
+      p_funcionario_id: funcId,
+      p_data:           dataSelecionada,
+      p_status:         statusPonto,
+      p_entrada:        entrada,
+      p_observacao:     edit.justificativa.trim() || null,
+      // Jornada da turma (migr. 290). Sem isso o dia gravaria a jornada
+      // padrão da manhã mesmo numa turma da tarde.
+      p_horas:          PONTO_JORNADA_HORAS,
+    });
+    if (error) throw error;
+  }, [dataSelecionada, jornada.entrada]);
+
   const handleSave = useCallback(async (func: Funcionario) => {
     if (!supabase || !canEdit) return;
     const edit = edits[func.id];
     if (!edit) return;
 
-    // Atraso sem horário não é quantificável — e é exatamente o que a folha
-    // precisa para descontar. Pedir aqui evita gravar um rótulo que não vira
-    // nada, que era o defeito do modelo antigo.
-    if (edit.status === 'Presente com Atraso' && !edit.entrada) {
-      showToast('Informe o horário de entrada para registrar o atraso.', 'error');
-      return;
-    }
-
-    // Falta justificada sem motivo é falta com nome bonito: a RPC recusa
-    // (migr. 303) e aqui a recusa chega antes do round-trip.
-    if (edit.status === 'Justificado' && !edit.justificativa.trim()) {
-      showToast('Escreva a justificativa antes de salvar a falta justificada.', 'error');
-      return;
-    }
+    const recusa = recusaDoRascunho(edit);
+    if (recusa) { showToast(recusa, 'error'); return; }
 
     const key = func.id;
     setSaving(prev => ({ ...prev, [key]: true }));
 
     try {
-      // 'Presente com Atraso' vai como Normal + entrada real; o desconto sai do
-      // recalcular_folha_do_ponto comparando com o horário-alvo da turma.
-      // 'Justificado' vai como está: a folha já o trata como zero desconto.
-      const statusPonto = edit.status === 'Falta' || edit.status === 'Justificado' ? edit.status : 'Normal';
-      const entrada = edit.status === 'Falta' || edit.status === 'Justificado'
-        ? null
-        : (edit.status === 'Presente com Atraso' ? edit.entrada : jornada.entrada);
-
-      const { error } = await supabase.rpc('registrar_ponto_manual', {
-        p_funcionario_id: func.id,
-        p_data:           dataSelecionada,
-        p_status:         statusPonto,
-        p_entrada:        entrada,
-        p_observacao:     edit.justificativa.trim() || null,
-        // Jornada da turma (migr. 290). Sem isso o dia gravaria a jornada
-        // padrão da manhã mesmo numa turma da tarde.
-        p_horas:          PONTO_JORNADA_HORAS,
-      });
-      if (error) throw error;
-
+      await gravarLinha(func.id, edit);
       setEdits(prev => { const n = { ...prev }; delete n[func.id]; return n; });
       // silent: a tela tem `if (isLoading) return <spinner>`, e um reload
       // normal aqui desmontaria a grade inteira que o operador está
@@ -444,7 +459,92 @@ const FrequenciaTrabalhoViewInner = ({ showToast, profile, filial, embedded }: a
     } finally {
       setSaving(prev => ({ ...prev, [key]: false }));
     }
-  }, [edits, dataSelecionada, canEdit, reload, showToast]);
+  }, [edits, canEdit, gravarLinha, reload, showToast]);
+
+  // ── Lançamento em lote ────────────────────────────────────────────────
+  //
+  // O dia normal de uma turma é "todo mundo veio, menos um". Lançar isso a
+  // mão são 30 cliques em Presente e 30 em Salvar para chegar ao mesmo lugar.
+  // Aqui é: marca todos presentes, corrige quem faltou (a linha continua
+  // editável), salva de uma vez.
+  //
+  // Quem já tem registro no dia fica de fora da marcação: a linha lançada é
+  // decisão de alguém, e o botão não vai por cima dela. Dia de afastamento e
+  // dia de turma anterior também não entram — o banco recusa os dois.
+  const [salvandoLote, setSalvandoLote] = useState(false);
+
+  const marcaveis = useMemo(
+    () => filteredFuncs.filter((f: Funcionario) => {
+      const freq = getFreq(f.id, dataSelecionada);
+      return !freq && !edits[f.id];
+    }),
+    [filteredFuncs, freqMap, dataSelecionada, edits],
+  );
+
+  const pendentesDeSalvar = useMemo(
+    () => funcionariosAtivos.filter((f: Funcionario) => !!edits[f.id]),
+    [funcionariosAtivos, edits],
+  );
+
+  const marcarTodosPresentes = () => {
+    if (!marcaveis.length) return;
+    setEdits(prev => {
+      const n = { ...prev };
+      marcaveis.forEach((f: Funcionario) => {
+        n[f.id] = { status: 'Presente', justificativa: '', entrada: '' };
+      });
+      return n;
+    });
+    showToast(`${marcaveis.length} marcado(s) como presente. Ajuste quem faltou e salve.`, 'info');
+  };
+
+  const salvarTodos = useCallback(async () => {
+    if (!supabase || !canEdit || !pendentesDeSalvar.length) return;
+
+    // Valida tudo antes de gravar qualquer coisa: descobrir no meio deixaria
+    // metade do dia lançada e a outra metade em rascunho, sem a pessoa saber
+    // onde parou.
+    for (const f of pendentesDeSalvar) {
+      const recusa = recusaDoRascunho(edits[f.id]);
+      if (recusa) { showToast(`${f.nome}: ${recusa}`, 'error'); return; }
+    }
+
+    setSalvandoLote(true);
+    // Ordem fixa por id: várias máquinas da turma salvam o mesmo dia ao mesmo
+    // tempo, e gravar em ordens diferentes é como se fabrica deadlock.
+    const fila = [...pendentesDeSalvar].sort((a, b) => a.id.localeCompare(b.id));
+    const falhas: { nome: string; motivo: string }[] = [];
+    let gravados = 0;
+
+    for (const f of fila) {
+      const edit = edits[f.id];
+      if (!edit) continue;
+      setSaving(prev => ({ ...prev, [f.id]: true }));
+      try {
+        await gravarLinha(f.id, edit);
+        gravados++;
+        setEdits(prev => { const n = { ...prev }; delete n[f.id]; return n; });
+      } catch (err: any) {
+        falhas.push({ nome: f.nome, motivo: err?.message ?? 'erro desconhecido' });
+      } finally {
+        setSaving(prev => ({ ...prev, [f.id]: false }));
+      }
+    }
+
+    await reload({ silent: true });
+    setSalvandoLote(false);
+
+    if (falhas.length === 0) {
+      showToast(`${gravados} lançamento(s) gravado(s) no ponto.`, 'success');
+    } else {
+      // O rascunho de quem falhou continua na tela, então dá para tentar de
+      // novo sem relançar o dia inteiro.
+      showToast(
+        `${gravados} gravado(s), ${falhas.length} recusado(s) — ${falhas.slice(0, 3).map(x => `${x.nome}: ${x.motivo}`).join(' · ')}`,
+        'error', true,
+      );
+    }
+  }, [pendentesDeSalvar, edits, canEdit, gravarLinha, reload, showToast]);
 
   // Stats do dia
   const statsForDate = useMemo(() => {
@@ -536,7 +636,13 @@ const FrequenciaTrabalhoViewInner = ({ showToast, profile, filial, embedded }: a
   if (isLoading || loadingFunc) return <div className="flex-1 flex items-center justify-center"><LoadingSpinner /></div>;
 
   return (
-    <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col h-full gap-5 overflow-y-auto main-scrollbar pb-6">
+    // Embutida, a tela NÃO é um segundo container de rolagem. Registro de
+    // Ponto já rola por fora; o `h-full overflow-y-auto` daqui dentro virava
+    // uma caixa de altura fixa dentro de outra caixa que rola — a grade ficava
+    // espremida numa janelinha com barra própria, e a página inteira ainda
+    // tinha espaço sobrando embaixo.
+    <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
+      className={`flex flex-col gap-5 pb-6 ${embedded ? '' : 'h-full overflow-y-auto main-scrollbar'}`}>
 
       {/* Título + filtros. Embutida como aba de Registro de Ponto, o cabeçalho
           próprio vira ruído: o título já está na tela de cima. Só o cabeçalho
@@ -724,6 +830,41 @@ const FrequenciaTrabalhoViewInner = ({ showToast, profile, filial, embedded }: a
         />
       </div>
 
+      {/* Lançamento em lote — só na visão de um dia, que é onde se lança. */}
+      {filtro === 'dia' && (
+        <div className="neu-flat rounded-2xl px-5 py-3.5 border border-white/5 shrink-0 flex flex-wrap items-center gap-3">
+          <button
+            type="button"
+            onClick={marcarTodosPresentes}
+            disabled={!marcaveis.length || salvandoLote}
+            title={marcaveis.length
+              ? `Marca ${marcaveis.length} funcionário(s) ainda sem lançamento em ${fmtData(dataSelecionada)}. Quem já tem registro não é tocado.`
+              : 'Todo mundo da lista já tem lançamento ou rascunho neste dia.'}
+            className="flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-widest border transition disabled:opacity-40 disabled:cursor-not-allowed bg-emerald-500/10 border-emerald-500/30 text-emerald-300 hover:bg-emerald-500/20"
+          >
+            <CheckCircle2 size={14} />
+            Todos presentes{marcaveis.length ? ` (${marcaveis.length})` : ''}
+          </button>
+
+          <button
+            type="button"
+            onClick={salvarTodos}
+            disabled={!pendentesDeSalvar.length || salvandoLote}
+            title={pendentesDeSalvar.length
+              ? `Grava ${pendentesDeSalvar.length} lançamento(s) em aberto.`
+              : 'Nada em aberto para gravar.'}
+            className="flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-widest border transition disabled:opacity-40 disabled:cursor-not-allowed bg-accent/15 border-accent/30 text-accent hover:bg-accent/25"
+          >
+            {salvandoLote ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
+            {salvandoLote ? 'Gravando...' : `Salvar tudo${pendentesDeSalvar.length ? ` (${pendentesDeSalvar.length})` : ''}`}
+          </button>
+
+          <p className="text-[11px] text-gray-500 flex-1 min-w-[220px]">
+            Marque todos e corrija só quem faltou — a linha continua editável antes de salvar.
+          </p>
+        </div>
+      )}
+
       {/* Visão DIA — tabela editável */}
       {filtro === 'dia' && (
         <div className="neu-flat rounded-3xl p-5 border border-white/5 shrink-0">
@@ -888,7 +1029,7 @@ const FrequenciaTrabalhoViewInner = ({ showToast, profile, filial, embedded }: a
                         <td className="py-3 px-3 text-center">
                           <button
                             onClick={() => handleSave(func)}
-                            disabled={!isDirty || isSaving || bloqueado}
+                            disabled={!isDirty || isSaving || bloqueado || salvandoLote}
                             className={`w-9 h-9 rounded-xl flex items-center justify-center border transition mx-auto ${isDirty && !bloqueado ? 'bg-accent/15 border-accent/30 text-accent hover:bg-accent/25' : 'border-white/5 text-gray-700'}`}
                             title={turmaAnterior ? 'Dia da turma anterior — não se reescreve' : bloqueado ? 'Dia coberto por afastamento' : 'Salvar'}
                           >

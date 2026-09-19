@@ -2,8 +2,9 @@ import React, { useMemo, useState } from 'react';
 import type { FilialOp } from '../components/FilialSelector';
 import { useFilial } from '../contexts/FilialContext';
 import { motion, AnimatePresence } from 'motion/react';
-import { Clock, Trash2, ClipboardList, ListChecks } from 'lucide-react';
+import { Clock, Trash2, ClipboardList, ListChecks, FileDown } from 'lucide-react';
 import { FrequenciaTrabalhoView } from './FrequenciaTrabalhoView';
+import { FrequenciaRelatorioTab } from './FrequenciaRelatorioTab';
 import { useFetchData, dbDelete } from '../hooks/useSupabaseData';
 import { LoadingSpinner, EmptyState, FilialBadge } from '../components/ui';
 import type { UserProfile } from '../hooks/useUserProfile';
@@ -66,7 +67,7 @@ const PontoEletronicoViewInner = ({ showToast, profile, filial }: { showToast: a
     '/api/funcionariosview', filial ? { filial } : undefined);
   // Sem o totem, o lançamento manual é a única forma de entrada — então é ele
   // que abre. 'registros' é a listagem de ponto_eletronico.
-  const [tab, setTab] = useState<'manual' | 'registros'>('manual');
+  const [tab, setTab] = useState<'manual' | 'registros' | 'relatorio'>('manual');
 
   // Exclusão de linha de ponto continua restrita a admin.
   const isAdmin = profile?.role === 'admin';
@@ -128,6 +129,7 @@ const PontoEletronicoViewInner = ({ showToast, profile, filial }: { showToast: a
             ? [{ key: 'manual', label: 'Lançamento', Icon: ClipboardList } as const]
             : []),
           { key: 'registros', label: 'Registros',  Icon: ListChecks },
+          { key: 'relatorio', label: 'Relatório',  Icon: FileDown },
         ] as const).map(({ key, label, Icon }) => (
           <button key={key} onClick={() => setTab(key)}
             className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-widest transition-all ${tab === key ? 'neu-flat text-gray-200 border border-white/10' : 'text-gray-600 hover:text-gray-400'}`}>
@@ -241,6 +243,16 @@ const PontoEletronicoViewInner = ({ showToast, profile, filial }: { showToast: a
             )}
           </div>
         </>
+      )}
+
+      {/* ── Aba Relatório ── */}
+      {tab === 'relatorio' && (
+        <FrequenciaRelatorioTab
+          funcionarios={funcionarios as any}
+          filial={filial}
+          profile={profile}
+          showToast={showToast}
+        />
       )}
 
       {/* ── Aba Histórico ── */}

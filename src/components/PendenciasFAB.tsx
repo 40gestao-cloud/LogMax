@@ -36,8 +36,8 @@
 // `PontoFAB` fica de fora de propósito: não é aviso, é ação (bater o ponto),
 // e mora em telas específicas (Início, Ponto Eletrônico), não na pilha global.
 
-import { useCallback, useMemo, useState } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { motion, AnimatePresence, useDragControls } from 'motion/react';
 import { Bell, Megaphone, ShoppingCart, BriefcaseBusiness, FileText, RotateCcw } from 'lucide-react';
 import { emOperacao } from '../lib/naoInterromper';
 import { AvisoMatrizFAB } from './AvisoMatrizFAB';
@@ -53,6 +53,43 @@ type Tipo = 'avisoMatriz' | 'pedidoOnline' | 'conviteVaga' | 'documento' | 'requ
 const ZERO: Record<Tipo, number> = {
   avisoMatriz: 0, pedidoOnline: 0, conviteVaga: 0, documento: 0, requisicao: 0,
 };
+
+// ── Onde a pílula fica ────────────────────────────────────────────────────
+//
+// Parada no canto inferior direito ela cobria conteúdo — em Registro de Ponto
+// tapava a coluna de ações da última linha da tabela. Agora se arrasta, e o
+// lugar escolhido é por máquina: a posição vive no localStorage, não no
+// banco, porque é preferência de quem está sentado ali, não do usuário.
+//
+// O deslocamento é guardado como offset a partir do canto (x/y negativos
+// andam para dentro da tela), então a pílula continua ancorada ao canto
+// inferior direito quando a janela muda de tamanho.
+const POS_KEY = 'logmax:pendencias-fab-pos';
+/** Folga para a pílula nunca sumir inteira fora da janela. */
+const LARGURA_PILULA = 200;
+const ALTURA_BLOCO = 120;
+
+const lerPos = (): { x: number; y: number } => {
+  try {
+    const raw = localStorage.getItem(POS_KEY);
+    if (!raw) return { x: 0, y: 0 };
+    const p = JSON.parse(raw);
+    if (typeof p?.x !== 'number' || typeof p?.y !== 'number') return { x: 0, y: 0 };
+    return p;
+  } catch { return { x: 0, y: 0 }; }
+};
+
+const gravarPos = (p: { x: number; y: number }) => {
+  try { localStorage.setItem(POS_KEY, JSON.stringify(p)); } catch { /* aba anônima, storage bloqueado */ }
+};
+
+/** Recorta a posição guardada ao tamanho ATUAL da janela: quem arrastou a
+ *  pílula para a esquerda num monitor grande abriria o notebook com ela fora
+ *  da tela, sem botão nenhum para trazê-la de volta. */
+const dentroDaTela = (p: { x: number; y: number }) => ({
+  x: Math.min(0, Math.max(p.x, -(window.innerWidth - LARGURA_PILULA))),
+  y: Math.min(24, Math.max(p.y, -(window.innerHeight - ALTURA_BLOCO))),
+});
 
 export function PendenciasFAB({ profile, showToast, activeView, onNavigate, aulaFiltro }: {
   profile: UserProfile;
@@ -86,6 +123,18 @@ export function PendenciasFAB({ profile, showToast, activeView, onNavigate, aula
     },
   }), [contar]);
 
+  // Posição arrastável. `arrastou` guarda o clique que era só arraste: sem
+  // ele, soltar a pílula em cima do novo lugar abriria (ou fecharia) a lista.
+  const dragControls = useDragControls();
+  const arrastou = useRef(false);
+  const [pos, setPos] = useState(() => (typeof window === 'undefined' ? { x: 0, y: 0 } : dentroDaTela(lerPos())));
+
+  useEffect(() => {
+    const aoRedimensionar = () => setPos(p => dentroDaTela(p));
+    window.addEventListener('resize', aoRedimensionar);
+    return () => window.removeEventListener('resize', aoRedimensionar);
+  }, []);
+
   const disparar = (tipo: Tipo) => {
     setSinais(prev => ({ ...prev, [tipo]: prev[tipo] + 1 }));
     setOpen(false);
@@ -118,50 +167,80 @@ export function PendenciasFAB({ profile, showToast, activeView, onNavigate, aula
 
   return (
     <>
+      {/* Pílula e lista andam juntas num só bloco arrastável — separadas, a
+          lista ficaria para trás no canto quando a pílula mudasse de lugar.
+          `dragListener={false}` + `dragControls`: só a pílula pega o arraste,
+          senão apertar um item da lista arrastaria o bloco em vez de abrir. */}
       {total > 0 && (
-        <motion.button
-          onClick={() => setOpen(o => !o)}
-          initial={{ opacity: 0, y: 12 }}
-          animate={{ opacity: 1, y: 0 }}
-          whileTap={{ scale: 0.95 }}
-          aria-label={`${total} pendência(s) esperando você`}
-          className="fixed bottom-24 right-6 z-40 h-12 pl-4 pr-5 rounded-full neu-flat border border-accent/40 flex items-center gap-2 text-accent hover:border-accent hover:brightness-110 transition-colors shadow-[0_8px_24px_rgba(0,0,0,0.35)]"
-          style={{ background: 'var(--color-card-bg)' }}
+        <motion.div
+          drag
+          dragListener={false}
+          dragControls={dragControls}
+          dragMomentum={false}
+          dragElastic={0}
+          dragConstraints={{
+            left: -(window.innerWidth - LARGURA_PILULA), right: 0,
+            top: -(window.innerHeight - ALTURA_BLOCO), bottom: 24,
+          }}
+          animate={{ x: pos.x, y: pos.y }}
+          transition={{ type: 'tween', duration: 0 }}
+          onDragStart={() => { arrastou.current = true; }}
+          onDragEnd={(_e, info) => {
+            const novo = dentroDaTela({ x: pos.x + info.offset.x, y: pos.y + info.offset.y });
+            setPos(novo);
+            gravarPos(novo);
+            // O clique de soltar chega depois do dragEnd; o timeout devolve a
+            // pílula ao estado clicável logo em seguida.
+            setTimeout(() => { arrastou.current = false; }, 0);
+          }}
+          className="fixed bottom-24 right-6 z-40 flex flex-col items-end gap-3"
         >
-          <span className="relative flex items-center justify-center">
-            <span className="absolute inline-flex w-5 h-5 rounded-full bg-accent/30 animate-ping" />
-            <Bell size={18} className="relative" />
-          </span>
-          <span className="text-xs font-black uppercase tracking-widest">Pendências</span>
-          <span className="text-[10px] font-black tabular-nums w-5 h-5 rounded-full bg-accent/20 border border-accent/40 flex items-center justify-center">
-            {total}
-          </span>
-        </motion.button>
-      )}
+          <AnimatePresence>
+            {open && (
+              <motion.div
+                key="pendencias-lista"
+                initial={{ opacity: 0, y: 8, scale: 0.97 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: 8, scale: 0.97 }}
+                className="neu-flat rounded-2xl border border-white/10 p-2 w-64 flex flex-col gap-1 shadow-[0_8px_24px_rgba(0,0,0,0.35)]"
+                style={{ background: 'var(--color-card-bg)' }}
+              >
+                {itens.map(({ tipo, label, icon: Icon, cor }) => (
+                  <button key={tipo} onClick={() => disparar(tipo)}
+                    className="flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-white/5 transition-colors text-left">
+                    <Icon size={16} className={cor} />
+                    <span className="text-xs font-semibold text-gray-200 flex-1">{label}</span>
+                    <span className={`text-[10px] font-black tabular-nums px-1.5 py-0.5 rounded-full bg-white/10 ${cor}`}>
+                      {contagens[tipo]}
+                    </span>
+                  </button>
+                ))}
+              </motion.div>
+            )}
+          </AnimatePresence>
 
-      <AnimatePresence>
-        {open && total > 0 && (
-          <motion.div
-            key="pendencias-lista"
-            initial={{ opacity: 0, y: 8, scale: 0.97 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 8, scale: 0.97 }}
-            className="fixed bottom-40 right-6 z-40 neu-flat rounded-2xl border border-white/10 p-2 w-64 flex flex-col gap-1 shadow-[0_8px_24px_rgba(0,0,0,0.35)]"
+          <motion.button
+            onPointerDown={e => dragControls.start(e)}
+            onClick={() => { if (!arrastou.current) setOpen(o => !o); }}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            whileTap={{ scale: 0.95 }}
+            aria-label={`${total} pendência(s) esperando você`}
+            title="Clique para abrir · arraste para mover"
+            className="h-12 pl-4 pr-5 rounded-full neu-flat border border-accent/40 flex items-center gap-2 text-accent hover:border-accent hover:brightness-110 transition-colors shadow-[0_8px_24px_rgba(0,0,0,0.35)] cursor-grab active:cursor-grabbing touch-none"
             style={{ background: 'var(--color-card-bg)' }}
           >
-            {itens.map(({ tipo, label, icon: Icon, cor }) => (
-              <button key={tipo} onClick={() => disparar(tipo)}
-                className="flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-white/5 transition-colors text-left">
-                <Icon size={16} className={cor} />
-                <span className="text-xs font-semibold text-gray-200 flex-1">{label}</span>
-                <span className={`text-[10px] font-black tabular-nums px-1.5 py-0.5 rounded-full bg-white/10 ${cor}`}>
-                  {contagens[tipo]}
-                </span>
-              </button>
-            ))}
-          </motion.div>
-        )}
-      </AnimatePresence>
+            <span className="relative flex items-center justify-center">
+              <span className="absolute inline-flex w-5 h-5 rounded-full bg-accent/30 animate-ping" />
+              <Bell size={18} className="relative" />
+            </span>
+            <span className="text-xs font-black uppercase tracking-widest">Pendências</span>
+            <span className="text-[10px] font-black tabular-nums w-5 h-5 rounded-full bg-accent/20 border border-accent/40 flex items-center justify-center">
+              {total}
+            </span>
+          </motion.button>
+        </motion.div>
+      )}
 
       {/* Os cinco continuam montados — cada um dono da própria fila, do
           próprio auto-abrir e do próprio modal. Só o botão deles some. */}
