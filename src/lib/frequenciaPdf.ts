@@ -115,10 +115,13 @@ export async function exportFrequenciaPDF(
   );
   const registros = totais.presencas + totais.faltas + totais.justificadas;
   const pct = registros > 0 ? Math.round((totais.presencas / registros) * 100) : 0;
+  // Dia apurado é data, não linha: com 7 funcionários em 2 dias o painel dizia
+  // 14 porque somava os registros (funcionários × dias).
+  const diasApurados = new Set(rel.funcionarios.flatMap(f => f.dias.map(d => d.data))).size;
 
   const cards: [string, string][] = [
     ['Funcionários', String(rel.funcionarios.length)],
-    ['Dias apurados', String(registros)],
+    ['Dias apurados', String(diasApurados)],
     ['Presenças', String(totais.presencas)],
     ['Faltas', String(totais.faltas)],
     ['Justificadas', String(totais.justificadas)],
