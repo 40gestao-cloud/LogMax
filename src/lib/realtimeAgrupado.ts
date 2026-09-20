@@ -1,5 +1,5 @@
-// Assinatura de realtime com janela, sorteio e conferência de sessão — uma
-// régua só para as telas que releem quando o banco muda.
+// Assinatura de realtime com janela, sorteio, conferência de sessão e canal
+// compartilhado — uma régua só para as telas que releem quando o banco muda.
 //
 // Por que existe. Cada hook assinava a tabela e RELIA na hora, sem espera. Com
 // a turma inteira aberta, um INSERT de um aluno virava uma leitura em cada
@@ -20,6 +20,23 @@
 //     de hora em hora em toda máquina, e SIGNED_IN também no foco da aba.
 //   - Reconexão do websocket relê: o que mudou enquanto o socket esteve fora
 //     não é reenviado, e sem isso a tela fica velha até alguém apertar F5.
+//   - Uma assinatura por tabela+filtro na máquina, dividida por quem pedir.
+//
+// ─── POR QUE A ASSINATURA É COMPARTILHADA ──────────────────────────────────
+//
+// A mesma tabela tinha três ouvintes independentes na mesma máquina. Em
+// Cotações, `requisicoes` era assinada pelos badges do menu, pelo aviso de
+// requisição devolvida e pelo `useFetchData` da tela — três canais, três
+// registros que o servidor de realtime confere a CADA mudança, três checagens
+// de RLS para entregar o mesmo evento três vezes. Contando tudo, uma máquina
+// chegava a ~28 assinaturas antes de a pessoa abrir qualquer coisa.
+//
+// Agora o registro abaixo é por `tabela|filtro`: o primeiro a pedir abre o
+// canal, os seguintes entram na lista de ouvintes dele, e o último a sair o
+// fecha. Cada um mantém a SUA janela e o SEU sorteio — o que se divide é a
+// escuta, não a decisão de quando reler. Duas telas que ouvem a mesma tabela
+// continuam relendo cada uma a sua consulta, que é o certo: os dados são
+// diferentes.
 //
 // Quem precisa reagir ao payload do evento (e não reler a tabela) continua
 // escrevendo o canal na mão — `useAulaConfig`, `useBlackout` e
@@ -27,6 +44,7 @@
 // `src/lib/reservasTrabalho.ts` também segue próprio, porque filtra o evento
 // pela chave antes de decidir, coisa que só ele sabe fazer.
 
+import type { RealtimeChannel } from '@supabase/supabase-js';
 import { supabase } from './supabase';
 import { freshToken } from './authFetch';
 
@@ -36,8 +54,75 @@ export type AlvoRealtime = string | { tabela: string; filtro?: string };
 const JANELA_MS = 1_500;
 const JITTER_MS = 2_500;
 
+/** O que um assinante quer saber. `reconectou` chega quando o websocket volta
+ *  — nesse caso não dá para saber o que passou, então relê tudo. */
+type Ouvinte = {
+  mudou: (tabela: string) => void;
+  reconectou: () => void;
+};
+
+type Assinatura = {
+  canal: RealtimeChannel;
+  ouvintes: Set<Ouvinte>;
+  /** Primeiro SUBSCRIBED é a assinatura inicial e não relê: quem chamou
+   *  acabou de carregar. Do segundo em diante é reconexão. */
+  jaAssinou: boolean;
+};
+
+const registro = new Map<string, Assinatura>();
+
+const idUnico = () =>
+  typeof crypto !== 'undefined' && crypto.randomUUID
+    ? crypto.randomUUID()
+    : Math.random().toString(36).slice(2);
+
+/**
+ * Põe `ouvinte` na assinatura de `tabela` (com `filtro`, se houver),
+ * abrindo o canal se for o primeiro. Devolve como sair dela.
+ */
+function ouvirTabela(tabela: string, filtro: string | undefined, ouvinte: Ouvinte): () => void {
+  const sb = supabase;
+  if (!sb) return () => {};
+
+  const chave = `${tabela}|${filtro ?? ''}`;
+  let assinatura = registro.get(chave);
+
+  if (!assinatura) {
+    const nova: Assinatura = {
+      canal: sb.channel(`rt_${tabela}_${idUnico()}`),
+      ouvintes: new Set(),
+      jaAssinou: false,
+    };
+    nova.canal.on(
+      'postgres_changes',
+      { event: '*', schema: 'public', table: tabela, ...(filtro ? { filter: filtro } : {}) } as any,
+      () => { for (const o of [...nova.ouvintes]) o.mudou(tabela); },
+    );
+    nova.canal.subscribe(status => {
+      if (status !== 'SUBSCRIBED') return;
+      if (nova.jaAssinou) { for (const o of [...nova.ouvintes]) o.reconectou(); }
+      nova.jaAssinou = true;
+    });
+    registro.set(chave, nova);
+    assinatura = nova;
+  }
+
+  assinatura.ouvintes.add(ouvinte);
+
+  return () => {
+    const atual = registro.get(chave);
+    if (!atual) return;
+    atual.ouvintes.delete(ouvinte);
+    if (atual.ouvintes.size === 0) {
+      registro.delete(chave);
+      void sb.removeChannel(atual.canal);
+    }
+  };
+}
+
 export function assinarRealtime(opts: {
-  /** Nome do canal; ganha sufixo único por instância. */
+  /** Nome do assinante. Só aparece em log — o canal é nomeado pela tabela,
+   *  porque ele agora é de quem quiser ouvi-la. */
   nome: string;
   alvos: AlvoRealtime[];
   /** Recebe as tabelas que mudaram no lote. Na volta do login e na reconexão,
@@ -55,7 +140,6 @@ export function assinarRealtime(opts: {
   let parado = false;
   let janela: ReturnType<typeof setTimeout> | null = null;
   let semSessao = false;
-  let jaAssinou = false;
   const pendentes = new Set<string>();
 
   const disparar = async (tabelas: Set<string>) => {
@@ -81,24 +165,16 @@ export function assinarRealtime(opts: {
     }, (opts.janelaMs ?? JANELA_MS) + Math.random() * (opts.jitterMs ?? JITTER_MS));
   };
 
-  const canalId = typeof crypto !== 'undefined' && crypto.randomUUID
-    ? crypto.randomUUID() : Math.random().toString(36).slice(2);
-  const canal = sb.channel(`${opts.nome}_${canalId}`);
-  for (const alvo of opts.alvos) {
-    const tabela = nomeTabela(alvo);
-    const filtro = typeof alvo === 'string' ? undefined : alvo.filtro;
-    canal.on(
-      'postgres_changes',
-      { event: '*', schema: 'public', table: tabela, ...(filtro ? { filter: filtro } : {}) } as any,
-      () => agendar(tabela),
-    );
-  }
-  canal.subscribe(status => {
-    if (status !== 'SUBSCRIBED') return;
-    // A primeira inscrição não relê: quem chamou já carregou ao montar.
-    if (jaAssinou) void disparar(todas());
-    jaAssinou = true;
-  });
+  const ouvinte: Ouvinte = {
+    mudou: tabela => agendar(tabela),
+    reconectou: () => { void disparar(todas()); },
+  };
+
+  const sair = opts.alvos.map(alvo =>
+    typeof alvo === 'string'
+      ? ouvirTabela(alvo, undefined, ouvinte)
+      : ouvirTabela(alvo.tabela, alvo.filtro, ouvinte),
+  );
 
   const auth = sb.auth.onAuthStateChange(evento => {
     if ((evento === 'SIGNED_IN' || evento === 'TOKEN_REFRESHED') && semSessao) {
@@ -110,6 +186,6 @@ export function assinarRealtime(opts: {
     parado = true;
     if (janela !== null) clearTimeout(janela);
     auth.data.subscription.unsubscribe();
-    void sb.removeChannel(canal);
+    for (const f of sair) f();
   };
 }

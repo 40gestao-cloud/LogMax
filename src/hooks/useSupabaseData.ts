@@ -11,6 +11,44 @@ function escapePostgrestSearch(s: string): string {
   return s.replace(/[,()*]/g, ' ');
 }
 
+// Valor que pode entrar num filtro de realtime sem escapar nada. Nome de
+// filial é SuperMax/MaxLook/TechMax/Matriz; qualquer coisa fora disso não
+// entra no canal — filtro malformado derruba a assinatura inteira, e realtime
+// morto é calado.
+const VALOR_FILTRAVEL = /^[A-Za-z0-9_-]+$/;
+
+/**
+ * Filtro de filial para o canal de realtime — ou null, quando não dá para
+ * filtrar com segurança.
+ *
+ * Por que existe. O canal ouvia a tabela INTEIRA mesmo quando a tela só lia
+ * uma unidade: uma venda na SuperMax acordava a máquina da TechMax, que relia
+ * `produtos` e recebia de volta exatamente o que já tinha. Com três unidades
+ * na sala, dois terços das releituras eram isso.
+ *
+ * Por que só em tabela com soft delete. O filtro do realtime é avaliado sobre
+ * o registro NOVO, e num DELETE o registro velho só traz o que a REPLICA
+ * IDENTITY manda — que nestes 64 casos é a chave primária, sem `filial`. Um
+ * DELETE real nunca casaria com `filial=eq.X` e a linha sumiria do banco sem
+ * sumir da tela. Em tabela com `ativo` o apagar é UPDATE (dbDelete), o
+ * registro novo vem completo e o filtro casa. Fora dessas, ouve tudo.
+ *
+ * O caso que escapa: linha que MUDA de filial deixa de avisar quem ouvia a
+ * filial antiga. Não acontece nos cadastros desta casa (produto não muda de
+ * unidade), e a reconexão do websocket relê tudo de qualquer jeito.
+ */
+function filtroFilialDoCanal(
+  table: string | undefined,
+  extraFilter: Record<string, any> | undefined,
+): string | null {
+  if (!table || !TABLES_WITH_ATIVO.has(table)) return null;
+  const valor = extraFilter?.filial;
+  // Array (`{ filial: ['TechMax', 'Matriz'] }`) fica de fora por ora: o `in`
+  // do realtime é outra sintaxe e não vale arriscar o canal por ele.
+  if (typeof valor !== 'string' || !VALOR_FILTRAVEL.test(valor)) return null;
+  return `filial=eq.${valor}`;
+}
+
 export function useFetchData<T = any>(
   endpoint: string,
   extraFilter?: Record<string, any>,
@@ -175,14 +213,19 @@ export function useFetchData<T = any>(
   // problema não era só a rajada de um import em massa, era a turma inteira
   // relendo a MESMA tabela no mesmo instante. Este hook é o mais usado do app,
   // então é aqui que a manada era maior.
+  //
+  // O canal também estreita para a filial quando a tela já está lendo só ela
+  // (vide `filtroFilialDoCanal`) — evento de outra unidade não acorda mais
+  // esta máquina.
+  const filtroCanal = filtroFilialDoCanal(table, extraFilter);
   useEffect(() => {
     if (!realtime || !table) return;
     return assinarRealtime({
       nome: `rt-${table}`,
-      alvos: [table],
+      alvos: [filtroCanal ? { tabela: table, filtro: filtroCanal } : table],
       aoMudar: () => { void loadRef.current({ silent: true }); }, // não pisca a UI
     });
-  }, [table, realtime]);
+  }, [table, realtime, filtroCanal]);
 
   return { data, setData, isLoading, error, reload: load, totalCount };
 }

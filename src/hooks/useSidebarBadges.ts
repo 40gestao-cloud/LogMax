@@ -1,197 +1,164 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { supabase, TABLES_WITH_ATIVO } from '../lib/supabase';
+import { supabase } from '../lib/supabase';
 import { freshToken } from '../lib/authFetch';
+import { assinarRealtime } from '../lib/realtimeAgrupado';
 import { SETOR_MODULES } from '../lib/sectorAccess';
 import { allSetores } from '../lib/rbac';
 import type { UserProfile } from './useUserProfile';
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Definições de badge por submódulo. Cada entry vira UMA query `count` quando
-// o usuário tem acesso ao módulo (gate por SETOR_MODULES — mesma lógica do
-// SidebarNav). Para adicionar um novo badge:
-//   1. Crie a entry abaixo com viewId no formato `${mod.id}-${slug-do-submenu}`
-//      (slug = label.toLowerCase().replace(/ /g, '').replace(/\//g, '')).
-//   2. Aponte para a tabela e o filtro que define "pendente". Use o mesmo
-//      status que a View do submódulo usa (não invente status novo).
+// Que bolinha existe, de quem ela é, e o que a faz ficar velha.
 //
-// Por que `count: 'exact', head: true`? Não traz linhas — só o número. Sem isso,
-// 14 submódulos × média de 50 linhas = 700 objetos baixados a cada navegação
-// só pra renderizar 14 bolinhas verdes.
+// A CONTAGEM NÃO MORA MAIS AQUI. Quem conta é a RPC `contar_pendencias`
+// (migr. 602): uma chamada devolve os 19 números de uma vez. Antes cada entry
+// virava um `head:true count` próprio — 21 requisições por atualização, por
+// máquina, e como a sala inteira ouve as mesmas tabelas, um INSERT de um aluno
+// virava (turma) × 21. Medido na LogMax-ERP: 1,4 milhão de chamadas e 11.523 s
+// de banco, catorze por cento de todo o tempo do servidor, para pintar bolinha
+// de menu.
 //
-// Por que NÃO incluir Contas a pagar/receber? São "dívidas em aberto", não
-// "tarefa pendente pra mim" — o badge ficaria sempre alto e perde o sentido
-// de notificação. Mantemos esses fluxos sem badge por escolha consciente.
+// Sobrou aqui o que é do front, e não do banco:
+//   viewId       — a chave, no formato `${mod.id}-${slug-do-submenu}`
+//                  (slug = label minúsculo, sem espaço e sem barra). É a MESMA
+//                  chave que a RPC devolve.
+//   modulo       — o gate: `SETOR_MODULES` decide se esta pessoa vê o submenu.
+//                  'all' passa sempre (item de topo, fora de módulo).
+//   listenTables — o que precisa mudar no banco para a bolinha estar velha.
+//
+// Para adicionar um badge: entry aqui + o número correspondente na RPC. Os dois
+// lados usam a mesma chave, e é só isso que os amarra.
+//
+// A REGRA DE CADA FILA — que estado é "esperando alguém" — está escrita na
+// migr. 602, junto do SQL que a executa. O que vale lembrar aqui, porque custou
+// caro descobrir:
+//
+//   · Não existe atalho genérico por `status = 'Pendente'`. Cada fluxo tem o
+//     SEU estado de espera: cotação parada no financeiro é 'Aguardando
+//     Financeiro', orçamento pronto para faturar é 'Aprovado Financeiro',
+//     pedido a separar é `separado_em IS NULL`. Contar por 'Pendente' pega
+//     menos de um terço do que está realmente parado.
+//   · `estoque-recebimentos` SOMA duas filas (a carga que não chegou e a
+//     entrada lançada que ninguém confirmou) porque é o par que a faixa dentro
+//     da tela mostra. Contar só a segunda escondia a que ninguém avisava.
+//   · `requisicoes-aprovações` também soma duas: compra e material do
+//     almoxarifado chegam na mesma caixa de decisão do gerente.
+//   · `financeiro-aprovaçõesdepromoções` e `marketing-promoções` são a MESMA
+//     fila vista dos dois lados (migr. 576/579) — a proposta espera o
+//     Financeiro em 'Aguardando Aprovação' e o gerente em 'Em Análise'.
+//     Contar só o primeiro deixava o gerente sem aviso do que esperava por ele.
+//
+// Por que NÃO incluir Contas a pagar/receber: são "dívidas em aberto", não
+// "tarefa pendente pra mim" — o badge ficaria sempre alto e perderia o sentido
+// de notificação. Escolha consciente.
+//
+// Empresa não tem badge: virou só parametrização (filiais, formas e condições
+// de pagamento, projetos), e parametrização não tem fila.
+//
+// Havia aqui 6 entries `*-tarefas` (compras/estoque/financeiro/rh/vendas/
+// empresa) apontando para submenus 'Tarefas' que não existem mais em módulo
+// nenhum — sem rota, sem entrada de menu. O gate é por módulo, não por submenu
+// existente, então elas seguiam disparando count + realtime a cada sessão para
+// pintar bolinha em item invisível. Removidas 2026-07-28.
 // ─────────────────────────────────────────────────────────────────────────────
 
 type BadgeDef = {
   viewId: string;
   modulo: string;
-  table: string;
-  filters: Record<string, string>;
-  // Colunas que precisam estar vazias (`.is(col, null)`) e valores a excluir
-  // (`.neq`). Existem porque nem toda fila se define por um status: "pedido a
-  // separar" é `separado_em IS NULL`, e contar por status daria número
-  // diferente do que a tela mostra — badge e lista têm de responder à mesma
-  // pergunta, senão a bolinha vira mentira.
-  isNull?: string[];
-  neq?: Record<string, string>;
-  // Vários valores aceitos na mesma coluna (`.in`). Existe porque uma fila pode
-  // ter mais de um estado em aberto: a promoção espera o Financeiro em
-  // 'Aguardando Aprovação' e o gerente em 'Em Análise', e a mesma tela mostra
-  // os dois. Contar só um deixaria o gerente sem aviso do que espera por ele.
-  inList?: Record<string, string[]>;
-  select?: string;
-  listenTables?: string[];
-  // Coluna de filial na `table` (ou embedded via inner-join no `select`).
-  // Quando o usuário está em modo filial (filialAtiva !== null), aplicamos
-  // .eq(filialColumn, filialAtiva) para não contar pendências de outras filiais.
-  // Em modo Matriz (filialAtiva === null), o filtro é ignorado — vê tudo.
-  filialColumn?: string;
+  /** Tabelas cuja mudança deixa esta bolinha velha. Realtime não emite evento
+   *  de view: `estoque-recebimentos` lê a `v_pedidos_a_receber` dentro da RPC,
+   *  mas escuta as tabelas reais por trás dela. */
+  listenTables: string[];
 };
 
 const BADGE_DEFS: BadgeDef[] = [
   // ─── Compras ──────────────────────────────────────────────────────────────
-  { viewId: 'compras-requisiçõesdecompra', modulo: 'compras',    table: 'requisicoes',          filters: { status: 'Pendente' }, filialColumn: 'filial' },
-  { viewId: 'compras-cotações',         modulo: 'compras',    table: 'cotacoes',             filters: { status: 'Pendente' }, filialColumn: 'filial' },
-  { viewId: 'compras-pedidos',          modulo: 'compras',    table: 'pedidos',              filters: { status: 'Pendente' }, filialColumn: 'filial' },
-  // Recebimentos tem DUAS filas e a bolinha soma as duas — é o mesmo par que a
-  // faixa de fila de trabalho mostra dentro da tela. A primeira é a carga que
-  // ainda não chegou ao sistema; a segunda, a entrada lançada que ninguém
-  // confirmou. Contar só a segunda escondia justamente a que ninguém avisava.
-  //
-  // As DUAS precisam de `filialColumn` — só a de pedidos tinha. Sem ela o
-  // `count` não filtra a unidade e a RLS é a única régua: quem enxerga mais de
-  // uma filial (admin, CEO, conselheiro) via na TechMax os 14 recebimentos por
-  // confirmar do SuperMax. O aluno confirmava tudo o que a tela mostrava e o
-  // número no menu não baixava — "confirmei e continua aparecendo". A faixa
-  // dentro da tela sempre filtrou pela filial; era o menu que discordava dela.
-  { viewId: 'estoque-recebimentos',     modulo: 'estoque',    table: 'recebimentos',         filters: { status: 'Pendente' }, filialColumn: 'filial' },
-  // A segunda fila lê a view da migr. 530 e não a tabela: "em entrega e sem
-  // recebido_em" também pega o pedido cuja carga JÁ foi toda lançada e só
-  // espera conferência — e esse já está contado na primeira fila. A view põe o
-  // saldo na régua, que é a mesma coisa que a faixa dentro da tela pergunta.
-  // `listenTables` volta a nomear as tabelas reais: realtime não emite evento
-  // de view.
-  { viewId: 'estoque-recebimentos',     modulo: 'estoque',    table: 'v_pedidos_a_receber',  filters: {}, filialColumn: 'filial', listenTables: ['pedidos', 'recebimentos'] },
+  { viewId: 'compras-requisiçõesdecompra', modulo: 'compras', listenTables: ['requisicoes'] },
+  { viewId: 'compras-cotações',            modulo: 'compras', listenTables: ['cotacoes'] },
+  { viewId: 'compras-pedidos',             modulo: 'compras', listenTables: ['pedidos'] },
 
   // ─── Requisições ──────────────────────────────────────────────────────────
   // Caixa de decisão do gerente. Mora no módulo Requisições desde que ele
   // deixou de ser submenu de Empresa.
-  {
-    viewId: 'requisicoes-aprovações',
-    modulo: 'requisicoes',
-    table: 'aprovacoes_compras',
-    filters: { status: 'Pendente', 'requisicoes.ativo': 'true', 'requisicoes.status': 'Pendente' },
-    select: '*,requisicoes!inner(id)',
-    listenTables: ['aprovacoes_compras', 'requisicoes'],
-    filialColumn: 'filial',
-  },
-  // A mesma tela também é a porta do material do almoxarifado (aba "Material
-  // do estoque"), então o número no menu tem de contar os dois documentos —
-  // senão a aba mostra fila e o menu diz que não há nada. O badge de
-  // 'estoque-liberarrequisições' continua: são duas portas para a mesma fila.
-  {
-    viewId: 'requisicoes-aprovações',
-    modulo: 'requisicoes',
-    table: 'aprovacoes_estoque',
-    filters: { status: 'Pendente', 'requisicoes_estoque.ativo': 'true', 'requisicoes_estoque.status': 'Pendente' },
-    select: '*,requisicoes_estoque!inner(id)',
-    listenTables: ['aprovacoes_estoque', 'requisicoes_estoque'],
-    filialColumn: 'filial',
-  },
+  { viewId: 'requisicoes-aprovações', modulo: 'requisicoes',
+    listenTables: ['aprovacoes_compras', 'requisicoes', 'aprovacoes_estoque', 'requisicoes_estoque'] },
 
   // ─── Estoque ──────────────────────────────────────────────────────────────
-  {
-    viewId: 'estoque-liberarrequisições',
-    modulo: 'estoque',
-    table: 'aprovacoes_estoque',
-    filters: { status: 'Pendente', 'requisicoes_estoque.ativo': 'true', 'requisicoes_estoque.status': 'Pendente' },
-    select: '*,requisicoes_estoque!inner(id)',
-    listenTables: ['aprovacoes_estoque', 'requisicoes_estoque'],
-    filialColumn: 'filial',
-  },
-  { viewId: 'estoque-requisiçõesdematerial', modulo: 'estoque', table: 'requisicoes_estoque',  filters: { status: 'Pendente' }, filialColumn: 'filial' },
-  { viewId: 'estoque-expedição',        modulo: 'estoque',    table: 'expedicao',            filters: { status: 'Pendente' }, filialColumn: 'filial' },
+  // Duas portas para a mesma fila do almoxarifado: esta e a de Requisições.
+  { viewId: 'estoque-liberarrequisições',    modulo: 'estoque',
+    listenTables: ['aprovacoes_estoque', 'requisicoes_estoque'] },
+  { viewId: 'estoque-recebimentos',          modulo: 'estoque', listenTables: ['recebimentos', 'pedidos'] },
+  { viewId: 'estoque-requisiçõesdematerial', modulo: 'estoque', listenTables: ['requisicoes_estoque'] },
+  { viewId: 'estoque-expedição',             modulo: 'estoque', listenTables: ['expedicao'] },
+  { viewId: 'estoque-pedidosdevenda',        modulo: 'estoque', listenTables: ['pedidos_venda'] },
 
   // ─── Financeiro ───────────────────────────────────────────────────────────
-  { viewId: 'financeiro-aprovaçõesdecotação',    modulo: 'financeiro', table: 'cotacoes',            filters: { status: 'Aguardando Financeiro' }, filialColumn: 'filial' },
-  { viewId: 'financeiro-aprovaçõesdeorçamento',  modulo: 'financeiro', table: 'orcamentos',          filters: { status: 'Aguardando Financeiro' }, filialColumn: 'filial' },
-  // MIGR 576/579: a fila da oferta tem DOIS estados em aberto — 'Aguardando
-  // Aprovação' espera o Financeiro, 'Em Análise' espera o gerente da filial. A
-  // tela mostra os dois; contar só o primeiro deixava o gerente sem nenhum
-  // aviso de que havia oferta esperando a liberação dele.
-  { viewId: 'financeiro-aprovaçõesdepromoções', modulo: 'financeiro', table: 'marketing_promocoes', filters: {}, inList: { status: ['Aguardando Aprovação', 'Em Análise'] }, filialColumn: 'filial' },
-  { viewId: 'financeiro-aprovaçõesdeconteúdo',  modulo: 'financeiro', table: 'marketing_tarefas',   filters: { status_link: 'Aguardando Aprovação' }, filialColumn: 'filial' },
-  // Pedidos de Venda chega no Financeiro pra registrar pagamento: conta o que
-  // ainda não foi recebido. Mesmo recorte que PedidosVendaView mode="financeiro".
-  { viewId: 'financeiro-pedidosdevenda',         modulo: 'financeiro', table: 'pedidos_venda',       filters: {}, isNull: ['pago_em'], neq: { status: 'Cancelado' }, filialColumn: 'filial' },
-
-  // ─── Metas (top-level, não faz parte de módulo — usa 'all' para passar no gate) ─
-  // Badge = metas estratégicas ativas visíveis (RLS já limita ao setor).
-  // Serve como "avisos" quando a Matriz lança meta nova.
-  { viewId: 'metas',      modulo: 'all', table: 'metas_estrategicas', filters: { status: 'Em Produção' } },
-
-  // ─── RH ───────────────────────────────────────────────────────────────────
-  { viewId: 'rh-férias',  modulo: 'rh', table: 'ferias',  filters: { status: 'Solicitada' }, filialColumn: 'filial' },
-
-  // ─── Estoque (extra) ──────────────────────────────────────────────────────
-  // Pedidos aguardando a logística separar. Mesmo recorte que
-  // PedidosVendaView mode="estoque".
-  { viewId: 'estoque-pedidosdevenda', modulo: 'estoque', table: 'pedidos_venda', filters: {}, isNull: ['separado_em'], neq: { status: 'Cancelado' }, filialColumn: 'filial' },
+  { viewId: 'financeiro-aprovaçõesdecotação',   modulo: 'financeiro', listenTables: ['cotacoes'] },
+  { viewId: 'financeiro-aprovaçõesdeorçamento', modulo: 'financeiro', listenTables: ['orcamentos'] },
+  { viewId: 'financeiro-aprovaçõesdepromoções', modulo: 'financeiro', listenTables: ['marketing_promocoes'] },
+  { viewId: 'financeiro-aprovaçõesdeconteúdo',  modulo: 'financeiro', listenTables: ['marketing_tarefas'] },
+  { viewId: 'financeiro-pedidosdevenda',        modulo: 'financeiro', listenTables: ['pedidos_venda'] },
 
   // ─── Vendas ───────────────────────────────────────────────────────────────
-  { viewId: 'vendas-orçamentos',     modulo: 'vendas', table: 'orcamentos', filters: { status: 'Aprovado Financeiro' }, filialColumn: 'filial' },
   // 'vendas-clienteespecial' saiu daqui junto com o submenu: Cliente Especial
   // é tela da Matriz, e em Matriz a sidebar não lista módulos operacionais —
   // o badge não tinha onde aparecer.
+  { viewId: 'vendas-orçamentos', modulo: 'vendas', listenTables: ['orcamentos'] },
 
   // ─── Marketing ────────────────────────────────────────────────────────────
-  // Mesma régua do lado do marketing: a proposta segue "em curso" enquanto não
-  // for liberada, reprovada ou expirar.
-  { viewId: 'marketing-promoções', modulo: 'marketing', table: 'marketing_promocoes', filters: {}, inList: { status: ['Aguardando Aprovação', 'Em Análise'] }, filialColumn: 'filial' },
-  // 'Tarefas' do marketing usa a tabela própria marketing_tarefas — status_link
-  // 'Aguardando Aprovação' já vira o badge 'financeiro-aprovaçõesdeconteúdo';
-  // não duplicamos aqui pra não inflar dois badges com a mesma fila.
+  // 'Tarefas' do marketing não entra: o status_link 'Aguardando Aprovação' já
+  // vira 'financeiro-aprovaçõesdeconteúdo', e dois badges para a mesma fila
+  // inflam a conta da sala.
+  { viewId: 'marketing-promoções', modulo: 'marketing', listenTables: ['marketing_promocoes'] },
+
+  // ─── RH ───────────────────────────────────────────────────────────────────
+  { viewId: 'rh-férias', modulo: 'rh', listenTables: ['ferias'] },
+
+  // ─── Metas (top-level, fora de módulo — 'all' para passar no gate) ────────
+  // Serve como "avisos" quando a Matriz lança meta nova.
+  { viewId: 'metas', modulo: 'all', listenTables: ['metas_estrategicas'] },
 
   // ─── TI ───────────────────────────────────────────────────────────────────
-  // Desenvolvimento com IA: badge conta treinamentos ainda por acontecer.
-  { viewId: 'ti-desenvolvimentocomia', modulo: 'ti', table: 'desenvolvimentos_ia', filters: { status: 'Agendado' } },
-
-  // Empresa não tem badge: virou só parametrização (filiais, formas e
-  // condições de pagamento, projetos), e parametrização não tem fila.
-  //
-  // Havia aqui 6 entries `*-tarefas` (compras/estoque/financeiro/rh/vendas/
-  // empresa) apontando para submenus 'Tarefas' que não existem mais em módulo
-  // nenhum — sem rota, sem entrada de menu. O gate abaixo é por módulo, não
-  // por submenu existente, então elas seguiam disparando count + realtime a
-  // cada sessão para pintar bolinha em item invisível. Removidas 2026-07-28.
+  // Desenvolvimento com IA: treinamentos ainda por acontecer.
+  { viewId: 'ti-desenvolvimentocomia', modulo: 'ti', listenTables: ['desenvolvimentos_ia'] },
 ];
 
+// Janela, não debounce — e por que ela é tão larga aqui.
+//
+// Com 500ms reiniciando a cada evento, um único INSERT fazia TODAS as máquinas
+// da turma contarem juntas meio segundo depois: a manada inteira no mesmo
+// instante. Em 15/09 isso somou ~4 mil contagens em 10 minutos na
+// logmax-contabilidade e a API respondeu 504 por seis minutos, login incluído.
+// O primeiro evento abre a janela e os seguintes entram no mesmo lote sem
+// empurrar o prazo — senão uma sala que escreve sem parar nunca deixaria o
+// badge atualizar. Some o sorteio por máquina e o número chega até 10s depois:
+// é bolinha de menu, não saldo de caixa.
 const REALTIME_JANELA_MS = 4_000;
 const REALTIME_JITTER_MS = 6_000;
 const FOCO_INTERVALO_MIN_MS = 60_000;
 
 /**
- * Retorna `Record<viewId, count>` com a contagem de itens pendentes por
- * submódulo. Cada entry vira UM `head:true count` no Supabase — não traz
- * linhas, só o número.
+ * Retorna `Record<viewId, count>` com o tamanho de cada fila que vira bolinha
+ * na sidebar.
  *
- * Disparos de query:
- *   - **Mount** / mudança de usuário: full fetch (todos os badges elegíveis).
- *   - **Realtime granular**: evento em UMA tabela → re-fetcha só os badges
- *     dessa tabela. Janela de 4s + até 6s sorteados por máquina, pra agrupar
- *     bursts e não pôr a turma inteira contando no mesmo instante.
- *   - **Window focus**: full fetch como fallback se realtime perdeu eventos
- *     durante sleep do device. No máximo uma vez por minuto.
- *   - Contagens idênticas no mesmo lote (duas portas pra mesma fila) viram
- *     uma requisição só.
- *   - **Navegação (activeView)**: NÃO dispara fetch. Realtime + focus já
- *     cobrem; re-fetchar a cada clique de menu era overhead desnecessário.
+ * Uma chamada à RPC `contar_pendencias` (migr. 602) devolve o quadro inteiro.
+ * Era uma requisição por badge — até 21 por atualização, por máquina.
  *
- * Gate por SETOR_MODULES: só dispara queries de submódulos visíveis ao
- * usuário, evitando bater em tabelas que a RLS bloquearia.
- * Erros (RLS / schema drift) devolvem `count = 0` (badge esconde) e logam
- * `console.warn` para visibilidade do dev.
+ * Quando conta:
+ *   - **Mount** / mudança de usuário ou de filial ativa.
+ *   - **Realtime**: mudança em qualquer tabela ouvida, num canal só, com
+ *     janela de 4s + até 6s sorteados por máquina — para agrupar rajadas e não
+ *     pôr a turma inteira contando no mesmo instante.
+ *   - **Volta ao foco da aba**: no máximo uma vez por minuto, para cobrir o
+ *     realtime que caiu enquanto a máquina dormia.
+ *   - **Navegação**: NÃO conta. Realtime e foco já cobrem; recontar a cada
+ *     clique de menu era gasto sem resposta nova.
+ *
+ * O gate de `SETOR_MODULES` decide QUAIS badges são desenhados. A RPC é
+ * SECURITY INVOKER, então o número já vem recortado pela RLS de quem chamou —
+ * o gate aqui é sobre o menu, não sobre o dado.
+ *
+ * Erro (RLS, schema drift, RPC ausente antes da migração rodar) devolve quadro
+ * vazio, as bolinhas somem e o motivo sai no `console.warn`.
  */
 export function useSidebarBadges(
   profile: UserProfile | null,
@@ -220,23 +187,23 @@ export function useSidebarBadges(
   const semSessaoRef = useRef(false);
 
   /**
-   * Conta os badges elegíveis. Se `onlyTables` for passado, conta SÓ os
-   * badges cujas tabelas estão no set (fetch parcial — usado pelo realtime).
-   * Sem `onlyTables`: full fetch (mount, focus, mudança de usuário).
+   * Conta. O `_tabelasQueMudaram` chega do realtime e não é usado para
+   * recortar nada: agora que o quadro inteiro custa UMA chamada, contar só
+   * parte dele não economiza ida ao servidor — e contar tudo tira do caminho
+   * a classe de bug em que a bolinha A ficava velha porque quem mudou foi a
+   * tabela B. Fica no argumento porque o `assinarRealtime` o entrega, e
+   * porque é o que se olha quando alguém for investigar o que disparou isto.
    */
-  const fetchBadges = useCallback(async (onlyTables?: Set<string>) => {
+  const fetchBadges = useCallback(async (_tabelasQueMudaram?: Set<string>) => {
     const p = profileRef.current;
     if (!p || !supabase) {
-      if (!onlyTables) setBadges({});
+      setBadges({});
       return;
     }
     const myId = ++reqIdRef.current;
 
-    // Sem sessão não conta. O `profile` fica em memória depois que o refresh
-    // do token falha — em 15/09, na logmax-contabilidade, as máquinas que
-    // perderam a sessão nos 504 do login seguiram contando como anon, e cada
-    // contagem voltava 401 (42501). Badge sem usuário não tem o que mostrar:
-    // zera e espera o login voltar (Effect 4 refaz no SIGNED_IN).
+    // Sem sessão não conta. Depois dos 504 de login de 15/09, máquina com a
+    // sessão perdida seguia consultando como anon e colhendo 401 em série.
     if (!(await freshToken())) {
       semSessaoRef.current = true;
       if (myId === reqIdRef.current) setBadges({});
@@ -244,101 +211,35 @@ export function useSidebarBadges(
     }
     semSessaoRef.current = false;
 
-    const allowedModulos = new Set(
-      allSetores(p).flatMap(s => SETOR_MODULES[String(s)] ?? []),
-    );
-    let eligible = BADGE_DEFS.filter(def => def.modulo === 'all' || allowedModulos.has(def.modulo));
-    if (onlyTables) {
-      // Considera listenTables (default = [table]) — assim mudanças na tabela
-      // pai (via inner-join) também disparam re-fetch do badge filho.
-      //
-      // O alvo é o viewId, não a def: quando um badge soma mais de uma fonte
-      // (Recebimentos = recebimentos + pedidos em entrega), refazer só a fonte
-      // que mudou daria um total pela metade. Recalcula o grupo inteiro.
-      const viewsAlvo = new Set(
-        BADGE_DEFS
-          .filter(def => (def.listenTables ?? [def.table]).some(t => onlyTables.has(t)))
-          .map(def => def.viewId),
-      );
-      eligible = eligible.filter(def => viewsAlvo.has(def.viewId));
-    }
-    if (eligible.length === 0) return;
-
-    // Duas portas para a mesma fila (aprovacoes_estoque em Requisições e em
-    // Estoque) faziam a MESMA contagem duas vezes por máquina. No pico de
-    // 15/09 aprovacoes_estoque foi a tabela mais contada da turma. A chave
-    // junta tudo o que muda a resposta; a promessa é compartilhada no lote.
-    const fAtivaLote = filialAtivaRef.current;
-    const emVoo = new Map<string, Promise<number>>();
-    const contar = (def: BadgeDef): Promise<number> => {
-      const chave = JSON.stringify([
-        def.table, def.select ?? '*', def.filters, def.isNull ?? [], def.neq ?? {}, def.inList ?? {},
-        def.filialColumn && fAtivaLote ? fAtivaLote : null,
-      ]);
-      let p = emVoo.get(chave);
-      if (!p) {
-        p = contarUm(def);
-        emVoo.set(chave, p);
-      }
-      return p;
-    };
-
-    const contarUm = async (def: BadgeDef): Promise<number> => {
-      try {
-        let q = supabase!
-          .from(def.table)
-          .select(def.select ?? '*', { count: 'exact', head: true });
-        if (TABLES_WITH_ATIVO.has(def.table)) {
-          q = q.eq('ativo', true);
-        }
-        for (const [col, val] of Object.entries(def.filters)) {
-          q = q.eq(col, val);
-        }
-        for (const col of def.isNull ?? []) {
-          q = q.is(col, null);
-        }
-        for (const [col, val] of Object.entries(def.neq ?? {})) {
-          q = q.neq(col, val);
-        }
-        for (const [col, vals] of Object.entries(def.inList ?? {})) {
-          q = q.in(col, vals);
-        }
-        // Filial-aware: em modo filial, só conta pendências da filial ativa.
-        // Em modo Matriz (filialAtiva=null), vê tudo.
-        if (def.filialColumn && fAtivaLote) {
-          q = q.eq(def.filialColumn, fAtivaLote);
-        }
-        const { count, error } = await q;
-        if (error) {
-          console.warn(`[useSidebarBadges] ${def.viewId} (${def.table}):`, error.message);
-          return 0;
-        }
-        return count ?? 0;
-      } catch (err: any) {
-        console.warn(`[useSidebarBadges] ${def.viewId} (${def.table}) threw:`, err?.message ?? err);
-        return 0;
-      }
-    };
-
-    const results = await Promise.all(
-      eligible.map(async def => [def.viewId, await contar(def)] as const),
-    );
+    // Em modo Matriz (filialAtiva === null) a RPC recebe NULL e conta tudo o
+    // que a RLS deixa ver; em modo filial, só a unidade ativa.
+    const { data, error } = await supabase.rpc('contar_pendencias', {
+      p_filial: filialAtivaRef.current,
+    });
 
     if (myId !== reqIdRef.current) return; // resposta obsoleta — ignora
 
-    // Fetch parcial: merge no estado existente (preserva badges de outras
-    // tabelas). Fetch full: substitui o objeto inteiro (badges que sumiram
-    // do gate por mudança de usuário também somem).
-    // Soma as fontes DENTRO deste lote antes de gravar. Acumular sobre o
-    // estado anterior contaria em dobro a cada realtime.
-    const somado: Record<string, number> = {};
-    for (const [id, n] of results) somado[id] = (somado[id] ?? 0) + n;
-
-    if (onlyTables) {
-      setBadges(prev => ({ ...prev, ...somado }));
-    } else {
-      setBadges(somado);
+    if (error) {
+      console.warn('[useSidebarBadges] contar_pendencias:', error.message);
+      setBadges({});
+      return;
     }
+
+    // O gate é do MENU: a RPC devolve todas as chaves, e aqui ficam só as dos
+    // submódulos que esta pessoa enxerga. Chave que a RPC não trouxe (versão
+    // do banco mais velha que a do app) vira 0 em vez de `undefined`, senão a
+    // bolinha ficaria pendurada no último número conhecido.
+    const contagens = (data ?? {}) as Record<string, unknown>;
+    const allowedModulos = new Set(
+      allSetores(p).flatMap(s => SETOR_MODULES[String(s)] ?? []),
+    );
+    const quadro: Record<string, number> = {};
+    for (const def of BADGE_DEFS) {
+      if (def.modulo !== 'all' && !allowedModulos.has(def.modulo)) continue;
+      const n = Number(contagens[def.viewId]);
+      quadro[def.viewId] = Number.isFinite(n) ? n : 0;
+    }
+    setBadges(quadro);
   }, []);
 
   // Effect 1: full fetch ao montar / mudar de usuário. Sem dep em activeView
@@ -347,9 +248,19 @@ export function useSidebarBadges(
     fetchBadges();
   }, [profile?.id, setoresKey, filialAtiva, fetchBadges]);
 
-  // Effect 2: subscriptions Realtime. Cada evento conhece sua tabela e
-  // dispara fetch SÓ dos badges dessa tabela (granularidade fina). Debounce
-  // por tabela agrupa bursts (ex.: trigger que insere em cascata).
+  // Effect 2: realtime das tabelas que alimentam badge.
+  //
+  // UM canal com N assinaturas, e não N canais. Antes era um `supabase.channel`
+  // por tabela — quinze deles por máquina, só para as bolinhas do menu, antes
+  // de a pessoa abrir qualquer tela. Cada canal é um join no servidor de
+  // realtime e um registro de assinatura que ele confere a cada mudança; o
+  // `.on()` aceita várias tabelas no mesmo canal e entrega o mesmo evento.
+  //
+  // A janela e o sorteio continuam os mesmos (4s + até 6s por máquina) —
+  // agora vindos do `assinarRealtime`, que é onde essa régua mora desde
+  // 15/09. Vêm junto duas coisas que a versão caseira não tinha: não conta
+  // sem sessão (antes a máquina deslogada seguia colhendo 401) e relê na
+  // reconexão do websocket (o que mudou com o socket fora não é reenviado).
   useEffect(() => {
     if (!profile || !supabase) return;
 
@@ -359,50 +270,19 @@ export function useSidebarBadges(
     const tables = Array.from(new Set(
       BADGE_DEFS
         .filter(def => def.modulo === 'all' || allowedModulos.has(def.modulo))
-        .flatMap(d => d.listenTables ?? [d.table]),
+        .flatMap(d => d.listenTables),
     ));
+    if (tables.length === 0) return;
 
-    // Set acumula tabelas alteradas dentro da janela. Sem ele, 2 eventos em
-    // tabelas diferentes na mesma janela perderiam o primeiro.
-    //
-    // Janela, não debounce. Com 500ms e reinício a cada evento, um único INSERT
-    // fazia TODAS as máquinas da turma contarem juntas meio segundo depois — a
-    // manada inteira no mesmo instante. Em 15/09 isso somou ~4 mil contagens em
-    // 10 minutos na logmax-contabilidade e a API respondeu 504 por seis minutos,
-    // login incluído. Agora o primeiro evento abre uma janela de 4s mais um
-    // atraso sorteado por máquina (até 6s); os eventos seguintes entram no mesmo
-    // lote sem empurrar o prazo — senão uma sala escrevendo sem parar nunca
-    // deixaria o badge atualizar. O número chega até 10s depois: é bolinha de
-    // menu, não saldo de caixa.
-    const pendingTables = new Set<string>();
-    let janelaTimer: ReturnType<typeof setTimeout> | null = null;
-
-    const triggerFor = (table: string) => {
-      pendingTables.add(table);
-      if (janelaTimer !== null) return;
-      janelaTimer = setTimeout(() => {
-        janelaTimer = null;
-        const batch = new Set(pendingTables);
-        pendingTables.clear();
-        fetchBadges(batch);
-      }, REALTIME_JANELA_MS + Math.random() * REALTIME_JITTER_MS);
-    };
-
-    const channels = tables.map(table => {
-      const id = (typeof crypto !== 'undefined' && crypto.randomUUID)
-        ? crypto.randomUUID()
-        : Math.random().toString(36).slice(2);
-      return supabase!
-        .channel(`badges-${table}-${id}`)
-        .on('postgres_changes', { event: '*', schema: 'public', table }, () => triggerFor(table))
-        .subscribe();
+    return assinarRealtime({
+      nome: 'badges',
+      alvos: tables,
+      janelaMs: REALTIME_JANELA_MS,
+      jitterMs: REALTIME_JITTER_MS,
+      // O lote diz QUAIS tabelas mudaram: só os badges dessas são recontados.
+      aoMudar: tabelas => { void fetchBadges(tabelas); },
     });
-
-    return () => {
-      if (janelaTimer !== null) clearTimeout(janelaTimer);
-      channels.forEach(c => supabase!.removeChannel(c));
-    };
-  }, [profile?.id, setoresKey, fetchBadges]);
+  }, [profile?.id, setoresKey, fetchBadges]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Effect 3: fallback — re-fetcha quando o tab/window recupera foco. Cobre
   // o caso de realtime ter desconectado durante sleep do device (mobile/laptop
