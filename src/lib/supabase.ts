@@ -167,6 +167,11 @@ export const ENDPOINT_TABLE_MAP: Record<string, string> = {
   // por isso): Capital lia `distribuicoes_lucro` sem a chave, então a lista de
   // distribuições de lucro da filial e a da Matriz ficavam vazias em silêncio.
   'distribuicoes_lucro':              'distribuicoes_lucro',
+  // Migr. 604 — aplicações financeiras. Sem estas duas o painel abriria sem
+  // banco nenhum na praça e sem contrato nenhum na lista, em silêncio: é a
+  // mesma armadilha das linhas acima, e o teste continua sendo o que a pega.
+  'bancos_investimento':              'bancos_investimento',
+  'aplicacoes_financeiras':           'aplicacoes_financeiras',
   'caixa_bancos':                     'caixa_bancos',
   // RH → Funcionários lê os usuários da unidade para oferecer o cadastro já
   // preenchido. Sem esta chave o select saía com uma única opção ("cadastrar

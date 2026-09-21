@@ -7,9 +7,12 @@ import {
 import { supabase } from '../lib/supabase';
 import { LoadingSpinner, NeuButtonAccent } from '../components/ui';
 import { useFetchData } from '../hooks/useSupabaseData';
+import { PeriodoCapitalAviso } from '../components/PeriodoCapitalAviso';
+import { AplicacoesPanel } from '../components/AplicacoesPanel';
 import { formatBRL, parseBRL } from '../lib/viewUtils';
 import type { UserProfile } from '../hooks/useUserProfile';
 import { useFilial } from '../contexts/FilialContext';
+import { dataSimplesBR } from '../lib/dates';
 
 // ── Tipos ──────────────────────────────────────────────────────────
 type SaldoFilial = {
@@ -107,6 +110,16 @@ function ModalSolicitar({
   const [justificativa, setJustificativa] = useState('');
   const [saving, setSaving] = useState(false);
 
+  // Migr. 604 — o teto é da Matriz, não do input. O banco recusa de qualquer
+  // jeito; ler aqui serve para o aluno ver o limite antes de digitar 48.
+  const { data: configs = [] } =
+    useFetchData<{ id: string; max_parcelas: number }>('capital_config', undefined, false);
+  // `null` enquanto a config não chegou: mostrar o fallback de 60 durante o
+  // carregamento faria o rótulo piscar "até 60x" e depois "até 12x" — o aluno
+  // leria o número errado justamente no instante em que vai digitar.
+  const maxParcelas: number | null = configs[0]?.max_parcelas ?? null;
+  const teto = maxParcelas ?? 60;
+
   const handleSalvar = async () => {
     if (!supabase) return;
     const valor = parseBRL(valorStr);
@@ -166,12 +179,19 @@ function ModalSolicitar({
         </div>
 
         <div className="flex flex-col gap-1">
-          <label className="text-[10px] font-black uppercase tracking-widest text-gray-500">Nº de parcelas desejadas</label>
+          <label className="text-[10px] font-black uppercase tracking-widest text-gray-500">
+            Nº de parcelas desejadas{maxParcelas ? ` (até ${maxParcelas}x)` : ''}
+          </label>
           <input
-            type="number" min="1" max="60" value={parcelas}
+            type="number" min="1" max={teto} value={parcelas}
             onChange={e => setParcelas(e.target.value)}
             className="neu-pressed rounded-xl px-3 py-2.5 text-sm text-gray-100 bg-transparent outline-none"
           />
+          {maxParcelas != null && (parseInt(parcelas) || 1) > maxParcelas && (
+            <p className="text-[11px] text-red-400 mt-1">
+              A Matriz parcela em até {maxParcelas}x. Acima disso o pedido é recusado.
+            </p>
+          )}
         </div>
 
         <div className="flex flex-col gap-1">
@@ -288,6 +308,14 @@ export function FilialCapitalView({
         </div>
       )}
 
+      {saldo && (
+        <PeriodoCapitalAviso
+          dataInicio={saldo.data_inicio}
+          dataFim={saldo.data_fim}
+          podeConfigurar={false}
+        />
+      )}
+
       {/* Card principal de saldo */}
       {loadingSaldo ? (
         <LoadingSpinner />
@@ -348,8 +376,8 @@ export function FilialCapitalView({
                 </div>
                 {saldo.data_inicio && (
                   <p className="text-[10px] text-gray-600 mt-2">
-                    Período: {fmtDate(saldo.data_inicio)}
-                    {saldo.data_fim ? ` → ${fmtDate(saldo.data_fim)}` : ' → sem prazo'}
+                    Período: {dataSimplesBR(saldo.data_inicio)}
+                    {saldo.data_fim ? ` → ${dataSimplesBR(saldo.data_fim)}` : ' → sem prazo'}
                   </p>
                 )}
               </>
@@ -446,6 +474,15 @@ export function FilialCapitalView({
             é o que sobra de fato pra distribuir ou reinvestir.
           </p>
         </div>
+      )}
+
+      {/* Aplicações (migr. 604) — antes dos empréstimos de propósito: a
+          pergunta "tenho sobra parada?" vem antes de "preciso pegar dinheiro?". */}
+      {filial && (
+        <AplicacoesPanel
+          filial={filial} profile={profile} showToast={showToast}
+          onMovimentou={carregarSaldo}
+        />
       )}
 
       {/* Empréstimos */}

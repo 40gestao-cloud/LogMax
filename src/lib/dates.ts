@@ -32,6 +32,21 @@ export function dataBR(iso: string | Date | null | undefined): string | null {
   return Number.isNaN(d.getTime()) ? null : FMT.format(d);
 }
 
+/**
+ * Coluna `date` do Postgres (`'YYYY-MM-DD'`) em `DD/MM/AAAA`, sem passar por
+ * `new Date()`.
+ *
+ * `new Date('2026-09-01')` é meia-noite UTC; no Acre (UTC−5) isso é 31/08 às
+ * 19h, e a tela mostra o dia anterior. Foi o que fez o período do Capital
+ * aparecer como 31/08 quando a configuração dizia 01/09. Data pura não tem
+ * hora nem fuso — é texto, e aqui continua texto.
+ */
+export function dataSimplesBR(d: string | null | undefined): string {
+  if (!d) return '—';
+  const [ano, mes, dia] = d.slice(0, 10).split('-');
+  return ano && mes && dia ? `${dia}/${mes}/${ano}` : d;
+}
+
 /** Data N dias antes de hoje no fuso do Acre, formato `YYYY-MM-DD`. */
 export function daysAgoBR(dias: number): string {
   const [y, m, d] = todayBR().split('-').map(Number);

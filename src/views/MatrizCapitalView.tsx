@@ -1,15 +1,18 @@
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
-import { todayBR } from '../lib/dates';
+import { todayBR, dataSimplesBR } from '../lib/dates';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   Landmark, Plus, X, Clock, Trash2, ChevronDown, ChevronUp,
   TrendingUp, TrendingDown, AlertTriangle, CheckCircle, XCircle,
-  Settings, BarChart3, CreditCard, ShieldAlert, Info,
+  Settings, BarChart3, CreditCard, ShieldAlert, Info, PiggyBank, CalendarClock,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { tabelaPrice } from '../lib/mutuo';
 import { LoadingSpinner, NeuButtonAccent, FormField } from '../components/ui';
 import { useFetchData } from '../hooks/useSupabaseData';
+import { PeriodoCapitalAviso } from '../components/PeriodoCapitalAviso';
+import { AplicacoesPanel } from '../components/AplicacoesPanel';
+import type { BancoInvestimento } from '../components/AplicacoesPanel';
 import type { UserProfile } from '../hooks/useUserProfile';
 import { bancoDaUnidade } from '../lib/filiais';
 import { useConfirm } from '../contexts/ConfirmContext';
@@ -34,6 +37,8 @@ type CapitalConfig = {
   data_fim: string | null;
   reserva_min_pct: number;
   taxa_juros_padrao: number;
+  // Migr. 604 — teto de parcelas do crédito da holding (1..60).
+  max_parcelas: number;
   criado_por_nome: string | null;
   created_at: string;
 };
@@ -555,6 +560,10 @@ function ModalConfig({
   const [dataFim, setDataFim] = useState(config?.data_fim ?? '');
   const [reservaPct, setReservaPct] = useState(String(config?.reserva_min_pct ?? 0));
   const [taxaPadrao, setTaxaPadrao] = useState(String(config?.taxa_juros_padrao ?? 0));
+  // Migr. 604 — política de crédito da holding. 12 é o padrão da coluna; o
+  // teto duro é 60 (5 anos), e vale lembrar que contrato de 60x não se encerra
+  // dentro de uma turma.
+  const [maxParcelas, setMaxParcelas] = useState(String(config?.max_parcelas ?? 12));
   const [saving, setSaving] = useState(false);
 
   const handleSalvar = async () => {
@@ -566,6 +575,7 @@ function ModalConfig({
         data_fim: dataFim || null,
         reserva_min_pct: parseFloat(reservaPct) || 0,
         taxa_juros_padrao: parseFloat(taxaPadrao) || 0,
+        max_parcelas: Math.min(60, Math.max(1, parseInt(maxParcelas) || 12)),
         criado_por: profile?.id ?? null,
         criado_por_nome: profile?.nome ?? null,
       };
@@ -592,8 +602,8 @@ function ModalConfig({
         </div>
         {config && (
           <div className="text-xs text-gray-500 neu-pressed rounded-xl p-3">
-            Ativo desde {fmtDate(config.data_inicio)}
-            {config.data_fim ? ` até ${fmtDate(config.data_fim)}` : ' (sem prazo)'}
+            Ativo desde {dataSimplesBR(config.data_inicio)}
+            {config.data_fim ? ` até ${dataSimplesBR(config.data_fim)}` : ' (sem prazo)'}
             {' · '}Reserva {config.reserva_min_pct}% · Juros padrão {config.taxa_juros_padrao}% a.m.
           </div>
         )}
@@ -622,6 +632,19 @@ function ModalConfig({
               onChange={e => setTaxaPadrao(e.target.value)}
               className="neu-pressed rounded-xl px-3 py-2.5 text-sm text-gray-100 bg-transparent outline-none" />
           </div>
+        </div>
+        <div className="flex flex-col gap-1">
+          <label className="text-[10px] font-black uppercase tracking-widest text-gray-500">
+            Parcelamento máximo (1 a 60)
+          </label>
+          <input type="number" min="1" max="60" step="1" value={maxParcelas}
+            onChange={e => setMaxParcelas(e.target.value)}
+            className="neu-pressed rounded-xl px-3 py-2.5 text-sm text-gray-100 bg-transparent outline-none" />
+          <p className="text-[10px] text-gray-500 leading-relaxed">
+            Teto de parcelas que a filial pode pedir e a Matriz aprovar. Prazo longo
+            deixa a parcela leve e o juro total pesado — em 60x o contrato atravessa
+            a turma inteira sem quitar.
+          </p>
         </div>
         <NeuButtonAccent onClick={handleSalvar} isLoading={saving}>Salvar Nova Configuração</NeuButtonAccent>
       </motion.div>
@@ -2208,7 +2231,192 @@ function TabFaturamento({ notas }: { notas: NotaEmitidaMatriz[] }) {
 }
 
 // ── View principal ─────────────────────────────────────────────────────────
-type Tab = 'geral' | 'dre' | 'prestacao' | 'faturamento' | 'emprestimos' | 'lucro' | 'config';
+// ── Tab: Aplicações (migr. 604) ───────────────────────────────────────────
+// A holding aplica o capital próprio do mesmo jeito que a loja aplica o caixa,
+// então a tela é o painel compartilhado com um seletor de unidade por cima.
+//
+// O botão de fechar o mês vive AQUI e em lugar nenhum: é o relógio da turma,
+// vale para as 4 unidades de uma vez, e quem clica é o professor. A RPC cobra
+// `role='admin'` literal — o botão só esconde o que o banco já recusa.
+function TabAplicacoes({
+  profile, showToast, onMovimentou,
+}: {
+  profile: UserProfile | null;
+  showToast: (msg: string, t?: string) => void;
+  onMovimentou: () => void;
+}) {
+  const [unidade, setUnidade] = useState<UnidadeCapital>('Matriz');
+  const [fechando, setFechando] = useState(false);
+  const [recarga, setRecarga] = useState(0);
+  const confirm = useConfirm();
+
+  const ehProfessor = profile?.role === 'admin';
+
+  const fecharMes = async () => {
+    if (!supabase) return;
+    const ok = await confirm({
+      message: 'Fechar o mês capitaliza o rendimento de TODAS as aplicações das 4 unidades, de uma vez. É o relógio da turma e não tem desfazer. Confirma?',
+    });
+    if (!ok) return;
+    setFechando(true);
+    try {
+      const { data, error } = await supabase.rpc('fechar_mes_aplicacoes');
+      if (error) throw error;
+      const qtd = (data as any)?.aplicacoes ?? 0;
+      const total = Number((data as any)?.rendimento ?? 0);
+      showToast(
+        qtd === 0
+          ? 'Mês fechado — nenhuma unidade tem aplicação viva.'
+          : `Mês fechado: ${qtd} aplicação(ões) renderam ${BRL(total)}.`,
+        'success',
+      );
+      setRecarga(n => n + 1);
+      onMovimentou();
+    } catch (err: any) {
+      showToast(err.message ?? 'Erro ao fechar o mês.', 'error');
+    } finally { setFechando(false); }
+  };
+
+  return (
+    <div className="flex flex-col gap-4">
+      {ehProfessor && (
+        <div className="neu-flat rounded-3xl p-4 border border-accent/20 flex items-center justify-between gap-3">
+          <div>
+            <p className="text-sm font-bold text-gray-100">Relógio das aplicações</p>
+            <p className="text-[11px] text-gray-500 leading-relaxed mt-0.5">
+              Aplicação só rende quando o mês fecha. Um clique = um mês para todas
+              as unidades, com juro composto sobre o que já rendeu.
+            </p>
+          </div>
+          <button
+            onClick={fecharMes} disabled={fechando}
+            className="shrink-0 flex items-center gap-1.5 text-xs px-3 py-2 rounded-xl bg-accent/10 text-accent border border-accent/20 hover:bg-accent/20 transition-colors disabled:opacity-50"
+          >
+            <CalendarClock size={13} /> {fechando ? 'Fechando…' : 'Fechar mês'}
+          </button>
+        </div>
+      )}
+
+      <div className="flex gap-1 p-1 neu-flat rounded-2xl border border-white/5">
+        {UNIDADES.map(u => (
+          <button
+            key={u} onClick={() => setUnidade(u)}
+            className={`flex-1 py-2 rounded-xl text-xs font-bold transition-all ${
+              unidade === u ? 'bg-accent text-white' : 'text-gray-500 hover:text-gray-300'
+            }`}
+          >
+            {u}
+          </button>
+        ))}
+      </div>
+
+      <AplicacoesPanel
+        key={`${unidade}-${recarga}`}
+        filial={unidade} profile={profile} showToast={showToast}
+        onMovimentou={onMovimentou}
+      />
+    </div>
+  );
+}
+
+// ── Editor da praça: os bancos onde se aplica (migr. 604) ─────────────────
+// Cadastro curto e fechado (5 linhas na semente), então não virou view nova:
+// mora dentro de Config, que é onde a direção já define reserva e juros.
+function EditorBancosInvestimento({
+  profile, showToast,
+}: {
+  profile: UserProfile | null;
+  showToast: (msg: string, t?: string) => void;
+}) {
+  const { data: bancosRaw = [], reload } =
+    useFetchData<BancoInvestimento>('bancos_investimento', undefined, false);
+  // Mesma razão do painel: a semente grava os 5 no mesmo instante, então
+  // created_at não ordena nada. `ordem` é quem manda.
+  const bancos = useMemo(
+    () => [...bancosRaw].sort((a, b) => (a.ordem ?? 0) - (b.ordem ?? 0)),
+    [bancosRaw],
+  );
+  const [salvando, setSalvando] = useState<string | null>(null);
+  const podeEditar = podeConfigurar(profile);
+
+  const salvar = async (b: BancoInvestimento, campos: Partial<BancoInvestimento>) => {
+    if (!supabase) return;
+    setSalvando(b.id);
+    try {
+      const { error } = await supabase
+        .from('bancos_investimento')
+        .update({ ...campos, atualizado_por: profile?.id ?? null, updated_at: new Date().toISOString() })
+        .eq('id', b.id);
+      if (error) throw error;
+      showToast(`${b.nome} atualizado.`, 'success');
+      reload();
+    } catch (err: any) {
+      showToast(err.message ?? 'Erro ao salvar.', 'error');
+    } finally { setSalvando(null); }
+  };
+
+  return (
+    <div className="neu-flat rounded-3xl p-5 border border-white/5">
+      <div className="flex items-center gap-2 mb-1">
+        <PiggyBank size={14} className="text-accent" />
+        <span className="text-[10px] font-black uppercase tracking-widest text-gray-500">
+          Praça financeira — onde as unidades aplicam
+        </span>
+      </div>
+      <p className="text-[11px] text-gray-500 mb-4 leading-relaxed">
+        Taxa em % ao mês. Carência é em meses fechados: quem paga mais costuma prender
+        o dinheiro por mais tempo — é essa troca que a unidade precisa pesar.
+      </p>
+
+      <div className="flex flex-col gap-2">
+        {bancos.map(b => (
+          <div key={b.id} className="neu-pressed rounded-2xl p-3 flex flex-col gap-2">
+            <div className="flex items-center justify-between gap-2">
+              <div>
+                <span className="text-sm font-bold text-gray-100">{b.nome}</span>
+                <span className="text-[10px] text-gray-500 ml-2">{b.produto}</span>
+              </div>
+              {b.isento_ir && <span className="text-[10px] text-green-400">isento de IR</span>}
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div className="flex flex-col gap-1">
+                <label className="text-[9px] font-black uppercase tracking-widest text-gray-500">Taxa (% a.m.)</label>
+                <input
+                  type="number" step="0.01" min="0" max="100" defaultValue={Number(b.taxa_mensal)}
+                  disabled={!podeEditar || salvando === b.id}
+                  onBlur={e => {
+                    const v = parseFloat(e.target.value);
+                    if (!isNaN(v) && v !== Number(b.taxa_mensal)) salvar(b, { taxa_mensal: v });
+                  }}
+                  className="neu-flat rounded-xl px-3 py-2 text-sm text-gray-100 bg-transparent outline-none tabular-nums"
+                />
+              </div>
+              <div className="flex flex-col gap-1">
+                <label className="text-[9px] font-black uppercase tracking-widest text-gray-500">Carência (meses)</label>
+                <input
+                  type="number" step="1" min="0" max="60" defaultValue={b.carencia_meses}
+                  disabled={!podeEditar || salvando === b.id}
+                  onBlur={e => {
+                    const v = parseInt(e.target.value);
+                    if (!isNaN(v) && v !== b.carencia_meses) salvar(b, { carencia_meses: v });
+                  }}
+                  className="neu-flat rounded-xl px-3 py-2 text-sm text-gray-100 bg-transparent outline-none tabular-nums"
+                />
+              </div>
+            </div>
+          </div>
+        ))}
+        {bancos.length === 0 && (
+          <p className="text-sm text-gray-500">
+            Nenhum banco cadastrado — a semente da migração 604 não foi aplicada nesta turma.
+          </p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+type Tab = 'geral' | 'dre' | 'prestacao' | 'faturamento' | 'emprestimos' | 'lucro' | 'aplicacoes' | 'config';
 
 type NotaEmitidaMatriz = {
   id: string;
@@ -2325,6 +2533,7 @@ export function MatrizCapitalView({
     { id: 'faturamento', label: 'Faturamento' },
     { id: 'emprestimos', label: 'Empréstimos', badge: pendentesCount > 0 ? pendentesCount : undefined },
     { id: 'lucro', label: 'Distribuição de Lucro' },
+    { id: 'aplicacoes', label: 'Aplicações' },
     { id: 'config', label: 'Config' },
   ];
 
@@ -2353,12 +2562,18 @@ export function MatrizCapitalView({
         </div>
         {configAtiva && (
           <p className="text-xs text-gray-500 mt-2">
-            Período: {fmtDate(configAtiva.data_inicio)}
-            {configAtiva.data_fim ? ` → ${fmtDate(configAtiva.data_fim)}` : ' → sem prazo'}
+            Período: {dataSimplesBR(configAtiva.data_inicio)}
+            {configAtiva.data_fim ? ` → ${dataSimplesBR(configAtiva.data_fim)}` : ' → sem prazo'}
             {configAtiva.reserva_min_pct > 0 && ` · Reserva ${configAtiva.reserva_min_pct}%`}
           </p>
         )}
       </div>
+
+      <PeriodoCapitalAviso
+        dataInicio={configAtiva?.data_inicio}
+        dataFim={configAtiva?.data_fim}
+        podeConfigurar={podeConfigurar(profile)}
+      />
 
       {/* Tabs */}
       <div className="flex gap-1 p-1 neu-flat rounded-2xl border border-white/5">
@@ -2446,6 +2661,13 @@ export function MatrizCapitalView({
         />
       )}
 
+      {tab === 'aplicacoes' && (
+        <TabAplicacoes
+          profile={profile} showToast={showToast}
+          onMovimentou={() => { carregarSaldos(); reloadBancos(); }}
+        />
+      )}
+
       {tab === 'config' && (
         <div className="flex flex-col gap-4">
           <div className="neu-flat rounded-3xl p-5 border border-accent/20">
@@ -2467,11 +2689,11 @@ export function MatrizCapitalView({
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <span className="text-[10px] uppercase tracking-widest text-gray-500">Início</span>
-                  <p className="text-sm font-bold text-gray-100 mt-0.5">{fmtDate(configAtiva.data_inicio)}</p>
+                  <p className="text-sm font-bold text-gray-100 mt-0.5">{dataSimplesBR(configAtiva.data_inicio)}</p>
                 </div>
                 <div>
                   <span className="text-[10px] uppercase tracking-widest text-gray-500">Fim</span>
-                  <p className="text-sm font-bold text-gray-100 mt-0.5">{configAtiva.data_fim ? fmtDate(configAtiva.data_fim) : 'Sem prazo'}</p>
+                  <p className="text-sm font-bold text-gray-100 mt-0.5">{configAtiva.data_fim ? dataSimplesBR(configAtiva.data_fim) : 'Sem prazo'}</p>
                 </div>
                 <div>
                   <span className="text-[10px] uppercase tracking-widest text-gray-500">Reserva mínima</span>
@@ -2481,11 +2703,17 @@ export function MatrizCapitalView({
                   <span className="text-[10px] uppercase tracking-widest text-gray-500">Juros padrão</span>
                   <p className="text-sm font-bold text-gray-100 mt-0.5">{configAtiva.taxa_juros_padrao}%</p>
                 </div>
+                <div>
+                  <span className="text-[10px] uppercase tracking-widest text-gray-500">Parcelamento máximo</span>
+                  <p className="text-sm font-bold text-gray-100 mt-0.5">{configAtiva.max_parcelas ?? 12}x</p>
+                </div>
               </div>
             ) : (
               <p className="text-sm text-gray-500">Nenhuma configuração definida. O cálculo de saldo usará todos os aportes sem período fixo.</p>
             )}
           </div>
+
+          <EditorBancosInvestimento profile={profile} showToast={showToast} />
         </div>
       )}
 
