@@ -2,7 +2,7 @@ import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { todayBR, dataSimplesBR } from '../lib/dates';
 import { motion, AnimatePresence } from 'motion/react';
 import {
-  Landmark, Plus, X, Clock, Trash2, ChevronDown, ChevronUp,
+  Landmark, Plus, X, Clock, Trash2, Pencil, ChevronDown, ChevronUp,
   TrendingUp, TrendingDown, AlertTriangle, CheckCircle, XCircle,
   Settings, BarChart3, CreditCard, ShieldAlert, Info, PiggyBank, CalendarClock,
 } from 'lucide-react';
@@ -147,6 +147,13 @@ function podeExcluir(p: UserProfile | null) {
 // Migr. 572 — a válvula do professor. `role === 'admin'` LITERAL, do mesmo
 // jeito que a RPC: `podeExcluir` acima inclui o CEO, que é aluno.
 function podeApagarEmprestimo(p: UserProfile | null) {
+  if (!p) return false;
+  return p.role === 'admin';
+}
+// Migr. 606 — corrigir a própria aprovação é a mesma válvula do professor, e
+// pela mesma razão: refaz o contrato e mexe nas duas contas. A RPC cobra
+// `role = 'admin'` literal; aqui só se esconde o botão.
+function podeEditarEmprestimo(p: UserProfile | null) {
   if (!p) return false;
   return p.role === 'admin';
 }
@@ -930,6 +937,246 @@ function ModalApagarEmprestimo({
   );
 }
 
+// ── Modal: Editar empréstimo aprovado ─────────────────────────────────────
+//
+// Migr. 606. O meio-termo entre deixar como está e apagar: o contrato está
+// certo em existir e errado no número — taxa digitada como 23 em vez de 2,3,
+// 12x onde era 6x, um zero a mais no valor. Aqui se corrige sem jogar fora a
+// solicitação do aluno.
+//
+// A tela diz o que a RPC faz, porque não é um UPDATE inocente: o cronograma
+// inteiro é refeito e o principal antigo volta antes do novo sair. O que a
+// unidade já pagou volta sozinho para a conta que pagou (`trg_sync_saldo_*`),
+// e os vencimentos recomeçam a 30 dias de hoje.
+function ModalEditarEmprestimo({
+  emp, bancos, onClose, onSaved, showToast,
+}: {
+  emp: Emprestimo; bancos: Banco[]; onClose: () => void; onSaved: () => void;
+  showToast: (msg: string, t?: string) => void;
+}) {
+  const [valor, setValor] = useState(formatBRL(Number(emp.valor)));
+  const [taxa, setTaxa] = useState(String(emp.taxa_juros ?? 0));
+  const [parcelas, setParcelas] = useState(String(emp.num_parcelas));
+  const [destinoId, setDestinoId] = useState(emp.banco_id ?? '');
+  const [origemId, setOrigemId] = useState(emp.banco_origem_id ?? '');
+  const [motivo, setMotivo] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  const valorNum = parseBRL(valor);
+  const contasMatriz = useMemo(() => bancos.filter(b => b.filial === 'Matriz'), [bancos]);
+  const contasFilial = useMemo(() => bancos.filter(b => bancoDaUnidade(b, emp.filial)), [bancos, emp.filial]);
+
+  // A conta da unidade precisa ter o principal ANTIGO para devolver antes que
+  // o novo saia — é a mesma recusa da 573, antecipada na tela.
+  const destinoAtual = bancos.find(b => b.id === emp.banco_id) ?? null;
+  const saldoDestinoAtual = Number(destinoAtual?.saldo ?? 0);
+  const semDevolucao = !!destinoAtual && saldoDestinoAtual < Number(emp.valor);
+
+  // O caixa da Matriz confere o valor NOVO já com o antigo de volta: trocar
+  // 10.000 por 10.500 não pode ser recusado por saldo que a própria edição
+  // devolve.
+  const origem = contasMatriz.find(b => b.id === origemId) ?? null;
+  const saldoOrigem = Number(origem?.saldo ?? 0)
+    + (origemId === emp.banco_origem_id ? Number(emp.valor) : 0);
+  const semSaldo = !!origemId && valorNum > saldoOrigem;
+
+  const mutuo = tabelaPrice(valorNum, parseFloat(taxa) || 0, parseInt(parcelas) || 1);
+  const mudou =
+    valorNum !== Number(emp.valor)
+    || (parseFloat(taxa) || 0) !== Number(emp.taxa_juros ?? 0)
+    || (parseInt(parcelas) || 0) !== emp.num_parcelas
+    || destinoId !== (emp.banco_id ?? '')
+    || origemId !== (emp.banco_origem_id ?? '');
+
+  const salvar = async () => {
+    if (!supabase) return;
+    if (valorNum <= 0) { showToast('Informe o valor do empréstimo.', 'error'); return; }
+    if (!destinoId) { showToast(`Selecione a conta de ${emp.filial} que recebe.`, 'error'); return; }
+    if (!origemId) { showToast('Selecione a conta da Matriz de onde sai o valor.', 'error'); return; }
+    setSaving(true);
+    try {
+      const { error } = await supabase.rpc('editar_emprestimo', {
+        p_emprestimo_id: emp.id,
+        p_valor: valorNum,
+        p_taxa_juros: parseFloat(taxa) || 0,
+        p_num_parcelas: parseInt(parcelas) || 1,
+        p_banco_id: destinoId,
+        p_banco_origem_id: origemId,
+        p_justificativa_resp: null,
+        p_motivo: motivo.trim() || null,
+      });
+      if (error) throw error;
+      showToast('Empréstimo corrigido. Parcelas e títulos foram refeitos.', 'success');
+      onSaved(); onClose();
+    } catch (err: any) {
+      showToast(err.message ?? 'Erro ao editar.', 'error');
+    } finally { setSaving(false); }
+  };
+
+  const cor = FILIAL_COLOR[emp.filial as Filial] ?? FILIAL_COLOR.SuperMax;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={onClose}>
+      <motion.div
+        initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}
+        exit={{ opacity: 0, scale: 0.95 }} transition={{ duration: 0.18 }}
+        className="neu-flat rounded-3xl p-6 w-full max-w-md border border-accent/20 flex flex-col gap-4 max-h-[90vh] overflow-y-auto"
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-base font-bold text-gray-100">Corrigir Empréstimo</h2>
+            <span className={`text-xs font-bold ${cor.accent}`}>
+              {emp.filial} · aprovado em {fmtDate(emp.created_at)}
+            </span>
+          </div>
+          <button onClick={onClose} className="modal-close-btn"><X size={16} /></button>
+        </div>
+
+        <div className="neu-pressed rounded-2xl p-4 flex flex-col gap-2">
+          <div className="flex justify-between text-sm">
+            <span className="text-gray-500">Como está hoje</span>
+            <span className="font-bold text-gray-100 tabular-nums">
+              {BRL(emp.valor)} · {emp.num_parcelas}x · {Number(emp.taxa_juros ?? 0)}% a.m.
+            </span>
+          </div>
+          <div className="text-xs text-gray-400 italic border-t border-white/5 pt-2">
+            "{emp.justificativa}"
+          </div>
+        </div>
+
+        {semDevolucao ? (
+          <div className="flex items-start gap-2 text-[11px] text-red-400 bg-red-500/5 border border-red-500/20 rounded-xl p-3">
+            <AlertTriangle size={13} className="shrink-0 mt-0.5" />
+            <span>
+              Refazer o contrato exige devolver os {BRL(emp.valor)} originais antes de aplicar o
+              valor novo, e a conta de {emp.filial} tem {BRL(saldoDestinoAtual)}. A unidade já usou
+              o dinheiro — o caminho é ela pagar as parcelas primeiro.
+            </span>
+          </div>
+        ) : (
+          <div className="flex items-start gap-2 text-[11px] text-gray-400 bg-white/[0.03] border border-white/5 rounded-xl p-3">
+            <Info size={13} className="shrink-0 mt-0.5 text-accent" />
+            <span>
+              As {emp.num_parcelas} parcelas e os títulos dos dois lados são apagados e refeitos
+              com as condições novas — o que a unidade já pagou volta sozinho para a conta que
+              pagou. Os vencimentos recomeçam: a primeira parcela cai em 30 dias. A unidade do
+              contrato não muda.
+            </span>
+          </div>
+        )}
+
+        <div className="flex flex-col gap-3">
+          <div className="flex flex-col gap-1">
+            <label className="text-[10px] font-black uppercase tracking-widest text-gray-500">Valor *</label>
+            <input
+              type="text" inputMode="numeric" value={valor}
+              onChange={e => setValor(formatBRL(e.target.value))}
+              placeholder="0,00"
+              className="neu-pressed rounded-xl px-3 py-2.5 text-sm text-gray-100 bg-transparent outline-none"
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div className="flex flex-col gap-1">
+              <label className="text-[10px] font-black uppercase tracking-widest text-gray-500">
+                Taxa de juros (% ao mês)
+              </label>
+              <input
+                type="number" min="0" step="0.1" value={taxa}
+                onChange={e => setTaxa(e.target.value)}
+                className="neu-pressed rounded-xl px-3 py-2.5 text-sm text-gray-100 bg-transparent outline-none"
+              />
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="text-[10px] font-black uppercase tracking-widest text-gray-500">Nº de parcelas</label>
+              <input
+                type="number" min="1" max="60" value={parcelas}
+                onChange={e => setParcelas(e.target.value)}
+                className="neu-pressed rounded-xl px-3 py-2.5 text-sm text-gray-100 bg-transparent outline-none"
+              />
+            </div>
+          </div>
+
+          <div className="flex flex-col gap-1">
+            <label className="text-[10px] font-black uppercase tracking-widest text-gray-500">Sai da conta (Matriz) *</label>
+            <select
+              value={origemId} onChange={e => setOrigemId(e.target.value)}
+              className="neu-pressed rounded-xl px-3 py-2.5 text-sm text-gray-100 bg-transparent outline-none"
+            >
+              <option value="">Selecione...</option>
+              {contasMatriz.map(b => (
+                <option key={b.id} value={b.id}>
+                  {b.banco} — {b.conta} · saldo {BRL(Number(b.saldo ?? 0))}
+                </option>
+              ))}
+            </select>
+            {!emp.banco_origem_id && (
+              <span className="text-[10px] text-gray-500">
+                Este empréstimo é anterior ao registro da conta de origem, então ela precisa ser informada.
+              </span>
+            )}
+            {semSaldo && (
+              <span className="text-[10px] text-red-400">
+                Saldo insuficiente: a conta fica com {BRL(saldoOrigem)} depois da devolução e o
+                empréstimo corrigido é de {BRL(valorNum)}.
+              </span>
+            )}
+          </div>
+
+          <div className="flex flex-col gap-1">
+            <label className="text-[10px] font-black uppercase tracking-widest text-gray-500">
+              Entra na conta * <span className="text-gray-600 normal-case tracking-normal">— conta de {emp.filial}</span>
+            </label>
+            <select
+              value={destinoId} onChange={e => setDestinoId(e.target.value)}
+              className="neu-pressed rounded-xl px-3 py-2.5 text-sm text-gray-100 bg-transparent outline-none"
+            >
+              <option value="">Selecione...</option>
+              {contasFilial.map(b => (
+                <option key={b.id} value={b.id}>{b.banco} — {b.conta} ({b.tipo})</option>
+              ))}
+            </select>
+          </div>
+
+          {valorNum > 0 && (
+            <div className="neu-pressed rounded-xl p-3 flex flex-col gap-1.5">
+              <div className="flex justify-between text-xs text-gray-400">
+                <span>Parcela fixa ({parcelas || 1}x)</span>
+                <strong className="text-gray-200 tabular-nums">{BRL(mutuo.valorParcela)}</strong>
+              </div>
+              <div className="flex justify-between text-xs text-gray-400">
+                <span>Total que {emp.filial} devolve</span>
+                <strong className="text-gray-200 tabular-nums">{BRL(mutuo.totalPago)}</strong>
+              </div>
+              <div className="flex justify-between text-xs text-gray-400 border-t border-white/5 pt-1.5">
+                <span>Juros — o que a Matriz ganha</span>
+                <strong className="text-accent tabular-nums">{BRL(mutuo.totalJuros)}</strong>
+              </div>
+            </div>
+          )}
+
+          <div className="flex flex-col gap-1">
+            <label className="text-[10px] font-black uppercase tracking-widest text-gray-500">Motivo da correção</label>
+            <textarea
+              value={motivo} onChange={e => setMotivo(e.target.value)} rows={2}
+              className="neu-pressed rounded-xl px-3 py-2 text-sm text-gray-100 bg-transparent outline-none resize-none"
+              placeholder="Fica no histórico de operações. Ex.: taxa digitada errada na aprovação."
+            />
+          </div>
+        </div>
+
+        <NeuButtonAccent
+          onClick={salvar} isLoading={saving}
+          disabled={semDevolucao || semSaldo || !mudou || valorNum <= 0}
+        >
+          <Pencil size={15} /> {mudou ? 'Salvar correção' : 'Nada mudou'}
+        </NeuButtonAccent>
+      </motion.div>
+    </div>
+  );
+}
+
 // ── Card por filial (Aportes) ──────────────────────────────────────────────
 function FilialCapitalCard({
   filial, registros, saldo, profile, onNovo, onExcluir,
@@ -1147,6 +1394,7 @@ function TabEmprestimos({
 }) {
   const [modalEmp, setModalEmp] = useState<Emprestimo | null>(null);
   const [modalApagar, setModalApagar] = useState<Emprestimo | null>(null);
+  const [modalEditar, setModalEditar] = useState<Emprestimo | null>(null);
   const [modalAplicar, setModalAplicar] = useState(false);
   const confirm = useConfirm();
   // Migr. 572 — arquivado é histórico fechado: o gatilho recusa aprovar e
@@ -1272,6 +1520,17 @@ function TabEmprestimos({
                   </span>
                 )}
                 <span className="text-[10px] text-gray-500">{fmtDate(emp.created_at)}</span>
+                {/* Migr. 606 — só o contrato VIVO se corrige: negado não tem
+                    contrato, e arquivado é histórico fechado. */}
+                {podeEditarEmprestimo(profile) && emp.status === 'Aprovado' && !emp.arquivado_em && (
+                  <button
+                    onClick={() => setModalEditar(emp)}
+                    title="Corrigir empréstimo"
+                    className="action-btn-edit shrink-0"
+                  >
+                    <Pencil size={12} />
+                  </button>
+                )}
                 {podeApagarEmprestimo(profile) && (
                   <button
                     onClick={() => handleApagar(emp)}
@@ -1300,6 +1559,14 @@ function TabEmprestimos({
           <ModalApagarEmprestimo
             emp={modalApagar} bancos={bancos}
             onClose={() => setModalApagar(null)}
+            onSaved={onReload}
+            showToast={showToast}
+          />
+        )}
+        {modalEditar && (
+          <ModalEditarEmprestimo
+            emp={modalEditar} bancos={bancos}
+            onClose={() => setModalEditar(null)}
             onSaved={onReload}
             showToast={showToast}
           />
