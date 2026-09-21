@@ -2474,7 +2474,12 @@ export function MatrizCapitalView({
 
   const { data: registros = [], isLoading, reload } = useFetchData<CapitalRow>('capital_filial', undefined, false);
   const { data: emprestimos = [], reload: reloadEmp } = useFetchData<Emprestimo>('emprestimos_filial', undefined, false);
-  const { data: configs = [] } = useFetchData<CapitalConfig>('capital_config', undefined, false);
+  // `reloadConfigs` existe desde 21/09: salvar período novo chamava o `reload`
+  // de `capital_filial` (a lista de aportes) e nunca recarregava esta lista, e
+  // a tela seguia mostrando a configuração anterior até um F5 — inclusive o
+  // período, a reserva e o teto de parcelas.
+  const { data: configs = [], reload: reloadConfigs } =
+    useFetchData<CapitalConfig>('capital_config', undefined, false);
   // `reload` importa desde a migr. 326: aporte e empréstimo mexem no saldo das
   // contas, e o select de origem mostra esse saldo. Sem recarregar, o segundo
   // aporte da sessão seria decidido olhando o saldo de antes do primeiro.
@@ -2738,7 +2743,9 @@ export function MatrizCapitalView({
           <ModalConfig
             config={configAtiva} profile={profile}
             onClose={() => setModalConfig(false)}
-            onSaved={reload}
+            // Período novo muda a janela de TODO o cálculo: recarrega a
+            // configuração, os aportes e os saldos das 4 unidades.
+            onSaved={() => { reloadConfigs(); reload(); carregarSaldos(); }}
             showToast={showToast}
           />
         )}
