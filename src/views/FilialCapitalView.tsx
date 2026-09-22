@@ -2,13 +2,14 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   Landmark, Plus, X, AlertTriangle, ShieldAlert, CheckCircle,
-  XCircle, Clock, CreditCard, Info,
+  XCircle, Clock, CreditCard, Info, Calculator,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { LoadingSpinner, NeuButtonAccent } from '../components/ui';
 import { useFetchData } from '../hooks/useSupabaseData';
 import { PeriodoCapitalAviso } from '../components/PeriodoCapitalAviso';
 import { AplicacoesPanel } from '../components/AplicacoesPanel';
+import EmprestimoMemoria from '../components/EmprestimoMemoria';
 import { formatBRL, parseBRL } from '../lib/viewUtils';
 import type { UserProfile } from '../hooks/useUserProfile';
 import { useFilial } from '../contexts/FilialContext';
@@ -226,6 +227,7 @@ export function FilialCapitalView({
   const [saldoErr, setSaldoErr] = useState<string | null>(null);
   const [loadingSaldo, setLoadingSaldo] = useState(true);
   const [modalSolicitar, setModalSolicitar] = useState(false);
+  const [modalMemoria, setModalMemoria] = useState<Emprestimo | null>(null);
 
   const { data: emprestimos = [], isLoading: loadingEmp, reload: reloadEmp } =
     useFetchData<Emprestimo>('emprestimos_filial', { filial }, false);
@@ -535,9 +537,19 @@ export function FilialCapitalView({
                     Matriz: "{emp.justificativa_resposta}"
                   </p>
                 )}
-                <div className="flex justify-between text-[10px] text-gray-600">
+                <div className="flex justify-between items-center gap-2 text-[10px] text-gray-600">
                   <span>{fmtDate(emp.created_at)}</span>
-                  {emp.aprovado_por_nome && <span>Analisado por: {emp.aprovado_por_nome}</span>}
+                  {emp.aprovado_por_nome && <span className="truncate">Analisado por: {emp.aprovado_por_nome}</span>}
+                  {/* A conta aberta: o aluno tem de conseguir refazer a parcela,
+                      não só ler o valor dela. */}
+                  {emp.status === 'Aprovado' && (
+                    <button
+                      onClick={() => setModalMemoria(emp)}
+                      className="ml-auto flex items-center gap-1 text-[10px] font-bold text-accent hover:underline shrink-0"
+                    >
+                      <Calculator size={11} /> Memória de cálculo
+                    </button>
+                  )}
                 </div>
               </div>
             ))}
@@ -607,6 +619,9 @@ export function FilialCapitalView({
       )}
 
       <AnimatePresence>
+        {modalMemoria && (
+          <EmprestimoMemoria emprestimo={modalMemoria} onClose={() => setModalMemoria(null)} />
+        )}
         {modalSolicitar && (
           <ModalSolicitar
             filial={filial} profile={profile}

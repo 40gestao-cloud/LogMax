@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import {
   Landmark, Plus, X, Clock, Trash2, Pencil, ChevronDown, ChevronUp,
   TrendingUp, TrendingDown, AlertTriangle, CheckCircle, XCircle,
-  Settings, BarChart3, CreditCard, ShieldAlert, Info, PiggyBank, CalendarClock,
+  Settings, BarChart3, CreditCard, ShieldAlert, Info, PiggyBank, CalendarClock, Calculator,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { tabelaPrice } from '../lib/mutuo';
@@ -12,6 +12,7 @@ import { LoadingSpinner, NeuButtonAccent, FormField } from '../components/ui';
 import { useFetchData } from '../hooks/useSupabaseData';
 import { PeriodoCapitalAviso } from '../components/PeriodoCapitalAviso';
 import { AplicacoesPanel } from '../components/AplicacoesPanel';
+import EmprestimoMemoria from '../components/EmprestimoMemoria';
 import type { BancoInvestimento } from '../components/AplicacoesPanel';
 import type { UserProfile } from '../hooks/useUserProfile';
 import { bancoDaUnidade } from '../lib/filiais';
@@ -492,7 +493,7 @@ function ModalAprovarEmprestimo({
                 Taxa de juros (% ao mês)
               </label>
               <input
-                type="number" min="0" step="0.1" value={taxa}
+                type="number" min="0" step="0.001" value={taxa}
                 onChange={e => setTaxa(e.target.value)}
                 className="neu-pressed rounded-xl px-3 py-2.5 text-sm text-gray-100 bg-transparent outline-none"
               />
@@ -635,7 +636,7 @@ function ModalConfig({
           </div>
           <div className="flex flex-col gap-1">
             <label className="text-[10px] font-black uppercase tracking-widest text-gray-500">Taxa juros padrão (% a.m.)</label>
-            <input type="number" min="0" step="0.1" value={taxaPadrao}
+            <input type="number" min="0" step="0.001" value={taxaPadrao}
               onChange={e => setTaxaPadrao(e.target.value)}
               className="neu-pressed rounded-xl px-3 py-2.5 text-sm text-gray-100 bg-transparent outline-none" />
           </div>
@@ -1083,7 +1084,7 @@ function ModalEditarEmprestimo({
                 Taxa de juros (% ao mês)
               </label>
               <input
-                type="number" min="0" step="0.1" value={taxa}
+                type="number" min="0" step="0.001" value={taxa}
                 onChange={e => setTaxa(e.target.value)}
                 className="neu-pressed rounded-xl px-3 py-2.5 text-sm text-gray-100 bg-transparent outline-none"
               />
@@ -1399,6 +1400,7 @@ function TabEmprestimos({
   const confirm = useConfirm();
   // Migr. 572 — arquivado é histórico fechado: o gatilho recusa aprovar e
   // negar, então ele sai da fila de análise mesmo continuando 'Pendente'.
+  const [modalMemoria, setModalMemoria] = useState<Emprestimo | null>(null);
   const pendentes = emprestimos.filter(e => e.status === 'Pendente' && !e.arquivado_em);
   const historico = emprestimos.filter(e => e.status !== 'Pendente' || !!e.arquivado_em);
 
@@ -1520,6 +1522,17 @@ function TabEmprestimos({
                   </span>
                 )}
                 <span className="text-[10px] text-gray-500">{fmtDate(emp.created_at)}</span>
+                {/* A conta aberta, para a Matriz responder a pergunta do aluno
+                    com a mesma tela que ele tem. */}
+                {emp.status === 'Aprovado' && (
+                  <button
+                    onClick={() => setModalMemoria(emp)}
+                    title="Memória de cálculo"
+                    className="action-btn-blue shrink-0"
+                  >
+                    <Calculator size={12} />
+                  </button>
+                )}
                 {/* Migr. 606 — só o contrato VIVO se corrige: negado não tem
                     contrato, e arquivado é histórico fechado. */}
                 {podeEditarEmprestimo(profile) && emp.status === 'Aprovado' && !emp.arquivado_em && (
@@ -1547,6 +1560,9 @@ function TabEmprestimos({
       )}
 
       <AnimatePresence>
+        {modalMemoria && (
+          <EmprestimoMemoria emprestimo={modalMemoria} onClose={() => setModalMemoria(null)} />
+        )}
         {modalEmp && (
           <ModalAprovarEmprestimo
             emp={modalEmp} bancos={bancos} taxaPadrao={taxaPadrao}
@@ -1683,7 +1699,7 @@ function ModalAplicarCapital({
                 Taxa de juros (% ao mês)
               </label>
               <input
-                type="number" min="0" step="0.1" value={taxa}
+                type="number" min="0" step="0.001" value={taxa}
                 onChange={e => setTaxa(e.target.value)}
                 className="neu-pressed rounded-xl px-3 py-2.5 text-sm text-gray-100 bg-transparent outline-none"
               />
