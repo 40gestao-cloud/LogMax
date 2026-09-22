@@ -21,6 +21,7 @@ import { ATRIBUTOS_PRODUTO, rotuloParaCliente, type AtributoDef } from './atribu
 import { UNIDADES_FRACIONARIAS, normalizarUnidade, EMBALAGENS_COMPRA } from './unidades';
 import { unidadesDeProduto } from './unidades';
 import { normalizeEan13, gerarEanInterno } from './barcode';
+import { TIPOS_PRODUTO, TIPO_LABEL, ehVendavel, temEstoque, type TipoProduto } from './tipoProduto';
 import { parseBRL, parseQtd } from './viewUtils';
 import { supabase } from './supabase';
 
@@ -226,9 +227,32 @@ export async function lerPlanilhaProdutos(
     // modelo promete o mesmo — "sem o código do fabricante, o cadastro gera um
     // interno". Cobrar aqui recusaria a roupa sem etiqueta, que é o caso em que
     // a promessa vale. O tratamento dele está logo abaixo.
+    // Além do EAN, três colunas saem da checagem genérica porque a régua delas
+    // depende da Classificação, exatamente como no formulário: preço de venda e
+    // categoria só valem para quem vende, e estoque mínimo só para quem tem
+    // saldo. Cobrar preço de venda de um freezer era o que fazia o aluno
+    // inventar número para a linha passar.
+    const DEPENDEM_DO_TIPO = ['Preço de Venda (R$)', 'Categoria', 'Estoque Mínimo'];
     campos
-      .filter(c => c.obrigatorio && c.col !== 'Cód. Barras EAN')
+      .filter(c => c.obrigatorio && c.col !== 'Cód. Barras EAN' && !DEPENDEM_DO_TIPO.includes(c.col))
       .forEach(c => exige(c.col));
+
+    // ── Classificação (Tipo) ────────────────────────────────────────────────
+    const tipoTexto = bruto['Classificação (Tipo)'] ?? '';
+    let tipo: TipoProduto = 'estoque_venda';
+    if (tipoTexto) {
+      const achado = TIPOS_PRODUTO.find(t => norm(TIPO_LABEL[t]) === norm(tipoTexto));
+      if (achado) tipo = achado;
+      else erros.push(`Classificação "${tipoTexto}" não existe — use ${TIPOS_PRODUTO.map(t => TIPO_LABEL[t]).join(', ')}`);
+    } else {
+      avisos.push(`Classificação em branco — entrou como ${TIPO_LABEL.estoque_venda}`);
+    }
+    const vendavel = ehVendavel(tipo);
+    const comEstoque = temEstoque(tipo);
+
+    if (vendavel && !bruto['Preço de Venda (R$)']) exige('Preço de Venda (R$)');
+    if (vendavel && !bruto['Categoria']) exige('Categoria');
+    if (comEstoque && !bruto['Estoque Mínimo']) exige('Estoque Mínimo');
 
     const nome   = bruto['Nome do produto'] ?? '';
     const codigo = bruto['Código'] ?? '';
@@ -289,15 +313,27 @@ export async function lerPlanilhaProdutos(
     if (bruto['Preço de Venda (R$)'] && !(venda > 0)) erros.push('Preço de Venda inválido');
     // Mesmo aviso do formulário: existe queima de estoque e isca de vitrine,
     // então não impede — mas quem confere tem de ver.
-    if (custo > 0 && venda > 0 && venda < custo) avisos.push('Preço de venda abaixo do custo');
+    if (vendavel && custo > 0 && venda > 0 && venda < custo) avisos.push('Preço de venda abaixo do custo');
 
     const minimo = parseQtd(bruto['Estoque Mínimo']);
     if (bruto['Estoque Mínimo'] && !(minimo >= 0)) erros.push('Estoque Mínimo inválido');
     if (!frac && minimo % 1 !== 0) erros.push(`Estoque Mínimo com fração, mas a unidade ${unidade} não aceita meia`);
 
-    const saldo = parseQtd(bruto['Saldo de Abertura'] ?? '');
+    let saldo = parseQtd(bruto['Saldo de Abertura'] ?? '');
     if (saldo < 0) erros.push('Saldo de Abertura negativo');
     if (!frac && saldo % 1 !== 0) erros.push(`Saldo de Abertura com fração, mas a unidade ${unidade} não aceita meia`);
+
+    // Patrimônio não tem saldo nem ponto de reposição: não se repõe um freezer.
+    // O valor digitado é ignorado, com aviso — recusar a linha inteira por
+    // causa de uma coluna que não se aplica seria pior.
+    if (!comEstoque) {
+      if (saldo > 0) avisos.push('Patrimônio não tem saldo de estoque — o Saldo de Abertura foi ignorado');
+      if (bruto['Estoque Mínimo']) avisos.push('Patrimônio não tem estoque mínimo — a coluna foi ignorada');
+      saldo = 0;
+    }
+    if (!vendavel && bruto['Preço de Venda (R$)']) {
+      avisos.push(`${TIPO_LABEL[tipo]} não se vende — o Preço de Venda foi ignorado e o item não aparece no PDV`);
+    }
 
     // ── Conteúdo da embalagem (só mercearia) ────────────────────────────────
     let peso: number | null = null;
@@ -391,17 +427,19 @@ export async function lerPlanilhaProdutos(
       ean,
       fornecedor: bruto['Fornecedor'],
       marca: bruto['Marca'] || null,
-      preco: venda,
+      // Zero, não o que veio digitado: mesma régua do formulário — item que
+      // não se vende não carrega etiqueta de venda.
+      preco: vendavel ? venda : 0,
       estoque: 0,
-      estoque_minimo: minimo,
+      estoque_minimo: comEstoque ? minimo : 0,
       unidade,
       peso,
       peso_unidade: pesoUnidade,
-      embalagem_compra: embNome,
-      embalagem_qtd: embQtd,
+      embalagem_compra: comEstoque ? embNome : null,
+      embalagem_qtd: comEstoque ? embQtd : null,
       filial,
       status: 'Ativo',
-      tipo: 'estoque_venda',
+      tipo,
       elegivel_beneficios: isSuper && /^(sim|s|true|x|1)$/i.test(bruto['Elegível a benefícios'] ?? ''),
       atributos,
     };

@@ -161,6 +161,61 @@ describe('lerPlanilhaProdutos', () => {
     expect(r.linhas[0].avisos.join(' ')).toMatch(/abaixo do custo/i);
   });
 
+  // ── Classificação (Tipo) ────────────────────────────────────────────────
+  // A coluna faltava no modelo e o import gravava tudo como mercadoria: resma
+  // de papel e freezer iam parar no PDV. A régua por tipo é a mesma do
+  // formulário (migr. 440).
+
+  it('em branco, entra como mercadoria e avisa', async () => {
+    const r = await lerPlanilhaProdutos(await planilha([LINHA_BOA]), FILIAL, CONTEXTO);
+    expect(r.linhas[0].erros).toEqual([]);
+    expect(r.linhas[0].payload?.tipo).toBe('estoque_venda');
+    expect(r.linhas[0].avisos.join(' ')).toMatch(/Classificação em branco/i);
+  });
+
+  it('recusa classificação que não existe', async () => {
+    const r = await lerPlanilhaProdutos(
+      await planilha([{ ...LINHA_BOA, 'Classificação (Tipo)': 'Imobilizado' }]), FILIAL, CONTEXTO);
+    expect(r.linhas[0].erros.join(' ')).toMatch(/Classificação "Imobilizado" não existe/);
+  });
+
+  it('uso e consumo entra sem preço de venda e sem categoria', async () => {
+    const r = await lerPlanilhaProdutos(await planilha([{
+      ...LINHA_BOA,
+      'Classificação (Tipo)': 'Uso e consumo (interno)',
+      'Nome do produto': 'Resma de papel A4',
+      'Categoria': '',
+      'Preço de Venda (R$)': '',
+    }]), FILIAL, CONTEXTO);
+    expect(r.linhas[0].erros).toEqual([]);
+    expect(r.linhas[0].payload?.tipo).toBe('consumo');
+    expect(r.linhas[0].payload?.preco).toBe(0);
+    // Continua tendo saldo e mínimo: consumo se estoca, só não se vende.
+    expect(r.linhas[0].saldoAbertura).toBe(40);
+    expect(r.linhas[0].payload?.estoque_minimo).toBe(10);
+  });
+
+  it('mercadoria sem preço de venda continua sendo recusada', async () => {
+    const r = await lerPlanilhaProdutos(
+      await planilha([{ ...LINHA_BOA, 'Preço de Venda (R$)': '' }]), FILIAL, CONTEXTO);
+    expect(r.linhas[0].erros.join(' ')).toMatch(/Preço de Venda \(R\$\) é obrigatório/);
+  });
+
+  it('patrimônio ignora saldo e mínimo, e não leva preço de venda', async () => {
+    const r = await lerPlanilhaProdutos(await planilha([{
+      ...LINHA_BOA,
+      'Classificação (Tipo)': 'Patrimônio (bem de uso)',
+      'Nome do produto': 'Freezer horizontal 500L',
+      'Preço de Venda (R$)': '4.500,00',
+    }]), FILIAL, CONTEXTO);
+    expect(r.linhas[0].erros).toEqual([]);
+    expect(r.linhas[0].payload?.tipo).toBe('patrimonio');
+    expect(r.linhas[0].payload?.preco).toBe(0);
+    expect(r.linhas[0].payload?.estoque_minimo).toBe(0);
+    expect(r.linhas[0].saldoAbertura).toBe(0);
+    expect(r.linhas[0].avisos.join(' ')).toMatch(/Saldo de Abertura foi ignorado/i);
+  });
+
   it('explica quando o arquivo não tem o cabeçalho do modelo', async () => {
     const wb = new ExcelJS.Workbook();
     const ws = wb.addWorksheet('Plan1');

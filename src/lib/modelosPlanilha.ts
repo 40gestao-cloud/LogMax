@@ -27,6 +27,7 @@
 import { GOLD_HEX, BLACK_HEX, GOLD_TINT_HEX } from './pdfPalette';
 import { unidadesDeProduto, unidadesDeRequisicao, itemExemploDaFilial, exemploProduto, UNIDADES_CONTEUDO, EMBALAGENS_COMPRA } from './unidades';
 import { ATRIBUTOS_PRODUTO as ATRIBUTOS_FICHA, rotuloParaCliente, type AtributoDef } from './atributosProduto';
+import { TIPOS_PRODUTO, TIPO_LABEL, TIPO_AJUDA } from './tipoProduto';
 import { supabase } from './supabase';
 
 export type ModeloFormato = 'texto' | 'moeda' | 'inteiro' | 'decimal' | 'data';
@@ -227,6 +228,15 @@ const modeloProdutos = (filial: string): Modelo => {
     { col: 'Código', obrigatorio: true, exemplo: '001',
       dica: `Código único dentro da ${filial}. Filiais diferentes podem repetir o mesmo código.` },
     { col: 'Nome do produto', obrigatorio: true, exemplo: ex.nome },
+    // A pergunta que decide o resto da linha, e que faltava aqui: o formulário
+    // sempre teve os três destinos (migr. 440), o modelo não. Quem preenchia a
+    // planilha só via "produto" e cadastrava resma de papel e freezer como
+    // mercadoria — os dois iam parar no PDV. Em branco continua entrando como
+    // mercadoria, que é o legado, mas a linha avisa.
+    { col: 'Classificação (Tipo)', lista: TIPOS_PRODUTO.map(t => TIPO_LABEL[t]),
+      exemplo: TIPO_LABEL.estoque_venda,
+      dica: TIPOS_PRODUTO.map(t => `${TIPO_LABEL[t]}: ${TIPO_AJUDA[t]}`).join(' | ')
+        + ' Em branco, entra como Mercadoria para revenda.' },
     { col: 'Categoria', obrigatorio: true, exemplo: ex.categoria, fonte: 'categorias',
       dica: 'Precisa existir em Cadastros > Categorias antes de cadastrar o produto. É ela que carrega o markup-alvo usado para sugerir o preço de venda.' },
     { col: 'Subcategoria', exemplo: ex.subcategoria, fonte: 'subcategorias',
@@ -284,7 +294,7 @@ const modeloProdutos = (filial: string): Modelo => {
     acao: 'Produto',
     titulo: `Produtos — ${filial}`,
     arquivo: `modelo-produtos-${filial.toLowerCase()}`,
-    intro: 'Uma linha por produto. Categoria e Fornecedor vêm em lista suspensa com o que já existe no LogMax — se o que você precisa não está lá, cadastre primeiro. Preenchido o arquivo, volte em Cadastros > Produtos e use "Importar planilha": o LogMax confere linha a linha e mostra o que entra antes de gravar.',
+    intro: 'Uma linha por produto. Comece pela Classificação: mercadoria para revenda vai ao PDV, uso e consumo é o que a empresa gasta internamente (papel, limpeza, embalagem) e patrimônio é bem de uso (freezer, balcão, computador) — a classificação muda o que o LogMax cobra no resto da linha. Categoria e Fornecedor vêm em lista suspensa com o que já existe no LogMax — se o que você precisa não está lá, cadastre primeiro. Preenchido o arquivo, volte em Cadastros > Produtos e use "Importar planilha": o LogMax confere linha a linha e mostra o que entra antes de gravar.',
     campos,
   };
 };
