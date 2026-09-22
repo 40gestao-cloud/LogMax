@@ -340,6 +340,15 @@ async function handleCreate(
     return res.status(400).json({ error: 'Colaboradores e gerentes precisam de uma unidade operacional (SuperMax, MaxLook ou TechMax) — ou de nenhuma, para alocar depois.' });
   }
 
+  // O caminho inverso faltava (migr. 608): CEO e conselheiro julgam as três
+  // unidades na competição, então não podem morar dentro de uma delas. O banco
+  // rebaixa de qualquer jeito; aqui a recusa é explícita pra tela não exibir um
+  // cargo que não foi o gravado.
+  if ((role === 'ceo' || role === 'conselheiro') && !semAlocacao && filialInformada !== 'Matriz') {
+    log.warn('user.validation_failed', { caller_id: callerId, target_role: role, reason: 'conselho_fora_da_matriz' });
+    return res.status(400).json({ error: 'CEO e Conselheiro são cargos da Matriz — quem julga a competição não pode estar em uma das unidades disputando.' });
+  }
+
   // Sem retentativa aqui, de propósito: repetir um POST que pode ter dado
   // certo do outro lado é como se fabrica conta duplicada. A recuperação é
   // olhar o que ficou (`contaOrfaDoEmail`) em vez de mandar de novo às cegas.
@@ -519,6 +528,16 @@ async function handleUpdate(
       updates.filial = filial;
     }
   }
+  // (migr. 608) Conselho é cargo de Matriz. Mandar um CEO/conselheiro para uma
+  // unidade era o caminho que deixava Kevila, Yan e Bismarck com direito de
+  // avaliar a própria filial na competição seguinte.
+  {
+    const filialFinal = updates.filial !== undefined ? updates.filial : targetProfile.filial;
+    const roleFinal   = updates.role ?? targetProfile.role;
+    if ((roleFinal === 'ceo' || roleFinal === 'conselheiro') && filialFinal && filialFinal !== 'Matriz') {
+      return res.status(400).json({ error: 'CEO e Conselheiro são cargos da Matriz. Para mover esta pessoa para uma unidade, rebaixe o cargo no mesmo envio — quem julga a competição não pode estar em uma das unidades disputando.' });
+    }
+  }
   if (is_conselheiro !== undefined) {
     if (callerProfile.role !== 'admin') {
       return res.status(403).json({ error: 'Apenas administradores podem ativar o modo Conselheiro.' });
@@ -526,6 +545,12 @@ async function handleUpdate(
     const targetRoleAfter = updates.role ?? targetProfile.role;
     if (targetRoleAfter !== 'gerente') {
       return res.status(400).json({ error: 'O modo Conselheiro só se aplica a gerentes.' });
+    }
+    // Gerente vive em unidade operacional, e a 608 tira o assento de quem está
+    // em unidade: o toggle não teria efeito nenhum no banco. Recusar aqui é
+    // melhor que aceitar e o gatilho desfazer sem ninguém ver.
+    if (is_conselheiro === true) {
+      return res.status(400).json({ error: 'O assento no conselho é da Matriz. Um gerente de unidade não vota na competição em que a própria unidade concorre.' });
     }
     if (typeof is_conselheiro !== 'boolean') {
       return res.status(400).json({ error: 'is_conselheiro deve ser booleano.' });
@@ -841,6 +866,11 @@ async function handleAjustarAcessoCarreira(
   const roleFinal = updates.role ?? alvo.role;
   if ((roleFinal === 'colaborador' || roleFinal === 'gerente') && updates.filial === 'Matriz') {
     return res.status(400).json({ error: 'Colaboradores e gerentes precisam de uma unidade operacional.' });
+  }
+  // (migr. 608) E o inverso: a movimentação de carreira que joga um CEO ou
+  // conselheiro numa unidade precisa dizer para qual cargo ele desce.
+  if ((roleFinal === 'ceo' || roleFinal === 'conselheiro') && updates.filial !== 'Matriz') {
+    return res.status(400).json({ error: 'CEO e Conselheiro são cargos da Matriz. Informe o cargo novo na movimentação para mover esta pessoa para uma unidade.' });
   }
 
   const { error } = await admin.from('user_profiles').update(updates).eq('id', mov.user_profile_id);
