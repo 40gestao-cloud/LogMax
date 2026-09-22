@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   Landmark, Plus, X, AlertTriangle, ShieldAlert, CheckCircle,
-  XCircle, Clock, CreditCard, Info, Calculator,
+  XCircle, Clock, CreditCard, Info, Calculator, Check, TrendingDown,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { LoadingSpinner, NeuButtonAccent } from '../components/ui';
@@ -13,7 +13,9 @@ import EmprestimoMemoria from '../components/EmprestimoMemoria';
 import { formatBRL, parseBRL, qtdBR } from '../lib/viewUtils';
 import type { UserProfile } from '../hooks/useUserProfile';
 import { useFilial } from '../contexts/FilialContext';
-import { dataSimplesBR } from '../lib/dates';
+import { dataSimplesBR, todayBR } from '../lib/dates';
+import { bancoDaUnidade } from '../lib/filiais';
+import { hasSetor } from '../lib/rbac';
 
 // ── Tipos ──────────────────────────────────────────────────────────
 type SaldoFilial = {
@@ -85,6 +87,25 @@ function podesolicitarEmprestimo(p: UserProfile | null, filial: string) {
   if (!p) return false;
   return (p.role === 'gerente' || p.role === 'admin' || p.role === 'ceo')
     && (p.filial === filial || p.role === 'admin' || p.role === 'ceo');
+}
+
+// Espelha a trava da RPC `antecipar_parcela_emprestimo` (616) — só pra não
+// oferecer botão que o banco vai recusar. A régua de verdade é lá.
+function podeAntecipar(p: UserProfile | null, filial: string) {
+  if (!p) return false;
+  return hasSetor(p, 'financeiro')
+    || ((p.role === 'gerente' || p.role === 'admin' || p.role === 'ceo') && p.filial === filial)
+    || p.role === 'admin' || p.role === 'ceo';
+}
+
+// Meses cheios entre hoje e o vencimento — mesma truncagem do `age()` no
+// banco (616): dia fracionado não conta, e nunca é negativo.
+function mesesCheiosAte(vencimentoISO: string, hojeISO: string): number {
+  const v = new Date(vencimentoISO + 'T00:00:00');
+  const h = new Date(hojeISO + 'T00:00:00');
+  let meses = (v.getFullYear() - h.getFullYear()) * 12 + (v.getMonth() - h.getMonth());
+  if (v.getDate() < h.getDate()) meses -= 1;
+  return Math.max(meses, 0);
 }
 
 // ── Barra de saúde ─────────────────────────────────────────────────
@@ -228,12 +249,23 @@ export function FilialCapitalView({
   const [loadingSaldo, setLoadingSaldo] = useState(true);
   const [modalSolicitar, setModalSolicitar] = useState(false);
   const [modalMemoria, setModalMemoria] = useState<Emprestimo | null>(null);
+  const [antecipandoId, setAntecipandoId] = useState<string | null>(null);
+  const [antecipaBankId, setAntecipaBankId] = useState('');
+  const [antecipaSaving, setAntecipaSaving] = useState(false);
 
   const { data: emprestimos = [], isLoading: loadingEmp, reload: reloadEmp } =
     useFetchData<Emprestimo>('emprestimos_filial', { filial }, false);
 
   const { data: parcelas = [], reload: reloadParcelas } =
     useFetchData<Parcela>('parcelas_emprestimo', undefined, false);
+
+  // Mesma conta bancária que a baixa em Contas a Pagar usa: caixa da própria
+  // unidade, nunca o de outra filial (325).
+  const { data: bancos = [] } =
+    useFetchData<any>('/api/caixabancosview', filial ? { filial } : undefined);
+  const bancosAtivos = bancos.filter(
+    (b: any) => (b.status === 'Ativo' || !b.status) && bancoDaUnidade(b, filial),
+  );
 
   // Migr. 474 — o lucro que a unidade mandou para a Matriz. Aparece aqui
   // porque o dinheiro saiu do caixa dela e ninguem deveria descobrir isso por
@@ -274,6 +306,45 @@ export function FilialCapitalView({
     empAprovados.some(e => e.id === p.emprestimo_id),
   );
   const parcelasPendentes = parcelasDoFilial.filter(p => p.status === 'Pendente');
+
+  // Fuso do Acre, como a RPC (`acre_today`): das 19h à meia-noite o corte de
+  // UTC já é o dia seguinte, e a prévia do desconto contaria um mês a menos.
+  const hoje = todayBR();
+
+  const openAntecipar = (p: Parcela) => {
+    setAntecipandoId(p.id);
+    setAntecipaBankId('');
+  };
+  const closeAntecipar = () => {
+    setAntecipandoId(null);
+    setAntecipaBankId('');
+  };
+
+  const handleConfirmarAntecipacao = async (p: Parcela) => {
+    if (!antecipaBankId) { showToast('Selecione a conta bancária de débito.', 'error'); return; }
+    if (!supabase) return;
+    setAntecipaSaving(true);
+    try {
+      const { data, error } = await supabase.rpc('antecipar_parcela_emprestimo', {
+        p_parcela_id: p.id,
+        p_banco_id: antecipaBankId,
+      });
+      if (error) throw new Error(error.message);
+      const r = data as any;
+      showToast(
+        `Parcela ${r.parcela} antecipada em ${r.meses} mês(es): pagou ${BRL(r.valor_pago)}, `
+        + `desconto de ${BRL(r.desconto)} sobre ${BRL(r.valor_original)} (juro que deixou de correr).`,
+        'success',
+      );
+      closeAntecipar();
+      reloadParcelas();
+      carregarSaldo();
+    } catch (err: any) {
+      showToast(err?.message ?? 'Erro ao antecipar parcela.', 'error');
+    } finally {
+      setAntecipaSaving(false);
+    }
+  };
 
   const statusIcon = (s: string) => {
     if (s === 'Aprovado') return <CheckCircle size={13} className="text-green-400" />;
@@ -565,9 +636,15 @@ export function FilialCapitalView({
           </span>
           {parcelasPendentes.map(p => {
             const vencido = new Date(p.data_vencimento) < new Date();
+            const emp = empAprovados.find(e => e.id === p.emprestimo_id);
+            const i = Number(emp?.taxa_juros ?? 0) / 100;
+            const mesesAntecip = mesesCheiosAte(p.data_vencimento, hoje);
+            const elegivel = !vencido && i > 0 && mesesAntecip >= 1 && podeAntecipar(profile, filial);
+            const pv = elegivel ? Math.round((p.valor_parcela / Math.pow(1 + i, mesesAntecip)) * 100) / 100 : null;
+            const descontoPreview = pv !== null ? Math.round((p.valor_parcela - pv) * 100) / 100 : null;
             return (
               <div key={p.id} className="flex flex-col gap-0.5">
-                <div className="flex items-center justify-between text-sm">
+                <div className="flex items-center justify-between text-sm gap-2">
                   <span className="text-gray-400">Parcela {p.num_parcela}</span>
                   <span className={`font-bold tabular-nums ${vencido ? 'text-red-400' : 'text-gray-200'}`}>
                     {BRL(p.valor_parcela)}
@@ -575,6 +652,15 @@ export function FilialCapitalView({
                   <span className={`text-xs ${vencido ? 'text-red-400' : 'text-gray-500'}`}>
                     {fmtDate(p.data_vencimento)}{vencido ? ' — VENCIDA' : ''}
                   </span>
+                  {elegivel && antecipandoId !== p.id && (
+                    <button
+                      onClick={() => openAntecipar(p)}
+                      title="Pagar hoje, com desconto do juro que ainda não correu."
+                      className="neu-button py-1 px-2.5 rounded-lg text-[10px] font-bold text-accent hover:bg-accent/10 transition-colors flex items-center gap-1 shrink-0"
+                    >
+                      <TrendingDown size={11} /> Antecipar
+                    </button>
+                  )}
                 </div>
                 {/* Onde a aula acontece: da parcela, só o juro é custo. O
                     resto é o próprio dinheiro voltando pra Matriz. */}
@@ -584,6 +670,55 @@ export function FilialCapitalView({
                     {p.saldo_devedor !== null && ` · resta ${BRL(p.saldo_devedor)}`}
                   </span>
                 )}
+                <AnimatePresence>
+                  {antecipandoId === p.id && (
+                    <motion.div
+                      initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }}
+                      className="mt-1 flex flex-col gap-2 p-3 rounded-2xl"
+                      style={{ background: 'color-mix(in srgb, var(--color-accent) 5%, transparent)', border: '1px solid color-mix(in srgb, var(--color-accent) 18%, transparent)' }}
+                    >
+                      <p className="text-[11px] text-gray-400">
+                        Antecipando {mesesAntecip} mês(es): valor à vista{' '}
+                        <strong className="text-accent tabular-nums">{pv !== null ? BRL(pv) : '—'}</strong>
+                        {' '}— desconto de{' '}
+                        <strong className="text-emerald-300 tabular-nums">{descontoPreview !== null ? BRL(descontoPreview) : '—'}</strong>
+                        {' '}(juro que deixa de correr, {qtdBR(Number(emp?.taxa_juros ?? 0))}% a.m.). O cronograma das outras parcelas não muda.
+                      </p>
+                      <div className="flex flex-col sm:flex-row sm:items-end gap-2">
+                        <div className="flex flex-col gap-1 flex-1 min-w-0">
+                          <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest flex items-center gap-1.5">
+                            <Landmark size={11} /> Conta bancária de débito *
+                          </label>
+                          <select
+                            className="neu-input py-2 px-3 rounded-xl text-xs w-full"
+                            value={antecipaBankId} onChange={e => setAntecipaBankId(e.target.value)}
+                          >
+                            <option value="">Selecione...</option>
+                            {bancosAtivos.map((b: any) => (
+                              <option key={b.id} value={b.id}>
+                                {(b.banco ?? b.conta ?? '—')} — saldo {BRL(Number(b.saldo ?? 0))}
+                              </option>
+                            ))}
+                          </select>
+                          {bancosAtivos.length === 0 && (
+                            <span className="text-[10px] text-yellow-400 mt-1">Nenhum caixa/banco ativo em {filial}.</span>
+                          )}
+                        </div>
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => handleConfirmarAntecipacao(p)} disabled={antecipaSaving || !antecipaBankId}
+                            className="neu-button-accent py-2 px-4 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 disabled:opacity-50"
+                          >
+                            {antecipaSaving ? 'Antecipando...' : <><Check size={12} /> Confirmar</>}
+                          </button>
+                          <button onClick={closeAntecipar} className="neu-button py-2 px-3 rounded-xl text-xs text-gray-500 flex items-center justify-center gap-1">
+                            <X size={11} /> Cancelar
+                          </button>
+                        </div>
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
               </div>
             );
           })}
