@@ -10,7 +10,7 @@ import { useFetchData } from '../hooks/useSupabaseData';
 import { PeriodoCapitalAviso } from '../components/PeriodoCapitalAviso';
 import { AplicacoesPanel } from '../components/AplicacoesPanel';
 import EmprestimoMemoria from '../components/EmprestimoMemoria';
-import { formatBRL, parseBRL } from '../lib/viewUtils';
+import { formatBRL, parseBRL, qtdBR } from '../lib/viewUtils';
 import type { UserProfile } from '../hooks/useUserProfile';
 import { useFilial } from '../contexts/FilialContext';
 import { dataSimplesBR } from '../lib/dates';
@@ -517,7 +517,7 @@ export function FilialCapitalView({
                   <span className="text-sm font-bold text-gray-100 tabular-nums">{BRL(emp.valor)}</span>
                   <span className="text-xs text-gray-500">{emp.num_parcelas}x</span>
                   {emp.taxa_juros > 0 && (
-                    <span className="text-xs text-gray-500">{emp.taxa_juros}% a.m.</span>
+                    <span className="text-xs text-gray-500">{qtdBR(emp.taxa_juros)}% a.m.</span>
                   )}
                   {emp.banco_nome && (
                     <span className="text-xs text-gray-500 truncate ml-auto">{emp.banco_nome}</span>

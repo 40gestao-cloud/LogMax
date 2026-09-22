@@ -17,7 +17,7 @@ import type { BancoInvestimento } from '../components/AplicacoesPanel';
 import type { UserProfile } from '../hooks/useUserProfile';
 import { bancoDaUnidade } from '../lib/filiais';
 import { useConfirm } from '../contexts/ConfirmContext';
-import { formatBRL, parseBRL } from '../lib/viewUtils';
+import { formatBRL, parseBRL, qtdBR } from '../lib/viewUtils';
 
 // ── Tipos ──────────────────────────────────────────────────────────────────
 type CapitalRow = {
@@ -612,7 +612,7 @@ function ModalConfig({
           <div className="text-xs text-gray-500 neu-pressed rounded-xl p-3">
             Ativo desde {dataSimplesBR(config.data_inicio)}
             {config.data_fim ? ` até ${dataSimplesBR(config.data_fim)}` : ' (sem prazo)'}
-            {' · '}Reserva {config.reserva_min_pct}% · Juros padrão {config.taxa_juros_padrao}% a.m.
+            {' · '}Reserva {qtdBR(config.reserva_min_pct)}% · Juros padrão {qtdBR(config.taxa_juros_padrao)}% a.m.
           </div>
         )}
         <div className="grid grid-cols-2 gap-3">
@@ -1038,7 +1038,7 @@ function ModalEditarEmprestimo({
           <div className="flex justify-between text-sm">
             <span className="text-gray-500">Como está hoje</span>
             <span className="font-bold text-gray-100 tabular-nums">
-              {BRL(emp.valor)} · {emp.num_parcelas}x · {Number(emp.taxa_juros ?? 0)}% a.m.
+              {BRL(emp.valor)} · {emp.num_parcelas}x · {qtdBR(emp.taxa_juros ?? 0)}% a.m.
             </span>
           </div>
           <div className="text-xs text-gray-400 italic border-t border-white/5 pt-2">
@@ -2989,7 +2989,7 @@ export function MatrizCapitalView({
                 </div>
                 <div>
                   <span className="text-[10px] uppercase tracking-widest text-gray-500">Juros padrão</span>
-                  <p className="text-sm font-bold text-gray-100 mt-0.5">{configAtiva.taxa_juros_padrao}%</p>
+                  <p className="text-sm font-bold text-gray-100 mt-0.5">{qtdBR(configAtiva.taxa_juros_padrao)}%</p>
                 </div>
                 <div>
                   <span className="text-[10px] uppercase tracking-widest text-gray-500">Parcelamento máximo</span>

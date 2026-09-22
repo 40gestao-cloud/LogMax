@@ -20,6 +20,7 @@ import { motion } from 'motion/react';
 import { X, Calculator, TrendingDown, Info } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { LoadingSpinner } from './ui';
+import { qtdBR } from '../lib/viewUtils';
 
 type ParcelaMemoria = {
   id: string;
@@ -47,8 +48,13 @@ export type EmprestimoMemoriaProps = {
 const BRL = (v: number) =>
   v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
-// Taxa com até 3 casas, sem zero à toa: 0,625% e 1% — não "1,000%".
-const PCT = (v: number, casas = 3) =>
+// A taxa exata, como se lê em português: `qtdBR` é a mesma régua do resto do
+// sistema — `numeric` chega com a escala inteira ("0.625") e jogado na tela o
+// leitor brasileiro vê outro número.
+const PCT_EXATA = (v: number) => `${qtdBR(v)}%`;
+
+// Só para o derivado (equivalente anual), onde arredondar é o certo.
+const PCT = (v: number, casas = 2) =>
   `${Number(v).toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: casas })}%`;
 
 const NUM = (v: number, casas = 8) =>
@@ -152,7 +158,7 @@ export default function EmprestimoMemoria({ emprestimo, onClose }: EmprestimoMem
         <div className="px-5 pb-5 overflow-y-auto main-scrollbar flex flex-col gap-3">
           <Bloco titulo="O que foi contratado">
             <Linha label="Principal (o que entrou no caixa)" valor={BRL(P)} destaque />
-            <Linha label="Juros ao mês" valor={PCT(taxa)} />
+            <Linha label="Juros ao mês" valor={PCT_EXATA(taxa)} />
             <Linha label="Equivalente ao ano" valor={PCT(anual, 2)} />
             <Linha label="Prazo" valor={`${n} parcelas mensais`} />
             {primeira && <Linha label="1º vencimento" valor={fmtDate(primeira.data_vencimento)} />}
@@ -163,11 +169,11 @@ export default function EmprestimoMemoria({ emprestimo, onClose }: EmprestimoMem
             </p>
           </Bloco>
 
-          {i > 0 && (
+          {i > 0 && parcelas.length > 0 && (
             <Bloco titulo="Como a parcela sai desses números" icone={Calculator}>
               <div className="font-mono text-[11px] leading-relaxed text-gray-300 bg-black/30 rounded-xl p-3 overflow-x-auto">
                 <div className="text-gray-500">PMT = P × i × (1+i)ⁿ ÷ ((1+i)ⁿ − 1)</div>
-                <div className="mt-2">i = {PCT(taxa)} ÷ 100 = {NUM(i, 5)}</div>
+                <div className="mt-2">i = {PCT_EXATA(taxa)} ÷ 100 = {NUM(i, 5)}</div>
                 <div>(1 + {NUM(i, 5)})<sup>{n}</sup> = {NUM(fator)}</div>
                 <div className="mt-2">
                   PMT = {BRL(P)} × {NUM(i, 5)} × {NUM(fator)} ÷ ({NUM(fator)} − 1)
@@ -179,7 +185,7 @@ export default function EmprestimoMemoria({ emprestimo, onClose }: EmprestimoMem
               {primeira && primeira.juros !== null && (
                 <p className="text-[11px] text-gray-500 leading-relaxed">
                   <strong className="text-gray-400">Conferência pela 1ª parcela</strong> — é a única sem
-                  arredondamento acumulado: juros = {BRL(P)} × {PCT(taxa)} ={' '}
+                  arredondamento acumulado: juros = {BRL(P)} × {PCT_EXATA(taxa)} ={' '}
                   <span className="tabular-nums text-gray-300">{BRL(Number(primeira.juros))}</span>.
                   Se esse número bate, a taxa exibida é mesmo a taxa usada.
                 </p>
@@ -187,6 +193,7 @@ export default function EmprestimoMemoria({ emprestimo, onClose }: EmprestimoMem
             </Bloco>
           )}
 
+          {parcelas.length > 0 && (
           <Bloco titulo="O que isso custa">
             <Linha label="Parcela" valor={primeira ? BRL(Number(primeira.valor_parcela)) : '—'} destaque />
             <Linha label="Total a pagar" valor={BRL(totalPago)} />
@@ -207,7 +214,9 @@ export default function EmprestimoMemoria({ emprestimo, onClose }: EmprestimoMem
               <Linha label={`Juros já pagos (${pagas.length} de ${n})`} valor={BRL(jurosPagos)} />
             )}
           </Bloco>
+          )}
 
+          {primeira && (
           <Bloco titulo="Da parcela, só o juro é despesa" icone={TrendingDown}>
             {primeira && primeira.juros !== null && (
               <div className="font-mono text-[11px] text-gray-300 bg-black/30 rounded-xl p-3 leading-relaxed">
@@ -240,6 +249,7 @@ export default function EmprestimoMemoria({ emprestimo, onClose }: EmprestimoMem
               </p>
             )}
           </Bloco>
+          )}
 
           {ultimaDifere && primeira && ultima && (
             <Bloco titulo="Por que a última parcela é diferente" icone={Info}>
