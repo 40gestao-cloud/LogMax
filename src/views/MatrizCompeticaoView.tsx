@@ -114,9 +114,17 @@ type Placar = {
       dias_distintos?: number; funcionarios_ativos?: number;
       dias_letivos?: number; esperado?: number; ausencias?: number; calendario?: boolean;
     } | null;
+    // Migr. 617: terceiro eixo objetivo — parcela de empréstimo paga até o
+    // vencimento. Unidade sem parcela vencida no período fica de fora (taxa
+    // null) e o peso dela volta para o conselho.
+    pontualidade?: {
+      taxa: number | null; vencidas: number; em_dia: number;
+      atrasadas: number; entrou: boolean;
+    } | null;
   }>;
   inclui_eixos_conselho?: boolean;
   peso_frequencia?: number;
+  peso_pontualidade?: number;
   media_por_item?: boolean;
   // Migr. 376: com calendário da turma, dia letivo sem lançamento vira falta.
   calendario_turma?: boolean;
@@ -760,6 +768,8 @@ export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToa
       itens: Number(placar.por_filial?.[f]?.itens ?? 0),
       taxa:  placar.por_filial?.[f]?.frequencia?.taxa ?? null,
       freq:  placar.por_filial?.[f]?.frequencia ?? null,
+      // Migr. 617: pagar a parcela até o vencimento.
+      pont:  placar.por_filial?.[f]?.pontualidade ?? null,
     })));
   }, [placar]);
 
@@ -1029,6 +1039,14 @@ export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToa
                   >
                     Frequência do ponto ({Math.round((placar.peso_frequencia ?? 0.2) * 100)}%)
                   </span>
+                  {/* (617) Pontualidade também não é voto: sai do vencimento
+                      das parcelas de empréstimo pagas no período. */}
+                  <span
+                    className="px-2 py-0.5 rounded-full border bg-emerald-500/10 border-emerald-500/30 text-emerald-300"
+                    title="Parcelas de empréstimo vencidas no período, quitadas até a data de vencimento. Unidade sem parcela vencida fica fora do eixo."
+                  >
+                    Pontualidade no pagamento ({Math.round((placar.peso_pontualidade ?? 0.1) * 100)}%)
+                  </span>
                 </div>
 
                 {/* Pódio — média das notas por filial (× 10, escala 0-100) */}
@@ -1068,6 +1086,7 @@ export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToa
                         <th className="text-right pb-3 font-bold pr-4">Conselho (0-10)</th>
                         <th className="text-right pb-3 font-bold pr-4">Frequência</th>
                         <th className="text-right pb-3 font-bold pr-4">Cobertura do ponto</th>
+                        <th className="text-right pb-3 font-bold pr-4">Pontualidade</th>
                         <th className="text-right pb-3 font-bold pr-4">Final (0-10)</th>
                         <th className="text-right pb-3 font-bold pr-4">Escala 0-100</th>
                       </tr>
@@ -1127,6 +1146,24 @@ export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToa
                                 </td>
                               );
                             })()}
+                            {/* (617) Parcela paga até o vencimento ÷ parcelas
+                                já vencidas no período. Sem dívida vencida, a
+                                unidade não ganha nem perde: o eixo não entra. */}
+                            <td
+                              className="py-3 text-right tabular-nums pr-4"
+                              title={p.pont?.taxa == null
+                                ? 'Nenhuma parcela de empréstimo venceu nesta unidade dentro do período — o eixo não entra e o peso volta para o conselho.'
+                                : `${p.pont.em_dia} de ${p.pont.vencidas} parcela(s) paga(s) até o vencimento — ${p.pont.atrasadas} em atraso ou sem pagar.`}
+                            >
+                              {p.pont?.taxa == null
+                                ? <span className="text-gray-600">—</span>
+                                : <>
+                                    <span className={p.pont.entrou ? 'text-emerald-300' : 'text-gray-500'}>
+                                      {(p.pont.taxa * 100).toFixed(0)}%
+                                    </span>
+                                    <span className="text-gray-600"> ({p.pont.em_dia}/{p.pont.vencidas})</span>
+                                  </>}
+                            </td>
                             <td className={`py-3 text-right tabular-nums pr-4 ${isBest ? 'text-emerald-400 font-bold' : 'text-gray-300'}`}>
                               {p.n === 0 ? '—' : (p.media / 10).toFixed(1)}
                             </td>
@@ -1148,6 +1185,10 @@ export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToa
                     : `atraso valendo meio dia (entrada após ${placar.jornada_entrada ?? '—'})`}, falta zerando e
                   justificado fora da conta; entra na nota final com peso {Math.round((placar.peso_frequencia ?? 0.2) * 100)}%.
                   Filial sem ponto lançado não é punida — a parcela simplesmente não entra e a final repete a do conselho.
+                  {' '}Pontualidade = parcelas de empréstimo que venceram no período e foram quitadas até o vencimento (antecipar conta como em dia,
+                  não pagar conta como atraso); vale {Math.round((placar.peso_pontualidade ?? 0.1) * 100)}% e é uma taxa, não um valor — a régua é
+                  a mesma para quem pegou R$ 1 milhão e para quem pegou R$ 5 milhões. Unidade sem parcela vencida no período fica fora do eixo, e o
+                  peso volta para o conselho.
                   {placar.calendario_turma
                     ? ' Com o calendário da turma configurado, cada pessoa ativa responde por cada dia letivo: dia sem lançamento conta como falta, e a cobertura mostra quanto foi de fato registrado.'
                     : ' Sem o calendário da turma configurado, o que não foi lançado não entra na conta — configure os dias de aula no card de Frequência, na Central de Avaliação, para a falta descontar.'}
