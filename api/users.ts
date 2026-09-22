@@ -546,12 +546,6 @@ async function handleUpdate(
     if (targetRoleAfter !== 'gerente') {
       return res.status(400).json({ error: 'O modo Conselheiro só se aplica a gerentes.' });
     }
-    // Gerente vive em unidade operacional, e a 608 tira o assento de quem está
-    // em unidade: o toggle não teria efeito nenhum no banco. Recusar aqui é
-    // melhor que aceitar e o gatilho desfazer sem ninguém ver.
-    if (is_conselheiro === true) {
-      return res.status(400).json({ error: 'O assento no conselho é da Matriz. Um gerente de unidade não vota na competição em que a própria unidade concorre.' });
-    }
     if (typeof is_conselheiro !== 'boolean') {
       return res.status(400).json({ error: 'is_conselheiro deve ser booleano.' });
     }

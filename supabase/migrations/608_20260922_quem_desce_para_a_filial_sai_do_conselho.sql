@@ -11,9 +11,16 @@
 -- ato — não é uma segunda tarefa que o professor precisa lembrar de fazer.
 --
 -- Gatilho de NORMALIZAÇÃO, não de bloqueio: mover a pessoa continua permitido,
--- o que muda é que o papel desce junto (`ceo`/`conselheiro` → `colaborador`,
--- `is_conselheiro` → false). Recusar o UPDATE obrigaria o professor a rebaixar
--- antes e mover depois, em duas idas à tela, para chegar no mesmo lugar.
+-- o que muda é que o papel desce junto (`ceo`/`conselheiro` → `colaborador`).
+-- Recusar o UPDATE obrigaria o professor a rebaixar antes e mover depois, em
+-- duas idas à tela, para chegar no mesmo lugar.
+--
+-- `is_conselheiro` NÃO é tocado, e a primeira versão desta migração errava
+-- nisso. O nome engana: o toggle "Acesso de Conselheiro" dá VISÃO GLOBAL a um
+-- gerente, não assento no conselho — para votar e avaliar, `contar_votantes_
+-- matriz` e `avaliar_item_matriz` exigem `filial = 'Matriz'`, e gerente nunca
+-- é da Matriz. Ou seja: limpar a flag não fechava furo nenhum na competição e
+-- matava um recurso que o professor liga de propósito.
 --
 -- Vale inclusive para o service_role: o caminho real é `/api/users`, que usa a
 -- chave de serviço e passa por cima do `bloquear_privesc`. Um guard que
@@ -42,10 +49,6 @@ BEGIN
     RETURN NEW;
   END IF;
 
-  IF COALESCE(NEW.is_conselheiro, false) THEN
-    NEW.is_conselheiro := false;
-  END IF;
-
   IF NEW.role IN ('ceo', 'conselheiro') THEN
     NEW.role := 'colaborador';
   END IF;
@@ -60,11 +63,6 @@ CREATE TRIGGER trg_user_profiles_conselho_e_da_matriz
   FOR EACH ROW EXECUTE FUNCTION public.fn_conselho_e_da_matriz();
 
 -- Quem já está em unidade operacional carregando papel de conselho.
-UPDATE public.user_profiles
-   SET is_conselheiro = false
- WHERE filial IS NOT NULL AND filial <> 'Matriz'
-   AND COALESCE(is_conselheiro, false);
-
 UPDATE public.user_profiles
    SET role = 'colaborador'
  WHERE filial IS NOT NULL AND filial <> 'Matriz'

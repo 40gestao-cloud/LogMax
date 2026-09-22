@@ -55,15 +55,20 @@ export async function buscarRelatorioCentralAvaliacao(competicao: {
   id: string; nome: string; data_inicio: string; data_fim: string;
 }, ehAdmin = false): Promise<CentralRelatorio> {
   // Admin não é conselho — nota dele fica de fora dos agregados (regra 240).
+  // Papel e vínculo vêm CONGELADOS da própria nota (migr. 609): ler o perfil de
+  // hoje fazia o relatório mudar quando alguém trocava de cargo, e a mesma nota
+  // entrava aqui e ficava fora do placar. `avaliador_filial` é o que barra nota
+  // dada para a própria unidade.
   const { data: avalsRaw } = await supabase
     .from('avaliacoes_matriz')
-    .select('item_tipo,item_id,decisao,nota,comentario,avaliador:user_profiles!avaliador_id(role)')
+    .select('item_tipo,item_id,decisao,nota,comentario,filial_avaliada,avaliador_role,avaliador_filial')
     .eq('competicao_id', competicao.id)
     .eq('ativo', true);
 
   const avalsPorChave = new Map<string, any[]>();
   for (const a of (avalsRaw ?? []) as any[]) {
-    if (a.avaliador?.role === 'admin') continue;
+    if ((a.avaliador_role ?? 'conselheiro') === 'admin') continue;
+    if ((a.avaliador_filial ?? 'Matriz') === a.filial_avaliada) continue;
     const key = `${a.item_tipo}:${a.item_id}`;
     const list = avalsPorChave.get(key) ?? [];
     list.push(a);
