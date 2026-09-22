@@ -268,6 +268,16 @@ const MSG_POR_CONSTRAINT: Record<string, string> = {
     'Esta combinação de tamanho e cor já existe neste modelo. Cada variante é um '
     + 'cadastro só — dois partem o estoque da peça em dois. Edite a que já existe, '
     + 'ou escolha outra combinação.',
+  // Migr. 491, índice (filial, nf_numero, nf_serie). Sem esta frase o aluno
+  // recebia o texto cru do Postgres, não entendia que a carga já tinha entrado
+  // e clicava em Registrar de novo — na turma da tarde de 22/09 isso virou 42
+  // reenvios em meia hora, cada um acordando a sala inteira para recontar
+  // badge. A mensagem que explica é o que faz a repetição parar.
+  uq_recebimento_nf_por_filial:
+    'Esta nota fiscal já foi lançada nesta unidade. Se você acabou de registrar '
+    + 'e a tela demorou, a carga PROVAVELMENTE já entrou — procure-a na lista '
+    + 'antes de lançar de novo. Se é outra carga, confira o número e a série da '
+    + 'nota: duas entradas com a mesma nota cobram o fornecedor duas vezes.',
 };
 
 function traduzErroDeGravacao(error: { code?: string; message?: string }): string {

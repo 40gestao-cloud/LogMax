@@ -124,6 +124,8 @@ const RecebimentosViewInner = ({ showToast, filial }: { showToast: any; filial: 
   // (assíncrono); um double-click rápido entra em handleConfirmar 2× antes
   // do re-render. Este ref tranca o item já em processo imediatamente.
   const confirmingRef = useRef<string | null>(null);
+  // Mesmo guard para o Registrar.
+  const savingRef = useRef(false);
 
   const pedidosAtivos = pedidos.filter((p: any) => !['Cancelado', 'Recebido'].includes(p.status));
 
@@ -362,6 +364,11 @@ const RecebimentosViewInner = ({ showToast, filial }: { showToast: any; filial: 
 
   const handleSave = async () => {
     if (!validate()) return;
+    // Guard sincrônico, como no Confirmar: `isLoading={isSaving}` só desabilita
+    // depois do re-render, e o duplo clique entra aqui duas vezes antes disso —
+    // dois recebimentos da mesma carga, ou o 23505 da nota repetida.
+    if (savingRef.current) return;
+    savingRef.current = true;
     setIsSaving(true);
     showToast("Salvando...", 'info', false);
     try {
@@ -401,6 +408,7 @@ const RecebimentosViewInner = ({ showToast, filial }: { showToast: any; filial: 
       showToast(`Erro ao salvar: ${err?.message ?? 'verifique o console'}`, 'error', true);
     } finally {
       setIsSaving(false);
+      savingRef.current = false;
     }
   };
 
