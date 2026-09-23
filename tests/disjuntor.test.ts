@@ -174,4 +174,70 @@ describe('fetchMedido', () => {
     const r = await f('https://x.supabase.co/rest/v1/pedidos');
     expect(r.status).toBe(201);
   });
+
+  it('poe teto na leitura: GET pendurado e abortado e conta como falta', async () => {
+    // No dia 22 o gateway soltou 504 so aos 190s. A maquina esperava tres
+    // minutos por uma resposta que nao ia servir.
+    const pendurado = ((_u: any, init: any) => new Promise((_res, rej) => {
+      init?.signal?.addEventListener('abort', () => rej(new Error('abortado')));
+    })) as unknown as typeof fetch;
+    const f = fetchMedido(pendurado);
+    const p = f('https://x.supabase.co/rest/v1/pedidos', { method: 'GET' });
+    const esperado = expect(p).rejects.toThrow();
+    await vi.advanceTimersByTimeAsync(25_100);
+    await esperado;
+    // Falha de rede (status null) conta — e 25s passa do limiar imediato.
+    expect(estadoDisjuntor()).toBe('aberto');
+  });
+
+  it('NUNCA poe teto em escrita — POST pendurado segue pendurado', async () => {
+    // A garantia central: nao existe caminho em que isto aborte um INSERT e
+    // deixe o aluno sem saber se gravou.
+    let injetouSignal: boolean | null = null;
+    const pendurado = ((_u: any, init: any) => {
+      injetouSignal = Boolean(init && init.signal);
+      return new Promise(() => {}); // nunca resolve
+    }) as unknown as typeof fetch;
+    const f = fetchMedido(pendurado);
+    let acabou = false;
+    void f('https://x.supabase.co/rest/v1/recebimentos', { method: 'POST' })
+      .then(() => { acabou = true; }, () => { acabou = true; });
+    await vi.advanceTimersByTimeAsync(120_000);
+    expect(acabou).toBe(false);      // ninguem abortou
+    expect(injetouSignal).toBe(false); // nem signal foi injetado
+  });
+
+  it('PATCH e DELETE tambem ficam fora do teto', async () => {
+    const vistos: string[] = [];
+    const pendurado = ((_u: any, init: any) => {
+      vistos.push(init?.signal ? 'com-signal' : 'sem-signal');
+      return new Promise(() => {});
+    }) as unknown as typeof fetch;
+    const f = fetchMedido(pendurado);
+    void f('https://x.supabase.co/rest/v1/recebimentos', { method: 'PATCH' }).catch(() => {});
+    void f('https://x.supabase.co/rest/v1/recebimentos', { method: 'DELETE' }).catch(() => {});
+    void f('https://x.supabase.co/rest/v1/rpc/contar_pendencias', { method: 'POST' }).catch(() => {});
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(vistos).toEqual(['sem-signal', 'sem-signal', 'sem-signal']);
+  });
+
+  it('nao descarta o signal de quem chamou', async () => {
+    // Alguma tela pode usar `.abortSignal()` do supabase-js. Os dois valem.
+    const pendurado = ((_u: any, init: any) => new Promise((_res, rej) => {
+      init?.signal?.addEventListener('abort', () => rej(new Error('abortado')));
+    })) as unknown as typeof fetch;
+    const f = fetchMedido(pendurado);
+    const meu = new AbortController();
+    const p = f('https://x.supabase.co/rest/v1/pedidos', { method: 'GET', signal: meu.signal });
+    const esperado = expect(p).rejects.toThrow();
+    meu.abort();                          // muito antes dos 25s
+    await esperado;
+  });
+
+  it('GET rapido nao e afetado pelo teto', async () => {
+    const f = fetchMedido(respostaEm(RAPIDO, 200));
+    const r = await f('https://x.supabase.co/rest/v1/pedidos', { method: 'GET' });
+    expect(r.status).toBe(200);
+    expect(estadoDisjuntor()).toBe('fechado');
+  });
 });

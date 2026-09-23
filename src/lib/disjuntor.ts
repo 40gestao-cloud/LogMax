@@ -42,9 +42,10 @@
 // · Não corta a primeira leitura de uma tela. Abrir um menu é intenção da
 //   pessoa; tela em branco por decisão nossa é a mesma frustração do
 //   travamento, com a diferença de que a culpa é nossa.
-// · Não aborta requisição em voo. Um `AbortController` em cima de escrita deixa
-//   o aluno sem saber se gravou, e o wrapper de `fetch` não sabe distinguir
-//   intenção. Fica para depois, se a medição mostrar que precisa.
+// · Não aborta ESCRITA, nunca. O teto de tempo existe (ver `TETO_LEITURA_MS`),
+//   mas só para GET/HEAD — que no PostgREST é leitura por construção. Abortar
+//   um INSERT deixaria o aluno sem saber se gravou, e o wrapper de `fetch` não
+//   tem como saber a intenção de quem chamou; o método, sim.
 // · Não mede upload de imagem. `/storage/` é lento por natureza (6,4 s numa
 //   foto de produto no dia 22, com o banco saudável) e viraria alarme falso.
 //   Medimos `/rest/v1/` e `/auth/v1/`, que são as que TÊM de ser rápidas.
@@ -180,8 +181,42 @@ export function _resetDisjuntor(): void {
 }
 
 /**
- * Envolve um `fetch` para medir o que interessa. Só `/rest/v1/` e `/auth/v1/`
- * entram na conta — ver o cabeçalho sobre `/storage/`.
+ * Teto para uma LEITURA. Passado isto a requisição é abortada no cliente.
+ *
+ * 25s é folgado de propósito: o disjuntor já abriu aos 15s, então nada que
+ * chegue aqui ainda tem chance de ser útil. No dia 22 o gateway só desistiu aos
+ * **190 s** — a máquina ficava três minutos pendurada numa resposta que não ia
+ * servir para nada, sem poder nem mostrar erro.
+ */
+const TETO_LEITURA_MS = 25_000;
+
+/**
+ * Métodos que o cliente pode abortar. GET e HEAD no PostgREST são leitura, por
+ * construção — não existe GET que grave. É isto que torna o corte seguro sem
+ * precisar saber a intenção de quem chamou: não há caminho em que isto aborte
+ * um INSERT e deixe o aluno sem saber se gravou.
+ *
+ * O preço: RPC é POST no PostgREST, e POST não entra. `contar_pendencias` e
+ * `resumo_recebimentos` são leitura na prática e seguem sem teto. Ficou assim
+ * de propósito — o jeito de cobri-las é passar `.abortSignal()` nos dois pontos
+ * de chamada, e preferi não espalhar isso agora: o ganho é a máquina deixar de
+ * esperar, e as duas não bloqueiam mais nada enquanto esperam.
+ */
+const METODOS_ABORTAVEIS = new Set(['GET', 'HEAD']);
+
+/**
+ * Envolve um `fetch` para medir o que interessa, e põe teto nas leituras.
+ *
+ * Só `/rest/v1/` e `/auth/v1/` entram na conta — ver o cabeçalho sobre
+ * `/storage/`. O teto é só para `/rest/v1/` em GET/HEAD.
+ *
+ * ─── O QUE ABORTAR NÃO RESOLVE ─────────────────────────────────────────────
+ *
+ * Abortar aqui é do lado do cliente. Fechar a conexão HTTP às vezes faz o
+ * PostgREST cancelar a consulta no Postgres, mas isso não é garantido — então
+ * NÃO conte com isto para devolver conexão do pool ao servidor. O ganho é
+ * outro, e é real: a máquina para de esperar, o erro chega à tela, e o
+ * disjuntor conta a falta na hora em vez de três minutos depois.
  */
 export function fetchMedido(base: typeof fetch = fetch): typeof fetch {
   return async (entrada: any, init?: any) => {
@@ -191,14 +226,35 @@ export function fetchMedido(base: typeof fetch = fetch): typeof fetch {
     const conta = url.includes('/rest/v1/') || url.includes('/auth/v1/');
     if (!conta) return base(entrada, init);
 
+    const metodo = String(init?.method ?? entrada?.method ?? 'GET').toUpperCase();
+    const comTeto = url.includes('/rest/v1/') && METODOS_ABORTAVEIS.has(metodo);
+
+    // Sinal de quem chamou NÃO é descartado: o supabase-js expõe
+    // `.abortSignal()` e alguma tela pode estar usando. Os dois valem, e o
+    // primeiro que disparar vence.
+    let init2 = init;
+    let relogio: ReturnType<typeof setTimeout> | null = null;
+    if (comTeto) {
+      const meu = new AbortController();
+      relogio = setTimeout(() => meu.abort(new Error('teto de leitura')), TETO_LEITURA_MS);
+      const doChamador: AbortSignal | undefined = init?.signal ?? undefined;
+      if (doChamador) {
+        if (doChamador.aborted) meu.abort(doChamador.reason);
+        else doChamador.addEventListener('abort', () => meu.abort(doChamador.reason), { once: true });
+      }
+      init2 = { ...(init ?? {}), signal: meu.signal };
+    }
+
     const t0 = Date.now();
     try {
-      const r = await base(entrada, init);
+      const r = await base(entrada, init2);
       medirResposta(Date.now() - t0, r.status);
       return r;
     } catch (e) {
       medirResposta(Date.now() - t0, null);
       throw e;
+    } finally {
+      if (relogio !== null) clearTimeout(relogio);
     }
   };
 }

@@ -174,8 +174,10 @@ export function useFetchData<T = any>(
       const { data: rows, error: err, count } = await q.range(from, to);
       if (myId !== reqIdRef.current) return; // resposta obsoleta — ignora
       if (err) {
+        // O log guarda o texto cru (é o que serve para depurar); a tela recebe
+        // a frase traduzida.
         console.error('[useFetchData] Erro Supabase:', err.message);
-        setError(err.message);
+        setError(traduzErroDeLeitura(err));
       } else {
         setData((rows ?? []) as T[]);
         setTotalCount(count ?? null);
@@ -187,7 +189,7 @@ export function useFetchData<T = any>(
       if (myId !== reqIdRef.current) return; // resposta obsoleta — ignora
       if (err) {
         console.error('[useFetchData] Erro Supabase:', err.message);
-        setError(err.message);
+        setError(traduzErroDeLeitura(err));
       } else {
         setData((rows ?? []) as T[]);
       }
@@ -279,6 +281,29 @@ const MSG_POR_CONSTRAINT: Record<string, string> = {
     + 'antes de lançar de novo. Se é outra carga, confira o número e a série da '
     + 'nota: duas entradas com a mesma nota cobram o fornecedor duas vezes.',
 };
+
+/**
+ * Erro de LEITURA em frase de gente. O par de `traduzErroDeGravacao`, e muito
+ * mais curto: leitura tem um punhado de modos de falhar, e o que a pessoa pode
+ * fazer é quase sempre o mesmo (esperar, e NÃO recarregar).
+ *
+ * O caso que trouxe esta função: o teto de leitura do disjuntor
+ * (`TETO_LEITURA_MS`) aborta GET pendurado, e o supabase-js devolve isso como
+ * erro com texto de AbortError. "signal is aborted without reason" na tela é
+ * pior que o travamento — o aluno lê e conclui que quebrou algo.
+ */
+function traduzErroDeLeitura(error: { message?: string }): string {
+  const msg = error?.message ?? '';
+  if (/abort/i.test(msg) || /teto de leitura/i.test(msg)) {
+    return 'A consulta demorou demais e foi interrompida. A rede está lenta — '
+      + 'aguarde alguns segundos, o sistema volta sozinho. Não recarregue a página.';
+  }
+  if (/failed to fetch|networkerror|load failed/i.test(msg)) {
+    return 'Não deu para falar com o servidor. Confira a conexão — o sistema '
+      + 'tenta de novo sozinho.';
+  }
+  return msg;
+}
 
 function traduzErroDeGravacao(error: { code?: string; message?: string }): string {
   const msg = error?.message ?? '';
