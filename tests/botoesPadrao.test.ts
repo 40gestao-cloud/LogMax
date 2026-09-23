@@ -43,12 +43,11 @@ const FORA_DA_FAMILIA: Record<string, string> = {
     'projeção em tela cheia para exibir na aula: os controles são grandes de propósito, para serem vistos de longe.',
   'views/MaxShowEditor.tsx':
     'editor de apresentação com canvas e chrome próprios.',
-  'views/PDVViewSupermax.tsx':
-    'PDV roda em layout de operação, fora da grade de telas administrativas.',
   'views/PDVView.tsx':
-    'idem PDVViewSupermax: layout de operação.',
-  // Modais que saíram do PDVViewSupermax (etapa 3 do plano de divisão): mesmo
-  // chrome MaxPOS de lá — X branco sobre a faixa navy, ou redondo sobre a amarela.
+    'PDV roda em layout de operação, fora da grade de telas administrativas.',
+  // O PDV SuperMax (réplica do MaxPOS) foi dividido em components/pdv/ (etapa 3
+  // do plano de divisão): a view não tem mais botão-ícone, as peças têm o
+  // chrome MaxPOS — X branco sobre a faixa navy, ou redondo sobre a amarela.
   'components/pdv/ManualPdv.tsx':
     'modal do PDVViewSupermax, chrome MaxPOS.',
   'components/pdv/ConsultaPrecoModal.tsx':
@@ -59,6 +58,8 @@ const FORA_DA_FAMILIA: Record<string, string> = {
     'modal do PDVViewSupermax, chrome MaxPOS.',
   'components/pdv/ClientePickerModal.tsx':
     'modal do PDVViewSupermax, chrome MaxPOS.',
+  'components/pdv/CupomItens.tsx':
+    'X vermelho de cancelar item na linha do cupom, chrome MaxPOS.',
   'components/pdv/CabecalhoPdv.tsx':
     'faixa amarela do topo do PDVViewSupermax (tela cheia e manual, redondos), chrome MaxPOS.',
   'components/pdv/PagamentoModal.tsx':

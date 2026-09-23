@@ -47,6 +47,9 @@ import { MovimentoCaixaModal } from '../components/pdv/MovimentoCaixaModal';
 import { OperacaoCaixaModal } from '../components/pdv/OperacaoCaixaModal';
 import { PagamentoModal, type FormaPagamentoSupermax } from '../components/pdv/PagamentoModal';
 import { Header } from '../components/pdv/CabecalhoPdv';
+import { CupomItens, type ItemCupom } from '../components/pdv/CupomItens';
+import { LinhaCodigo } from '../components/pdv/LinhaCodigo';
+import { RodapeAtalhos } from '../components/pdv/RodapeAtalhos';
 import { mascararDocumento } from '../lib/pdv/documento';
 import {
   totaisComDesconto, restanteAPagar, valorDevido as calcValorDevido, mistoAtivo, trocoDoRecebido,
@@ -59,17 +62,7 @@ import {
 // controle_caixa, pix_pendentes. Cores e layout: amarelo/navy/verde MaxPOS.
 
 
-interface CartItem {
-  produto_id: string;
-  nome_produto: string;
-  ean?: string;
-  codigo?: string;
-  preco_unitario: number;
-  qtd: number;
-  subtotal: number;
-  estoque: number;
-  unidade: string;
-}
+type CartItem = ItemCupom;
 
 type FormaPagamento = FormaPagamentoSupermax;
 
@@ -1825,6 +1818,39 @@ export const PDVViewSupermax = ({
     );
   }
 
+  // Teclado do campo CÓDIGO (a tela é LinhaCodigo). Enter lê; setas andam nas
+  // sugestões ou, com o campo vazio, nos itens do carrinho; Esc desiste.
+  const onCodeKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      handleCodeEnter();
+    } else if (e.key === 'ArrowDown' && suggestions.length > 0) {
+      e.preventDefault();
+      setSuggestionIdx(prev => Math.min(prev + 1, suggestions.length - 1));
+    } else if (e.key === 'ArrowUp' && suggestions.length > 0) {
+      e.preventDefault();
+      setSuggestionIdx(prev => Math.max(prev - 1, 0));
+    } else if ((e.key === 'ArrowUp' || e.key === 'ArrowDown') && code.length === 0 && cart.length > 0) {
+      // Sem código digitado e sem sugestões: setas navegam itens do carrinho.
+      // Del em cima do selecionado remove aquele item específico.
+      e.preventDefault();
+      setSelectedCartIdx(prev => {
+        if (prev < 0) return e.key === 'ArrowUp' ? cart.length - 1 : 0;
+        if (e.key === 'ArrowUp')   return prev <= 0 ? cart.length - 1 : prev - 1;
+        return prev >= cart.length - 1 ? 0 : prev + 1;
+      });
+    } else if (e.key === 'Escape' && (code.length > 0 || qtdArmada !== null)) {
+      e.preventDefault();
+      // Esc é o "desisti": limpa o campo E desarma a quantidade.
+      qtdArmadaRef.current = null;
+      setQtdArmada(null);
+      consumirCodigo();
+    } else if (e.key === 'Escape' && selectedCartIdx >= 0) {
+      e.preventDefault();
+      setSelectedCartIdx(-1);
+    }
+  };
+
   if (!caixaAtivo) {
     return (
       <div className={`flex flex-col ${rootClass}`} style={{ fontFamily: 'Arial, Helvetica, sans-serif', background: '#f3f4f6' }}>
@@ -1937,156 +1963,17 @@ export const PDVViewSupermax = ({
       />
 
       {/* Tabela de itens + sidebar */}
-      <div className="flex-1 flex overflow-hidden min-h-0">
-        <div className="flex-1 flex flex-col min-w-0 border-r border-gray-300">
-          <div
-            className="grid grid-cols-[70px_160px_1fr_80px_90px_130px_150px_40px] gap-2 px-4 py-3 text-sm font-bold uppercase tracking-wide shrink-0 text-white"
-            style={{ background: NAVY_DARK }}
-          >
-            <div>ITEM</div>
-            <div>CÓDIGO</div>
-            <div>DESCRIÇÃO</div>
-            <div className="text-right">QTD</div>
-            <div className="text-right">ESTOQUE</div>
-            <div className="text-right">UNIT R$</div>
-            <div className="text-right">TOTAL R$</div>
-            <div></div>
-          </div>
-          <div className="flex-1 overflow-y-auto bg-white">
-            {cart.length === 0 ? (
-              <div className="text-center text-gray-400 py-16 text-sm italic">
-                Bipe ou digite o código do produto para iniciar.
-              </div>
-            ) : cart.map((item, idx) => {
-              const ruptura = item.qtd > item.estoque;
-              return (
-              <div
-                key={item.produto_id}
-                className={`grid grid-cols-[70px_160px_1fr_80px_90px_130px_150px_40px] gap-2 px-4 py-2.5 text-lg tabular-nums border-b ${
-                  idx === selectedCartIdx
-                    ? 'bg-yellow-200 border-yellow-500 ring-2 ring-yellow-500'
-                    : idx === cart.length - 1 && selectedCartIdx < 0
-                      ? 'bg-yellow-50 border-gray-200'
-                      : 'border-gray-200'
-                }`}
-              >
-                <div className="text-gray-500">{String(idx + 1).padStart(3, '0')}</div>
-                <div className="text-gray-500 truncate">{item.ean || item.codigo || '—'}</div>
-                <div className="truncate font-semibold flex items-center gap-2">
-                  <span className="truncate">{(item.nome_produto || '').toUpperCase()}</span>
-                  {ofertaDoItem(item.produto_id, item.preco_unitario) && (
-                    <span
-                      className="shrink-0 px-1.5 py-0.5 text-[10px] font-black uppercase tracking-wider rounded border"
-                      style={{ background: '#dcfce7', color: '#166534', borderColor: MONEY }}
-                      title="Preço promocional aprovado — veio do cadastro, não do caixa"
-                    >
-                      Oferta
-                    </span>
-                  )}
-                  {ruptura && (
-                    <span
-                      className="shrink-0 px-1.5 py-0.5 text-[10px] font-black uppercase tracking-wider rounded border"
-                      style={{ background: '#fef3c7', color: '#92400e', borderColor: '#f59e0b' }}
-                      title={`Estoque: ${item.estoque} · Vendendo: ${item.qtd}`}
-                    >
-                      Ruptura
-                    </span>
-                  )}
-                </div>
-                <div className="text-right">{fmtQtd(item.qtd)}</div>
-                <div className={`text-right ${ruptura ? 'text-red-600 font-bold' : 'text-gray-500'}`}>{item.estoque}</div>
-                <div className="text-right">
-                  {(() => {
-                    const o = ofertaDoItem(item.produto_id, item.preco_unitario);
-                    if (!o) return fmt(item.preco_unitario);
-                    return (
-                      <>
-                        <span className="block text-xs font-normal text-gray-400 line-through">{fmt(o.de)}</span>
-                        <span style={{ color: MONEY }} title={`Em oferta — preço de tabela R$ ${fmt(o.de)}`}>{fmt(item.preco_unitario)}</span>
-                      </>
-                    );
-                  })()}
-                </div>
-                <div className="text-right font-bold">{fmt(item.subtotal)}</div>
-                <button
-                  onClick={() => removeFromCart(item.produto_id)}
-                  tabIndex={-1}
-                  className="w-7 h-7 flex items-center justify-center text-white rounded hover:brightness-110 self-center justify-self-end"
-                  style={{ background: RED }}
-                  title="Cancelar este item"
-                >
-                  <X size={14} />
-                </button>
-              </div>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* Sidebar 420px */}
-        <div className="w-[420px] shrink-0 flex flex-col bg-gray-50">
-          <div className="px-5 py-5 border-b border-gray-300">
-            <div className="text-sm font-bold uppercase tracking-wider text-gray-500 mb-3">ÚLTIMO ITEM LIDO</div>
-            {lastAdded ? (
-              <>
-                <div className="text-2xl font-bold leading-tight mb-2 text-gray-900 break-words">
-                  {(lastAdded.nome_produto || '').toUpperCase()}
-                </div>
-                <div className="text-xs text-gray-500 mb-4">
-                  CÓDIGO: {lastAdded.codigo || '—'} · EAN: {lastAdded.ean || '—'}
-                </div>
-                <div className="text-base text-gray-600 tabular-nums">
-                  {lastAdded.qtd} {(lastAdded.unidade || '').toLowerCase()} × R$ {fmt(lastAdded.preco_unitario)}
-                </div>
-                {(() => {
-                  const o = ofertaDoItem(lastAdded.produto_id, lastAdded.preco_unitario);
-                  if (!o) return null;
-                  return (
-                    <div className="mt-1 flex items-center gap-2 text-sm">
-                      <span
-                        className="px-1.5 py-0.5 text-[11px] font-black uppercase tracking-wider rounded border"
-                        style={{ background: '#dcfce7', color: '#166534', borderColor: MONEY }}
-                      >
-                        Oferta
-                      </span>
-                      <span className="text-gray-500 tabular-nums">
-                        de <span className="line-through">R$ {fmt(o.de)}</span> por R$ {fmt(lastAdded.preco_unitario)}
-                      </span>
-                    </div>
-                  );
-                })()}
-                <div className="text-6xl font-bold tabular-nums mt-1" style={{ color: MONEY }}>
-                  R$ {fmt(lastAdded.subtotal)}
-                </div>
-              </>
-            ) : (
-              <div className="h-32" />
-            )}
-          </div>
-          <div className="px-5 py-5 flex-1 space-y-4 text-lg">
-            <div className="flex justify-between items-baseline">
-              <span className="text-gray-600">QTD. ITENS</span>
-              <span className="tabular-nums font-bold text-gray-900 text-2xl">{totalItens}</span>
-            </div>
-            <div className="flex justify-between items-baseline">
-              <span className="text-gray-600">SUBTOTAL</span>
-              <span className="tabular-nums font-bold text-gray-900 text-2xl">R$ {fmt(subtotal)}</span>
-            </div>
-            {descontoAplicado > 0 && (
-              <div className="flex justify-between items-baseline">
-                <span className="text-gray-600">DESCONTO</span>
-                <span className="tabular-nums font-bold text-2xl" style={{ color: RED }}>− R$ {fmt(descontoAplicado)}</span>
-              </div>
-            )}
-            {economiaOfertas > 0.001 && (
-              <div className="flex justify-between items-baseline border-t pt-3" style={{ borderColor: '#d1d5db' }}>
-                <span className="text-gray-600">VOCÊ ECONOMIZOU</span>
-                <span className="tabular-nums font-bold text-2xl" style={{ color: MONEY }}>R$ {fmt(economiaOfertas)}</span>
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
+      <CupomItens
+        cart={cart}
+        selectedCartIdx={selectedCartIdx}
+        ofertaDoItem={ofertaDoItem}
+        onRemover={removeFromCart}
+        lastAdded={lastAdded}
+        totalItens={totalItens}
+        subtotal={subtotal}
+        descontoAplicado={descontoAplicado}
+        economiaOfertas={economiaOfertas}
+      />
 
       {/* Barra TOTAL A PAGAR */}
       <div className="px-6 py-4 flex items-center justify-between border-t-2 shrink-0 bg-gray-100" style={{ borderColor: YELLOW_DARK }}>
@@ -2097,171 +1984,28 @@ export const PDVViewSupermax = ({
       </div>
 
       {/* Linha CÓDIGO */}
-      <div className="px-6 py-2 shrink-0 border-t border-gray-300 bg-white">
-        {codeMsg && codeMsg.type === 'err' && (
-          <div className="mb-1.5 px-3 py-1 text-sm font-bold inline-block border" style={{ background: '#fee2e2', color: RED, borderColor: '#fca5a5' }}>
-            {codeMsg.text}
-          </div>
-        )}
-        <div className="flex items-center gap-3">
-          <span className="text-2xl font-bold text-gray-700 shrink-0">CÓDIGO:</span>
-          {qtdArmada !== null && (
-            // A quantidade armada TEM de estar visível: é estado invisível que
-            // muda o resultado do próximo bipe. Sai da tela sozinha assim que
-            // um item a consome, e Esc desarma.
-            <span
-              className="shrink-0 px-3 py-1 text-xl font-black tabular-nums border-2"
-              style={{ background: YELLOW, color: NAVY_DARK, borderColor: YELLOW_DARK }}
-              title="Quantidade armada — vale para o próximo item (Esc desarma)"
-            >
-              {fmtQtd(qtdArmada)} ×
-            </span>
-          )}
-          <div className="relative">
-            <input
-              ref={codeInputRef}
-              value={code}
-              onChange={(e) => registrarDigitacao(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  e.preventDefault();
-                  handleCodeEnter();
-                } else if (e.key === 'ArrowDown' && suggestions.length > 0) {
-                  e.preventDefault();
-                  setSuggestionIdx(prev => Math.min(prev + 1, suggestions.length - 1));
-                } else if (e.key === 'ArrowUp' && suggestions.length > 0) {
-                  e.preventDefault();
-                  setSuggestionIdx(prev => Math.max(prev - 1, 0));
-                } else if ((e.key === 'ArrowUp' || e.key === 'ArrowDown') && code.length === 0 && cart.length > 0) {
-                  // Sem código digitado e sem sugestões: setas navegam itens do carrinho.
-                  // Del em cima do selecionado remove aquele item específico.
-                  e.preventDefault();
-                  setSelectedCartIdx(prev => {
-                    if (prev < 0) return e.key === 'ArrowUp' ? cart.length - 1 : 0;
-                    if (e.key === 'ArrowUp')   return prev <= 0 ? cart.length - 1 : prev - 1;
-                    return prev >= cart.length - 1 ? 0 : prev + 1;
-                  });
-                } else if (e.key === 'Escape' && (code.length > 0 || qtdArmada !== null)) {
-                  e.preventDefault();
-                  // Esc é o "desisti": limpa o campo E desarma a quantidade.
-                  qtdArmadaRef.current = null;
-                  setQtdArmada(null);
-                  consumirCodigo();
-                } else if (e.key === 'Escape' && selectedCartIdx >= 0) {
-                  e.preventDefault();
-                  setSelectedCartIdx(-1);
-                }
-              }}
-              onBlur={() => {
-                // refoca se o foco caiu no body (clique fora sem alvo)
-                setTimeout(() => {
-                  const ae = document.activeElement;
-                  if (!ae || ae === document.body) codeInputRef.current?.focus();
-                }, 0);
-              }}
-              autoFocus
-              autoComplete="off"
-              spellCheck={false}
-              placeholder="EAN / REF ou nome do produto"
-              className="w-96 bg-white border-2 text-2xl font-bold text-gray-900 outline-none px-3 py-1.5 focus:border-blue-700"
-              style={{ borderColor: '#9ca3af', fontFamily: 'Consolas, "Courier New", monospace' }}
-            />
-            {suggestions.length > 0 && (
-              <div className="absolute left-0 bottom-full mb-1 bg-white border-2 shadow-2xl z-50 w-[640px] max-w-[90vw]" style={{ borderColor: NAVY_DARK }}>
-                <div className="px-3 py-1 text-[10px] font-black uppercase tracking-widest text-white" style={{ background: NAVY_DARK }}>
-                  {suggestions.length} {suggestions.length === 1 ? 'sugestão' : 'sugestões'} — ↑↓ navegar · Enter selecionar · Esc limpar
-                </div>
-                {suggestions.map((p: any, idx: number) => (
-                  <button
-                    key={p.id}
-                    type="button"
-                    tabIndex={-1}
-                    onMouseDown={(e) => e.preventDefault()}
-                    onClick={() => { addToCart(p); setCode(''); setSuggestionIdx(-1); codeInputRef.current?.focus(); }}
-                    onMouseEnter={() => setSuggestionIdx(idx)}
-                    ref={(el) => {
-                      // Foco DOM segue suggestionIdx pra Tab/Arrow não dessincronizar
-                      // o highlight amarelo do que está visualmente selecionado.
-                      if (el && idx === suggestionIdx) el.scrollIntoView({ block: 'nearest' });
-                    }}
-                    className={`w-full grid grid-cols-[150px_1fr_120px] gap-3 text-left px-3 py-2 text-sm border-b border-gray-200 focus:outline-none ${idx === suggestionIdx ? 'bg-yellow-100' : 'bg-white hover:bg-yellow-50'}`}
-                  >
-                    <span className="tabular-nums text-gray-500 truncate">{p.codigo || p.ean || '—'}</span>
-                    <span className="truncate font-semibold text-gray-900">{(p.nome || '').toUpperCase()}</span>
-                    <span className="text-right font-bold tabular-nums" style={{ color: MONEY }}>R$ {fmt(Number(p.preco ?? 0))}</span>
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-          <div className="flex-1" />
-          {cart.length > 0 ? (
-            <button
-              onClick={suspenderVenda}
-              className="px-4 py-2.5 text-sm font-black uppercase tracking-wider border-2 focus:outline-none focus-visible:ring-4 focus-visible:ring-offset-2 focus-visible:ring-yellow-600"
-              style={{ background: YELLOW, color: NAVY_DARK, borderColor: NAVY_DARK }}
-              title="Suspender esta venda e liberar o caixa (Ctrl+G)"
-            >
-              ⌖ SUSPENDER
-            </button>
-          ) : vendaSuspensa ? (
-            <button
-              onClick={recuperarVendaSuspensa}
-              className="px-4 py-2.5 text-sm font-black uppercase tracking-wider border-2 ring-2 ring-yellow-300 focus:outline-none focus-visible:ring-4 focus-visible:ring-offset-2 focus-visible:ring-yellow-600"
-              style={{ background: YELLOW, color: NAVY_DARK, borderColor: NAVY_DARK }}
-              title={`Recuperar venda suspensa (${vendaSuspensa.cart.length} itens · suspensa às ${new Date(vendaSuspensa.suspensaEm).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })})`}
-            >
-              ⟲ RECUPERAR ({vendaSuspensa.cart.length})
-            </button>
-          ) : null}
-          <button
-            onClick={cancelSale}
-            disabled={cart.length === 0}
-            className="px-6 py-2.5 text-lg font-bold text-white transition disabled:opacity-30 focus:outline-none focus-visible:ring-4 focus-visible:ring-offset-2 focus-visible:ring-red-700"
-            style={{ background: RED }}
-            title="Cancelar venda (F9)"
-          >
-            CANCELAR VENDA
-          </button>
-          <button
-            data-action="fechar-venda-pdv"
-            onClick={openPayment}
-            disabled={cart.length === 0 || isClosing}
-            className="px-6 py-2.5 text-lg font-bold text-white transition disabled:opacity-30 focus:outline-none focus-visible:ring-4 focus-visible:ring-offset-2 focus-visible:ring-green-700"
-            style={{ background: MONEY }}
-            title="Subtotal / Pagamentos (F4 ou F5 · Enter no campo vazio)"
-          >
-            {isClosing ? <Loader2 size={20} className="animate-spin inline" /> : 'FECHAR VENDA'}
-          </button>
-        </div>
-      </div>
+      <LinhaCodigo
+        erro={codeMsg && codeMsg.type === 'err' ? codeMsg.text : null}
+        qtdArmada={qtdArmada}
+        inputRef={codeInputRef}
+        code={code}
+        onDigitar={registrarDigitacao}
+        onKeyDown={onCodeKeyDown}
+        suggestions={suggestions}
+        suggestionIdx={suggestionIdx}
+        onSugestaoIdx={setSuggestionIdx}
+        onEscolherSugestao={(p) => { addToCart(p); setCode(''); setSuggestionIdx(-1); codeInputRef.current?.focus(); }}
+        temItens={cart.length > 0}
+        vendaSuspensa={vendaSuspensa ? { itens: vendaSuspensa.cart.length, suspensaEm: vendaSuspensa.suspensaEm } : null}
+        onSuspender={suspenderVenda}
+        onRecuperar={recuperarVendaSuspensa}
+        onCancelarVenda={cancelSale}
+        onFecharVenda={openPayment}
+        processando={isClosing}
+      />
 
       {/* Rodapé amarelo F-keys */}
-      <div className="px-6 py-2 shrink-0 border-t-2" style={{ background: YELLOW, borderColor: YELLOW_DARK }}>
-        <div className="flex flex-wrap items-center gap-x-5 gap-y-1 text-sm text-black tracking-wide">
-          <span className="px-2 py-0.5 rounded text-white font-bold" style={{ background: NAVY_DARK }}>
-            Enter (campo vazio) = SUBTOTAL
-          </span>
-          <span className="opacity-40">·</span>
-          <span><b>F4</b> Subtotal · <b>F5</b> Pagamentos</span>
-          <span className="opacity-40">·</span>
-          <span><b>F8</b> Buscar produto</span>
-          <span className="opacity-40">·</span>
-          <span><b>Del</b> Cancelar último item</span>
-          <span className="opacity-40">·</span>
-          <span><b>F3</b> / <b>F9</b> Cancelar cupom · <b>Esc</b> Sair tela cheia</span>
-          <span className="opacity-40">·</span>
-          <span><b>2*</b> Qtd — sozinho arma p/ o próximo item, ou <b>2*código</b> / <b>2*nome</b> (peso: <b>0,350*</b>)</span>
-          <span className="opacity-40">·</span>
-          <span><b>F6</b> Desconto (gerente) · <b>Ctrl+G</b> Suspender/recuperar</span>
-          <span className="opacity-40">·</span>
-          <span><b>F7</b> Consulta preço</span>
-          <span className="opacity-40">·</span>
-          <span><b>F10</b> Sangria · <b>F11</b> Suprimento</span>
-          <span className="opacity-40">·</span>
-          <span><b>F12</b> Fechar/Suspender caixa</span>
-        </div>
-      </div>
+      <RodapeAtalhos />
 
       {/* === MODAIS === */}
 
