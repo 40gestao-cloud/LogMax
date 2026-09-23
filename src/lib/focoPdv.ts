@@ -23,22 +23,27 @@ const focaveisDe = (container: HTMLElement): HTMLElement[] =>
  * Prende Tab/Shift+Tab dentro de `container`: só intercepta nas PONTAS, então
  * no meio da lista o foco continua andando naturalmente e, no último, volta ao
  * primeiro em vez de vazar. Serve tanto para modal quanto para a raiz do PDV.
+ *
+ * Quando age, o evento para aqui. Sem isso, o Tab de um modal subia até o trap
+ * da raiz do PDV — e se o último focável do modal era também o último do PDV
+ * (o X do Manual, único focável dele), a raiz via "fim da lista" e mandava o
+ * foco para o cabeçalho. O foco saía do modal e o Esc dele parava de fechar.
  */
 export function trapTab(
-  e: Pick<React.KeyboardEvent, 'key' | 'shiftKey' | 'preventDefault'>,
+  e: Pick<React.KeyboardEvent, 'key' | 'shiftKey' | 'preventDefault' | 'stopPropagation'>,
   container: HTMLElement | null,
 ) {
   if (e.key !== 'Tab' || !container) return;
   const focusables = focaveisDe(container);
-  if (focusables.length === 0) { e.preventDefault(); return; }
+  if (focusables.length === 0) { e.preventDefault(); e.stopPropagation(); return; }
   const first = focusables[0];
   const last  = focusables[focusables.length - 1];
   const active = document.activeElement as HTMLElement | null;
   const dentro = !!active && container.contains(active);
   if (e.shiftKey) {
-    if (!dentro || active === first) { e.preventDefault(); last.focus(); }
+    if (!dentro || active === first) { e.preventDefault(); e.stopPropagation(); last.focus(); }
   } else {
-    if (!dentro || active === last) { e.preventDefault(); first.focus(); }
+    if (!dentro || active === last) { e.preventDefault(); e.stopPropagation(); first.focus(); }
   }
 }
 
