@@ -11,9 +11,22 @@ name: saude-turmas
 #   manhã  07:40–11:20  →  12:40–16:20 UTC
 #   tarde  13:20–16:50  →  18:20–21:50 UTC
 #
-# O agendamento do GitHub é best-effort: em horário de pico a fila atrasa alguns
-# minutos. Para o que isto mede (aula travando), atraso de minutos é aceitável —
-# e a janela de 25 min que o script olha cobre a folga entre execuções.
+# ─── SOBRE A JANELA, QUE JÁ DEIXOU UMA QUEDA PASSAR ─────────────────────────
+#
+# O comentário que estava aqui dizia que "a janela de 25 min cobre a folga entre
+# execuções". Não cobria. O agendamento do GitHub é best-effort e, para repo em
+# plano gratuito, `*/15` não é entregue a cada 15 min: em 22/09 as execuções
+# saíram às 16:04, 19:43 e 20:52 UTC — folga real de mais de uma hora. A queda
+# daquele dia foi 19:03–19:11; a execução de 19:43 olhou de 19:23 para frente e
+# passou verde. A aula caiu, o vigia disse OK, e quem percebeu foi o professor
+# outra vez.
+#
+# Agora a janela é de 120 min (padrão do script) e não custa nada, porque a
+# avaliação passou a ser MINUTO A MINUTO — janela larga não dilui mais nada.
+# O porquê está escrito em scripts/saude-turmas.mjs, que é onde a régua mora.
+#
+# O cron continua pedindo de 15 em 15: quando o GitHub entrega, melhor: a queda
+# é vista mais perto da hora. Quando não entrega, a janela cobre.
 
 on:
   schedule:
@@ -22,9 +35,13 @@ on:
   workflow_dispatch:
     inputs:
       minutos:
-        description: 'Janela a olhar, em minutos'
+        description: 'Janela a olhar, em minutos (a API dos logs guarda 24h)'
         required: false
-        default: '20'
+        default: '120'
+      fim:
+        description: 'Fim da janela em ISO, para investigar o passado (vazio = agora)'
+        required: false
+        default: ''
 
 jobs:
   saude:
@@ -42,6 +59,9 @@ jobs:
       # fetch nativo), e instalar o repo inteiro a cada 15 minutos seria minuto
       # de runner gasto à toa.
       - name: Medir as 4 turmas
-        run: node scripts/saude-turmas.mjs --minutos=${{ github.event.inputs.minutos || '25' }}
+        run: |
+          node scripts/saude-turmas.mjs \
+            --minutos=${{ github.event.inputs.minutos || '120' }} \
+            ${{ github.event.inputs.fim && format('--fim={0}', github.event.inputs.fim) || '' }}
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
