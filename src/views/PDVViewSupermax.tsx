@@ -38,6 +38,10 @@ import { AgradecimentoTela } from '../components/pdv/AgradecimentoTela';
 import { CpfNotaModal } from '../components/pdv/CpfNotaModal';
 import { ValeModal } from '../components/pdv/ValeModal';
 import { ParcelasModal } from '../components/pdv/ParcelasModal';
+import { ClientePickerModal } from '../components/pdv/ClientePickerModal';
+import { BuscaProdutoModal } from '../components/pdv/BuscaProdutoModal';
+import { CartaoPickerModal } from '../components/pdv/CartaoPickerModal';
+import { PagadorPickerModal } from '../components/pdv/PagadorPickerModal';
 import { mascararDocumento } from '../lib/pdv/documento';
 import {
   totaisComDesconto, restanteAPagar, valorDevido as calcValorDevido, mistoAtivo, trocoDoRecebido,
@@ -136,7 +140,6 @@ export const PDVViewSupermax = ({
   // Índices de seleção por teclado nos modais (Arrow keys + Enter).
   const [payChoiceIdx, setPayChoiceIdx]       = useState(0);
   const [confirmFocusIdx, setConfirmFocusIdx] = useState<0 | 1>(0);
-  const [clientIdx, setClientIdx]             = useState(-1);
 
   // Busca por nome/código (F8) — replica o classicSearch do MaxPOS.
   // Quantidade ARMADA — a régua do caixa de mercado: o operador informa quantos
@@ -151,11 +154,9 @@ export const PDVViewSupermax = ({
 
   const [searchModalOpen, setSearchModalOpen] = useState(false);
   const [searchTerm, setSearchTerm]           = useState('');
-  const [searchIdx, setSearchIdx]             = useState(0);
 
   // Picker de cartão (F2 no payment modal) — Crédito/Débito.
   const [cardPickerOpen, setCardPickerOpen] = useState(false);
-  const [cardPickerIdx, setCardPickerIdx]   = useState<0 | 1>(0);
 
   // Confirmação de cancelar PIX — Esc/clique no botão pedem confirmação
   // antes de marcar pix_pendentes como cancelado. Sem isso, encostar no Esc
@@ -283,7 +284,6 @@ export const PDVViewSupermax = ({
 
   // Picker F3 (PIX / Fiado) — padrão do card picker F2. Navegação por ↑↓ + Enter.
   const [payerPickerOpen, setPayerPickerOpen] = useState(false);
-  const [payerPickerIdx, setPayerPickerIdx]   = useState(0);
 
   // Seleção de item no carrinho por ↑↓ (Del apaga selecionado). -1 = último item.
   const [selectedCartIdx, setSelectedCartIdx] = useState<number>(-1);
@@ -697,11 +697,6 @@ export const PDVViewSupermax = ({
   // Quantidade que o F8 vai aplicar: a digitada na própria busca, senão a
   // armada, senão 1.
   const qtdDoF8 = buscaF8.temMultiplicador ? buscaF8.qtd : (qtdArmada ?? 1);
-
-  // Reseta seleção do search modal ao abrir / quando lista muda
-  useEffect(() => {
-    if (searchModalOpen) setSearchIdx(filteredSearch.length > 0 ? 0 : -1);
-  }, [searchModalOpen, filteredSearch.length]);
 
   // Sugestões enquanto digita (só quando 2+ chars e não é padrão N*EAN).
   // Acento-insensível: "feijão" digitado casa com "FEIJAO" cadastrado e vice-versa.
@@ -1773,18 +1768,6 @@ export const PDVViewSupermax = ({
     }
   };
 
-  const clientesFiltrados = useMemo(() => {
-    const t = clientSearch.trim().toLowerCase();
-    return (clientes ?? []).filter((c: any) =>
-      !t || (c.nome ?? '').toLowerCase().includes(t)
-    ).slice(0, 30);
-  }, [clientes, clientSearch]);
-
-  // Reseta seleção do picker quando abre ou quando a lista muda
-  useEffect(() => {
-    if (clientPickerOpen) setClientIdx(clientesFiltrados.length > 0 ? 0 : -1);
-  }, [clientPickerOpen, clientesFiltrados.length]);
-
   // Foco inicial do payment modal — SÓ ao abrir, no primeiro forma button.
   // ANTES esse effect rodava em cada mudança de payChoiceIdx, e como cada
   // onMouseEnter chama setPayChoiceIdx, qualquer hover do mouse re-focava
@@ -2346,8 +2329,8 @@ export const PDVViewSupermax = ({
             // F3 (PIX) só fora do misto — PIX é forma única.
             const mistoActive = pagamentos.length > 0 || parseBRL(parcialValor) > 0;
             if (e.key === 'F1' && !e.shiftKey) { e.preventDefault(); e.stopPropagation(); handlePayChoice('Dinheiro'); return; }
-            if (e.key === 'F2' && !e.shiftKey) { e.preventDefault(); e.stopPropagation(); setCardPickerIdx(0); setCardPickerOpen(true); return; }
-            if (e.key === 'F3' && !e.shiftKey && !mistoActive) { e.preventDefault(); e.stopPropagation(); setPayerPickerIdx(0); setPayerPickerOpen(true); return; }
+            if (e.key === 'F2' && !e.shiftKey) { e.preventDefault(); e.stopPropagation(); setCardPickerOpen(true); return; }
+            if (e.key === 'F3' && !e.shiftKey && !mistoActive) { e.preventDefault(); e.stopPropagation(); setPayerPickerOpen(true); return; }
             if (/^F\d+$/.test(e.key)) e.stopPropagation();
           }}
         >
@@ -2776,76 +2759,14 @@ export const PDVViewSupermax = ({
 
       {/* Cliente picker (Fiado) — ↑↓ navega · Enter seleciona · Esc fecha */}
       {clientPickerOpen && (
-        <div
-          className="fixed inset-0 z-[180] flex items-center justify-center p-4"
-          style={{ background: 'rgba(0,0,0,0.7)' }}
-          onKeyDown={(e) => {
-            if (e.key === 'Tab') trapTab(e, e.currentTarget as HTMLElement);
-            if (/^F\d+$/.test(e.key)) e.stopPropagation();
-          }}
-        >
-          <div className="bg-white border-4 max-w-xl w-full shadow-2xl" style={{ borderColor: NAVY_DARK }}>
-            <div className="px-5 py-4 text-white flex items-center justify-between" style={{ background: NAVY_DARK }}>
-              <span className="font-black tracking-wide text-sm uppercase">
-                {clientPickerModo === 'fiado' ? 'Fiado · Selecione o cliente' : 'Vincular cliente à venda'}
-              </span>
-              <button onClick={() => setClientPickerOpen(false)} className="text-white p-1" tabIndex={-1}><X size={18} /></button>
-            </div>
-            <div className="p-4 space-y-3">
-              <input
-                autoFocus
-                type="text"
-                value={clientSearch}
-                onChange={(e) => { setClientSearch(e.target.value); setClientIdx(0); }}
-                onKeyDown={(e) => {
-                  if (e.key === 'Escape') { e.preventDefault(); setClientPickerOpen(false); return; }
-                  if (e.key === 'ArrowDown') {
-                    e.preventDefault();
-                    setClientIdx(i => Math.min(i + 1, clientesFiltrados.length - 1));
-                    return;
-                  }
-                  if (e.key === 'ArrowUp') {
-                    e.preventDefault();
-                    setClientIdx(i => Math.max(i - 1, 0));
-                    return;
-                  }
-                  if (e.key === 'Enter') {
-                    e.preventDefault();
-                    const pick = clientesFiltrados[clientIdx >= 0 ? clientIdx : 0];
-                    if (pick) escolherCliente(pick);
-                    return;
-                  }
-                }}
-                placeholder="Buscar cliente por nome..."
-                className="w-full border-2 text-base px-3 py-2 outline-none focus:border-blue-700"
-                style={{ borderColor: '#9ca3af' }}
-              />
-              <div className="max-h-96 overflow-y-auto space-y-1">
-                {clientesFiltrados.length === 0 ? (
-                  <div className="text-center text-gray-500 py-4 text-sm">Nenhum cliente encontrado.</div>
-                ) : clientesFiltrados.map((c: any, i: number) => {
-                  const active = i === clientIdx;
-                  return (
-                    <button
-                      key={c.id}
-                      onClick={() => escolherCliente(c)}
-                      onMouseEnter={() => setClientIdx(i)}
-                      tabIndex={-1}
-                      ref={(el) => { if (el && active) el.scrollIntoView({ block: 'nearest' }); }}
-                      className={`w-full text-left px-3 py-2 border-2 font-bold ${active ? 'bg-yellow-100' : 'hover:bg-yellow-50'}`}
-                      style={{ borderColor: active ? NAVY_DARK : '#e5e7eb' }}
-                    >
-                      {c.nome}
-                    </button>
-                  );
-                })}
-              </div>
-              <div className="text-xs text-gray-500 font-bold uppercase tracking-wider text-center">
-                ↑↓ navegar · Enter selecionar · Esc voltar
-              </div>
-            </div>
-          </div>
-        </div>
+        <ClientePickerModal
+          titulo={clientPickerModo === 'fiado' ? 'Fiado · Selecione o cliente' : 'Vincular cliente à venda'}
+          clientes={clientes as any[]}
+          busca={clientSearch}
+          onBusca={setClientSearch}
+          onEscolher={escolherCliente}
+          onClose={() => setClientPickerOpen(false)}
+        />
       )}
 
       {/* PIX aguardando — Esc pede confirmação (não cancela direto) */}
@@ -3303,95 +3224,18 @@ export const PDVViewSupermax = ({
 
       {/* Busca de produto (F8) — ↑↓ navega · Enter adiciona · Esc fecha */}
       {searchModalOpen && (
-        <div
-          className="fixed inset-0 z-[200] flex items-start justify-center p-6"
-          style={{ background: 'rgba(0,0,0,0.5)' }}
-          onKeyDown={(e) => {
-            if (e.key === 'Tab') { trapTab(e, e.currentTarget as HTMLElement); return; }
-            if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); setSearchModalOpen(false); requestAnimationFrame(() => codeInputRef.current?.focus()); return; }
-            if (/^F\d+$/.test(e.key)) e.stopPropagation();
+        <BuscaProdutoModal
+          termo={searchTerm}
+          onTermo={setSearchTerm}
+          produtos={filteredSearch}
+          qtd={qtdDoF8}
+          onEscolher={(p) => {
+            addToCart(p, buscaF8.temMultiplicador ? buscaF8.qtd : undefined);
+            setSearchModalOpen(false);
+            codeInputRef.current?.focus();
           }}
-        >
-          <div className="w-full max-w-4xl mt-12 bg-white border-4 shadow-2xl" style={{ borderColor: NAVY_DARK }}>
-            <div className="px-5 py-4 text-white flex items-center justify-between" style={{ background: NAVY_DARK }}>
-              <span className="font-black tracking-wide text-sm uppercase flex items-center gap-2">
-                <Search size={16} /> F8 · Busca de produtos
-                {qtdDoF8 !== 1 && (
-                  <span className="ml-2 px-2 py-0.5 text-xs font-black" style={{ background: YELLOW, color: NAVY_DARK }}>
-                    QTD {fmtQtd(qtdDoF8)} ×
-                  </span>
-                )}
-              </span>
-              <button onClick={() => { setSearchModalOpen(false); requestAnimationFrame(() => codeInputRef.current?.focus()); }} className="text-white p-1" tabIndex={-1}><X size={18} /></button>
-            </div>
-            <div className="p-4">
-              <input
-                autoFocus
-                value={searchTerm}
-                onChange={(e) => { setSearchTerm(e.target.value); setSearchIdx(0); }}
-                onKeyDown={(e) => {
-                  if (e.key === 'Escape') { e.preventDefault(); setSearchModalOpen(false); requestAnimationFrame(() => codeInputRef.current?.focus()); return; }
-                  if (e.key === 'ArrowDown') {
-                    e.preventDefault();
-                    setSearchIdx(i => Math.min(i + 1, filteredSearch.length - 1));
-                    return;
-                  }
-                  if (e.key === 'ArrowUp') {
-                    e.preventDefault();
-                    setSearchIdx(i => Math.max(i - 1, 0));
-                    return;
-                  }
-                  if (e.key === 'Enter') {
-                    e.preventDefault();
-                    const pick = filteredSearch[searchIdx >= 0 ? searchIdx : 0];
-                    if (pick) {
-                      addToCart(pick, buscaF8.temMultiplicador ? buscaF8.qtd : undefined);
-                      setSearchModalOpen(false);
-                      codeInputRef.current?.focus();
-                    }
-                    return;
-                  }
-                }}
-                placeholder="Nome, código ou EAN do produto..."
-                className="w-full bg-white border-2 text-xl font-bold text-gray-900 outline-none px-3 py-2 focus:border-blue-700"
-                style={{ borderColor: '#9ca3af' }}
-              />
-              <div className="mt-3 max-h-[55vh] overflow-y-auto border border-gray-300">
-                {filteredSearch.length === 0 ? (
-                  <div className="py-10 text-center text-gray-400 text-sm">Nenhum produto.</div>
-                ) : filteredSearch.map((p: any, i: number) => {
-                  const active = i === searchIdx;
-                  return (
-                    <button
-                      key={p.id}
-                      onClick={() => {
-                        addToCart(p, buscaF8.temMultiplicador ? buscaF8.qtd : undefined);
-                        setSearchModalOpen(false);
-                        codeInputRef.current?.focus();
-                      }}
-                      onMouseEnter={() => setSearchIdx(i)}
-                      tabIndex={-1}
-                      ref={(el) => { if (el && active) el.scrollIntoView({ block: 'nearest' }); }}
-                      className={`w-full grid grid-cols-[150px_1fr_120px] gap-3 text-left py-2 px-3 text-sm border-b border-gray-200 ${active ? 'bg-yellow-100' : 'bg-white hover:bg-yellow-50'}`}
-                    >
-                      <span className="tabular-nums text-gray-500 truncate">{p.codigo || p.ean || '—'}</span>
-                      <span className="truncate font-semibold text-gray-900">{(p.nome || '').toUpperCase()}</span>
-                      <span className="text-right font-bold tabular-nums" style={{ color: MONEY }}>R$ {fmt(Number(p.preco ?? 0))}</span>
-                    </button>
-                  );
-                })}
-              </div>
-              <div className="mt-3 text-xs text-gray-500 font-bold uppercase tracking-wider text-center">
-                ↑↓ navegar · Enter adicionar {qtdDoF8 !== 1 && (
-                  <span style={{ color: NAVY_DARK }}>({fmtQtd(qtdDoF8)} un)</span>
-                )} · Esc voltar
-              </div>
-              <div className="mt-1 text-[11px] text-gray-400 text-center">
-                Para vários do mesmo item, digite <b>2*</b> antes do nome (ex.: <b>2*feijao</b>).
-              </div>
-            </div>
-          </div>
-        </div>
+          onClose={() => { setSearchModalOpen(false); requestAnimationFrame(() => codeInputRef.current?.focus()); }}
+        />
       )}
 
       {/* Consulta de preço (F7) — read-only, não adiciona ao carrinho */}
@@ -3404,65 +3248,10 @@ export const PDVViewSupermax = ({
 
       {/* Picker de cartão (F2 no payment modal) — ↑↓ navega · Enter seleciona · Esc fecha */}
       {cardPickerOpen && (
-        <div
-          className="fixed inset-0 z-[195] flex items-center justify-center p-4"
-          style={{ background: 'rgba(0,0,0,0.5)' }}
-          tabIndex={-1}
-          ref={(el) => { if (el && cardPickerOpen && !el.contains(document.activeElement)) el.focus(); }}
-          onKeyDown={(e) => {
-            if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); setCardPickerOpen(false); return; }
-            if (e.key === 'Tab') {
-              e.preventDefault(); e.stopPropagation();
-              setCardPickerIdx(i => (i === 0 ? 1 : 0));
-              return;
-            }
-            if (e.key === 'ArrowDown' || e.key === 'ArrowRight') {
-              e.preventDefault(); e.stopPropagation();
-              setCardPickerIdx(i => (i === 0 ? 1 : 0));
-              return;
-            }
-            if (e.key === 'ArrowUp' || e.key === 'ArrowLeft') {
-              e.preventDefault(); e.stopPropagation();
-              setCardPickerIdx(i => (i === 0 ? 1 : 0));
-              return;
-            }
-            if (e.key === 'Enter') {
-              e.preventDefault(); e.stopPropagation();
-              const forma: FormaPagamento = cardPickerIdx === 0 ? 'Cartão Crédito' : 'Cartão Débito';
-              setCardPickerOpen(false);
-              handlePayChoice(forma);
-              return;
-            }
-            if (/^F\d+$/.test(e.key)) e.stopPropagation();
-          }}
-        >
-          <div className="bg-white border-4 max-w-md w-full shadow-2xl" style={{ borderColor: NAVY_DARK }}>
-            <div className="px-5 py-4 text-white" style={{ background: NAVY_DARK }}>
-              <div className="text-xs font-black uppercase tracking-[0.3em] opacity-90">F2 · Cartão</div>
-              <div className="text-2xl font-black tracking-wide mt-0.5">Crédito ou Débito?</div>
-            </div>
-            <div className="p-6 space-y-3">
-              {(['Cartão Crédito', 'Cartão Débito'] as const).map((forma, idx) => {
-                const active = idx === cardPickerIdx;
-                return (
-                  <button
-                    key={forma}
-                    onClick={() => { setCardPickerOpen(false); handlePayChoice(forma); }}
-                    onMouseEnter={() => setCardPickerIdx(idx as 0 | 1)}
-                    className={`w-full border-2 px-4 py-4 flex items-center gap-3 font-black uppercase tracking-wide text-left ${active ? 'bg-yellow-100' : 'bg-white hover:bg-yellow-50'}`}
-                    style={{ borderColor: active ? NAVY_DARK : '#cbd5e1', color: NAVY_DARK, boxShadow: active ? `inset 0 0 0 2px ${NAVY_DARK}` : undefined }}
-                  >
-                    <CreditCard size={22} />
-                    <span>{forma}</span>
-                  </button>
-                );
-              })}
-              <div className="text-xs text-gray-500 font-bold uppercase tracking-wider text-center pt-2">
-                ↑↓ navegar · Enter selecionar · Esc voltar
-              </div>
-            </div>
-          </div>
-        </div>
+        <CartaoPickerModal
+          onEscolher={(forma) => { setCardPickerOpen(false); handlePayChoice(forma); }}
+          onVoltar={() => setCardPickerOpen(false)}
+        />
       )}
 
       {/* Reimpressão (Ctrl+R) — últimas 10 vendas concluídas da filial nesta sessão */}
@@ -3475,7 +3264,6 @@ export const PDVViewSupermax = ({
         />
       )}
 
-      {/* Picker PIX/Fiado (F3 no payment modal) — ↑↓ navega · Enter seleciona · Esc fecha */}
       {/* CPF / CNPJ na nota — mesmo modal do MaxPOS. Vazio + confirmar remove. */}
       {cpfModalOpen && (
         <CpfNotaModal
@@ -3499,65 +3287,12 @@ export const PDVViewSupermax = ({
         />
       )}
 
+      {/* Picker PIX/Fiado (F3 no payment modal) — ↑↓ navega · Enter seleciona · Esc fecha */}
       {payerPickerOpen && (
-        <div
-          className="fixed inset-0 z-[195] flex items-center justify-center p-4"
-          style={{ background: 'rgba(0,0,0,0.5)' }}
-          tabIndex={-1}
-          ref={(el) => { if (el && payerPickerOpen && !el.contains(document.activeElement)) el.focus(); }}
-          onKeyDown={(e) => {
-            if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); setPayerPickerOpen(false); return; }
-            if (e.key === 'Tab' || e.key === 'ArrowDown' || e.key === 'ArrowRight') {
-              e.preventDefault(); e.stopPropagation();
-              setPayerPickerIdx(i => (i + 1) % 3);
-              return;
-            }
-            if (e.key === 'ArrowUp' || e.key === 'ArrowLeft') {
-              e.preventDefault(); e.stopPropagation();
-              setPayerPickerIdx(i => (i + 2) % 3);
-              return;
-            }
-            if (e.key === 'Enter') {
-              e.preventDefault(); e.stopPropagation();
-              const forma: FormaPagamento = payerPickerIdx === 0 ? 'PIX' : payerPickerIdx === 1 ? 'Vale-Alimentação' : 'Fiado';
-              setPayerPickerOpen(false);
-              handlePayChoice(forma);
-              return;
-            }
-            if (/^F\d+$/.test(e.key)) e.stopPropagation();
-          }}
-        >
-          <div className="bg-white border-4 max-w-md w-full shadow-2xl" style={{ borderColor: NAVY_DARK }}>
-            <div className="px-5 py-4 text-white" style={{ background: NAVY_DARK }}>
-              <div className="text-xs font-black uppercase tracking-[0.3em] opacity-90">F3 · Outras formas</div>
-              <div className="text-2xl font-black tracking-wide mt-0.5">PIX, Vale ou Fiado?</div>
-            </div>
-            <div className="p-6 space-y-3">
-              {([
-                { forma: 'PIX' as const,              Icon: Wallet },
-                { forma: 'Vale-Alimentação' as const, Icon: Wallet },
-                { forma: 'Fiado' as const,            Icon: UsersIcon },
-              ]).map(({ forma, Icon }, idx) => {
-                const active = idx === payerPickerIdx;
-                return (
-                  <button
-                    key={forma}
-                    onClick={() => { setPayerPickerOpen(false); handlePayChoice(forma); }}
-                    onMouseEnter={() => setPayerPickerIdx(idx)}
-                    className={`w-full border-2 px-4 py-4 flex items-center gap-3 font-black uppercase tracking-wide text-left ${active ? 'bg-yellow-100' : 'bg-white hover:bg-yellow-50'}`}
-                    style={{ borderColor: active ? NAVY_DARK : '#cbd5e1', color: NAVY_DARK, boxShadow: active ? `inset 0 0 0 2px ${NAVY_DARK}` : undefined }}
-                  >
-                    <Icon size={22} />
-                    <span>{forma}</span>
-                  </button>
-                );
-              })}
-              <div className="text-xs text-gray-500 font-bold uppercase tracking-wider text-center pt-2">
-                ↑↓ navegar · Enter selecionar · Esc voltar
-              </div>
-            </div>
-          </div>
-        </div>
+        <PagadorPickerModal
+          onEscolher={(forma) => { setPayerPickerOpen(false); handlePayChoice(forma); }}
+          onVoltar={() => setPayerPickerOpen(false)}
+        />
       )}
 
       {/* Parcelas Cartão Crédito (1x-12x) — só forma única; misto não pergunta */}
