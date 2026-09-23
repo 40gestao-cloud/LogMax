@@ -57,7 +57,7 @@ A espera do Pix ou do cartão (polling, realtime, cancelar com confirmação, `o
 
 Precisa do ambiente de teste do pré-requisito.
 
-**Código feito (2026-09-23). O roteiro de cliques ainda falta.**
+**Feito (2026-09-23), com o roteiro de cliques aprovado na turma Aprendiz.**
 - `src/lib/pdv/cobranca.ts` reúne:
   - `aguardarCobranca`: realtime + polling de 2s, que dispara uma vez;
   - `inserirPixPendente` e `inserirCartaoPendente`;
@@ -76,11 +76,17 @@ O que continua divergente e é decisão da etapa 5:
 - O Pix dos nichos não cancela as pendentes antigas do operador antes de criar outra. A SuperMax cancela. Como a MaxPay casa por valor, uma pendente velha com o mesmo valor pode ser confirmada no lugar da nova.
 - Cancelar Pix ou cartão pede confirmação na SuperMax, e nos nichos não.
 
-**Antes do deploy:** rodar o roteiro do pré-requisito, com os mesmos cliques nos dois PDVs:
-- Pix pago; Pix cancelado;
-- débito; crédito 3x;
-- na SuperMax, cartão dentro do misto;
-- Pix pago com o caixa fechado no meio: tem de aparecer "Tentar Novamente" e, reaberto o caixa, a venda sai sozinha.
+**Roteiro rodado em 23/09, 06:08–06:25 no horário do Acre, na Aprendiz.** O dev local foi apontado para ela com `--mode aprendiz`. O papel do MaxBank foi feito por SQL, mudando o status da cobrança; o que se testou foi a tela reagir. Resultado:
+- **SuperMax**, tudo passou:
+  - Pix pago, Pix cancelado, débito;
+  - crédito 3x, com 3 parcelas geradas;
+  - misto de dinheiro com troco + débito na maquininha, com CPF na nota: gravou `p_valor_dinheiro` 2,00, ou seja, o troco ficou fora;
+  - Pix pago com o caixa suspenso: mostrou "Tentar Novamente" e, reaberto o caixa, a venda saiu sozinha e uma vez só.
+- **MaxLook e TechMax**, tudo passou: Pix pago, Pix cancelado, débito e crédito 3x.
+- **Duas conferências extras:**
+  - Pix cancelado e depois marcado como pago não gerou venda, na SuperMax e na MaxLook.
+  - Houve 11 vendas para 11 casos, nenhuma duplicada, e nenhuma cobrança ficou em "aguardando".
+- **Caixas de teste:** os três foram fechados por `fechar_caixa_conferido`, todos "exato". Na SuperMax, o esperado foi R$ 102 (fundo + R$ 2 do misto).
 
 ### 3. Modais do `PDVViewSupermax` para `src/components/pdv/` (risco baixo por modal)
 Da linha 2.454 em diante, cada modal vira um componente com props explícitas. Ordem sugerida, dos puramente de leitura para os que gravam:
