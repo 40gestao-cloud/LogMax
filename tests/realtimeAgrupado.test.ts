@@ -38,7 +38,12 @@ describe('assinarRealtime', () => {
   let lotes: Set<string>[];
   let parar: () => void;
 
-  const esgotarJanela = () => vi.advanceTimersByTimeAsync(4_100);
+  // Tem de passar do PIOR caso: janela + o máximo que o sorteio pode somar
+  // (4s + 6s na régua atual). Estava em 4 100 ms, que cobria a régua antiga de
+  // 1,5s + 2,5s — ao abrir a janela para espalhar a manada, os testes de lote
+  // passaram a medir a máquina que ainda não tinha lido. Se `JANELA_MS` ou
+  // `JITTER_MS` mudarem de novo, é este número que acompanha.
+  const esgotarJanela = () => vi.advanceTimersByTimeAsync(10_100);
 
   beforeEach(() => {
     vi.useFakeTimers();

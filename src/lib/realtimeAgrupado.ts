@@ -51,8 +51,29 @@ import { freshToken } from './authFetch';
 /** Tabela a ouvir. `filtro` é a sintaxe do PostgREST: `filial=eq.SuperMax`. */
 export type AlvoRealtime = string | { tabela: string; filtro?: string };
 
-const JANELA_MS = 1_500;
-const JITTER_MS = 2_500;
+// A régua padrão: 4s de janela + até 6s sorteados por máquina.
+//
+// Era 1,5s + 2,5s, e ficou curto. Os badges já usavam 4+6 porque 1,5+2,5 não
+// tinha bastado para eles em 15/09 — mas o default curto continuou valendo
+// para TODO o resto, inclusive o `useFetchData`, que é o hook mais usado do
+// app. Em 22/09 a turma da tarde fez recebimento em massa: as escritas subiram
+// 55 → 79 → 92 → 114 por minuto, cada uma voltando multiplicada pela sala, e
+// a chegada saltou de ~90 requisições por 10s para 234. O pool de 10 conexões
+// do PostgREST encheu (`PGRST003 — Timed out acquiring connection from
+// connection pool`) e a sala passou oito minutos com a tela pendurada, login
+// incluído. Aluno com tela travada aperta F5, e cada F5 é um pacote de boot
+// novo — foi assim que oito minutos se sustentaram.
+//
+// 4+6 espalha o mesmo lote por dez segundos em vez de quatro: o pico de
+// chegada cai para perto de 40% do que era, sem que nenhuma tela deixe de
+// atualizar. É o que os badges já provaram em produção desde 15/09.
+//
+// O número não é regra de negócio, é orçamento de conexão: com pool de 10 e
+// consulta de ~25ms, o que derruba a aula não é o volume do dia, é o instante.
+// Tela que precise de resposta mais rápida que isso passa `janelaMs` próprio —
+// e deve ter um motivo escrito, como o `reservasTrabalho`.
+const JANELA_MS = 4_000;
+const JITTER_MS = 6_000;
 
 /** O que um assinante quer saber. `reconectou` chega quando o websocket volta
  *  — nesse caso não dá para saber o que passou, então relê tudo. */
