@@ -428,6 +428,15 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode, onNavigate }: { s
     const n = Number(req?.qtd ?? 0);
     return Number.isFinite(n) && n > 0 ? n : 0;
   }, [correcao, requisicoes]);
+  // O item é da REQUISIÇÃO, não da proposta. Em 23/09 a gerente devolveu a
+  // cotação por "erro na especificação do gênero do produto", a aluna escreveu
+  // o nome certo na Observação (o único campo de texto do modal) e a cotação
+  // foi aprovada com o item antigo — na requisição, na cotação e na sugestão
+  // de cadastro. O modal passa a mostrar o item e dizer onde ele se corrige.
+  const reqCorrecao = useMemo(() => {
+    if (!correcao) return null;
+    return correcao.req ?? requisicoes.find((r: any) => r.id === correcao.requisicao_id) ?? null;
+  }, [correcao, requisicoes]);
   const unidadeCorrecao = useMemo(() => {
     if (!correcao) return '';
     const req = correcao.req ?? requisicoes.find((r: any) => r.id === correcao.requisicao_id);
@@ -2119,6 +2128,19 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode, onNavigate }: { s
                   : 'A proposta volta para quem a cadastrou, que corrige e reenvia — nada é recusado e nenhuma concorrente é cancelada. Use quando o problema é o preenchimento (valor digitado errado, prazo em branco), não a oferta do fornecedor.'}
               </p>
 
+              {decisao.tipo === 'devolver' && (() => {
+                const req = decisao.cot.req ?? requisicoes.find((r: any) => r.id === decisao.cot.requisicao_id);
+                return (
+                  <div className="neu-inset rounded-xl p-3 mb-4 border border-amber-400/15 text-xs text-gray-300">
+                    <p className="text-[10px] text-amber-400 uppercase tracking-widest font-bold mb-1">Erro no item?</p>
+                    O item <b>{req?.item ?? '—'}</b> é da requisição {req ? numeroRequisicao(req) : ''}, não desta
+                    proposta — quem corrige a cotação não consegue mudar o nome, a marca pedida nem a quantidade.
+                    Se o erro é no item, <b>reprove</b> esta cotação e peça a correção em Compras → Requisições de
+                    Compra (Compras ou o gerente); depois cota-se de novo.
+                  </div>
+                );
+              })()}
+
               <div className="flex flex-col gap-1.5">
                 <label htmlFor="cot-feedback" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">
                   {decisao.tipo === 'reprovar' ? 'Motivo da reprovação *'
@@ -2188,6 +2210,22 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode, onNavigate }: { s
                 Fornecedor e requisição não mudam aqui: trocar de fornecedor é outra proposta, não
                 correção desta. Ao reenviar, a cotação volta para a fila do Financeiro.
               </p>
+
+              {reqCorrecao && (
+                <div className="mb-4">
+                  <FormField label={`Item — da requisição ${numeroRequisicao(reqCorrecao)}`}>
+                    <div className="neu-pressed py-2 px-3 rounded-xl text-sm text-gray-300">
+                      {reqCorrecao.item}{reqCorrecao.marca ? ` · ${reqCorrecao.marca}` : ''}
+                    </div>
+                  </FormField>
+                  <p className="text-[10px] text-gray-500 mt-1">
+                    O nome do item não se corrige aqui, nem na observação: ele é da requisição, e é o que
+                    segue para o pedido e para o cadastro do produto. Se pediram para mudar o item, fale com
+                    Compras ou o gerente — a correção é em Compras → Requisições de Compra, com esta cotação
+                    cancelada antes.
+                  </p>
+                </div>
+              )}
 
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 {qtdCorrecao > 0 && (
