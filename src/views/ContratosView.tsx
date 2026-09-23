@@ -98,9 +98,9 @@ const ABA_DE: Record<StatusContrato, Aba> = {
 
 // ── Modal: novo / editar rascunho / aditivo ────────────────────────────────
 function ModalContrato({
-  profile, minhaParte, doc, pai, onClose, onSaved, showToast, assinar,
+  profile, minhaParte, doc, pai, filialAtiva, onClose, onSaved, showToast, assinar,
 }: {
-  profile: UserProfile; minhaParte: Parte;
+  profile: UserProfile; minhaParte: Parte; filialAtiva: string | null;
   doc: Contrato | null; pai: Contrato | null;
   onClose: () => void; onSaved: () => void;
   showToast: (msg: string, t?: string) => void;
@@ -112,7 +112,11 @@ function ModalContrato({
   const outrasPartes = PARTES.filter(p => p !== minhaParte);
   const [titulo, setTitulo] = useState(doc?.titulo ?? (pai ? `Aditivo ao ${numeroContrato(pai.numero)} — ${pai.titulo}` : ''));
   const [parteB, setParteB] = useState<Parte | ''>(
-    doc?.parte_b ?? (pai ? contraparte(pai, minhaParte) : ''));
+    doc?.parte_b ?? (pai ? contraparte(pai, minhaParte)
+      // O professor operando a SuperMax quer contratar com a SuperMax — e
+      // contrato com outra unidade sairia da lista filtrada ao salvar.
+      : (filialAtiva && filialAtiva !== minhaParte && (PARTES as readonly string[]).includes(filialAtiva)
+          ? filialAtiva as Parte : '')));
   const [objeto, setObjeto] = useState(base?.objeto ?? '');
   const [valor, setValor] = useState(base?.valor != null ? formatBRL(Number(base.valor)) : '');
   const [condicoes, setCondicoes] = useState(base?.condicoes ?? '');
@@ -178,10 +182,13 @@ function ModalContrato({
       if (editando) {
         const { data, error } = await supabase.from('contratos')
           .update({ ...campos, ...doArquivo }).eq('id', doc!.id).select('id');
-        if (error) throw error;
         // UPDATE que a RLS recortou não é erro — é zero linhas
-        // (vide feedback_update_zero_linhas_nao_e_erro).
-        if (!data?.length) throw new Error('O contrato não é mais rascunho — recarregue a tela.');
+        // (vide feedback_update_zero_linhas_nao_e_erro). Nos dois casos o
+        // arquivo novo já subiu e ninguém aponta para ele: limpa antes de sair.
+        if (error || !data?.length) {
+          if (pathNovo) await supabase.storage.from('contratos').remove([pathNovo]);
+          throw error ?? new Error('O contrato não é mais rascunho — recarregue a tela.');
+        }
         id = doc!.id;
         if (arquivo && pathNovo) await supabase.storage.from('contratos').remove([doc!.arquivo_path]);
       } else {
@@ -189,8 +196,9 @@ function ModalContrato({
           ...campos, ...doArquivo,
           parte_a: minhaParte,
           contrato_pai_id: pai?.id ?? null,
+          // Autor, nome e número o banco carimba (migr. 624); `criado_por`
+          // segue aqui porque a policy de INSERT o confere.
           criado_por: profile.id,
-          criado_por_nome: profile.nome ?? null,
         }).select('id').single();
         if (error || !data) {
           if (pathNovo) await supabase.storage.from('contratos').remove([pathNovo]);
@@ -583,15 +591,25 @@ export const ContratosView = ({ showToast, profile }: { showToast: any; profile:
       if (!error) setAbertoId(null);
     },
     encerrar: async (c: Contrato, rescisao: boolean) => {
-      const motivo = await prompt({
-        message: rescisao
-          ? 'Rescindir é romper antes do combinado. Qual o motivo? (fica no manifesto)'
-          : 'Encerrar o contrato (fim combinado). Observação opcional:',
-        placeholder: rescisao ? 'Ex.: serviço não entregue no prazo' : '',
-        confirmLabel: rescisao ? 'Rescindir' : 'Encerrar',
-        maxLength: 300,
-      });
-      if (motivo == null) return;
+      // Encerrar é o fim combinado e não pede motivo — o prompt não aceita
+      // vazio, então ele vira confirmação. Rescindir pede, e o banco confere.
+      let motivo = '';
+      if (rescisao) {
+        const m = await prompt({
+          message: 'Rescindir é romper antes do combinado. Qual o motivo? (fica no manifesto)',
+          placeholder: 'Ex.: serviço não entregue no prazo',
+          confirmLabel: 'Rescindir',
+          maxLength: 300,
+        });
+        if (m == null) return;
+        motivo = m;
+      } else {
+        const ok = await confirm({
+          message: `Encerrar ${numeroContrato(c.numero)} "${c.titulo}"? É o fim combinado entre as partes — ele sai de Vigentes e não volta.`,
+          confirmLabel: 'Encerrar',
+        });
+        if (!ok) return;
+      }
       const { error } = await encerrar(c.id, rescisao, motivo);
       showToast(error ?? (rescisao ? 'Contrato rescindido.' : 'Contrato encerrado.'), error ? 'error' : 'success');
       if (!error) setAbertoId(null);
@@ -723,6 +741,7 @@ export const ContratosView = ({ showToast, profile }: { showToast: any; profile:
             minhaParte={minhaParte}
             doc={form.doc}
             pai={form.pai}
+            filialAtiva={filialAtiva}
             onClose={() => setForm(null)}
             onSaved={recarregar}
             showToast={showToast}
