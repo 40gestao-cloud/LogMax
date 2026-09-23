@@ -169,8 +169,10 @@ export function aulaSubmenusDoModulo(config: AulaConfig, modId: string): string[
 //   e a regra padrão daria 'pendencias' como módulo, que não existe. Mesmo
 //   defeito que 'documentos' teve: botão na sidebar e guard devolvendo pra
 //   Início.
+// - 'contratos' (migr. 623): não é módulo de setor — quem entra é o gerente e
+//   a Matriz, e a regra padrão daria 'contratos' como módulo inexistente.
 const SEMPRE_LIBERADO = new Set([
-  'inicio', 'aula-modo', 'aula-atividade', 'documentos', 'pendencias',
+  'inicio', 'aula-modo', 'aula-atividade', 'documentos', 'pendencias', 'contratos',
   'sessoes-gerais', 'analise-ia', 'comparativos-matriz',
   'painel-bi', 'briefing-diario', 'central-tempo',
 ]);

@@ -40,7 +40,7 @@ import {
   Sun, Moon, Megaphone, ArrowLeft, Monitor, Eye,
   Star, MessageSquare, BookOpen, Database, Target, Brain, ListTodo,
   Layers, Landmark, GraduationCap, Lock, Trophy, ClipboardList, Inbox,
-  Presentation, FileText, Hourglass, Dices,
+  Presentation, FileText, Hourglass, Dices, FileSignature,
 } from 'lucide-react';
 import { NotificationBell } from './components/NotificationBell';
 import { AvisoDisjuntor } from './components/AvisoDisjuntor';
@@ -151,6 +151,7 @@ const AulaModoView                         = lazyView(() => import('./views/Aula
 const AulaAtividadeView                    = lazyView(() => import('./views/AulaAtividadeView').then(m => ({ default: m.AulaAtividadeView })));
 const MaxShowsView                         = lazyView(() => import('./views/MaxShowsView').then(m => ({ default: m.MaxShowsView })));
 const DocumentosView                       = lazyView(() => import('./views/DocumentosView').then(m => ({ default: m.DocumentosView })));
+const ContratosView                        = lazyView(() => import('./views/ContratosView').then(m => ({ default: m.ContratosView })));
 const PendenciasView                       = lazyView(() => import('./views/PendenciasView').then(m => ({ default: m.PendenciasView })));
 
 // --- prefetch das views ---
@@ -293,6 +294,7 @@ const PREFETCH_VIEW: Record<string, { preload: () => Promise<unknown> }> = {
   'aula-atividade': AulaAtividadeView,
   'max-show': MaxShowsView,
   'documentos': DocumentosView,
+  'contratos': ContratosView,
   'pendencias': PendenciasView,
 };
 
@@ -711,6 +713,14 @@ const SidebarNav = ({ activeView, navigate, openModules, toggleModule, handleSig
         <button onPointerEnter={() => prefetchOnHover('documentos')} onPointerLeave={cancelPrefetchHover} onPointerDown={() => prefetchView('documentos')} onClick={() => { navigate('documentos'); onClose?.(); }} className={`flex items-center gap-3 p-2.5 rounded-xl text-sm font-semibold ${activeView === 'documentos' ? 'nav-item neu-pressed text-accent is-active' : 'nav-item neu-button text-gray-100'}`}>
           <FileText size={18} /><span>Documentos</span>
         </button>
+        {/* Contratos entre unidades (migr. 623). Papel de gestão: o gerente e o
+            professor assinam, CEO e conselheiro acompanham. Colaborador não
+            tem contrato nenhum para ver — a RLS devolveria a lista vazia. */}
+        {['admin', 'ceo', 'conselheiro', 'gerente'].includes(profile?.role) && (
+          <button onPointerEnter={() => prefetchOnHover('contratos')} onPointerLeave={cancelPrefetchHover} onPointerDown={() => prefetchView('contratos')} onClick={() => { navigate('contratos'); onClose?.(); }} className={`flex items-center gap-3 p-2.5 rounded-xl text-sm font-semibold ${activeView === 'contratos' ? 'nav-item neu-pressed text-accent is-active' : 'nav-item neu-button text-gray-100'}`}>
+            <FileSignature size={18} /><span>Contratos</span>
+          </button>
+        )}
         {/* Central de Avaliação (modo filial): hub com abas Padrão/Metas.
             No modo Matriz o item vive sob Competição, na seção Matriz abaixo. */}
         {!matrizMode && aulaAllow('avaliacoes') && (
@@ -1600,6 +1610,7 @@ function LogMaxAppInner() {
       case 'max-work-show':
       case 'max-show':                     return <MaxShowsView showToast={st} profile={profile} />;
       case 'documentos':                   return <DocumentosView showToast={st} profile={profile} />;
+      case 'contratos':                    return <ContratosView showToast={st} profile={profile} />;
       case 'pendencias':                   return <PendenciasView showToast={st} profile={profile} />;
       default:
         return (
