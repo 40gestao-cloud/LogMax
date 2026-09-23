@@ -59,6 +59,8 @@ const FORA_DA_FAMILIA: Record<string, string> = {
     'modal do PDVViewSupermax, chrome MaxPOS.',
   'components/pdv/ClientePickerModal.tsx':
     'modal do PDVViewSupermax, chrome MaxPOS.',
+  'components/pdv/CabecalhoPdv.tsx':
+    'faixa amarela do topo do PDVViewSupermax (tela cheia e manual, redondos), chrome MaxPOS.',
   'components/pdv/PagamentoModal.tsx':
     'modal do PDVViewSupermax, chrome MaxPOS (inclui o lápis/lixeira da linha de pagamento).',
   'components/ArteLightbox.tsx':
