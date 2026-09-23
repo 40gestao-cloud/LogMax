@@ -6,6 +6,7 @@ import {
 } from '../src/lib/pdv/pagamento';
 import { isProdutoFracionario, fmtQtdArmada, formatQtd } from '../src/lib/pdv/quantidade';
 import { formasDaUnidade, rotuloFiado, podeDevolver, podeAlternarFilial } from '../src/lib/pdv/regrasUnidade';
+import { mascararDocumento } from '../src/lib/pdv/documento';
 
 // Lógica pura dos dois PDVs (src/lib/pdv/). O payload de criar_venda_pdv é o
 // que os PDVs mandavam à mão antes da extração — qualquer diferença aqui é
@@ -175,5 +176,15 @@ describe('regras por unidade', () => {
   it('gerente não alterna filial', () => {
     expect(podeAlternarFilial({ role: 'ceo' })).toBe(true);
     expect(podeAlternarFilial({ role: 'gerente' })).toBe(false);
+  });
+});
+
+describe('documento na nota', () => {
+  it('CPF até 11 dígitos, CNPJ até 14, o resto é descartado', () => {
+    expect(mascararDocumento('11144477735')).toBe('111.444.777-35');
+    expect(mascararDocumento('111.444')).toBe('111.444');
+    expect(mascararDocumento('11222333000181')).toBe('11.222.333/0001-81');
+    expect(mascararDocumento('112223330001819999')).toBe('11.222.333/0001-81');
+    expect(mascararDocumento('abc')).toBe('');
   });
 });

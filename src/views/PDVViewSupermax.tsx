@@ -33,6 +33,12 @@ import { YELLOW, YELLOW_DARK, NAVY_DARK, MONEY, RED } from '../components/pdv/co
 import { ManualPdv } from '../components/pdv/ManualPdv';
 import { ConsultaPrecoModal } from '../components/pdv/ConsultaPrecoModal';
 import { ReimpressaoModal, type VendaReimpressao } from '../components/pdv/ReimpressaoModal';
+import { ReciboVendaModal, type VendaConcluida } from '../components/pdv/ReciboVendaModal';
+import { AgradecimentoTela } from '../components/pdv/AgradecimentoTela';
+import { CpfNotaModal } from '../components/pdv/CpfNotaModal';
+import { ValeModal } from '../components/pdv/ValeModal';
+import { ParcelasModal } from '../components/pdv/ParcelasModal';
+import { mascararDocumento } from '../lib/pdv/documento';
 import {
   totaisComDesconto, restanteAPagar, valorDevido as calcValorDevido, mistoAtivo, trocoDoRecebido,
   valorEditado, formaDoMisto, trocoTotal, dinheiroNaGaveta as calcDinheiroNaGaveta,
@@ -64,22 +70,6 @@ type FormaPagamento = 'Dinheiro' | 'Cartão Débito' | 'Cartão Crédito' | 'Fia
 type DestinoCartao = 'venda' | 'linha';
 
 const FORMAS_PAGAMENTO: FormaPagamento[] = ['Dinheiro', 'Cartão Crédito', 'Cartão Débito', 'PIX', 'Vale-Alimentação', 'Fiado'];
-
-// CPF/CNPJ na nota: só dígitos no banco (migr. 574), máscara só na tela.
-const mascararDocumento = (v: string): string => {
-  const d = v.replace(/\D/g, '').slice(0, 14);
-  if (d.length <= 11) {
-    return d
-      .replace(/(\d{3})(\d)/, '$1.$2')
-      .replace(/(\d{3})(\d)/, '$1.$2')
-      .replace(/(\d{3})(\d{1,2})$/, '$1-$2');
-  }
-  return d
-    .replace(/(\d{2})(\d)/, '$1.$2')
-    .replace(/(\d{3})(\d)/, '$1.$2')
-    .replace(/(\d{3})(\d)/, '$1/$2')
-    .replace(/(\d{4})(\d{1,2})$/, '$1-$2');
-};
 
 // Busca de produto (prefixo, acento-insensível) vive em lib/produtoBusca.ts —
 // compartilhada com PDVView.tsx. `norm` segue em uso aqui para outras buscas
@@ -114,17 +104,7 @@ export const PDVViewSupermax = ({
   const [cart, setCart]                 = useState<CartItem[]>([]);
   const [lastAdded, setLastAdded]       = useState<CartItem | null>(null);
   const [isClosing, setIsClosing]       = useState(false);
-  const [lastVenda, setLastVenda]       = useState<{
-    id: string;
-    total: number;
-    subtotal: number;
-    desconto: number;
-    forma: string;
-    cliente: string | null;
-    cpfNota?: string | null;
-    economia?: number;
-    itens: { nome_produto: string; qtd: number; preco_unitario: number; subtotal: number }[];
-  } | null>(null);
+  const [lastVenda, setLastVenda]       = useState<VendaConcluida | null>(null);
   const [codeMsg, setCodeMsg]           = useState<{ type: 'err'; text: string } | null>(null);
   const [suggestionIdx, setSuggestionIdx] = useState(-1);
 
@@ -288,7 +268,6 @@ export const PDVViewSupermax = ({
   // Parcelamento Cartão Crédito (1x-12x) — só pergunta quando Crédito é
   // forma única; em misto cai no ELSE genérico da RPC e parcelas é ignorado.
   const [parcelasModalOpen, setParcelasModalOpen] = useState(false);
-  const [parcelasIdx, setParcelasIdx] = useState(0);
 
   // Modal do recibo — exibe resumo da venda + download PDF antes do agradecimento.
   const [reciboModalOpen, setReciboModalOpen] = useState(false);
@@ -1430,7 +1409,6 @@ export const PDVViewSupermax = ({
     // dentro do misto deixou de ser mentira contábil. `confirmarParcelas`
     // recalcula o destino e segue daqui.
     if (forma === 'Cartão Crédito') {
-      setParcelasIdx(0);
       setParcelasModalOpen(true);
       return;
     }
@@ -2781,142 +2759,19 @@ export const PDVViewSupermax = ({
 
       {/* Recibo — resumo da venda com opção de baixar PDF antes do agradecimento */}
       {reciboModalOpen && lastVenda && (
-        <div
-          className="fixed inset-0 z-[310] flex items-center justify-center p-4"
-          style={{ background: 'rgba(0,0,0,0.7)' }}
-          tabIndex={-1}
-          ref={(el) => { if (el && reciboModalOpen) { const btn = el.querySelector<HTMLButtonElement>('button:last-of-type'); if (btn) btn.focus(); else el.focus(); } }}
-          onKeyDown={(e) => {
-            if (e.key === 'Tab') { trapTab(e, e.currentTarget as HTMLElement); return; }
-            if (e.key === 'Enter' && !(e.target instanceof HTMLButtonElement)) {
-              e.preventDefault(); e.stopPropagation();
-              setReciboModalOpen(false);
-              setThankYouOpen(true);
-            } else if (e.key === 'Escape') {
-              e.stopPropagation();
-            } else {
-              e.stopPropagation();
-            }
-          }}
-        >
-          <div className="w-full max-w-md bg-white rounded-2xl shadow-2xl overflow-hidden" style={{ border: `3px solid ${NAVY_DARK}` }}>
-            <div className="px-5 py-4 text-center" style={{ background: NAVY_DARK, color: 'white' }}>
-              <div className="text-xs font-bold uppercase tracking-[0.3em] opacity-70">Venda concluída</div>
-              <div className="text-3xl font-black tabular-nums mt-1" style={{ color: YELLOW }}>
-                R$ {fmt(lastVenda.total)}
-              </div>
-              <div className="text-xs font-mono opacity-60 mt-1">#{lastVenda.id}</div>
-            </div>
-            <div className="px-5 py-3 max-h-[40vh] overflow-y-auto">
-              <table className="w-full text-xs">
-                <thead>
-                  <tr className="border-b" style={{ color: NAVY_DARK }}>
-                    <th className="text-left py-1 font-bold">Item</th>
-                    <th className="text-center py-1 font-bold w-12">Qtd</th>
-                    <th className="text-right py-1 font-bold w-20">Subtotal</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {lastVenda.itens.map((it, i) => (
-                    <tr key={i} className="border-b border-gray-100">
-                      <td className="py-1 text-gray-700">{it.nome_produto}</td>
-                      <td className="py-1 text-center text-gray-500">{it.qtd}</td>
-                      <td className="py-1 text-right font-mono text-gray-700">R$ {fmt(it.subtotal)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-              {(lastVenda.economia ?? 0) > 0.001 && (
-                <div className="flex justify-between text-xs mt-2 font-bold" style={{ color: MONEY }}>
-                  <span>Você economizou</span>
-                  <span>R$ {fmt(lastVenda.economia!)}</span>
-                </div>
-              )}
-              {lastVenda.desconto > 0 && (
-                <div className="flex justify-between text-xs mt-2 text-red-600 font-bold">
-                  <span>Desconto</span>
-                  <span>- R$ {fmt(lastVenda.desconto)}</span>
-                </div>
-              )}
-              <div className="flex justify-between text-sm mt-2 font-black" style={{ color: NAVY_DARK }}>
-                <span>Total</span>
-                <span>R$ {fmt(lastVenda.total)}</span>
-              </div>
-              <div className="text-xs text-gray-500 mt-1">{lastVenda.forma}</div>
-            </div>
-            <div className="px-5 py-4 flex flex-col gap-2 border-t">
-              <button
-                onClick={() => gerarReciboVendaPDF({
-                  id: lastVenda.id,
-                  shortId: lastVenda.id,
-                  data: new Date().toLocaleDateString('pt-BR', { timeZone: 'America/Rio_Branco' }),
-                  hora: new Date().toLocaleTimeString('pt-BR', { timeZone: 'America/Rio_Branco', hour: '2-digit', minute: '2-digit' }),
-                  filial,
-                  cliente: lastVenda.cliente,
-                  cpfNota: lastVenda.cpfNota ?? null,
-                  economia: lastVenda.economia ?? null,
-                  operador: operadorNome,
-                  itens: lastVenda.itens,
-                  subtotal: lastVenda.subtotal,
-                  desconto: lastVenda.desconto,
-                  total: lastVenda.total,
-                  formaPagamento: lastVenda.forma,
-                })}
-                className="w-full px-4 py-2.5 rounded-lg text-sm font-bold flex items-center justify-center gap-2 hover:brightness-110 transition"
-                style={{ background: NAVY_DARK, color: 'white' }}
-              >
-                <FileDown size={16} /> Baixar Recibo (PDF)
-              </button>
-              <button
-                onClick={() => { setReciboModalOpen(false); setThankYouOpen(true); }}
-                className="w-full px-4 py-3 rounded-lg text-base font-black uppercase tracking-wider hover:brightness-110 transition"
-                style={{ background: YELLOW, color: NAVY_DARK, border: `2px solid ${YELLOW_DARK}` }}
-                autoFocus
-              >
-                Continuar · Enter
-              </button>
-            </div>
-          </div>
-        </div>
+        <ReciboVendaModal
+          venda={lastVenda}
+          filial={filial}
+          operador={operadorNome}
+          onContinuar={() => { setReciboModalOpen(false); setThankYouOpen(true); }}
+        />
       )}
 
       {/* Agradecimento — tela final supermercado (só fecha com Enter) */}
       {thankYouOpen && (
-        <div
-          className="fixed inset-0 z-[320] flex items-center justify-center"
-          style={{ background: 'rgba(255,255,255,0.98)' }}
-          tabIndex={-1}
-          ref={(el) => { if (el && thankYouOpen) el.focus(); }}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') {
-              e.preventDefault(); e.stopPropagation();
-              setThankYouOpen(false);
-              setLastVenda(null);
-              setTimeout(() => codeInputRef.current?.focus(), 50);
-            } else {
-              e.stopPropagation();
-            }
-          }}
-        >
-          <div className="flex flex-col items-center justify-center text-center px-8 py-6 max-h-screen w-full">
-            <img
-              src="/icon-supermax.png"
-              alt="SuperMax"
-              className="object-contain drop-shadow-2xl"
-              style={{ maxHeight: '60vh', maxWidth: '70vw', width: 'auto', height: 'auto' }}
-              draggable={false}
-            />
-            <div className="mt-4 text-3xl md:text-4xl lg:text-5xl font-black tracking-wide shrink-0" style={{ color: NAVY_DARK }}>
-              Agradecemos a sua preferência
-            </div>
-            <div
-              className="mt-5 px-6 py-3 rounded-full text-sm md:text-base font-black uppercase tracking-[0.3em] animate-pulse shrink-0"
-              style={{ background: YELLOW, color: NAVY_DARK, border: `2px solid ${YELLOW_DARK}` }}
-            >
-              Pressione ENTER para continuar
-            </div>
-          </div>
-        </div>
+        <AgradecimentoTela
+          onContinuar={() => { setThankYouOpen(false); setLastVenda(null); setTimeout(() => codeInputRef.current?.focus(), 50); }}
+        />
       )}
 
       {/* Cliente picker (Fiado) — ↑↓ navega · Enter seleciona · Esc fecha */}
@@ -3623,135 +3478,25 @@ export const PDVViewSupermax = ({
       {/* Picker PIX/Fiado (F3 no payment modal) — ↑↓ navega · Enter seleciona · Esc fecha */}
       {/* CPF / CNPJ na nota — mesmo modal do MaxPOS. Vazio + confirmar remove. */}
       {cpfModalOpen && (
-        <div
-          className="fixed inset-0 z-[200] flex items-center justify-center p-4"
-          style={{ background: 'rgba(0,0,0,0.5)' }}
-          tabIndex={-1}
-          ref={(el) => { if (el && cpfModalOpen && !el.contains(document.activeElement)) el.focus(); }}
-          onKeyDown={(e) => {
-            if (e.key === 'Tab') { trapTab(e, e.currentTarget as HTMLElement); return; }
-            if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); setCpfModalOpen(false); return; }
-            if (e.key === 'Enter') {
-              if ((e.target as HTMLElement)?.tagName === 'BUTTON') { e.stopPropagation(); return; }
-              e.preventDefault(); e.stopPropagation(); confirmarCpf();
-              return;
-            }
-            if (e.key.length === 1 || /^F\d+$/.test(e.key)) e.stopPropagation();
-          }}
-        >
-          <div className="bg-white border-4 max-w-md w-full shadow-2xl" style={{ borderColor: NAVY_DARK }}>
-            <div className="px-5 py-3 text-white" style={{ background: NAVY_DARK }}>
-              <span className="font-black tracking-wide text-sm uppercase">CPF / CNPJ na nota</span>
-            </div>
-            <div className="p-5 space-y-4">
-              <p className="text-xs text-gray-600">
-                Informe CPF (11 dígitos) ou CNPJ (14 dígitos). Deixe vazio e confirme para remover.
-              </p>
-              <div>
-                <label className="text-xs font-bold uppercase tracking-wider text-gray-500 block mb-1.5">Documento</label>
-                <input
-                  autoFocus
-                  type="text"
-                  inputMode="numeric"
-                  value={cpfInput}
-                  onChange={(e) => setCpfInput(mascararDocumento(e.target.value))}
-                  onFocus={(e) => e.currentTarget.select()}
-                  placeholder="000.000.000-00"
-                  className="w-full bg-white border-2 text-2xl font-bold text-gray-900 tabular-nums px-3 py-2 outline-none focus:border-blue-700"
-                  style={{ borderColor: '#9ca3af', fontFamily: 'Consolas, "Courier New", monospace' }}
-                />
-              </div>
-              <div className="flex gap-3 pt-1">
-                <button
-                  onClick={() => setCpfModalOpen(false)}
-                  className="flex-1 px-4 py-3 border-2 text-gray-700 font-bold hover:bg-gray-50"
-                  style={{ borderColor: '#9ca3af' }}
-                >
-                  CANCELAR
-                </button>
-                <button
-                  onClick={confirmarCpf}
-                  className="flex-1 px-4 py-3 text-white font-bold"
-                  style={{ background: NAVY_DARK }}
-                >
-                  CONFIRMAR
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
+        <CpfNotaModal
+          valor={cpfInput}
+          onChange={setCpfInput}
+          onConfirmar={confirmarCpf}
+          onCancelar={() => setCpfModalOpen(false)}
+        />
       )}
 
       {/* Vale-Alimentação — a maquininha do voucher pede os 4 últimos dígitos.
           Simulação, igual ao MaxPOS: qualquer combinação de 4 autoriza. */}
       {valeModal && (
-        <div
-          className="fixed inset-0 z-[200] flex items-center justify-center p-4"
-          style={{ background: 'rgba(0,0,0,0.5)' }}
-          tabIndex={-1}
-          ref={(el) => { if (el && valeModal && !el.contains(document.activeElement)) el.focus(); }}
-          onKeyDown={(e) => {
-            if (e.key === 'Tab') { trapTab(e, e.currentTarget as HTMLElement); return; }
-            if (e.key === 'Escape') {
-              e.preventDefault(); e.stopPropagation();
-              setValeModal(null); setValeDigitos(''); setPaymentModalOpen(true);
-              return;
-            }
-            if (e.key === 'Enter') {
-              if ((e.target as HTMLElement)?.tagName === 'BUTTON') { e.stopPropagation(); return; }
-              e.preventDefault(); e.stopPropagation(); confirmarVale();
-              return;
-            }
-            if (e.key.length === 1 || /^F\d+$/.test(e.key)) e.stopPropagation();
-          }}
-        >
-          <div className="bg-white border-4 max-w-sm w-full shadow-2xl" style={{ borderColor: NAVY_DARK }}>
-            <div className="px-5 py-3 text-white" style={{ background: NAVY_DARK }}>
-              <span className="font-black tracking-wide text-sm uppercase">Vale-Alimentação · Autorização</span>
-            </div>
-            <div className="p-5 space-y-4">
-              <p className="text-xs text-gray-600">
-                Peça ao cliente os <b>4 últimos dígitos</b> do cartão Vale. É simulação — qualquer combinação de 4 dígitos autoriza.
-              </p>
-              <div className="flex justify-between text-sm">
-                <span className="text-gray-600">Valor</span>
-                <span className="font-bold tabular-nums">R$ {fmt(valeModal.valor)}</span>
-              </div>
-              <div>
-                <label className="text-xs font-bold uppercase tracking-wider text-gray-500 block mb-1.5">Últimos 4 dígitos</label>
-                <input
-                  autoFocus
-                  type="text"
-                  inputMode="numeric"
-                  maxLength={4}
-                  value={valeDigitos}
-                  onChange={(e) => setValeDigitos(e.target.value.replace(/\D/g, '').slice(0, 4))}
-                  onFocus={(e) => e.currentTarget.select()}
-                  placeholder="0000"
-                  className="w-full bg-white border-2 text-3xl font-bold text-gray-900 tabular-nums text-center tracking-[0.4em] px-3 py-2 outline-none focus:border-blue-700"
-                  style={{ borderColor: '#9ca3af', fontFamily: 'Consolas, "Courier New", monospace' }}
-                />
-              </div>
-              <div className="flex gap-3 pt-1">
-                <button
-                  onClick={() => { setValeModal(null); setValeDigitos(''); setPaymentModalOpen(true); }}
-                  className="flex-1 px-4 py-3 border-2 text-gray-700 font-bold hover:bg-gray-50"
-                  style={{ borderColor: '#9ca3af' }}
-                >
-                  CANCELAR
-                </button>
-                <button
-                  onClick={confirmarVale}
-                  disabled={!/^\d{4}$/.test(valeDigitos) || isClosing}
-                  className="flex-1 px-4 py-3 text-white font-bold disabled:opacity-30 flex items-center justify-center gap-2"
-                  style={{ background: NAVY_DARK }}
-                >
-                  {isClosing ? <><Loader2 size={18} className="animate-spin" /> ...</> : 'AUTORIZAR'}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
+        <ValeModal
+          valor={valeModal.valor}
+          digitos={valeDigitos}
+          onDigitos={setValeDigitos}
+          processando={isClosing}
+          onConfirmar={confirmarVale}
+          onCancelar={() => { setValeModal(null); setValeDigitos(''); setPaymentModalOpen(true); }}
+        />
       )}
 
       {payerPickerOpen && (
@@ -3816,68 +3561,13 @@ export const PDVViewSupermax = ({
       )}
 
       {/* Parcelas Cartão Crédito (1x-12x) — só forma única; misto não pergunta */}
-      {parcelasModalOpen && (() => {
-        const parcial = parseBRL(parcialValor);
-        const valorDevido = calcValorDevido(parcial, restante);
-        return (
-        <div
-          className="fixed inset-0 z-[195] flex items-center justify-center p-4"
-          style={{ background: 'rgba(0,0,0,0.5)' }}
-          tabIndex={-1}
-          ref={(el) => { if (el && parcelasModalOpen && !el.contains(document.activeElement)) el.focus(); }}
-          onKeyDown={(e) => {
-            if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); setParcelasModalOpen(false); return; }
-            if (e.key === 'Tab') {
-              e.preventDefault(); e.stopPropagation();
-              setParcelasIdx(i => (i + 1) % 12);
-              return;
-            }
-            if (e.key === 'ArrowRight') { e.preventDefault(); e.stopPropagation(); setParcelasIdx(i => Math.min(i + 1, 11)); return; }
-            if (e.key === 'ArrowLeft')  { e.preventDefault(); e.stopPropagation(); setParcelasIdx(i => Math.max(i - 1, 0)); return; }
-            if (e.key === 'ArrowDown')  { e.preventDefault(); e.stopPropagation(); setParcelasIdx(i => Math.min(i + 4, 11)); return; }
-            if (e.key === 'ArrowUp')    { e.preventDefault(); e.stopPropagation(); setParcelasIdx(i => Math.max(i - 4, 0)); return; }
-            if (e.key === 'Enter') {
-              e.preventDefault(); e.stopPropagation();
-              confirmarParcelas(parcelasIdx + 1);
-              return;
-            }
-            if (/^F\d+$/.test(e.key)) e.stopPropagation();
-          }}
-        >
-          <div className="bg-white border-4 max-w-xl w-full shadow-2xl" style={{ borderColor: NAVY_DARK }}>
-            <div className="px-5 py-4 text-white" style={{ background: NAVY_DARK }}>
-              <div className="text-xs font-black uppercase tracking-[0.3em] opacity-90">Cartão Crédito</div>
-              <div className="text-2xl font-black tracking-wide mt-0.5">Em quantas parcelas? · R$ {fmt(valorDevido)}</div>
-            </div>
-            <div className="p-6 space-y-4">
-              <div className="grid grid-cols-4 gap-2">
-                {Array.from({ length: 12 }, (_, i) => i + 1).map((n) => {
-                  const active = n - 1 === parcelasIdx;
-                  const valorParcela = Math.ceil(valorDevido * 100 / n) / 100;
-                  return (
-                    <button
-                      key={n}
-                      onClick={() => confirmarParcelas(n)}
-                      onMouseEnter={() => setParcelasIdx(n - 1)}
-                      className={`border-2 px-2 py-3 flex flex-col items-center gap-0.5 font-black uppercase tracking-wide ${active ? 'bg-yellow-100' : 'bg-white hover:bg-yellow-50'}`}
-                      style={{ borderColor: active ? NAVY_DARK : '#cbd5e1', color: NAVY_DARK, boxShadow: active ? `inset 0 0 0 2px ${NAVY_DARK}` : undefined }}
-                    >
-                      <span className="text-lg">{n}x</span>
-                      <span className="text-[10px] text-gray-600 tabular-nums normal-case">
-                        {n === 1 ? 'à vista' : `R$ ${fmt(valorParcela)}`}
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
-              <div className="text-xs text-gray-500 font-bold uppercase tracking-wider text-center">
-                ↑↓←→ navegar · Enter confirmar · Esc voltar
-              </div>
-            </div>
-          </div>
-        </div>
-        );
-      })()}
+      {parcelasModalOpen && (
+        <ParcelasModal
+          valorDevido={calcValorDevido(parseBRL(parcialValor), restante)}
+          onEscolher={confirmarParcelas}
+          onVoltar={() => setParcelasModalOpen(false)}
+        />
+      )}
 
       {/* Desconto (F6) — % ou R$ aplicado no total · Enter aplica · Esc cancela */}
       {discountModalOpen && (() => {
