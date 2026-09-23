@@ -46,9 +46,12 @@ export function useNotificacoes(setor: string | undefined | null, filial?: strin
       return;
     }
     setLoading(true);
+    // `lido` é de cada pessoa (migr. 619): a RLS de `notificacoes_lidas` só
+    // devolve as linhas de quem pergunta, então o embed vem vazio ou com uma.
+    // A coluna `notificacoes.lido` era do setor inteiro e ficou sem uso.
     let q = supabase
       .from('notificacoes')
-      .select('*')
+      .select('*, notificacoes_lidas(user_id)')
       .order('created_at', { ascending: false })
       .limit(50);
 
@@ -58,7 +61,12 @@ export function useNotificacoes(setor: string | undefined | null, filial?: strin
     if (filial) q = q.or(`filial.eq.${filial},filial.is.null`);
 
     const { data: rows, error } = await q;
-    if (!error && rows) setData(rows as Notificacao[]);
+    if (!error && rows) {
+      setData(rows.map(({ notificacoes_lidas, ...n }: any) => ({
+        ...n,
+        lido: (notificacoes_lidas?.length ?? 0) > 0,
+      })) as Notificacao[]);
+    }
     setLoading(false);
   }, [setor, filial]);
 
@@ -77,17 +85,21 @@ export function useNotificacoes(setor: string | undefined | null, filial?: strin
 
   const unreadCount = useMemo(() => data.filter(n => !n.lido).length, [data]);
 
-  const markRead = useCallback(async (id: string) => {
-    if (!supabase) return;
-    setData(prev => prev.map(n => n.id === id ? { ...n, lido: true } : n));
-    await supabase.rpc('marcar_notificacao_lida', { p_id: id });
+  // Marca só para quem clicou, e só o que está na tela (a lista já vem
+  // recortada por unidade). O antigo `marcar_todas_lidas` marcava por setor
+  // em todas as unidades — e, para CEO/conselheiro, a turma inteira.
+  const markIdsRead = useCallback(async (ids: string[]) => {
+    if (!supabase || ids.length === 0) return;
+    const alvo = new Set(ids);
+    setData(prev => prev.map(n => alvo.has(n.id) ? { ...n, lido: true } : n));
+    await supabase.rpc('marcar_notificacoes_lidas', { p_ids: ids });
   }, []);
 
-  const markAllRead = useCallback(async () => {
-    if (!supabase) return;
-    setData(prev => prev.map(n => ({ ...n, lido: true })));
-    await supabase.rpc('marcar_todas_lidas', { p_setor: setor ?? null });
-  }, [setor]);
+  const markRead = useCallback((id: string) => markIdsRead([id]), [markIdsRead]);
+
+  const markAllRead = useCallback((ids?: string[]) =>
+    markIdsRead(ids ?? data.filter(n => !n.lido).map(n => n.id)),
+  [markIdsRead, data]);
 
   return { data, isLoading, unreadCount, markRead, markAllRead, reload: load };
 }

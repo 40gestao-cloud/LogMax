@@ -8,35 +8,13 @@ import { useConfirm } from '../contexts/ConfirmContext';
 import { formatBRL } from '../lib/viewUtils';
 import { rotuloCondicao } from '../lib/condicaoPagamento';
 import { supabase } from '../lib/supabase';
+import { notificarSetor } from '../lib/notificar';
 import type { UserProfile } from '../hooks/useUserProfile';
 
 // View admin/CEO-only: simula o cliente decidindo sobre o orçamento.
 // Lista propostas com status='Enviado ao Cliente' (cliente ainda não decidiu),
 // permite aceitar/recusar em nome do cliente. Marca decidido_cliente_simulado=true
 // pra distinguir de uma decisão real, caso depois exista um portal externo.
-async function notificarSetor(args: {
-  setor: 'vendas';
-  tipo: 'aprovado' | 'reprovado';
-  titulo: string;
-  mensagem: string;
-  link_view?: string;
-  ref_id?: string;
-  motivo?: string;
-}) {
-  if (!supabase) return;
-  try {
-    await supabase.rpc('notificar_setor', {
-      p_setor:     args.setor,
-      p_tipo:      args.tipo,
-      p_titulo:    args.titulo,
-      p_mensagem:  args.mensagem,
-      p_link_view: args.link_view ?? null,
-      p_urgencia:  args.tipo === 'aprovado' ? 'Média' : 'Alta',
-      p_ref_id:    args.ref_id ?? null,
-      p_motivo:    args.motivo ?? null,
-    });
-  } catch { /* best-effort */ }
-}
 
 export const ClienteEspecialView = ({ showToast, profile }: { showToast: any; profile: UserProfile }) => {
   const isAdminOuCeo = profile.role === 'admin' || profile.role === 'ceo' || isConselheiro(profile);
@@ -124,25 +102,38 @@ export const ClienteEspecialView = ({ showToast, profile }: { showToast: any; pr
         decidido_cliente_simulado: true,
       };
       const falhas: string[] = [];
+      const aprovadas: any[] = [];
       // Em série: são poucas dezenas, e uma rajada de UPDATEs simultâneos pela
       // mesma sessão só rende erro de concorrência para economizar segundos.
       for (const o of selecionados) {
         try {
           await dbUpdate('/api/orcamentosview', o.id, carimbo);
+          aprovadas.push(o);
         } catch {
           falhas.push(o.cliente?.nome ?? o.id.slice(-6));
         }
       }
-      const idsOk = new Set(selecionados.map((o: any) => o.id));
+      const idsOk = new Set(aprovadas.map((o: any) => o.id));
       setData((prev: any[]) => prev.map(o => idsOk.has(o.id) ? { ...o, ...carimbo } : o));
 
-      await notificarSetor({
-        setor: 'vendas',
-        tipo: 'aprovado',
-        titulo: `Cliente aprovou ${selecionados.length} proposta(s) (simulado por ${profile.nome ?? 'admin/CEO'})`,
-        mensagem: `Total R$ ${formatBRL(totalMarcado)} — gere os pedidos em Vendas > Orçamentos.`,
-        link_view: 'vendas-orçamentos',
-      });
+      // Um aviso por unidade: a lista mistura filiais, e o Vendas de cada uma
+      // só deve ver as propostas dela (migr. 619).
+      const porFilial = new Map<string | null, any[]>();
+      for (const o of aprovadas) {
+        const k = o.filial ?? null;
+        porFilial.set(k, [...(porFilial.get(k) ?? []), o]);
+      }
+      for (const [filialDoc, lista] of porFilial) {
+        const total = lista.reduce((s, o) => s + Number(o.valor_total ?? 0), 0);
+        await notificarSetor({
+          setor: 'vendas',
+          tipo: 'aprovado',
+          titulo: `Cliente aprovou ${lista.length} proposta(s) (simulado por ${profile.nome ?? 'admin/CEO'})`,
+          mensagem: `Total R$ ${formatBRL(total)} — gere os pedidos em Vendas > Orçamentos.`,
+          link_view: 'vendas-orçamentos',
+          filial: filialDoc,
+        });
+      }
 
       setMarcados(new Set());
       showToast(
@@ -196,8 +187,10 @@ export const ClienteEspecialView = ({ showToast, profile }: { showToast: any; pr
                      : `Cliente reprovou a proposta (simulado por ${profile.nome ?? 'admin/CEO'})`,
         mensagem:  `${cli} — R$ ${formatBRL(Number(selecionado.valor_total ?? 0))}`,
         link_view: 'vendas-orçamentos',
+        urgencia:  tipoDecisao === 'aprovar' ? 'Média' : 'Alta',
         ref_id:    selecionado.id,
         motivo:    tipoDecisao === 'reprovar' ? feedback : undefined,
+        filial:    selecionado.filial ?? null,
       });
 
       showToast(

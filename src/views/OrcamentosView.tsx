@@ -19,34 +19,8 @@ import type { UserProfile } from '../hooks/useUserProfile';
 import { useConfirm } from '../contexts/ConfirmContext';
 import type { FilialOp } from '../components/FilialSelector';
 import { useFilial } from '../contexts/FilialContext';
+import { notificarSetor } from '../lib/notificar';
 
-// notificar_setor existe em 022_20260520_ti_e_notificacoes.sql; usado em CotacoesView também.
-async function notificarSetor(args: {
-  setor: 'vendas' | 'financeiro';
-  tipo: 'aprovacao_pendente' | 'aprovado' | 'reprovado';
-  titulo: string;
-  mensagem?: string;
-  link_view?: string;
-  urgencia?: 'Baixa' | 'Média' | 'Alta';
-  ref_id?: string;
-  motivo?: string;
-}) {
-  if (!supabase) return;
-  try {
-    await supabase.rpc('notificar_setor', {
-      p_setor:     args.setor,
-      p_tipo:      args.tipo,
-      p_titulo:    args.titulo,
-      p_mensagem:  args.mensagem ?? null,
-      p_link_view: args.link_view ?? null,
-      p_urgencia:  args.urgencia ?? 'Média',
-      p_ref_id:    args.ref_id ?? null,
-      p_motivo:    args.motivo ?? null,
-    });
-  } catch {
-    // Best-effort; não bloqueia fluxo.
-  }
-}
 
 interface ItemOrcamento {
   produto_id: string;
@@ -426,6 +400,7 @@ const OrcamentosViewInner = ({
           link_view: 'financeiro-aprovaçõesdeorçamento',
           urgencia:  'Média',
           ref_id:    saved.id,
+          filial,
         });
         showToast('Proposta enviada ao Financeiro.', 'success', true);
       } else {
@@ -473,6 +448,7 @@ const OrcamentosViewInner = ({
         urgencia:  tipo === 'aprovar' ? 'Média' : 'Alta',
         ref_id:    orc.id,
         motivo:    tipo === 'reprovar' ? feedback : undefined,
+        filial:    orc.filial ?? filial,
       });
 
       showToast(tipo === 'aprovar' ? 'Proposta aprovada.' : 'Proposta reprovada.', 'success', true);

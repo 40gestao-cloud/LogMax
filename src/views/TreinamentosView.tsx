@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Plus, BookOpen, X, Edit2, Trash2, Users, Search, Check } from 'lucide-react';
 import { useFetchData, dbInsert, dbUpdate, dbDelete, dbSetStatus } from '../hooks/useSupabaseData';
 import { supabase } from '../lib/supabase';
+import { notificarSetor } from '../lib/notificar';
 import { LoadingSpinner, EmptyState, NeuButtonAccent } from '../components/ui';
 import { TreinamentoInscricoesModal } from '../components/TreinamentoInscricoesModal';
 import { useConfirm } from '../contexts/ConfirmContext';
@@ -154,14 +155,14 @@ const TreinamentosViewInner = ({ showToast, filial }: { showToast: any; filial: 
         porSetor.set(p.setor, arr);
       });
       await Promise.all(Array.from(porSetor.entries()).map(([setor, nomes]) =>
-        supabase!.rpc('notificar_setor', {
-          p_setor:     setor,
-          p_tipo:      'treinamento_atribuido',
-          p_titulo:    `Treinamento: ${treinamento.nome}`,
-          p_mensagem:  `Colaborador(es) do seu setor inscrito(s): ${nomes.join(', ')}. Avise sua equipe.`,
-          p_link_view: 'rh-treinamentos',
-          p_urgencia:  'Média',
-          p_ref_id:    treinamento.id,
+        notificarSetor({
+          setor,
+          tipo:      'treinamento_atribuido',
+          titulo:    `Treinamento: ${treinamento.nome}`,
+          mensagem:  `Colaborador(es) do seu setor inscrito(s): ${nomes.join(', ')}. Avise sua equipe.`,
+          link_view: 'rh-treinamentos',
+          ref_id:    treinamento.id,
+          filial,
         }),
       ));
     } catch (err) {

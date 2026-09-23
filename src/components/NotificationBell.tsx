@@ -160,7 +160,7 @@ export const NotificationBell = ({ setor, filterSetor, filial, onNavigate }: Pro
               </div>
               {badgeCount > 0 && (
                 <button
-                  onClick={() => markAllRead()}
+                  onClick={() => markAllRead(visible.filter(n => !n.lido).map(n => n.id))}
                   className="text-[10px] font-bold text-accent hover:text-accent/80 uppercase tracking-widest"
                 >
                   Marcar todas

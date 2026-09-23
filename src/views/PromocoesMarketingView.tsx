@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Plus, X, Clock, CheckCircle2, XCircle, Archive, FileDown, Sheet, Trash2, ImagePlus, ExternalLink, Send, Edit3, Sparkles, Copy, Loader2, Search, Maximize2, Presentation, ChevronDown } from 'lucide-react';
 import { useFetchData, dbInsert, dbDelete } from '../hooks/useSupabaseData';
 import { supabase } from '../lib/supabase';
+import { notificarSetor } from '../lib/notificar';
 import { freshToken, lerJsonDaApi } from '../lib/authFetch';
 import { LoadingSpinner, EmptyState, NeuButtonAccent, ExportButton } from '../components/ui';
 import { exportToPDF, exportToExcel, formatBRL, parseBRL, handleMoneyKeyDown } from '../lib/viewUtils';
@@ -481,20 +482,20 @@ const PromocoesMarketingViewInner = ({ showToast, profile, filial }: { showToast
         saved = await dbInsert('/api/marketingartesview', payload);
         setArtes((prev: any[]) => [saved, ...prev]);
 
-        // Broadcast único: setor='all' é visível por todos via RLS.
+        // Broadcast único: setor='all' é visível por todos via RLS — mas só
+        // na unidade da promoção (migr. 619).
         // Falha silenciosa — a arte já foi publicada com sucesso.
         const titulo = `Nova arte: ${promocao.nome_produto ?? 'campanha'}`;
         const msg = `Marketing publicou a arte da promoção. Clique pra visualizar.`;
-        const { error: notifErr } = await supabase!.rpc('notificar_setor', {
-          p_setor:     'all',
-          p_tipo:      'info',
-          p_titulo:    titulo,
-          p_mensagem:  msg,
-          p_link_view: 'artes-promocionais',
-          p_urgencia:  'Média',
-          p_ref_id:    saved.id,
+        await notificarSetor({
+          setor:     'all',
+          tipo:      'info',
+          titulo,
+          mensagem:  msg,
+          link_view: 'artes-promocionais',
+          ref_id:    saved.id,
+          filial:    promocao.filial ?? filial,
         });
-        if (notifErr) console.warn('[notificar_setor]', notifErr.message);
         showToast('Arte publicada e setores notificados!', 'success');
       }
       closeArteModal();

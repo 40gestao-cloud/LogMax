@@ -8,6 +8,7 @@ import { HistoricoOperacoes } from '../components/HistoricoOperacoes';
 import { useFetchData, dbUpdate } from '../hooks/useSupabaseData';
 import { LoadingSpinner, EmptyState, StatusBadge, Pagination, SelecioneUnidade, FilaDeTrabalho } from '../components/ui';
 import { supabase } from '../lib/supabase';
+import { notificarSetor } from '../lib/notificar';
 import { numeroPedido } from '../lib/documentos';
 import { qtdBR } from '../lib/viewUtils';
 import { useConfirm } from '../contexts/ConfirmContext';
@@ -115,13 +116,15 @@ const PedidosViewInner = ({ showToast, profile, filial }: { showToast: any; prof
         const item = pedido.item_descricao ?? pedido.req?.item ?? '';
         const forn = fornecedores.find((f: any) => f.id === pedido.fornecedor_id)?.nome;
         const servico = ehServico(pedido);
-        const { error: notifErr } = await supabase.rpc('notificar_setor', {
-          p_setor:     'logistica',
-          p_tipo:      'info',
-          p_titulo:    servico
+        // Best-effort: o pedido já avançou, e falha de notificação não pode
+        // desfazer isso nem travar a tela.
+        await notificarSetor({
+          setor:     'logistica',
+          tipo:      'info',
+          titulo:    servico
             ? `Serviço contratado — ${numeroPedido(pedido)}`
             : `Carga a caminho — ${numeroPedido(pedido)}`,
-          p_mensagem:  [
+          mensagem:  [
             item ? `Item: ${item}.` : null,
             pedido.item_qtd ? `Qtd: ${qtdBR(pedido.item_qtd)}.` : null,
             forn ? `Fornecedor: ${forn}.` : null,
@@ -129,14 +132,10 @@ const PedidosViewInner = ({ showToast, profile, filial }: { showToast: any; prof
               ? 'Quando for executado, registre o aceite em Estoque > Recebimentos — nada entra no estoque.'
               : 'Registre a chegada em Estoque > Recebimentos.',
           ].filter(Boolean).join(' '),
-          p_link_view: 'estoque-recebimentos',
-          p_urgencia:  'Média',
-          p_ref_id:    pedido.id,
-          p_filial:    filial,
+          link_view: 'estoque-recebimentos',
+          ref_id:    pedido.id,
+          filial:    pedido.filial ?? filial,
         });
-        // Best-effort: o pedido já avançou, e falha de notificação não pode
-        // desfazer isso nem travar a tela.
-        if (notifErr) console.warn('[Pedidos] notificar_setor(logistica):', notifErr.message);
       }
 
       showToast(

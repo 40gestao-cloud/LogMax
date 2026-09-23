@@ -5,6 +5,7 @@ import { Sparkles, Loader2, Lock, Calendar, CheckCircle2, X, Edit3, History, Lis
 import { BotaoWhatsApp } from '../components/BotaoWhatsApp';
 import { montarMensagemWhats } from '../lib/whatsappShare';
 import { supabase } from '../lib/supabase';
+import { notificarSetor } from '../lib/notificar';
 import { freshToken } from '../lib/authFetch';
 import { LoadingSpinner, EmptyState, NeuButtonAccent } from '../components/ui';
 import { useConfirm } from '../contexts/ConfirmContext';
@@ -387,16 +388,17 @@ export const BriefingDiarioView = ({ showToast, profile }: any) => {
       const setoresAfetados = Array.from(new Set(aprovadas.map(a => a.modulo)));
       for (const s of setoresAfetados) {
         const qtd = aprovadas.filter(a => a.modulo === s).length;
-        const { error: notifErr } = await supabase.rpc('notificar_setor', {
-          p_setor:     s,
-          p_tipo:      'briefing_diario',
-          p_titulo:    `Nova pauta: ${qtd} tarefa(s) do briefing diário`,
-          p_mensagem:  `Confira no submenu Tarefas do módulo ${SETOR_LABEL[s]}.`,
-          p_link_view: `${s}-tarefas`,
-          p_urgencia:  'Média',
-          p_ref_id:    briefing.id,
+        // filial null de propósito: cada tarefa ganhou uma cópia por unidade
+        // (fanout acima), então o aviso é mesmo para todas.
+        await notificarSetor({
+          setor:     s,
+          tipo:      'briefing_diario',
+          titulo:    `Nova pauta: ${qtd} tarefa(s) do briefing diário`,
+          mensagem:  `Confira no submenu Tarefas do módulo ${SETOR_LABEL[s]}.`,
+          link_view: `${s}-tarefas`,
+          ref_id:    briefing.id,
+          filial:    null,
         });
-        if (notifErr) console.warn(`[Briefing] notificar_setor(${s}) falhou:`, notifErr.message);
       }
 
       setBriefing(updBriefing);

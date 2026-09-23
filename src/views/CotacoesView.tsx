@@ -12,6 +12,7 @@ import { groupCadastrosParaSelect } from '../lib/cadastrosSelect';
 import { numeroCotacao, numeroPedido, numeroRequisicao } from '../lib/documentos';
 import { ehContratado } from '../lib/naturezaServico';
 import { supabase } from '../lib/supabase';
+import { notificarSetor } from '../lib/notificar';
 import { acompanharReservas, RESERVA_COLUNAS, type ReservaLinha } from '../lib/reservasTrabalho';
 import { assinarRealtime } from '../lib/realtimeAgrupado';
 import { hasAnySetor, hasSetor, isConselheiro } from '../lib/rbac';
@@ -81,34 +82,6 @@ const precoUnitario = (total: number, qtd: number): string => {
 // material — e o ponto pedagógico é que a data nasce preenchida em vez de
 // virar campo em branco que ninguém entende para que serve.
 const VALIDADE_PADRAO_DIAS = 15;
-
-// notificar_setor: RPC já existente em 022_20260520_ti_e_notificacoes.sql.
-async function notificarSetor(args: {
-  setor: 'compras' | 'financeiro';
-  tipo: 'aprovacao_pendente' | 'aprovado' | 'reprovado';
-  titulo: string;
-  mensagem?: string;
-  link_view?: string;
-  urgencia?: 'Baixa' | 'Média' | 'Alta';
-  ref_id?: string;
-  motivo?: string;
-}) {
-  if (!supabase) return;
-  try {
-    await supabase.rpc('notificar_setor', {
-      p_setor:     args.setor,
-      p_tipo:      args.tipo,
-      p_titulo:    args.titulo,
-      p_mensagem:  args.mensagem ?? null,
-      p_link_view: args.link_view ?? null,
-      p_urgencia:  args.urgencia ?? 'Média',
-      p_ref_id:    args.ref_id ?? null,
-      p_motivo:    args.motivo ?? null,
-    });
-  } catch {
-    // Notificação é best-effort — não bloqueia o fluxo principal.
-  }
-}
 
 // Congela as opções de um <select> enquanto ele está aberto.
 //
@@ -896,6 +869,7 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode, onNavigate }: { s
         link_view: 'financeiro-aprovaçõesdecotação',
         urgencia:  'Média',
         ref_id:    (saved as any)?.id,
+        filial,
       });
     } catch (err: any) {
       const msg = err?.message ?? err?.error_description ?? String(err);
@@ -938,13 +912,14 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode, onNavigate }: { s
         const reqItem  = cot.req?.item ?? requisicoes.find((r: any) => r.id === cot.requisicao_id)?.item ?? 'cotação';
         const fornNome = cot.forn?.nome ?? fornecedores.find((f: any) => f.id === cot.fornecedor_id)?.nome ?? 'fornecedor';
         await notificarSetor({
-          setor:     'compras',
+          setor:     'logistica',
           tipo:      'reprovado',
           titulo:    'Cotação devolvida para correção',
           mensagem:  `${reqItem} — ${fornNome}`,
           link_view: 'compras-cotações',
           urgencia:  'Alta',
           ref_id:    cot.id,
+          filial:    cot.filial ?? filial,
           motivo:    feedback,
         });
 
@@ -992,11 +967,14 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode, onNavigate }: { s
         return c;
       });
 
-      // Notifica Compras.
+      // Notifica Compras — no setor 'logistica': nenhum perfil tem o setor
+      // 'compras'; o módulo pende da logística (SETOR_MODULES) e o Modo Aula
+      // concede os dois. Mandado a 'compras', o aviso fora da aula não chegava
+      // a ninguém.
       const reqItem = cot.req?.item ?? requisicoes.find((r: any) => r.id === cot.requisicao_id)?.item ?? 'cotação';
       const fornNome = cot.forn?.nome ?? fornecedores.find((f: any) => f.id === cot.fornecedor_id)?.nome ?? 'fornecedor';
       await notificarSetor({
-        setor:     'compras',
+        setor:     'logistica',
         tipo:      tipo === 'aprovar' ? 'aprovado' : 'reprovado',
         titulo:    tipo === 'aprovar'
                      ? 'Cotação aprovada pelo Financeiro'
@@ -1005,6 +983,7 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode, onNavigate }: { s
         link_view: 'compras-cotações',
         urgencia:  tipo === 'aprovar' ? 'Média' : 'Alta',
         ref_id:    cot.id,
+        filial:    cot.filial ?? filial,
         motivo:    tipo === 'reprovar' ? feedback : undefined,
       });
 
@@ -1281,6 +1260,7 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode, onNavigate }: { s
         link_view: 'financeiro-aprovaçõesdecotação',
         urgencia:  'Média',
         ref_id:    correcao.id,
+        filial:    correcao.filial ?? filial,
       });
 
       showToast('Cotação corrigida e reenviada — está de volta na fila do Financeiro.', 'success', true);
