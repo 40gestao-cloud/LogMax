@@ -15,7 +15,7 @@ import { QuantidadeEmbalagem, qtdEmEstoque } from '../components/QuantidadeEmbal
 import { ehPerecivel, validadeDias, vencimentoPrevisto, armazenagemDe, ARMAZENAGEM_ESTILO } from '../lib/perecivel';
 import { requerImei, ATRIBUTOS_PRODUTO } from '../lib/atributosProduto';
 import { gerarImeis } from '../lib/imei';
-import { proximoNumeroNf } from '../lib/notaFiscal';
+import { proximoNumeroNfDeMaior } from '../lib/notaFiscal';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import { useConfirm } from '../contexts/ConfirmContext';
 
@@ -129,19 +129,45 @@ const RecebimentosViewInner = ({ showToast, filial }: { showToast: any; filial: 
 
   const pedidosAtivos = pedidos.filter((p: any) => !['Cancelado', 'Recebido'].includes(p.status));
 
-  // Lista sem paginação só para os contadores: a tabela mostra 50 por vez e um
-  // "nada a fazer" calculado sobre a página 1 é pior que contador nenhum.
-  const { data: todosRecebimentos } = useFetchData<any>('/api/recebimentosview', { filial }, true);
-  const aguardandoConfirmacao = todosRecebimentos.filter((r: any) => r.status === 'Pendente').length;
+  // Resumo agregado — três números que a página de 50 linhas não sabe dizer:
+  // quantos estão esperando confirmação, o maior número de NF já gasto na
+  // unidade e quais pedidos já têm carga lançada por confirmar. Um "nada a
+  // fazer" calculado sobre a página 1 é pior que contador nenhum.
+  //
+  // Isto era uma SEGUNDA leitura de `recebimentos`, a tabela inteira sem
+  // paginação, ao lado da página. Com realtime na tela, cada escrita de
+  // qualquer aluno da sala fazia TODA máquina refazer as duas — 638 leituras
+  // para 93 escritas em 15 minutos de aula em 22/09, e o pool de 10 conexões
+  // do PostgREST cheio por oito minutos (`PGRST003`), com a sala inteira
+  // olhando tela pendurada. Agora é uma consulta agregada (RPC
+  // `resumo_recebimentos`, migr. 618) que não cresce com a tabela.
+  //
+  // Recarrega junto com a lista: `data` ganha identidade nova a cada leitura
+  // do `useFetchData`, inclusive as disparadas por realtime, então seguir
+  // `data` dispensa uma segunda assinatura — e mudança de status não muda o
+  // tamanho da lista, por isso aqui é `data` e não `data.length`.
+  const [resumo, setResumo] = useState<{
+    aguardando: number; maxNf: number; pedidosAConfirmar: Set<string>;
+  }>({ aguardando: 0, maxNf: 0, pedidosAConfirmar: new Set() });
+  const reloadResumo = useCallback(async () => {
+    if (!supabase) return;
+    const { data: r, error } = await supabase.rpc('resumo_recebimentos', { p_filial: filial });
+    if (error) {
+      // RPC ausente (migração 618 pendente) — degrada para contador zerado e
+      // botão "Gerar" começando em 000000001, do mesmo jeito que unidade nova.
+      console.warn('[Recebimentos] resumo indisponível:', error.message);
+      return;
+    }
+    setResumo({
+      aguardando: Number(r?.aguardando_confirmacao ?? 0),
+      maxNf: Number(r?.max_nf ?? 0),
+      pedidosAConfirmar: new Set<string>(
+        Array.isArray(r?.pedidos_a_confirmar) ? r.pedidos_a_confirmar.map(String) : []),
+    });
+  }, [filial]);
+  useEffect(() => { reloadResumo(); }, [reloadResumo, data]);
 
-  // Fonte do botão "Gerar" do número de NF, nos três formulários que o
-  // digitam (Registrar, Confirmar, Nota pendente). `todosRecebimentos` já vem
-  // sem paginação e filtrado pela filial — é a mesma numeração que não pode
-  // repetir dentro dela.
-  const numerosNfExistentes = useMemo(
-    () => todosRecebimentos.map((r: any) => r.nf_numero).filter(Boolean),
-    [todosRecebimentos],
-  );
+  const aguardandoConfirmacao = resumo.aguardando;
 
   // Devoluções ao fornecedor por recebimento (migr. 423). Guarda quanto já
   // saiu de volta, para o teto do formulário e para o selo na linha.
@@ -668,8 +694,7 @@ const RecebimentosViewInner = ({ showToast, filial }: { showToast: any; filial: 
                   // procura da linha que sumiu. A carga inteira já foi lançada:
                   // o que falta é confirmar a entrada na tabela abaixo, e é
                   // isso que a opção cinza passa a dizer.
-                  const pendenteDeConfirmar = esgotado && todosRecebimentos.some(
-                    (r: any) => r.pedido_id === p.id && r.status === 'Pendente');
+                  const pendenteDeConfirmar = esgotado && resumo.pedidosAConfirmar.has(String(p.id));
                   // Serviço na mesma lista, marcado (migr. 499): quem abre esta
                   // tela procura "o que chegou", e contratação não chega em
                   // caixa. O selo evita o susto de não achar a dedetização.
@@ -711,7 +736,7 @@ const RecebimentosViewInner = ({ showToast, filial }: { showToast: any; filial: 
                         nesta filial e sugere o próximo. Mesma régua do Gerar
                         de código em Cadastros > Produtos. */}
                     <button type="button"
-                      onClick={() => setExtras(x => ({ ...x, nf_numero: proximoNumeroNf(numerosNfExistentes) }))}
+                      onClick={() => setExtras(x => ({ ...x, nf_numero: proximoNumeroNfDeMaior(resumo.maxNf) }))}
                       className="neu-button py-2 px-3 rounded-xl text-[11px] font-bold text-gray-400 hover:text-accent shrink-0">
                       Gerar
                     </button>
@@ -1053,7 +1078,7 @@ const RecebimentosViewInner = ({ showToast, filial }: { showToast: any; filial: 
                                       onChange={e => setConfirmNf(n => ({ ...n, numero: e.target.value }))}
                                       placeholder="Número" />
                                     <button type="button"
-                                      onClick={() => setConfirmNf(n => ({ ...n, numero: proximoNumeroNf(numerosNfExistentes) }))}
+                                      onClick={() => setConfirmNf(n => ({ ...n, numero: proximoNumeroNfDeMaior(resumo.maxNf) }))}
                                       title="Sugerir o próximo número desta filial"
                                       className="neu-button py-2 px-3 rounded-xl text-[11px] font-bold text-gray-400 hover:text-accent shrink-0">
                                       Gerar
@@ -1210,7 +1235,7 @@ const RecebimentosViewInner = ({ showToast, filial }: { showToast: any; filial: 
                         onChange={e => setNotaForm(n => ({ ...n, numero: e.target.value }))}
                         placeholder="Ex.: 000123456" />
                       <button type="button"
-                        onClick={() => setNotaForm(n => ({ ...n, numero: proximoNumeroNf(numerosNfExistentes) }))}
+                        onClick={() => setNotaForm(n => ({ ...n, numero: proximoNumeroNfDeMaior(resumo.maxNf) }))}
                         className="neu-button py-2 px-3 rounded-xl text-[11px] font-bold text-gray-400 hover:text-accent shrink-0">
                         Gerar
                       </button>

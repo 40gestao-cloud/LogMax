@@ -1,30 +1,35 @@
 import { describe, it, expect } from 'vitest';
-import { proximoNumeroNf } from '../src/lib/notaFiscal';
+import { proximoNumeroNfDeMaior } from '../src/lib/notaFiscal';
 
-describe('proximoNumeroNf', () => {
-  it('começa em 000000001 quando não há nenhuma nota ainda', () => {
-    expect(proximoNumeroNf([])).toBe('000000001');
+// O que este arquivo cobre encolheu de propósito. A extração de dígitos e a
+// busca do maior número passaram para o banco (RPC `resumo_recebimentos`,
+// migr. 618) — o navegador não traz mais a lista de NFs da unidade só para
+// reduzi-la a um máximo. O que sobra aqui é o que ainda é decisão do front:
+// somar 1 e vestir o padding, e não quebrar com o que o banco devolve de ruim.
+describe('proximoNumeroNfDeMaior', () => {
+  it('começa em 000000001 quando a unidade não emitiu nota nenhuma', () => {
+    // 0 é o que a RPC devolve nesse caso (coalesce(max(...), 0)).
+    expect(proximoNumeroNfDeMaior(0)).toBe('000000001');
   });
 
   it('é o maior existente + 1, não a contagem de linhas', () => {
-    // Buraco proposital: 3 números, mas o maior é 000000010.
-    expect(proximoNumeroNf(['000000001', '000000010', '000000003'])).toBe('000000011');
-  });
-
-  it('ignora lixo sem dígito nenhum, sem travar a conta', () => {
-    expect(proximoNumeroNf(['abc', '', null, undefined, '000000050'])).toBe('000000051');
-  });
-
-  it('extrai dígitos de texto digitado com formatação', () => {
-    // '000.123' vira '000123' pelo replace(/\D/g, '') — dígitos importam, pontuação não.
-    expect(proximoNumeroNf(['000.123'])).toBe('000000124');
+    expect(proximoNumeroNfDeMaior(10)).toBe('000000011');
   });
 
   it('não estoura o padding com número grande', () => {
-    expect(proximoNumeroNf(['999999998'])).toBe('999999999');
+    expect(proximoNumeroNfDeMaior(999999998)).toBe('999999999');
   });
 
-  it('só o maior número vale, mesmo repetido ou fora de ordem', () => {
-    expect(proximoNumeroNf(['000000005', '000000005', '000000002'])).toBe('000000006');
+  it('trata ausência e lixo como zero, sem travar o botão Gerar', () => {
+    // RPC fora do ar, campo faltando no jsonb, resposta antiga sem a chave.
+    expect(proximoNumeroNfDeMaior(null)).toBe('000000001');
+    expect(proximoNumeroNfDeMaior(undefined)).toBe('000000001');
+    expect(proximoNumeroNfDeMaior(NaN)).toBe('000000001');
+    expect(proximoNumeroNfDeMaior(-5)).toBe('000000001');
+  });
+
+  it('corta a fração em vez de arredondar para cima', () => {
+    // Não deveria chegar fracionário, mas se chegar, 7,9 não pode virar 9.
+    expect(proximoNumeroNfDeMaior(7.9)).toBe('000000008');
   });
 });
