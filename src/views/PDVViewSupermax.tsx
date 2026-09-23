@@ -27,6 +27,8 @@ import { trapTab, devolverTabAoPdv } from '../lib/focoPdv';
 // Quantidade na tela: 2 e não "2,000"; 0,350 mantém o peso.
 import { fmtQtdArmada as fmtQtd } from '../lib/pdv/quantidade';
 import { montarVendaPdv } from '../lib/pdv/venda';
+import { cancelarAguardandoAntigas, inserirPixPendente, inserirCartaoPendente, cancelarCobranca } from '../lib/pdv/cobranca';
+import { usePagamentoPendente } from '../hooks/usePagamentoPendente';
 import {
   totaisComDesconto, restanteAPagar, valorDevido as calcValorDevido, mistoAtivo, trocoDoRecebido,
   valorEditado, formaDoMisto, trocoTotal, dinheiroNaGaveta as calcDinheiroNaGaveta,
@@ -186,7 +188,6 @@ export const PDVViewSupermax = ({
   // do overlay (sintoma: PIX pago no banco mas sem venda no LogMax).
   const [pixError, setPixError] = useState<string | null>(null);
   const [pixProcessing, setPixProcessing] = useState(false);
-  const pixHandledRef = useRef(false);
 
   // Consulta de preço (F7) — read-only, não adiciona ao carrinho.
   const [priceQueryOpen, setPriceQueryOpen] = useState(false);
@@ -1410,30 +1411,11 @@ export const PDVViewSupermax = ({
         setIsClosing(true);
         // Cancela pendentes 'aguardando' antigos do mesmo operador (> 30s)
         // para evitar que MaxPay/MaxBank confunda com cobrança nova.
-        if (user?.id) {
-          const cutoff = new Date(Date.now() - 30_000).toISOString();
-          await supabase
-            .from('pix_pendentes')
-            .update({ status: 'cancelado' })
-            .eq('operador_id', user.id)
-            .eq('status', 'aguardando')
-            .lt('created_at', cutoff);
-        }
-        const { data: pendente, error: insErr } = await supabase
-          .from('pix_pendentes')
-          .insert({
-            valor:       totalFinal,
-            cliente_id:  null,
-            status:      'aguardando',
-            operador_id: user?.id ?? null,
-            // Filial do CAIXA, não a do perfil — admin opera pelo hub com
-            // perfil 'Matriz', que não vende (migr. 414).
-            filial,
-          })
-          .select('id, valor')
-          .single();
-        if (insErr || !pendente) throw new Error(insErr?.message ?? 'Falha ao gerar Pix.');
-        setPixModal({ id: pendente.id, valor: Number(pendente.valor) });
+        await cancelarAguardandoAntigas('pix_pendentes', user?.id);
+        const pendente = await inserirPixPendente({
+          valor: totalFinal, clienteId: null, operadorId: user?.id ?? null, filial,
+        });
+        setPixModal(pendente);
       } catch (err: any) {
         showToast?.(`Erro PIX: ${err?.message ?? '—'}`, 'error', true);
       } finally {
@@ -1493,35 +1475,11 @@ export const PDVViewSupermax = ({
       }
       setIsClosing(true);
       // Cancela pendentes antigos do mesmo operador (> 30s)
-      if (user?.id) {
-        const cutoff = new Date(Date.now() - 30_000).toISOString();
-        await supabase
-          .from('cartao_pendentes')
-          .update({ status: 'cancelado' })
-          .eq('operador_id', user.id)
-          .eq('status', 'aguardando')
-          .lt('created_at', cutoff);
-      }
-      const { data: pendente, error: insErr } = await supabase
-        .from('cartao_pendentes')
-        .insert({
-          valor,
-          metodo,
-          parcelas,
-          status: 'aguardando',
-          operador_id: user?.id ?? null,
-          filial,
-        })
-        .select('id, valor, metodo, parcelas')
-        .single();
-      if (insErr || !pendente) throw new Error(insErr?.message ?? 'Falha ao criar cobrança.');
-      setCartaoModal({
-        id: pendente.id,
-        valor: Number(pendente.valor),
-        metodo: pendente.metodo,
-        parcelas: pendente.parcelas,
-        destino,
+      await cancelarAguardandoAntigas('cartao_pendentes', user?.id);
+      const pendente = await inserirCartaoPendente({
+        valor, metodo, parcelas, operadorId: user?.id ?? null, filial,
       });
+      setCartaoModal({ ...pendente, destino });
     } catch (err: any) {
       showToast?.(`Erro Cartão: ${err?.message ?? '—'}`, 'error', true);
     } finally {
@@ -1642,16 +1600,16 @@ export const PDVViewSupermax = ({
 
   // Reseta estado de erro/processamento sempre que abre/troca pix_modal
   useEffect(() => {
-    pixHandledRef.current = false;
     setPixError(null);
     setPixProcessing(false);
   }, [pixModal?.id]);
 
-  // Registra a venda quando o pix vira 'pago'. Idempotente: pode ser chamado
-  // pelo realtime, polling ou botão "Tentar Novamente" — só dispara uma vez
-  // por sessão de pixModal, e libera retry quando o RPC falha.
-  const processarPagamentoPix = useCallback(async () => {
-    if (!pixModal) return;
+  // Registra a venda quando o pix vira 'pago'. Chamado pelo realtime/polling
+  // (via `usePagamentoPendente`, uma vez por aviso) ou pelo botão "Tentar
+  // Novamente". Devolve `false` na falha: a espera solta a trava e o próximo
+  // polling tenta de novo sozinho.
+  const processarPagamentoPix = useCallback(async (): Promise<boolean> => {
+    if (!pixModal) return true;
     setPixError(null);
     setPixProcessing(true);
     try {
@@ -1662,9 +1620,10 @@ export const PDVViewSupermax = ({
       await finalizarVendaRef.current('PIX');
       setPixModal(null);
       setReciboModalOpen(true);
+      return true;
     } catch (err: any) {
       setPixError(err?.message ?? String(err));
-      pixHandledRef.current = false; // permite retry manual ou novo trigger
+      return false;
     } finally {
       setPixProcessing(false);
     }
@@ -1672,46 +1631,16 @@ export const PDVViewSupermax = ({
   }, [pixModal, filial]);
 
   // PIX realtime + polling — finaliza venda quando MaxBank/MaxPay confirma
-  useEffect(() => {
-    if (!pixModal || !supabase) return;
-
-    const tryProcess = () => {
-      if (pixHandledRef.current) return;
-      pixHandledRef.current = true;
-      processarPagamentoPix();
-    };
-
-    const channel = supabase
-      .channel(`smx_pix_${pixModal.id}`)
-      .on(
-        'postgres_changes',
-        { event: 'UPDATE', schema: 'public', table: 'pix_pendentes', filter: `id=eq.${pixModal.id}` },
-        (payload: any) => { if (payload?.new?.status === 'pago') tryProcess(); }
-      )
-      .subscribe();
-
-    const timer = setInterval(async () => {
-      if (pixHandledRef.current) return;
-      const { data } = await supabase
-        .from('pix_pendentes')
-        .select('status')
-        .eq('id', pixModal.id)
-        .maybeSingle();
-      if (data?.status === 'pago') tryProcess();
-    }, 2000);
-
-    return () => { supabase.removeChannel(channel); clearInterval(timer); };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pixModal]);
+  usePagamentoPendente(
+    pixModal && { tabela: 'pix_pendentes', id: pixModal.id, canal: `smx_pix_${pixModal.id}` },
+    processarPagamentoPix,
+  );
 
   // Cartão (maquininha) realtime + polling — finaliza venda quando MaxBank autoriza
-  useEffect(() => {
-    if (!cartaoModal || !supabase) return;
-    let handled = false;
-
-    const onAutorizado = async () => {
-      if (handled) return;
-      handled = true;
+  usePagamentoPendente(
+    cartaoModal && { tabela: 'cartao_pendentes', id: cartaoModal.id, canal: `smx_cartao_${cartaoModal.id}` },
+    async () => {
+      if (!cartaoModal) return;
       const aberto = await caixaAindaAberto();
       if (!aberto) {
         showToast?.(`Cartão autorizado mas caixa de ${filial} foi fechado.`, 'error', true);
@@ -1745,30 +1674,8 @@ export const PDVViewSupermax = ({
         showToast?.(`Autorizado mas falhou venda: ${err?.message ?? '—'}`, 'error', true);
         setCartaoModal(null);
       }
-    };
-
-    const channel = supabase
-      .channel(`smx_cartao_${cartaoModal.id}`)
-      .on(
-        'postgres_changes',
-        { event: 'UPDATE', schema: 'public', table: 'cartao_pendentes', filter: `id=eq.${cartaoModal.id}` },
-        (payload: any) => { if (payload?.new?.status === 'autorizado') onAutorizado(); }
-      )
-      .subscribe();
-
-    const timer = setInterval(async () => {
-      if (handled) return;
-      const { data } = await supabase
-        .from('cartao_pendentes')
-        .select('status')
-        .eq('id', cartaoModal.id)
-        .maybeSingle();
-      if (data?.status === 'autorizado') onAutorizado();
-    }, 2000);
-
-    return () => { handled = true; supabase.removeChannel(channel); clearInterval(timer); };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cartaoModal]);
+    },
+  );
 
   // Confirma cancelamento — UPDATE pode falhar (rede caiu, RLS rejeitou). Sem
   // try/catch, modal fechava e pix_pendentes ficava 'aguardando' eternamente.
@@ -1872,10 +1779,7 @@ export const PDVViewSupermax = ({
     }
     const pixId = pixModal.id;
     try {
-      const { error } = await supabase
-        .from('pix_pendentes')
-        .update({ status: 'cancelado' })
-        .eq('id', pixId);
+      const error = await cancelarCobranca('pix_pendentes', pixId);
       if (error) throw error;
     } catch (err: any) {
       showToast?.(`Falha ao cancelar PIX (${err?.message ?? '—'}). Verifique em pix_pendentes.`, 'error', true);
@@ -1896,10 +1800,7 @@ export const PDVViewSupermax = ({
     // venda pela metade — o operador volta pro modal com o que já lançou.
     const voltaProMisto = cartaoModal.destino === 'linha';
     try {
-      const { error } = await supabase
-        .from('cartao_pendentes')
-        .update({ status: 'cancelado' })
-        .eq('id', cartaoId);
+      const error = await cancelarCobranca('cartao_pendentes', cartaoId);
       if (error) throw error;
     } catch (err: any) {
       showToast?.(`Falha ao cancelar cartão (${err?.message ?? '—'}).`, 'error', true);

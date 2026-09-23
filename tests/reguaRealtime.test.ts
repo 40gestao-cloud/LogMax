@@ -36,10 +36,8 @@ const FORA_DA_REGUA: Record<string, string> = {
     'idem: aplica o payload de blackout_config, uma linha.',
   'hooks/useComandoRecarga.ts':
     'lê o comando do payload para decidir se recarrega a PWA. Atrasar aqui atrasaria a recarga que o professor pediu.',
-  'views/PDVView.tsx':
-    'espera a confirmação de UM Pix/cartão do próprio caixa e reage ao payload. A janela da régua atrasaria o pagamento com o cliente na frente.',
-  'views/PDVViewSupermax.tsx':
-    'idem PDVView: confirmação de pagamento do próprio caixa.',
+  'lib/pdv/cobranca.ts':
+    'espera a confirmação de UM Pix/cartão do próprio caixa (os dois PDVs) e reage ao payload. A janela da régua atrasaria o pagamento com o cliente na frente.',
 
   // ── Janela própria, mais fina que a da régua ──
   'lib/reservasTrabalho.ts':

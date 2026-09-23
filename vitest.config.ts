@@ -35,6 +35,9 @@ const ESTATICOS = [
   'tests/notaFiscal.test.ts',
   'tests/orcamentoFases.test.ts',
   'tests/perecivel.test.ts',
+  // Puros: lógica do PDV em src/lib/pdv, com Supabase de mentira na cobrança.
+  'tests/pdvCobranca.test.ts',
+  'tests/pdvLogica.test.ts',
   'tests/precificacao.test.ts',
   'tests/produtoBusca.test.ts',
   'tests/realtimeAgrupado.test.ts',

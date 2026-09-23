@@ -1,6 +1,6 @@
 # Plano — dividir as telas grandes (PDV e Produtos)
 
-Escrito em 2026-09-23. **Etapa 1 feita em 2026-09-23** (ver abaixo); as demais não foram executadas. Cada etapa é entregável sozinha e **não muda comportamento**.
+Escrito em 2026-09-23. **Etapas 1 e 2 feitas em 2026-09-23** (ver abaixo); as demais não foram executadas. Cada etapa é entregável sozinha e **não muda comportamento**.
 
 ## O que a medição mostrou
 
@@ -56,6 +56,31 @@ Resultado: `PDVViewSupermax` com 4.672 linhas e `PDVView` com 3.206.
 A espera do Pix ou do cartão (polling, realtime, cancelar com confirmação, `onAutorizado`) existe nos dois PDVs. Ela vira um hook só e os dois passam a usá-lo. É o trecho em que um defeito custa mais caro, porque envolve cobrança na MaxPay e casamento por valor, então é o que mais ganha com ter uma versão só.
 
 Precisa do ambiente de teste do pré-requisito.
+
+**Código feito (2026-09-23). O roteiro de cliques ainda falta.**
+- `src/lib/pdv/cobranca.ts` reúne:
+  - `aguardarCobranca`: realtime + polling de 2s, que dispara uma vez;
+  - `inserirPixPendente` e `inserirCartaoPendente`;
+  - `cancelarAguardandoAntigas` e `cancelarCobranca`.
+- `src/hooks/usePagamentoPendente.ts` liga a espera ao ciclo de vida da tela.
+- Os dois PDVs usam as duas peças nas quatro esperas (Pix e cartão em cada um). A reação à confirmação continua em cada PDV, porque hoje é diferente:
+  - a SuperMax confere o caixa e tenta de novo o Pix que falhou;
+  - os nichos abrem o modal de falha pós-pagamento.
+- Testes em `tests/pdvCobranca.test.ts` (12 casos, com Supabase falso). O caso central: realtime e polling juntos disparam UMA vez.
+
+O que mudou de comportamento, tudo de propósito e pequeno:
+1. Depois que a espera para (modal fechado), um polling que ainda estava a caminho não dispara mais. O Pix da SuperMax não tinha essa trava.
+2. O texto de erro do cartão da SuperMax, quando o insert não devolve nem linha nem erro, passou a ser o dos nichos.
+
+O que continua divergente e é decisão da etapa 5:
+- O Pix dos nichos não cancela as pendentes antigas do operador antes de criar outra. A SuperMax cancela. Como a MaxPay casa por valor, uma pendente velha com o mesmo valor pode ser confirmada no lugar da nova.
+- Cancelar Pix ou cartão pede confirmação na SuperMax, e nos nichos não.
+
+**Antes do deploy:** rodar o roteiro do pré-requisito, com os mesmos cliques nos dois PDVs:
+- Pix pago; Pix cancelado;
+- débito; crédito 3x;
+- na SuperMax, cartão dentro do misto;
+- Pix pago com o caixa fechado no meio: tem de aparecer "Tentar Novamente" e, reaberto o caixa, a venda sai sozinha.
 
 ### 3. Modais do `PDVViewSupermax` para `src/components/pdv/` (risco baixo por modal)
 Da linha 2.454 em diante, cada modal vira um componente com props explícitas. Ordem sugerida, dos puramente de leitura para os que gravam:

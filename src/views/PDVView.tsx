@@ -33,6 +33,8 @@ import { trapTab, devolverTabAoPdv } from '../lib/focoPdv';
 import { isProdutoFracionario, fmtQtdArmada, formatQtd } from '../lib/pdv/quantidade';
 import { podeAlternarFilial, podeDevolver, formasDaUnidade, rotuloFiado } from '../lib/pdv/regrasUnidade';
 import { montarVendaPdv } from '../lib/pdv/venda';
+import { cancelarAguardandoAntigas, inserirPixPendente, inserirCartaoPendente, cancelarCobranca } from '../lib/pdv/cobranca';
+import { usePagamentoPendente } from '../hooks/usePagamentoPendente';
 
 // Unidades operacionais do PDV. Matriz é administrativa, não vende — fica fora.
 // Cada filial tem caixa próprio em `controle_caixa`; PDV só opera com o caixa
@@ -1089,28 +1091,14 @@ const PDVViewInner = ({ showToast, profile, filialInicial, onVoltar }: {
         const metodo: 'debito' | 'credito' = formaPagamento === 'Cartão Débito' ? 'debito' : 'credito';
         const parcelasEfetivas = metodo === 'credito' ? parcelas : 1;
         // Cancela pendentes antigos do mesmo operador (>30s) — evita QR fantasma
-        if (user?.id) {
-          const cutoff = new Date(Date.now() - 30_000).toISOString();
-          await supabase
-            .from('cartao_pendentes')
-            .update({ status: 'cancelado' })
-            .eq('operador_id', user.id)
-            .eq('status', 'aguardando')
-            .lt('created_at', cutoff);
-        }
-        const { data: pendente, error: insErr } = await supabase
-          .from('cartao_pendentes')
-          .insert({
-            valor:       totalFinal,
-            metodo,
-            parcelas:    parcelasEfetivas,
-            status:      'aguardando',
-            operador_id: user?.id ?? null,
-            filial:      filialFiltro,
-          })
-          .select('id, valor, metodo, parcelas')
-          .single();
-        if (insErr || !pendente) throw new Error(insErr?.message ?? 'Falha ao criar cobrança de cartão.');
+        await cancelarAguardandoAntigas('cartao_pendentes', user?.id);
+        const pendente = await inserirCartaoPendente({
+          valor:      totalFinal,
+          metodo,
+          parcelas:   parcelasEfetivas,
+          operadorId: user?.id ?? null,
+          filial:     filialFiltro,
+        });
 
         vendaSnapshotRef.current = {
           cart: [...cart],
@@ -1121,32 +1109,19 @@ const PDVViewInner = ({ showToast, profile, filialInicial, onVoltar }: {
           cupomCodigo:   cupomAplicado?.codigo ?? null,
           cupomDesconto: cupomDesconto,
         };
-        setCartaoModal({
-          id:       pendente.id,
-          valor:    Number(pendente.valor),
-          metodo:   pendente.metodo,
-          parcelas: pendente.parcelas,
-        });
+        setCartaoModal(pendente);
         return;
       }
 
       // Fluxo Pix: cria pendente, mostra QR e aguarda confirmação do simulador
       // via realtime. A venda só é persistida no RPC quando o cliente confirma.
       if (formaPagamento === 'PIX') {
-        const { data: pendente, error: insErr } = await supabase
-          .from('pix_pendentes')
-          .insert({
-            valor: totalFinal,
-            cliente_id: clienteId || null,
-            status: 'aguardando',
-            operador_id: user?.id ?? null,
-            // Filial do CAIXA aberto, não a do perfil — admin/CEO operam esta
-            // unidade pelo hub com perfil 'Matriz' (migr. 414).
-            filial: filialFiltro,
-          })
-          .select('id, valor')
-          .single();
-        if (insErr || !pendente) throw new Error(insErr?.message ?? 'Falha ao gerar Pix.');
+        const pendente = await inserirPixPendente({
+          valor:      totalFinal,
+          clienteId:  clienteId || null,
+          operadorId: user?.id ?? null,
+          filial:     filialFiltro,
+        });
 
         vendaSnapshotRef.current = {
           cart: [...cart],
@@ -1157,7 +1132,7 @@ const PDVViewInner = ({ showToast, profile, filialInicial, onVoltar }: {
           cupomCodigo:   cupomAplicado?.codigo ?? null,
           cupomDesconto: cupomDesconto,
         };
-        setPixPendente({ id: pendente.id, valor: Number(pendente.valor) });
+        setPixPendente(pendente);
         // isClosing fica true enquanto o overlay está aberto (botão "Fechar Venda" desabilitado)
         return;
       }
@@ -1211,14 +1186,11 @@ const PDVViewInner = ({ showToast, profile, filialInicial, onVoltar }: {
     }
   };
 
-  // Realtime + polling 2s: escuta a linha do pendente Pix.
-  useEffect(() => {
-    if (!pixPendente || !supabase) return;
-    let handled = false;
-
-    const onPago = async () => {
-      if (handled) return;
-      handled = true;
+  // Pix confirmado no MaxBank: grava a venda com o carrinho congelado na
+  // geração do QR. Realtime + polling em `usePagamentoPendente`.
+  usePagamentoPendente(
+    pixPendente && { tabela: 'pix_pendentes', id: pixPendente.id, canal: `pix_pendente_${pixPendente.id}` },
+    async () => {
       const snap = vendaSnapshotRef.current;
       if (!snap) return;
       try {
@@ -1237,52 +1209,24 @@ const PDVViewInner = ({ showToast, profile, filialInicial, onVoltar }: {
         setPixPendente(null);
         setIsClosing(false);
       }
-    };
-
-    const channel = supabase
-      .channel(`pix_pendente_${pixPendente.id}`)
-      .on(
-        'postgres_changes',
-        { event: 'UPDATE', schema: 'public', table: 'pix_pendentes', filter: `id=eq.${pixPendente.id}` },
-        (payload: any) => { if (payload?.new?.status === 'pago') onPago(); },
-      )
-      .subscribe();
-
-    const timer = setInterval(async () => {
-      if (handled) return;
-      const { data } = await supabase
-        .from('pix_pendentes')
-        .select('status')
-        .eq('id', pixPendente.id)
-        .maybeSingle();
-      if (data?.status === 'pago') onPago();
-    }, 2000);
-
-    return () => { handled = true; supabase.removeChannel(channel); clearInterval(timer); };
-  }, [pixPendente, showToast]);
+    },
+  );
 
   const cancelarPix = async () => {
     if (!pixPendente || !supabase) return;
     // Tenta marcar como cancelado; ignora erro porque o desfecho local é o mesmo.
-    await supabase.from('pix_pendentes')
-      .update({ status: 'cancelado' })
-      .eq('id', pixPendente.id);
+    await cancelarCobranca('pix_pendentes', pixPendente.id);
     vendaSnapshotRef.current = null;
     setPixPendente(null);
     setIsClosing(false);
   };
 
-  // Realtime + polling 2s: pendente de cartão. Quando MaxBank autoriza,
-  // finaliza venda via criar_venda_pdv com o snapshot capturado. Mesmo
-  // padrão do PDVViewSupermax (redundância realtime+polling porque WS às
-  // vezes atrasa em plans free do Supabase).
-  useEffect(() => {
-    if (!cartaoModal || !supabase) return;
-    let handled = false;
-
-    const onAutorizado = async () => {
-      if (handled) return;
-      handled = true;
+  // Cartão autorizado no MaxBank: grava a venda com o snapshot capturado.
+  // Realtime + polling em `usePagamentoPendente`, o mesmo do PDVViewSupermax.
+  usePagamentoPendente(
+    cartaoModal && { tabela: 'cartao_pendentes', id: cartaoModal.id, canal: `cartao_pendente_${cartaoModal.id}` },
+    async () => {
+      if (!cartaoModal) return;
       const snap = vendaSnapshotRef.current;
       if (!snap) return;
       try {
@@ -1302,30 +1246,8 @@ const PDVViewInner = ({ showToast, profile, filialInicial, onVoltar }: {
         setCartaoModal(null);
         setIsClosing(false);
       }
-    };
-
-    const channel = supabase
-      .channel(`cartao_pendente_${cartaoModal.id}`)
-      .on(
-        'postgres_changes',
-        { event: 'UPDATE', schema: 'public', table: 'cartao_pendentes', filter: `id=eq.${cartaoModal.id}` },
-        (payload: any) => { if (payload?.new?.status === 'autorizado') onAutorizado(); },
-      )
-      .subscribe();
-
-    const timer = setInterval(async () => {
-      if (handled) return;
-      const { data } = await supabase
-        .from('cartao_pendentes')
-        .select('status')
-        .eq('id', cartaoModal.id)
-        .maybeSingle();
-      if (data?.status === 'autorizado') onAutorizado();
-    }, 2000);
-
-    return () => { handled = true; supabase.removeChannel(channel); clearInterval(timer); };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cartaoModal]);
+    },
+  );
 
   // Retry do registro depois que o dinheiro já entrou. O snapshot do carrinho
   // continua em memória (só é limpo no sucesso), então basta rechamar o RPC —
@@ -1349,9 +1271,7 @@ const PDVViewInner = ({ showToast, profile, filialInicial, onVoltar }: {
 
   const cancelarCartao = async () => {
     if (!cartaoModal || !supabase) return;
-    await supabase.from('cartao_pendentes')
-      .update({ status: 'cancelado' })
-      .eq('id', cartaoModal.id);
+    await cancelarCobranca('cartao_pendentes', cartaoModal.id);
     vendaSnapshotRef.current = null;
     setCartaoModal(null);
     setIsClosing(false);
