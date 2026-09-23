@@ -4,7 +4,7 @@ import { QRCodeSVG } from 'qrcode.react';
 import { codigoCobranca } from '../lib/cobranca';
 import {
   X, Loader2, Lock, CreditCard, Wallet, Banknote, Users as UsersIcon, HelpCircle,
-  Maximize2, Minimize2, Search, FileDown, PauseCircle, Calculator, Receipt,
+  Maximize2, Minimize2, Search, FileDown, PauseCircle, Calculator,
   Pencil, Trash2, DollarSign,
 } from 'lucide-react';
 import { useFetchData } from '../hooks/useSupabaseData';
@@ -29,6 +29,10 @@ import { fmtQtdArmada as fmtQtd } from '../lib/pdv/quantidade';
 import { montarVendaPdv } from '../lib/pdv/venda';
 import { cancelarAguardandoAntigas, inserirPixPendente, inserirCartaoPendente, cancelarCobranca } from '../lib/pdv/cobranca';
 import { usePagamentoPendente } from '../hooks/usePagamentoPendente';
+import { YELLOW, YELLOW_DARK, NAVY_DARK, MONEY, RED } from '../components/pdv/coresMaxPos';
+import { ManualPdv } from '../components/pdv/ManualPdv';
+import { ConsultaPrecoModal } from '../components/pdv/ConsultaPrecoModal';
+import { ReimpressaoModal, type VendaReimpressao } from '../components/pdv/ReimpressaoModal';
 import {
   totaisComDesconto, restanteAPagar, valorDevido as calcValorDevido, mistoAtivo, trocoDoRecebido,
   valorEditado, formaDoMisto, trocoTotal, dinheiroNaGaveta as calcDinheiroNaGaveta,
@@ -39,11 +43,6 @@ import {
 // Camada de dados continua sendo LogMax: /api/produtosview, RPC criar_venda_pdv,
 // controle_caixa, pix_pendentes. Cores e layout: amarelo/navy/verde MaxPOS.
 
-const YELLOW      = '#FFC107';
-const YELLOW_DARK = '#B8860B';
-const NAVY_DARK   = '#172554';
-const MONEY       = '#15803d';
-const RED         = '#b91c1c';
 
 interface CartItem {
   produto_id: string;
@@ -191,8 +190,6 @@ export const PDVViewSupermax = ({
 
   // Consulta de preço (F7) — read-only, não adiciona ao carrinho.
   const [priceQueryOpen, setPriceQueryOpen] = useState(false);
-  const [priceQueryTerm, setPriceQueryTerm] = useState('');
-  const [priceQueryIdx, setPriceQueryIdx]   = useState(0);
 
   // Suprimento (F11) / Sangria (F12) — entrada/saída de dinheiro no caixa.
   const [cashMoveModal, setCashMoveModal] = useState<{ tipo: 'suprimento' | 'sangria' } | null>(null);
@@ -314,8 +311,7 @@ export const PDVViewSupermax = ({
 
   // Reimpressão (Ctrl+R) — últimas N vendas concluídas da filial nesta sessão.
   const [reprintOpen, setReprintOpen] = useState(false);
-  const [reprintList, setReprintList] = useState<Array<{ id: string; created_at: string; total_final: number; forma_pagamento: string }>>([]);
-  const [reprintIdx, setReprintIdx]   = useState(0);
+  const [reprintList, setReprintList] = useState<VendaReimpressao[]>([]);
   const [reprintLoading, setReprintLoading] = useState(false);
   const sessionStartRef = useRef<string>(new Date().toISOString());
 
@@ -728,16 +724,6 @@ export const PDVViewSupermax = ({
     if (searchModalOpen) setSearchIdx(filteredSearch.length > 0 ? 0 : -1);
   }, [searchModalOpen, filteredSearch.length]);
 
-  // Consulta de preço — mesma filtragem da busca F8, listagem só leitura.
-  const filteredPriceQuery = useMemo(
-    () => buscarProdutos(produtosDisponiveis, priceQueryTerm, 50),
-    [priceQueryTerm, produtosDisponiveis],
-  );
-
-  useEffect(() => {
-    if (priceQueryOpen) setPriceQueryIdx(filteredPriceQuery.length > 0 ? 0 : -1);
-  }, [priceQueryOpen, filteredPriceQuery.length]);
-
   // Sugestões enquanto digita (só quando 2+ chars e não é padrão N*EAN).
   // Acento-insensível: "feijão" digitado casa com "FEIJAO" cadastrado e vice-versa.
   const suggestions = useMemo(() => {
@@ -865,7 +851,6 @@ export const PDVViewSupermax = ({
     try {
       setReprintLoading(true);
       setReprintOpen(true);
-      setReprintIdx(0);
       const { data, error } = await supabase
         .from('vendas')
         .select('id, created_at, total_final, forma_pagamento')
@@ -876,7 +861,7 @@ export const PDVViewSupermax = ({
         .order('created_at', { ascending: false })
         .limit(10);
       if (error) throw error;
-      setReprintList((data ?? []) as Array<{ id: string; created_at: string; total_final: number; forma_pagamento: string }>);
+      setReprintList((data ?? []) as VendaReimpressao[]);
     } catch (err: any) {
       showToast?.(`Erro ao carregar vendas: ${err?.message ?? '—'}`, 'error', true);
       setReprintOpen(false);
@@ -1077,7 +1062,6 @@ export const PDVViewSupermax = ({
       if (e.key === 'F7') {
         e.preventDefault();
         if (!anyModal) {
-          setPriceQueryTerm('');
           setPriceQueryOpen(true);
         }
         return;
@@ -2793,190 +2777,7 @@ export const PDVViewSupermax = ({
       )}
 
       {/* Manual do PDV — passo a passo + tabela de atalhos */}
-      {helpOpen && (
-        <div
-          className="fixed inset-0 z-[300] flex items-center justify-center p-4"
-          style={{ background: 'rgba(0,0,0,0.7)' }}
-          onClick={(e) => { if (e.target === e.currentTarget) { setHelpOpen(false); requestAnimationFrame(() => codeInputRef.current?.focus()); } }}
-          tabIndex={-1}
-          ref={(el) => { if (el && helpOpen && !el.contains(document.activeElement)) el.focus(); }}
-          onKeyDown={(e) => {
-            if (e.key === 'Tab') trapTab(e, e.currentTarget as HTMLElement);
-            if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); setHelpOpen(false); requestAnimationFrame(() => codeInputRef.current?.focus()); }
-            if (/^F\d+$/.test(e.key)) e.stopPropagation();
-          }}
-        >
-          <div className="w-full max-w-4xl max-h-[92vh] flex flex-col bg-white border-4 shadow-2xl" style={{ borderColor: NAVY_DARK }}>
-            <div className="px-5 py-4 flex items-center justify-between shrink-0 border-b-2" style={{ background: YELLOW, borderColor: YELLOW_DARK }}>
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full flex items-center justify-center" style={{ background: NAVY_DARK, color: YELLOW }}>
-                  <HelpCircle size={22} />
-                </div>
-                <div>
-                  <div className="text-xs font-black uppercase tracking-[0.3em]" style={{ color: NAVY_DARK }}>Manual</div>
-                  <div className="text-xl font-black tracking-wide" style={{ color: NAVY_DARK }}>PDV SuperMax</div>
-                </div>
-              </div>
-              <button onClick={() => { setHelpOpen(false); requestAnimationFrame(() => codeInputRef.current?.focus()); }} className="w-9 h-9 rounded-full flex items-center justify-center border-2 hover:bg-white/40" style={{ borderColor: NAVY_DARK, color: NAVY_DARK }} aria-label="Fechar">
-                <X size={18} />
-              </button>
-            </div>
-
-            <div className="flex-1 overflow-y-auto px-6 py-5 space-y-6 text-sm" style={{ color: '#111827' }}>
-              {/* Passo a passo */}
-              <section>
-                <h3 className="text-base font-black uppercase tracking-wider mb-3 pb-2 border-b-2" style={{ color: NAVY_DARK, borderColor: YELLOW_DARK }}>
-                  Fluxo da venda
-                </h3>
-                <ol className="space-y-3 list-decimal list-inside">
-                  <li>
-                    <b>Adicionar produtos.</b> Bipe o código de barras OU digite EAN/REF/nome no campo <b>CÓDIGO</b> e aperte <kbd className="px-1.5 py-0.5 text-xs font-mono border rounded font-bold" style={{ background: '#f3f4f6', borderColor: NAVY_DARK, color: NAVY_DARK }}>Enter</kbd>.
-                    Para <b>vários do mesmo item</b>, informe a quantidade antes — como no caixa de mercado:
-                    digite <code>2*</code> e <kbd className="px-1.5 py-0.5 text-xs font-mono border rounded font-bold" style={{ background: '#f3f4f6', borderColor: NAVY_DARK, color: NAVY_DARK }}>Enter</kbd> para
-                    <b> armar</b> (aparece <b>2 ×</b> em amarelo ao lado do campo) e então identifique o item de qualquer
-                    forma: bipe, código, nome ou escolha no <b>F8</b>. Também funciona colado:
-                    <code>3*7891</code>, <code>2*feijao</code> ou peso <code>0,350*7891</code>.
-                    Nome que casa com vários produtos abre o <b>F8</b> já filtrado, com a quantidade.
-                  </li>
-                  <li>
-                    <b>Conferir.</b> A última leitura aparece destacada na barra lateral direita.
-                    Pra remover o último item: <kbd className="px-1.5 py-0.5 text-xs font-mono border rounded font-bold" style={{ background: '#f3f4f6', borderColor: NAVY_DARK, color: NAVY_DARK }}>Del</kbd>.
-                    Pra remover <b>qualquer item</b>: com o campo CÓDIGO vazio, use <kbd className="px-1.5 py-0.5 text-xs font-mono border rounded font-bold" style={{ background: '#f3f4f6', borderColor: NAVY_DARK, color: NAVY_DARK }}>↑ ↓</kbd> pra selecionar a linha (fica amarela) e aperte <kbd className="px-1.5 py-0.5 text-xs font-mono border rounded font-bold" style={{ background: '#f3f4f6', borderColor: NAVY_DARK, color: NAVY_DARK }}>Del</kbd>.
-                  </li>
-                  <li>
-                    <b>Subtotal / fechar venda.</b> Com o carrinho montado, aperte <kbd className="px-1.5 py-0.5 text-xs font-mono border rounded font-bold" style={{ background: '#f3f4f6', borderColor: NAVY_DARK, color: NAVY_DARK }}>Enter</kbd> no campo CÓDIGO vazio, ou <kbd className="px-1.5 py-0.5 text-xs font-mono border rounded font-bold" style={{ background: '#f3f4f6', borderColor: NAVY_DARK, color: NAVY_DARK }}>F4</kbd>/<kbd className="px-1.5 py-0.5 text-xs font-mono border rounded font-bold" style={{ background: '#f3f4f6', borderColor: NAVY_DARK, color: NAVY_DARK }}>F5</kbd>, ou clique <b>FECHAR VENDA</b>.
-                  </li>
-                  <li>
-                    <b>Escolher forma de pagamento.</b> Use <kbd className="px-1.5 py-0.5 text-xs font-mono border rounded font-bold" style={{ background: '#f3f4f6', borderColor: NAVY_DARK, color: NAVY_DARK }}>F1</kbd> Dinheiro, <kbd className="px-1.5 py-0.5 text-xs font-mono border rounded font-bold" style={{ background: '#f3f4f6', borderColor: NAVY_DARK, color: NAVY_DARK }}>F2</kbd> Cartão (picker Crédito/Débito) ou <kbd className="px-1.5 py-0.5 text-xs font-mono border rounded font-bold" style={{ background: '#f3f4f6', borderColor: NAVY_DARK, color: NAVY_DARK }}>F3</kbd> PIX/Fiado (picker) — <b>tudo por teclado</b>.
-                  </li>
-                  <li>
-                    <b>Confirmar o valor.</b>
-                    <ul className="ml-5 mt-1 space-y-1 list-disc">
-                      <li><b>Dinheiro:</b> o valor exato já vem preenchido. Pra troco, digite por cima o valor recebido.</li>
-                      <li><b>Cartão D/C:</b> entra direto na lista de pagamentos.</li>
-                      <li><b>PIX:</b> QR Code aparece — cliente paga pelo MaxBank, sistema confirma sozinho.</li>
-                      <li><b>Fiado:</b> escolha o cliente.</li>
-                    </ul>
-                  </li>
-                  <li>
-                    <b>Pagamento misto.</b> Digite um valor parcial em <b>VALOR DESTA FORMA</b> e escolha Cartão ou Dinheiro. Repita até o restante chegar a R$ 0,00. PIX/Fiado não aceitam misto.
-                  </li>
-                  <li>
-                    <b>Fechar venda.</b> Quando todos pagamentos cobrirem o total, aperte <kbd className="px-1.5 py-0.5 text-xs font-mono border rounded font-bold" style={{ background: '#f3f4f6', borderColor: NAVY_DARK, color: NAVY_DARK }}>Enter</kbd> ou clique <b>FECHAR VENDA</b>.
-                  </li>
-                  <li>
-                    <b>Conferir troco</b> (se houve dinheiro): tela cheia mostra o valor a entregar (ou <b>PAGAMENTO EXATO</b>). <kbd className="px-1.5 py-0.5 text-xs font-mono border rounded font-bold" style={{ background: '#f3f4f6', borderColor: NAVY_DARK, color: NAVY_DARK }}>Enter</kbd> avança.
-                  </li>
-                  <li>
-                    <b>Recibo da venda.</b> Baixe o PDF se necessário; <kbd className="px-1.5 py-0.5 text-xs font-mono border rounded font-bold" style={{ background: '#f3f4f6', borderColor: NAVY_DARK, color: NAVY_DARK }}>Enter</kbd> avança.
-                  </li>
-                  <li>
-                    <b>Tela de agradecimento.</b> <kbd className="px-1.5 py-0.5 text-xs font-mono border rounded font-bold" style={{ background: '#f3f4f6', borderColor: NAVY_DARK, color: NAVY_DARK }}>Enter</kbd> volta pro campo CÓDIGO pronto pra próxima venda.
-                  </li>
-                </ol>
-              </section>
-
-              {/* Tabela de teclas - leitura */}
-              <section>
-                <h3 className="text-base font-black uppercase tracking-wider mb-3 pb-2 border-b-2" style={{ color: NAVY_DARK, borderColor: YELLOW_DARK }}>
-                  Atalhos na tela de leitura
-                </h3>
-                <div className="grid grid-cols-[120px_1fr] gap-x-4 gap-y-2">
-                  {[
-                    ['Enter', 'No campo vazio: abre o pagamento. Com texto: adiciona produto.'],
-                    ['F3 / F9', 'Cancelar cupom (pede confirmação).'],
-                    ['F4', 'Subtotal — abre o modal de pagamento.'],
-                    ['F5', 'Pagamentos — mesmo destino do F4 (padrão Linx/VR).'],
-                    ['F6', 'Desconto no total — pede autorização do gerente da unidade e o motivo. Promoção não passa por aqui: já vem no preço.'],
-                    ['F7', 'Consulta de preço (não adiciona ao carrinho).'],
-                    ['F8', 'Buscar produto por nome ou código.'],
-                    ['F10', 'Sangria — retirada de dinheiro do caixa.'],
-                    ['F11', 'Suprimento — entrada de dinheiro no caixa.'],
-                    ['F12', 'Fechar / suspender caixa (fora de venda).'],
-                    ['Tab', 'Anda entre os campos do cupom. Nunca sai do PDV: no último focável volta ao primeiro.'],
-                    ['Del', 'Remove o último item — ou o item selecionado por ↑↓.'],
-                    ['↑ ↓', 'Sugestões enquanto digita · com campo vazio: seleciona item do carrinho.'],
-                    ['Esc', 'Limpa o campo / desmarca item / sai da tela cheia / cancela venda.'],
-                    ['2*', 'Arma a quantidade para o PRÓXIMO item, identificado como você quiser (bipe, código, nome, F8).'],
-                    ['2*item', 'Quantidade colada ao item: 3*7891, 2*feijao, ou peso 0,350*7891.'],
-                  ].map(([k, v]) => (
-                    <React.Fragment key={k}>
-                      <kbd className="text-xs font-mono px-2 py-1 rounded border self-start text-center" style={{ background: '#f3f4f6', borderColor: NAVY_DARK, color: NAVY_DARK }}>{k}</kbd>
-                      <span style={{ color: '#374151' }}>{v}</span>
-                    </React.Fragment>
-                  ))}
-                </div>
-              </section>
-
-              {/* Tabela de teclas - pagamento */}
-              <section>
-                <h3 className="text-base font-black uppercase tracking-wider mb-3 pb-2 border-b-2" style={{ color: NAVY_DARK, borderColor: YELLOW_DARK }}>
-                  Atalhos no modal de pagamento
-                </h3>
-                <div className="grid grid-cols-[120px_1fr] gap-x-4 gap-y-2">
-                  {[
-                    ['F1', 'Dinheiro — abre modal de valor recebido.'],
-                    ['F2', 'Cartão — picker Crédito / Débito.'],
-                    ['F3', 'Picker PIX / Vale / Fiado (só como forma única — não aceitam misto).'],
-                    ['↑ ↓ ← →', 'Navega entre as formas.'],
-                    ['Tab', 'Próximo elemento focável (preso no modal).'],
-                    ['Enter', 'Confirma forma focada. Com pagamentos lançados e restante 0: fecha venda.'],
-                    ['Esc', 'Em misto com pagamentos: limpa pagamentos. Sem pagamentos: fecha o modal.'],
-                  ].map(([k, v]) => (
-                    <React.Fragment key={k}>
-                      <kbd className="text-xs font-mono px-2 py-1 rounded border self-start text-center" style={{ background: '#f3f4f6', borderColor: NAVY_DARK, color: NAVY_DARK }}>{k}</kbd>
-                      <span style={{ color: '#374151' }}>{v}</span>
-                    </React.Fragment>
-                  ))}
-                </div>
-              </section>
-
-              {/* Operação de caixa — 100% teclado */}
-              <section>
-                <h3 className="text-base font-black uppercase tracking-wider mb-3 pb-2 border-b-2" style={{ color: NAVY_DARK, borderColor: YELLOW_DARK }}>
-                  Operação de caixa — teclado 100%
-                </h3>
-                <div className="grid grid-cols-[130px_1fr] gap-x-4 gap-y-2">
-                  {[
-                    ['Ctrl+R', 'Reimprimir uma das últimas vendas concluídas desta sessão.'],
-                    ['Ctrl+L', 'Fechar meu caixa (relatório do turno + valor contado).'],
-                    ['Ctrl+M', 'Trocar de PDV (SuperMax / MaxLook / TechMax).'],
-                    ['Ctrl+G', 'Gancheira: suspende a venda atual (ou recupera a suspensa, com o carrinho vazio).'],
-                    ['Ctrl+F', 'Entrar / sair de tela cheia.'],
-                    ['Shift+F1 · ?', 'Abrir este manual.'],
-                  ].map(([k, v]) => (
-                    <React.Fragment key={k}>
-                      <kbd className="text-xs font-mono px-2 py-1 rounded border self-start text-center" style={{ background: '#f3f4f6', borderColor: NAVY_DARK, color: NAVY_DARK }}>{k}</kbd>
-                      <span style={{ color: '#374151' }}>{v}</span>
-                    </React.Fragment>
-                  ))}
-                </div>
-                <p className="text-[11px] text-gray-500 mt-2 leading-relaxed">
-                  Todas as ações do PDV têm atalho — o operador não precisa tirar as mãos do teclado durante o turno.
-                </p>
-              </section>
-
-              {/* Dicas */}
-              <section>
-                <h3 className="text-base font-black uppercase tracking-wider mb-3 pb-2 border-b-2" style={{ color: NAVY_DARK, borderColor: YELLOW_DARK }}>
-                  Boas práticas
-                </h3>
-                <ul className="space-y-2 list-disc list-inside" style={{ color: '#374151' }}>
-                  <li>Antes de operar, garanta que o <b>caixa está aberto</b> em Financeiro → Controle de Caixa. O badge verde no header confirma.</li>
-                  <li>Badge <span className="px-1.5 py-0.5 text-[10px] font-black uppercase rounded border" style={{ background: '#fef3c7', color: '#92400e', borderColor: '#f59e0b' }}>Ruptura</span> aparece quando a quantidade vendida supera o estoque — confira o produto antes de fechar.</li>
-                  <li>Pra deixar dinheiro no caixa (troco inicial, reforço): <kbd className="px-1 py-0.5 text-xs font-mono border rounded font-bold" style={{ background: '#f3f4f6', borderColor: NAVY_DARK, color: NAVY_DARK }}>F11</kbd>. Pra retirar (depósito, pagto fornecedor): <kbd className="px-1 py-0.5 text-xs font-mono border rounded font-bold" style={{ background: '#f3f4f6', borderColor: NAVY_DARK, color: NAVY_DARK }}>F10</kbd> — sempre registrando o motivo.</li>
-                  <li><b>PIX/Fiado não aceitam pagamento parcial</b>. Pra dividir entre formas, use Dinheiro + Cartão.</li>
-                  <li>Pra alternar entre filiais (SuperMax/MaxLook/TechMax) sem perder o turno: <kbd className="px-1 py-0.5 text-xs font-mono border rounded font-bold" style={{ background: '#f3f4f6', borderColor: NAVY_DARK, color: NAVY_DARK }}>Ctrl+M</kbd> (só com carrinho vazio).</li>
-                </ul>
-              </section>
-            </div>
-
-            <div className="px-6 py-3 border-t-2 text-xs font-bold uppercase tracking-wider text-center shrink-0" style={{ borderColor: YELLOW_DARK, background: '#f9fafb', color: NAVY_DARK }}>
-              Esc fecha · Tab preso dentro do modal
-            </div>
-          </div>
-        </div>
-      )}
+      {helpOpen && <ManualPdv onClose={() => { setHelpOpen(false); requestAnimationFrame(() => codeInputRef.current?.focus()); }} />}
 
       {/* Recibo — resumo da venda com opção de baixar PDF antes do agradecimento */}
       {reciboModalOpen && lastVenda && (
@@ -3740,60 +3541,10 @@ export const PDVViewSupermax = ({
 
       {/* Consulta de preço (F7) — read-only, não adiciona ao carrinho */}
       {priceQueryOpen && (
-        <div
-          className="fixed inset-0 z-[200] flex items-start justify-center p-6"
-          style={{ background: 'rgba(0,0,0,0.5)' }}
-          onKeyDown={(e) => {
-            if (e.key === 'Tab') { trapTab(e, e.currentTarget as HTMLElement); return; }
-            if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); setPriceQueryOpen(false); requestAnimationFrame(() => codeInputRef.current?.focus()); return; }
-            if (/^F\d+$/.test(e.key)) e.stopPropagation();
-          }}
-        >
-          <div className="w-full max-w-3xl mt-12 bg-white border-4 shadow-2xl" style={{ borderColor: NAVY_DARK }}>
-            <div className="px-5 py-4 text-white flex items-center justify-between" style={{ background: NAVY_DARK }}>
-              <span className="font-black tracking-wide text-sm uppercase">F7 · Consulta de preço</span>
-              <button onClick={() => { setPriceQueryOpen(false); requestAnimationFrame(() => codeInputRef.current?.focus()); }} className="text-white p-1" tabIndex={-1}><X size={18} /></button>
-            </div>
-            <div className="p-4">
-              <input
-                autoFocus
-                value={priceQueryTerm}
-                onChange={(e) => { setPriceQueryTerm(e.target.value); setPriceQueryIdx(0); }}
-                onKeyDown={(e) => {
-                  if (e.key === 'Escape') { e.preventDefault(); setPriceQueryOpen(false); requestAnimationFrame(() => codeInputRef.current?.focus()); return; }
-                  if (e.key === 'ArrowDown') { e.preventDefault(); setPriceQueryIdx(i => Math.min(i + 1, filteredPriceQuery.length - 1)); return; }
-                  if (e.key === 'ArrowUp')   { e.preventDefault(); setPriceQueryIdx(i => Math.max(i - 1, 0)); return; }
-                }}
-                placeholder="Nome, código ou EAN do produto..."
-                className="w-full bg-white border-2 text-xl font-bold text-gray-900 outline-none px-3 py-2 focus:border-blue-700"
-                style={{ borderColor: '#9ca3af' }}
-              />
-              <div className="mt-3 max-h-[55vh] overflow-y-auto border border-gray-300">
-                {filteredPriceQuery.length === 0 ? (
-                  <div className="py-10 text-center text-gray-400 text-sm">Nenhum produto.</div>
-                ) : filteredPriceQuery.map((p: any, i: number) => {
-                  const active = i === priceQueryIdx;
-                  return (
-                    <div
-                      key={p.id}
-                      onMouseEnter={() => setPriceQueryIdx(i)}
-                      ref={(el) => { if (el && active) el.scrollIntoView({ block: 'nearest' }); }}
-                      className={`grid grid-cols-[150px_1fr_120px_120px] gap-3 py-2 px-3 text-sm border-b border-gray-200 ${active ? 'bg-yellow-100' : ''}`}
-                    >
-                      <span className="tabular-nums text-gray-500 truncate">{p.codigo || p.ean || '—'}</span>
-                      <span className="truncate font-semibold text-gray-900">{(p.nome || '').toUpperCase()}</span>
-                      <span className="text-right tabular-nums text-gray-600">Est: {Number(p.estoque ?? 0)}</span>
-                      <span className="text-right font-bold tabular-nums" style={{ color: MONEY }}>R$ {fmt(Number(p.preco ?? 0))}</span>
-                    </div>
-                  );
-                })}
-              </div>
-              <div className="mt-3 text-xs text-gray-500 font-bold uppercase tracking-wider text-center">
-                ↑↓ navegar · Esc fechar · Consulta não adiciona ao carrinho
-              </div>
-            </div>
-          </div>
-        </div>
+        <ConsultaPrecoModal
+          produtos={produtosDisponiveis}
+          onClose={() => { setPriceQueryOpen(false); requestAnimationFrame(() => codeInputRef.current?.focus()); }}
+        />
       )}
 
       {/* Picker de cartão (F2 no payment modal) — ↑↓ navega · Enter seleciona · Esc fecha */}
@@ -3861,98 +3612,12 @@ export const PDVViewSupermax = ({
 
       {/* Reimpressão (Ctrl+R) — últimas 10 vendas concluídas da filial nesta sessão */}
       {reprintOpen && (
-        <div
-          className="fixed inset-0 z-[200] flex items-center justify-center p-4"
-          style={{ background: 'rgba(0,0,0,0.55)' }}
-          tabIndex={-1}
-          ref={(el) => { if (el && reprintOpen && !el.contains(document.activeElement)) el.focus(); }}
-          onKeyDown={(e) => {
-            if (e.key === 'Tab') trapTab(e, e.currentTarget as HTMLElement);
-            if (e.key === 'Escape') {
-              e.preventDefault(); e.stopPropagation();
-              setReprintOpen(false);
-              requestAnimationFrame(() => codeInputRef.current?.focus());
-              return;
-            }
-            if (reprintLoading || reprintList.length === 0) return;
-            if (e.key === 'ArrowDown') {
-              e.preventDefault(); e.stopPropagation();
-              setReprintIdx(i => Math.min(i + 1, reprintList.length - 1));
-              return;
-            }
-            if (e.key === 'ArrowUp') {
-              e.preventDefault(); e.stopPropagation();
-              setReprintIdx(i => Math.max(i - 1, 0));
-              return;
-            }
-            if (e.key === 'Enter') {
-              e.preventDefault(); e.stopPropagation();
-              const v = reprintList[reprintIdx];
-              if (v) confirmReprint(v.id);
-              return;
-            }
-            if (/^F\d+$/.test(e.key)) e.stopPropagation();
-          }}
-        >
-          <div className="bg-white border-4 max-w-2xl w-full shadow-2xl" style={{ borderColor: NAVY_DARK, fontFamily: 'Arial, Helvetica, sans-serif' }}>
-            <div className="px-5 py-4 text-white flex items-center justify-between" style={{ background: NAVY_DARK }}>
-              <div className="flex items-center gap-2">
-                <Receipt size={20} />
-                <div>
-                  <div className="text-xs font-black uppercase tracking-[0.3em] opacity-90">Ctrl+R · Reimpressão</div>
-                  <div className="text-lg font-black tracking-wide">Últimas vendas desta sessão</div>
-                </div>
-              </div>
-              <button
-                onClick={() => { setReprintOpen(false); requestAnimationFrame(() => codeInputRef.current?.focus()); }}
-                className="text-white p-1" tabIndex={-1}
-              >
-                <X size={20} />
-              </button>
-            </div>
-            <div className="p-4 max-h-[60vh] overflow-y-auto">
-              {reprintLoading ? (
-                <div className="text-center py-10 text-gray-500 flex flex-col items-center gap-2">
-                  <Loader2 className="animate-spin" size={28} />
-                  <span className="text-sm font-bold uppercase tracking-wider">Carregando vendas…</span>
-                </div>
-              ) : reprintList.length === 0 ? (
-                <div className="text-center py-10 text-gray-500 text-sm">
-                  Nenhuma venda concluída nesta sessão do PDV.
-                </div>
-              ) : (
-                <div className="border-2 rounded overflow-hidden" style={{ borderColor: NAVY_DARK }}>
-                  <div className="px-3 py-1 text-[10px] font-black uppercase tracking-widest text-white grid grid-cols-[110px_1fr_120px_100px] gap-2" style={{ background: NAVY_DARK }}>
-                    <span>ID</span>
-                    <span>Forma de pagamento</span>
-                    <span className="text-right">Total</span>
-                    <span className="text-right">Hora</span>
-                  </div>
-                  {reprintList.map((v, idx) => {
-                    const hh = new Date(v.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-                    return (
-                      <button
-                        key={v.id}
-                        type="button"
-                        onMouseEnter={() => setReprintIdx(idx)}
-                        onClick={() => confirmReprint(v.id)}
-                        className={`w-full grid grid-cols-[110px_1fr_120px_100px] gap-2 px-3 py-2 text-sm tabular-nums text-left border-b border-gray-200 last:border-b-0 ${idx === reprintIdx ? 'bg-yellow-100' : 'bg-white hover:bg-yellow-50'}`}
-                      >
-                        <span className="font-mono text-gray-600 truncate">#{String(v.id).slice(-6).toUpperCase()}</span>
-                        <span className="truncate font-bold text-gray-900">{v.forma_pagamento || '—'}</span>
-                        <span className="text-right font-black" style={{ color: MONEY }}>R$ {fmt(Number(v.total_final ?? 0))}</span>
-                        <span className="text-right text-gray-500">{hh}</span>
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
-              <div className="text-xs text-gray-500 font-bold uppercase tracking-wider text-center pt-3">
-                ↑↓ navegar · Enter reimprimir · Esc voltar
-              </div>
-            </div>
-          </div>
-        </div>
+        <ReimpressaoModal
+          lista={reprintList}
+          carregando={reprintLoading}
+          onEscolher={confirmReprint}
+          onClose={() => { setReprintOpen(false); requestAnimationFrame(() => codeInputRef.current?.focus()); }}
+        />
       )}
 
       {/* Picker PIX/Fiado (F3 no payment modal) — ↑↓ navega · Enter seleciona · Esc fecha */}
