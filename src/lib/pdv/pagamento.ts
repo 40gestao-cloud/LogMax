@@ -36,7 +36,8 @@ export const valorDevido = (parcial: number, restante: number): number =>
   parcial > 0 ? Math.min(parcial, restante) : restante;
 
 // Misto começa quando já há linha lançada ou quando o parcial não cobre o
-// restante. PIX, Fiado e Vale só funcionam fora dele.
+// restante. PIX aceita parcial (vira uma linha, como Dinheiro/Cartão); Fiado
+// e Vale só funcionam fora dele — a RPC cria conta_receber pelo valor cheio.
 export const mistoAtivo = (qtdLinhas: number, parcial: number, restante: number): boolean =>
   qtdLinhas > 0 || (parcial > 0 && parcial < restante - CENTAVO);
 
@@ -60,6 +61,15 @@ export const formaDoMisto = (linhas: LinhaPagamento[]): string => {
   const parts = linhas.map(p => `${p.forma} R$ ${formatBRL(p.valor)}`);
   return `Misto: ${parts.join(' + ')}`;
 };
+
+// PIX e Cartão: o MaxBank já confirmou, o valor é o que o cliente pagou.
+// Editar a linha fecharia a venda com dinheiro que não entrou, e descartá-la
+// não estorna nada — por isso uma e outra coisa pedem tratamento à parte.
+export const ehLinhaEletronica = (p: LinhaPagamento): boolean =>
+  p.forma === 'PIX' || p.forma === 'Cartão Crédito' || p.forma === 'Cartão Débito';
+
+export const valorEletronicoPago = (linhas: LinhaPagamento[]): number =>
+  r2(linhas.filter(ehLinhaEletronica).reduce((s, p) => s + p.valor, 0));
 
 export const trocoTotal = (linhas: LinhaPagamento[]): number =>
   r2(linhas.reduce((s, p) => s + (p.troco ?? 0), 0));

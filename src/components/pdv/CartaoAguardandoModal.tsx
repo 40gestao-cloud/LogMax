@@ -6,8 +6,10 @@ import { NAVY_DARK, MONEY, RED } from './coresMaxPos';
 
 // Maquininha aguardando no PDV SuperMax (MaxPay/MaxBank autoriza). A espera é
 // da view, via usePagamentoPendente. Esc pede confirmação antes de cancelar.
-export function CartaoAguardandoModal({ cobranca, confirmando, onConfirmando, onCancelar }: {
+// `linha`: cartão parcial do misto — autorizado, vira linha; não fecha a venda.
+export function CartaoAguardandoModal({ cobranca, linha = false, confirmando, onConfirmando, onCancelar }: {
   cobranca: { id: string; valor: number; metodo: 'debito' | 'credito'; parcelas: number };
+  linha?: boolean;
   confirmando: boolean;
   onConfirmando: (v: boolean) => void;
   onCancelar: () => void;
@@ -55,7 +57,9 @@ export function CartaoAguardandoModal({ cobranca, confirmando, onConfirmando, on
             </div>
           </div>
           <p className="text-sm text-gray-700 leading-relaxed">
-            Operador digita o valor na <b>MaxPay</b> e o cliente aproxima o cartão (lendo o QR no <b>MaxBank</b>). A venda fecha sozinha quando for autorizado.
+            Operador digita o valor na <b>MaxPay</b> e o cliente aproxima o cartão (lendo o QR no <b>MaxBank</b>). {linha
+              ? 'Autorizado, o valor entra na lista e você volta pra lançar o resto.'
+              : 'A venda fecha sozinha quando for autorizado.'}{' '}
             Se a maquininha perguntar qual cobrança é, informe o <b>nº acima</b>.
           </p>
           <button

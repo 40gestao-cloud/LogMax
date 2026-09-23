@@ -10,10 +10,13 @@ import { NAVY_DARK, MONEY, RED } from './coresMaxPos';
 // confirmação, porque encostar no Esc cancelava um PIX a um segundo de ser pago.
 // Com `erro`, o PIX já foi pago e a venda não gravou: a tela troca o texto
 // pelo aviso e pelo "Tentar Novamente".
+// `linha`: PIX parcial do misto — confirmado, o valor entra na lista e o
+// operador volta ao pagamento; não fecha a venda.
 export function PixAguardandoModal({
-  cobranca, erro, processando, onTentarDeNovo, confirmando, onConfirmando, onCancelar,
+  cobranca, linha = false, erro, processando, onTentarDeNovo, confirmando, onConfirmando, onCancelar,
 }: {
   cobranca: { id: string; valor: number };
+  linha?: boolean;
   erro: string | null;
   processando: boolean;
   onTentarDeNovo: () => void;
@@ -71,7 +74,7 @@ export function PixAguardandoModal({
           {erro ? (
             <div className="border-2 p-4 space-y-3 text-left" style={{ borderColor: RED }}>
               <div className="text-xs font-black uppercase tracking-widest" style={{ color: RED }}>
-                ⚠ PIX recebido — falha ao registrar venda
+                ⚠ PIX recebido — falha ao {linha ? 'lançar no pagamento' : 'registrar venda'}
               </div>
               <div className="text-sm text-gray-900 font-mono whitespace-pre-wrap break-words bg-gray-50 p-2 border" style={{ borderColor: '#d1d5db' }}>
                 {erro}
@@ -90,7 +93,9 @@ export function PixAguardandoModal({
             </div>
           ) : (
             <p className="text-sm text-gray-700 leading-relaxed">
-              Cliente lê o QR no <b>MaxBank</b>. A venda fecha sozinha quando o pagamento for confirmado.
+              Cliente lê o QR no <b>MaxBank</b>. {linha
+                ? 'Confirmado o pagamento, o valor entra na lista e você volta pra lançar o resto.'
+                : 'A venda fecha sozinha quando o pagamento for confirmado.'}
               {/* A MaxPay acha a cobrança pelo VALOR (janela de 5 min), não pelo
                   QR: sem dizer isso, o operador digita um valor arredondado,
                   a maquininha não casa nada e fica em "aguardando" para sempre. */}

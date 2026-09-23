@@ -55,8 +55,9 @@ import { mascararDocumento } from '../lib/pdv/documento';
 import {
   totaisComDesconto, restanteAPagar, valorDevido as calcValorDevido, mistoAtivo, trocoDoRecebido,
   valorEditado, formaDoMisto, trocoTotal, dinheiroNaGaveta as calcDinheiroNaGaveta,
-  parcelasDaVenda, creditoDoMisto,
+  parcelasDaVenda, creditoDoMisto, ehLinhaEletronica, valorEletronicoPago, type LinhaPagamento,
 } from '../lib/pdv/pagamento';
+import { DescartarPagoModal } from '../components/pdv/DescartarPagoModal';
 
 // PDV do LogMax em modo SuperMax — réplica visual e UX do MaxPOS.
 // Camada de dados continua sendo LogMax: /api/produtosview, RPC criar_venda_pdv,
@@ -114,14 +115,17 @@ export const PDVViewSupermax = ({
   const [cashModalOpen, setCashModalOpen]       = useState(false);
   const [cashReceived, setCashReceived]         = useState('');
   const [changeModal, setChangeModal]           = useState<{ amount: number } | null>(null);
-  const [pixModal, setPixModal]                 = useState<{ id: string; valor: number } | null>(null);
-  // `destino` diz o que fazer quando o MaxBank autorizar: 'venda' fecha a
-  // venda inteira (cartão como forma única), 'linha' devolve o valor como um
-  // pagamento da lista do misto.
+  // `destino` diz o que fazer quando o MaxBank confirmar: 'venda' fecha a
+  // venda inteira (forma única), 'linha' devolve o valor como um pagamento
+  // da lista do misto. Vale pra PIX e pra Cartão.
+  const [pixModal, setPixModal]                 = useState<{ id: string; valor: number; destino: DestinoCartao } | null>(null);
   const [cartaoModal, setCartaoModal]           = useState<{ id: string; valor: number; metodo: 'debito' | 'credito'; parcelas: number; destino: DestinoCartao } | null>(null);
   const [clientPickerOpen, setClientPickerOpen] = useState(false);
   const [clientSearch, setClientSearch]         = useState('');
   const [confirmCancel, setConfirmCancel]       = useState(false);
+  // Pergunta antes de descartar linha de PIX/Cartão já paga (lixeira, Esc,
+  // VOLTAR, X). `confirmar` é o descarte que o operador pediu.
+  const [descarte, setDescarte]                 = useState<{ acao: string; linhas: LinhaPagamento[]; confirmar: () => void } | null>(null);
 
   // Modo tela cheia (overlay sobre app shell + tela cheia do navegador).
   // Default ON ao entrar no PDV. ESC sai do modo tela cheia; F9/botão vermelho
@@ -566,9 +570,18 @@ export const PDVViewSupermax = ({
     setDescontoAutorizacao(null);
   };
 
+  // Descarte de linhas do pagamento: sem PIX/Cartão já pago, segue direto;
+  // com, pergunta antes — o dinheiro já saiu do cliente e nada aqui estorna.
+  const pedirDescarte = (acao: string, linhas: LinhaPagamento[], confirmar: () => void) => {
+    if (valorEletronicoPago(linhas) <= 0.001) { confirmar(); return; }
+    setDescarte({ acao, linhas, confirmar });
+  };
+
   const iniciarEdicaoPagamento = (idx: number) => {
     const p = pagamentos[idx];
-    if (!p) return;
+    // PIX/Cartão: o valor é o que o MaxBank confirmou. Editar deixava subir a
+    // linha até zerar o restante e fechar a venda sem o dinheiro ter entrado.
+    if (!p || ehLinhaEletronica(p)) return;
     setEditPagIdx(idx);
     setEditPagValor(formatBRL(p.valor));
   };
@@ -599,11 +612,23 @@ export const PDVViewSupermax = ({
   };
 
   // Foco no FECHAR VENDA da tela principal (não o do modal de pagamento).
-  // Usado após aplicar desconto pra operador apertar Enter direto.
+  // Usado após aplicar desconto pra operador apertar Enter direto. O desconto
+  // também abre de dentro do pagamento — aí o foco volta pro campo dele.
   const focusFecharVendaPDV = () => {
     requestAnimationFrame(() => {
+      if (document.querySelector('[data-pdv-pagamento]')) { parcialInputRef.current?.focus(); return; }
       const btn = document.querySelector<HTMLButtonElement>('[data-action="fechar-venda-pdv"]');
       if (btn && !btn.disabled) btn.focus();
+    });
+  };
+
+  // Fechou um modal que pode ter aberto por cima do pagamento (desconto,
+  // gerente, cancelar venda)? Com o pagamento na tela o foco volta pro campo
+  // dele, e não pro CÓDIGO escondido atrás — lá os atalhos do modal morriam.
+  const devolverFoco = () => {
+    requestAnimationFrame(() => {
+      if (document.querySelector('[data-pdv-pagamento]')) parcialInputRef.current?.focus();
+      else codeInputRef.current?.focus();
     });
   };
 
@@ -1336,10 +1361,10 @@ export const PDVViewSupermax = ({
     const valorDevido = calcValorDevido(parcial, restante);
     if (valorDevido <= 0 && pagamentos.length > 0) return;
 
-    // PIX e Fiado precisam de etapa assíncrona (realtime, picker de cliente)
-    // e a RPC criar_venda_pdv trata cada um especificamente — então só
+    // Fiado e Vale precisam de etapa assíncrona (picker de cliente / voucher)
+    // e a RPC criar_venda_pdv cria a conta_receber pelo valor cheio — então só
     // funcionam como pagamento único, na venda inteira.
-    if (forma === 'PIX' || forma === 'Fiado' || forma === 'Vale-Alimentação') {
+    if (forma === 'Fiado' || forma === 'Vale-Alimentação') {
       if (mistoAtivo(pagamentos.length, parcial, restante)) {
         showToast?.(`${forma} não aceita pagamento parcial — use só como forma única.`, 'error', true);
         return;
@@ -1354,12 +1379,23 @@ export const PDVViewSupermax = ({
       if (forma === 'Fiado') { setClientPickerModo('fiado'); setClientPickerOpen(true); return; }
       // Vale-Alimentação: a maquininha do voucher pede os 4 últimos dígitos do
       // cartão. É simulação, como no MaxPOS — qualquer 4 dígitos autorizam.
-      if (forma === 'Vale-Alimentação') {
-        setValeDigitos('');
-        setValeModal({ valor: parseFloat(restante.toFixed(2)) });
+      setValeDigitos('');
+      setValeModal({ valor: parseFloat(restante.toFixed(2)) });
+      return;
+    }
+
+    // PIX — cria pendente, realtime confirma quando o MaxBank autoriza. Em
+    // misto (4 clientes dividindo a conta, por exemplo) vira uma linha e o
+    // operador volta ao modal, igual o Cartão já faz — 'destino' decide.
+    if (forma === 'PIX') {
+      const isMistoActive = mistoAtivo(pagamentos.length, parcial, restante);
+      setPaymentModalOpen(false);
+      const aberto = await caixaAindaAberto();
+      if (!aberto) {
+        showToast?.(`Caixa de ${filial} foi fechado. Abra em Financeiro → Controle de Caixa.`, 'error', true);
+        await refreshCaixa();
         return;
       }
-      // PIX — cria pendente, realtime finaliza quando MaxBank confirma.
       try {
         if (!supabase) throw new Error('Supabase indisponível.');
         setIsClosing(true);
@@ -1367,9 +1403,9 @@ export const PDVViewSupermax = ({
         // para evitar que MaxPay/MaxBank confunda com cobrança nova.
         await cancelarAguardandoAntigas('pix_pendentes', user?.id);
         const pendente = await inserirPixPendente({
-          valor: totalFinal, clienteId: null, operadorId: user?.id ?? null, filial,
+          valor: parseFloat(valorDevido.toFixed(2)), clienteId: null, operadorId: user?.id ?? null, filial,
         });
-        setPixModal(pendente);
+        setPixModal({ ...pendente, destino: isMistoActive ? 'linha' : 'venda' });
       } catch (err: any) {
         showToast?.(`Erro PIX: ${err?.message ?? '—'}`, 'error', true);
       } finally {
@@ -1557,10 +1593,10 @@ export const PDVViewSupermax = ({
     setPixProcessing(false);
   }, [pixModal?.id]);
 
-  // Registra a venda quando o pix vira 'pago'. Chamado pelo realtime/polling
-  // (via `usePagamentoPendente`, uma vez por aviso) ou pelo botão "Tentar
-  // Novamente". Devolve `false` na falha: a espera solta a trava e o próximo
-  // polling tenta de novo sozinho.
+  // Registra a venda (ou soma a linha do misto) quando o pix vira 'pago'.
+  // Chamado pelo realtime/polling (via `usePagamentoPendente`, uma vez por
+  // aviso) ou pelo botão "Tentar Novamente". Devolve `false` na falha: a
+  // espera solta a trava e o próximo polling tenta de novo sozinho.
   const processarPagamentoPix = useCallback(async (): Promise<boolean> => {
     if (!pixModal) return true;
     setPixError(null);
@@ -1569,6 +1605,16 @@ export const PDVViewSupermax = ({
       const aberto = await caixaAindaAberto();
       if (!aberto) {
         throw new Error(`Caixa de ${filial} foi fechado. Reabra em Financeiro → Controle de Caixa e clique em "Tentar Novamente". O PIX já foi pago no MaxBank — NÃO cancele aqui.`);
+      }
+      // Misto: a confirmação vira uma linha de pagamento e o operador volta
+      // ao modal pra lançar o resto — a venda só fecha no FECHAR VENDA.
+      if (pixModal.destino === 'linha') {
+        setPagamentos(prev => [...prev, { forma: 'PIX', valor: pixModal.valor }]);
+        setParcialValor('');
+        setPixModal(null);
+        setPaymentModalOpen(true);
+        focusFecharVenda();
+        return true;
       }
       await finalizarVendaRef.current('PIX');
       setPixModal(null);
@@ -1731,6 +1777,9 @@ export const PDVViewSupermax = ({
       return;
     }
     const pixId = pixModal.id;
+    // Pix que ia virar linha do misto: desistir dele não pode abandonar a
+    // venda pela metade — o operador volta pro modal com o que já lançou.
+    const voltaProMisto = pixModal.destino === 'linha';
     try {
       const error = await cancelarCobranca('pix_pendentes', pixId);
       if (error) throw error;
@@ -1739,6 +1788,7 @@ export const PDVViewSupermax = ({
     } finally {
       setConfirmPixCancel(false);
       setPixModal(null);
+      if (voltaProMisto) setPaymentModalOpen(true);
     }
   };
 
@@ -1780,6 +1830,21 @@ export const PDVViewSupermax = ({
     const id = setTimeout(() => parcialInputRef.current?.focus(), 0);
     return () => clearTimeout(id);
   }, [paymentModalOpen]);
+
+  // Fechou um seletor aberto por cima do pagamento (cartão, PIX/Vale/Fiado,
+  // parcelas, dinheiro, CPF, cliente)? O elemento focado sumiu com ele e o
+  // foco caía no body — fora do modal, onde F1/F2/F3, setas e Esc não chegam.
+  // Só age se o foco estiver mesmo fora: não rouba o FECHAR VENDA focado.
+  const subModalDoPagamento = cardPickerOpen || payerPickerOpen || parcelasModalOpen || cashModalOpen
+    || discountModalOpen || !!descAuth || cpfModalOpen || clientPickerOpen || confirmCancel || !!descarte;
+  useEffect(() => {
+    if (!paymentModalOpen || subModalDoPagamento) return;
+    const id = setTimeout(() => {
+      const raiz = document.querySelector('[data-pdv-pagamento]');
+      if (raiz && !raiz.contains(document.activeElement)) parcialInputRef.current?.focus();
+    }, 0);
+    return () => clearTimeout(id);
+  }, [paymentModalOpen, subModalDoPagamento]);
 
   // Foca o FECHAR VENDA quando pagamentos.length aumenta — substitui o
   // focusFecharVenda manual (que dependia de timing de rAF e podia ser
@@ -1977,11 +2042,15 @@ export const PDVViewSupermax = ({
           onConfirmarEdicao={confirmarEdicaoPagamento}
           onCancelarEdicao={() => { setEditPagIdx(null); setEditPagValor(''); }}
           onRemoverPagamento={(idx) => {
-            setPagamentos(prev => prev.filter((_, i) => i !== idx));
-            setEditPagIdx(null);
-            setEditPagValor('');
+            const linha = pagamentos[idx];
+            if (!linha) return;
+            pedirDescarte('Remover este pagamento', [linha], () => {
+              setPagamentos(prev => prev.filter((_, i) => i !== idx));
+              setEditPagIdx(null);
+              setEditPagValor('');
+            });
           }}
-          onLimparPagamentos={() => { setPagamentos([]); setParcialValor(''); }}
+          onLimparPagamentos={() => pedirDescarte('Descartar os pagamentos', pagamentos, () => { setPagamentos([]); setParcialValor(''); })}
           onEscolherForma={handlePayChoice}
           onAbrirCartao={() => setCardPickerOpen(true)}
           onAbrirOutras={() => setPayerPickerOpen(true)}
@@ -1991,7 +2060,7 @@ export const PDVViewSupermax = ({
           onCpf={() => { setCpfInput(cpfNota ? mascararDocumento(cpfNota) : ''); setCpfModalOpen(true); }}
           onVincularCliente={() => { setClientSearch(''); setClientPickerModo('vincular'); setClientPickerOpen(true); }}
           onDesvincularCliente={() => setClienteVinculado(null)}
-          onVoltar={() => {
+          onVoltar={() => pedirDescarte('Voltar e descartar os pagamentos', pagamentos, () => {
             if (pagamentos.length > 0) {
               setPagamentos([]);
               showToast?.('Pagamentos lançados descartados.', 'success');
@@ -2002,10 +2071,17 @@ export const PDVViewSupermax = ({
             setCpfNota('');
             setClienteVinculado(null);
             setPaymentModalOpen(false);
-          }}
+            devolverFoco();
+          })}
           onCancelarVenda={cancelSale}
           onFecharVenda={finalizarVendaMisto}
-          onFechar={() => setPaymentModalOpen(false)}
+          // O X fechava deixando as linhas no estado, e reabrir o pagamento
+          // (F5) as zera — PIX/Cartão pago sumia sem aviso por esse caminho.
+          onFechar={() => pedirDescarte('Fechar e descartar os pagamentos', pagamentos, () => {
+            if (valorEletronicoPago(pagamentos) > 0.001) { setPagamentos([]); setParcialValor(''); }
+            setPaymentModalOpen(false);
+            devolverFoco();
+          })}
         />
       )}
 
@@ -2064,6 +2140,7 @@ export const PDVViewSupermax = ({
       {pixModal && (
         <PixAguardandoModal
           cobranca={pixModal}
+          linha={pixModal.destino === 'linha'}
           erro={pixError}
           processando={pixProcessing}
           onTentarDeNovo={processarPagamentoPix}
@@ -2077,6 +2154,7 @@ export const PDVViewSupermax = ({
       {cartaoModal && (
         <CartaoAguardandoModal
           cobranca={cartaoModal}
+          linha={cartaoModal.destino === 'linha'}
           confirmando={confirmCartaoCancel}
           onConfirmando={setConfirmCartaoCancel}
           onCancelar={cancelarCartao}
@@ -2100,7 +2178,7 @@ export const PDVViewSupermax = ({
           onSenha={setDescAuthSenha}
           carregando={descAuthLoading}
           onAutorizar={confirmarAutorizacaoDesconto}
-          onCancelar={() => { setDescAuth(null); setDescAuthSenha(''); requestAnimationFrame(() => codeInputRef.current?.focus()); }}
+          onCancelar={() => { setDescAuth(null); setDescAuthSenha(''); devolverFoco(); }}
         />
       )}
 
@@ -2116,8 +2194,19 @@ export const PDVViewSupermax = ({
       {confirmCancel && (
         <CancelarVendaModal
           itens={cart.length}
+          valorPago={valorEletronicoPago(pagamentos)}
           onCancelarVenda={reallyCancelSale}
-          onVoltar={() => { setConfirmCancel(false); requestAnimationFrame(() => codeInputRef.current?.focus()); }}
+          onVoltar={() => { setConfirmCancel(false); devolverFoco(); }}
+        />
+      )}
+
+      {descarte && (
+        <DescartarPagoModal
+          acao={descarte.acao}
+          valor={valorEletronicoPago(descarte.linhas)}
+          detalhe={formaDoMisto(descarte.linhas.filter(ehLinhaEletronica)).replace(/^Misto: /, '')}
+          onConfirmar={() => { const { confirmar } = descarte; setDescarte(null); confirmar(); devolverFoco(); }}
+          onVoltar={() => { setDescarte(null); devolverFoco(); }}
         />
       )}
 
@@ -2189,6 +2278,7 @@ export const PDVViewSupermax = ({
       {/* Picker PIX/Fiado (F3 no payment modal) — ↑↓ navega · Enter seleciona · Esc fecha */}
       {payerPickerOpen && (
         <PagadorPickerModal
+          misto={mistoAtivo(pagamentos.length, parseBRL(parcialValor), restante)}
           onEscolher={(forma) => { setPayerPickerOpen(false); handlePayChoice(forma); }}
           onVoltar={() => setPayerPickerOpen(false)}
         />
@@ -2219,8 +2309,8 @@ export const PDVViewSupermax = ({
             setDiscountModalOpen(false);
             setDescAuth({ valor });
           }}
-          onRemover={() => { setDesconto(0); setDescontoAutorizacao(null); setDiscountModalOpen(false); requestAnimationFrame(() => codeInputRef.current?.focus()); }}
-          onFechar={() => { setDiscountModalOpen(false); requestAnimationFrame(() => codeInputRef.current?.focus()); }}
+          onRemover={() => { setDesconto(0); setDescontoAutorizacao(null); setDiscountModalOpen(false); devolverFoco(); }}
+          onFechar={() => { setDiscountModalOpen(false); devolverFoco(); }}
         />
       )}
 

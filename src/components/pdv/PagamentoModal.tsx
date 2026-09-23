@@ -2,7 +2,7 @@ import type { MutableRefObject, RefObject } from 'react';
 import { Banknote, CreditCard, DollarSign, Loader2, Pencil, Trash2, Users as UsersIcon, Wallet, X } from 'lucide-react';
 import { trapTab } from '../../lib/focoPdv';
 import { formatBRL, parseBRL } from '../../lib/viewUtils';
-import { mistoAtivo, type LinhaPagamento } from '../../lib/pdv/pagamento';
+import { mistoAtivo, ehLinhaEletronica, type LinhaPagamento } from '../../lib/pdv/pagamento';
 import { mascararDocumento } from '../../lib/pdv/documento';
 import { YELLOW, YELLOW_DARK, NAVY_DARK, MONEY, RED } from './coresMaxPos';
 
@@ -68,6 +68,7 @@ export function PagamentoModal(p: {
 
   return (
     <div
+      data-pdv-pagamento
       className="fixed inset-0 z-[180] flex items-start justify-center overflow-y-auto p-4"
       style={{ background: 'rgba(0,0,0,0.7)' }}
       onKeyDown={(e) => {
@@ -126,12 +127,21 @@ export function PagamentoModal(p: {
           payBtnRefs.current[next]?.focus();
           return;
         }
-        // F1/F2 funcionam mesmo em misto (Dinheiro/Cartão aceitam parcial).
-        // F3 (PIX) só fora do misto — PIX é forma única.
-        const mistoActive = pagamentos.length > 0 || parseBRL(parcialValor) > 0;
+        // F1/F2/F3 funcionam mesmo em misto (Dinheiro/Cartão/PIX aceitam
+        // parcial). O picker do F3 abre igual; Fiado/Vale continuam recusados
+        // dentro de onEscolherForma quando o misto já começou.
         if (e.key === 'F1' && !e.shiftKey) { e.preventDefault(); e.stopPropagation(); onEscolherForma('Dinheiro'); return; }
         if (e.key === 'F2' && !e.shiftKey) { e.preventDefault(); e.stopPropagation(); onAbrirCartao(); return; }
-        if (e.key === 'F3' && !e.shiftKey && !mistoActive) { e.preventDefault(); e.stopPropagation(); onAbrirOutras(); return; }
+        if (e.key === 'F3' && !e.shiftKey) { e.preventDefault(); e.stopPropagation(); onAbrirOutras(); return; }
+        // O rodapé anuncia F6 e F9 aqui dentro; o atalho global ignora tudo
+        // com modal aberto, então é este handler que responde. F6 segue a
+        // mesma trava do botão: com pagamento lançado o total não muda mais.
+        if (e.key === 'F6' && !e.shiftKey) {
+          e.preventDefault(); e.stopPropagation();
+          if (subtotal > 0 && pagamentos.length === 0) onDesconto();
+          return;
+        }
+        if (e.key === 'F9' && !e.shiftKey) { e.preventDefault(); e.stopPropagation(); onCancelarVenda(); return; }
         if (/^F\d+$/.test(e.key)) e.stopPropagation();
       }}
     >
@@ -159,7 +169,7 @@ export function PagamentoModal(p: {
         {/* Misto: input parcial + lista de pagamentos lançados */}
         <div className="px-6 pt-4">
           <label className="text-[11px] font-bold uppercase tracking-wider text-gray-500 block mb-1.5">
-            VALOR DESTA FORMA <span className="text-gray-400 normal-case font-medium">(vazio = restante · PIX e Fiado só como forma única)</span>
+            VALOR DESTA FORMA <span className="text-gray-400 normal-case font-medium">(vazio = restante · Fiado e Vale só como forma única)</span>
           </label>
           <input
             ref={parcialInputRef}
@@ -168,14 +178,16 @@ export function PagamentoModal(p: {
             value={parcialValor}
             onChange={(e) => onParcial(formatBRL(parseBRL(e.target.value)))}
             onKeyDown={(e) => {
-              // Esc limpa só o input — NÃO deve fechar modal nem limpar
-              // pagamentos. Sem stopPropagation, o handler do payment modal
-              // pega e bagunça tudo.
-              if (e.key === 'Escape') {
+              // Com valor digitado, Esc limpa só o campo — não fecha o modal
+              // nem limpa pagamentos. Vazio, sobe pro modal: o foco mora aqui,
+              // e sem isso o "Esc voltar" do rodapé nunca respondia.
+              if (e.key === 'Escape' && parseBRL(parcialValor) > 0) {
                 e.preventDefault(); e.stopPropagation();
                 onParcial('');
               }
-              if (/^F\d+$/.test(e.key)) e.stopPropagation();
+              // F1/F2/F3 (Dinheiro/Cartão/PIX) precisam subir até o onKeyDown
+              // do modal — é o foco padrão ao abrir, então SEM propagação os
+              // atalhos nunca disparam com o operador digitando o valor.
             }}
             placeholder={`Restante: ${formatBRL(restante)}`}
             className="w-full bg-white border-2 text-xl font-bold text-gray-900 tabular-nums px-3 py-1.5 outline-none focus:border-blue-700 focus:ring-2 focus:ring-blue-500/30"
@@ -203,6 +215,7 @@ export function PagamentoModal(p: {
                 {pagamentos.map((p, idx) => {
                   const editando = editPagIdx === idx;
                   const temTroco = !!p.troco && p.troco > 0.001;
+                  const eletronica = ehLinhaEletronica(p);
                   return (
                     <div key={idx} className="flex items-center justify-between bg-gray-50 border border-gray-300 px-2.5 py-1.5 gap-2 rounded">
                       <div className="min-w-0 flex-1">
@@ -233,16 +246,18 @@ export function PagamentoModal(p: {
                       <div className="flex items-center gap-1 shrink-0">
                         <button
                           tabIndex={-1}
-                          disabled={temTroco && !editando}
+                          disabled={(temTroco || eletronica) && !editando}
                           // mousedown com preventDefault evita o blur do input (que
                           // cancela) antes do click — assim o lapis confirma o valor.
                           onMouseDown={editando ? (e) => e.preventDefault() : undefined}
                           onClick={() => editando ? onConfirmarEdicao() : onIniciarEdicao(idx)}
                           className="w-6 h-6 flex items-center justify-center text-white rounded hover:brightness-110 disabled:opacity-30 disabled:cursor-not-allowed"
                           style={{ background: NAVY_DARK }}
-                          title={temTroco
-                            ? 'Pagamento com troco — remova e lance de novo para mudar o valor'
-                            : editando ? 'Confirmar valor (Enter)' : 'Editar valor'}
+                          title={eletronica
+                            ? 'Valor confirmado pelo MaxBank — não se edita'
+                            : temTroco
+                              ? 'Pagamento com troco — remova e lance de novo para mudar o valor'
+                              : editando ? 'Confirmar valor (Enter)' : 'Editar valor'}
                         >
                           <Pencil size={12} />
                         </button>
@@ -274,13 +289,13 @@ export function PagamentoModal(p: {
           <div className="grid grid-cols-3 gap-2">
             {FORMAS.map(([forma, Icon, hint, label], i) => {
               const active = i === payChoiceIdx;
-              // PIX e Fiado só funcionam como forma única (sem parcial),
-              // por causa de realtime / RPC que cria conta_receber pelo
-              // valor cheio. Dinheiro e Cartão D/C aceitam misto.
+              // Fiado e Vale só funcionam como forma única (sem parcial), por
+              // causa da RPC que cria conta_receber pelo valor cheio. Dinheiro,
+              // Cartão D/C e PIX aceitam misto (PIX vira linha e volta ao modal).
               const parcial = parseBRL(parcialValor);
               const isMistoActive = mistoAtivo(pagamentos.length, parcial, restante);
-              const isPixOrFiado = forma === 'PIX' || forma === 'Fiado' || forma === 'Vale-Alimentação';
-              const isDisabled = restante <= 0.001 || (isMistoActive && isPixOrFiado);
+              const isFiadoOuVale = forma === 'Fiado' || forma === 'Vale-Alimentação';
+              const isDisabled = restante <= 0.001 || (isMistoActive && isFiadoOuVale);
               return (
                 <button
                   key={forma}
@@ -290,7 +305,7 @@ export function PagamentoModal(p: {
                   onClick={() => onEscolherForma(forma)}
                   onFocus={() => setPayChoiceIdx(i)}
                   onMouseEnter={() => setPayChoiceIdx(i)}
-                  title={isDisabled && isMistoActive && isPixOrFiado
+                  title={isDisabled && isMistoActive && isFiadoOuVale
                     ? `${forma} só funciona como forma única — limpe os pagamentos lançados pra usar`
                     : undefined}
                   className={`relative border-2 bg-white rounded py-4 flex flex-col items-center gap-1.5 transition disabled:opacity-30 focus:outline-none hover:border-blue-700 hover:text-blue-700 focus-visible:ring-4 focus-visible:ring-offset-2 focus-visible:ring-blue-500 ${active && !isDisabled ? 'border-blue-700 text-blue-700' : 'text-gray-900'}`}

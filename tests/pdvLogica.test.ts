@@ -3,6 +3,7 @@ import { montarVendaPdv } from '../src/lib/pdv/venda';
 import {
   totaisComDesconto, restanteAPagar, valorDevido, mistoAtivo, trocoDoRecebido, valorEditado,
   formaDoMisto, trocoTotal, dinheiroNaGaveta, parcelasDaVenda, creditoDoMisto,
+  ehLinhaEletronica, valorEletronicoPago,
 } from '../src/lib/pdv/pagamento';
 import { isProdutoFracionario, fmtQtdArmada, formatQtd } from '../src/lib/pdv/quantidade';
 import { formasDaUnidade, rotuloFiado, podeDevolver, podeAlternarFilial } from '../src/lib/pdv/regrasUnidade';
@@ -136,6 +137,23 @@ describe('pagamento misto e troco', () => {
       { forma: 'Dinheiro', valor: 10 },
     ])).toEqual({ valor: 50.3, parcelas: 4 });
     expect(creditoDoMisto([{ forma: 'Dinheiro', valor: 10 }])).toEqual({ valor: 0, parcelas: 1 });
+  });
+
+  it('PIX e Cartão são linhas eletrônicas; Dinheiro não', () => {
+    expect(ehLinhaEletronica({ forma: 'PIX', valor: 1 })).toBe(true);
+    expect(ehLinhaEletronica({ forma: 'Cartão Crédito', valor: 1 })).toBe(true);
+    expect(ehLinhaEletronica({ forma: 'Cartão Débito', valor: 1 })).toBe(true);
+    expect(ehLinhaEletronica({ forma: 'Dinheiro', valor: 1 })).toBe(false);
+  });
+
+  it('valor já pago no MaxBank soma só PIX e Cartão', () => {
+    expect(valorEletronicoPago([
+      { forma: 'PIX', valor: 50.1 },
+      { forma: 'Cartão Crédito', valor: 100 },
+      { forma: 'Cartão Débito', valor: 100.2 },
+      { forma: 'Dinheiro', valor: 100, troco: 0 },
+    ])).toBe(250.3);
+    expect(valorEletronicoPago([{ forma: 'Dinheiro', valor: 10 }])).toBe(0);
   });
 });
 
