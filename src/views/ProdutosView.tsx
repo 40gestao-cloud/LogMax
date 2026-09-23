@@ -4,9 +4,9 @@ import type { FilialOp } from '../components/FilialSelector';
 import { useFilial } from '../contexts/FilialContext';
 import { MatrizConsolidado } from '../components/MatrizConsolidado';
 import { motion, AnimatePresence } from 'motion/react';
-import { Search, Edit2, Trash2, Plus, Save, FileDown, Sheet, Tag, TrendingUp, AlertTriangle, Barcode, Check, AlertCircle, ImagePlus, X as XIcon, Loader2, Percent, Grid3x3, Upload, Lock, Pencil } from 'lucide-react';
+import { Search, Edit2, Trash2, Plus, Save, FileDown, Sheet, AlertTriangle, Barcode, Grid3x3, Upload } from 'lucide-react';
 import { HistoricoOperacoes } from '../components/HistoricoOperacoes';
-import { ColarImagem, useColarImagemGlobal } from '../components/ColarImagem';
+import { useColarImagemGlobal } from '../components/ColarImagem';
 import { BotaoModeloPlanilha } from '../components/BotaoModeloPlanilha';
 import { ImportarProdutosModal } from '../components/ImportarProdutosModal';
 import { useFetchData, dbInsert, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
@@ -14,42 +14,42 @@ import { LoadingSpinner, EmptyState, FormField, ExportButton, NeuButtonAccent, S
 import { SelectBusca, type SelectBuscaGrupo } from '../components/SelectBusca';
 import type { UserProfile } from '../hooks/useUserProfile';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
-import { useFormValidation, exportToExcel, formatBRL, parseBRL, handleMoneyKeyDown, formatQtd, parseQtd, handleQtdKeyDown, qtdBR, drawPdfHeader } from '../lib/viewUtils';
+import { useFormValidation, exportToExcel, formatBRL, parseBRL, formatQtd, parseQtd, qtdBR, drawPdfHeader } from '../lib/viewUtils';
 import { GOLD, BLACK, GRAY_INK, GOLD_TINT } from '../lib/pdfPalette';
-import { normalizeEan13, drawEan13ToCanvas, downloadEan13LabelPdf, drawEtiquetasGridOnDoc, gerarEanInterno } from '../lib/barcode';
-import { FILIAL_DEFAULT } from '../lib/filiais';
+import { normalizeEan13, drawEan13ToCanvas, downloadEan13LabelPdf, drawEtiquetasGridOnDoc } from '../lib/barcode';
 import {
   validarImagemProduto,
   uploadImagemProduto,
   avaliarResolucaoImagem,
-  PRODUTO_IMAGEM_RES_IDEAL,
   removerImagemAntiga,
-  PRODUTO_IMAGEM_ACCEPT,
-  PRODUTO_IMAGEM_OUTPUT_MAX_LABEL,
   PRODUTO_IMAGEM_MAX_SLOTS,
 } from '../lib/produtoImagem';
 import { useConfirm } from '../contexts/ConfirmContext';
 import {
   UNIDADES_PRODUTO,
   unidadesDeProduto,
-  UNIDADES_CONTEUDO,
-  divergenciaDeConteudo,
   UNIDADES_FRACIONARIAS,
   temConteudoDeEmbalagem,
   normalizarUnidade,
   formatarConteudo,
   exemploProduto,
-  EMBALAGENS_COMPRA,
   embalagemDoProduto,
   rotuloEmbalagem,
-  rotuloUnidade,
 } from '../lib/unidades';
-import { ATRIBUTOS_PRODUTO, rotuloVariante, atributosPadrao, rotuloAtributo, type AtributoDef } from '../lib/atributosProduto';
-import { calcMarkup, calcMargem, precoPorMarkup, corDoMarkup, fmtPct, vendaAbaixoDoCusto, EXPLICA_MARKUP_MARGEM } from '../lib/precificacao';
-import { TIPOS_PRODUTO, TIPO_LABEL, TIPO_AJUDA, normalizarTipo, ehVendavel, temEstoque, type TipoProduto } from '../lib/tipoProduto';
+import { ATRIBUTOS_PRODUTO, rotuloVariante, atributosPadrao } from '../lib/atributosProduto';
+import { calcMarkup, calcMargem, precoPorMarkup, fmtPct, vendaAbaixoDoCusto } from '../lib/precificacao';
+import { TIPOS_PRODUTO, TIPO_LABEL, TIPO_AJUDA, normalizarTipo, ehVendavel, temEstoque } from '../lib/tipoProduto';
 import { supabase } from '../lib/supabase';
 import { acompanharReservas, RESERVA_COLUNAS, type ReservaLinha } from '../lib/reservasTrabalho';
 import { useReservaTrabalho } from '../hooks/useReservaTrabalho';
+import { EMPTY_EXTRAS, parseNum, fmtBRL, SEM_COMPRA } from '../components/produtos/produtoFormComum';
+import { MarkupBadge } from '../components/produtos/MarkupBadge';
+import { EtiquetaPreviewModal } from '../components/produtos/EtiquetaPreviewModal';
+import { SecaoIdentificacao } from '../components/produtos/SecaoIdentificacao';
+import { SecaoEstoque } from '../components/produtos/SecaoEstoque';
+import { SecaoPrecos } from '../components/produtos/SecaoPrecos';
+import { SecaoEtiqueta } from '../components/produtos/SecaoEtiqueta';
+import { SecaoImagens } from '../components/produtos/SecaoImagens';
 
 /**
  * O custo vive em `produtos_custo`, tabela irmã com RLS própria (migração 262) —
@@ -75,54 +75,11 @@ async function salvarPrecoCusto(produtoId: string, valor: number): Promise<void>
 // gerador de planilha e no PDV, e as três discordavam.
 const UNIDADES = UNIDADES_PRODUTO;
 
-const EMPTY_EXTRAS = {
-  categoria:              '',
-  categoria_id:           '' as string,
-  subcategoria_id:        '' as string,
-  preco_custo:            '',
-  /** Exceção consciente ao bloqueio de preço abaixo do custo (migr. 601). */
-  venda_abaixo_custo:     false,
-  estoque:                '',
-  estoque_minimo:         '',
-  unidade:                'UN' as string,
-  ean:                    '',
-  fornecedor:             '',
-  // Guarda a CHAVE; `fornecedor` acima continua com o nome porque a busca
-  // trigram (migr. 028), o export e a ficha do catálogo leem da coluna de
-  // texto. Migr. 488 — sugestão opcional, não pré-requisito.
-  fornecedor_id:          '',
-  marca:                  '',
-  peso:                   '',
-  // Medida do CONTEÚDO da embalagem, independente de `unidade` (que é a medida
-  // do estoque). Arroz 5 KG em pacote: peso=5, peso_unidade=KG, unidade=UN.
-  // Migr. 438 — antes o rótulo usava `unidade` e produzia "Peso / Volume (UN)".
-  peso_unidade:           'KG' as string,
-  // Embalagem de COMPRA — a terceira medida (migr. 589). Fardo de arroz com 30
-  // UN: o estoque continua em UN, e é só a requisição que pede em fardo.
-  embalagem_compra:       '',
-  embalagem_qtd:          '',
-  filial:                 FILIAL_DEFAULT as string,
-  tipo:                   'estoque_venda' as TipoProduto,
-  patrimonio_numero:      '',
-  patrimonio_responsavel: '',
-  patrimonio_localizacao: '',
-  // Migr. 511 — meses até depreciar 100% (linear, sem residual). Vazio =
-  // não entra na depreciação do DRE (bem cadastrado só pra controle físico).
-  patrimonio_vida_util_meses: '',
-  elegivel_beneficios:    false,
-  // Atributos por nicho (JSONB em produtos.atributos). Cada filial preenche
-  // um subconjunto: MaxLook usa tamanho/cor/genero/colecao/material; TechMax
-  // usa modelo/cor/memoria/tela/bateria/camera/garantia_dias/requer_imei.
-  // SuperMax fica com objeto vazio (usa as colunas físicas que já tem).
-  atributos:              {} as Record<string, any>,
-};
 
 // A ficha por nicho (tipo + tabela) vive em src/lib/atributosProduto.ts —
 // o PDV exibe a mesma lista no modal de detalhes do produto, e duas cópias
 // divergiriam no primeiro campo novo.
 
-const parseNum = (v: string | number | undefined | null): number =>
-  typeof v === 'number' ? v : parseFloat(String(v ?? '').replace(',', '.')) || 0;
 
 
 /**
@@ -141,156 +98,16 @@ const fichaVazia = (item: any, filial: string): boolean => {
   });
 };
 
-const fmtBRL = (v: number) => `R$ ${formatBRL(v)}`;
 
-// Sentinel do select "Item comprado". Produto nasce de uma compra; o cadastro
-// sem pedido existe (saldo de abertura do primeiro dia, doação, item que a
-// turma já tinha) mas é exceção, e exceção se escolhe com o nome dela na tela.
-const SEM_COMPRA = '__sem_compra__';
 
 // Prefixo do valor das requisições que ainda esperam o pedido sair (migr. 494).
 // O outro grupo do mesmo select guarda a DESCRIÇÃO do item; aqui é preciso o id
 // da requisição, porque é nela que o vínculo vai ser gravado.
 const REQ_PREFIX = '__req__:';
 
-// Sentinel do "Outro…" nos campos de lista da ficha (tamanho, cor).
-const OUTRO = '__outro__';
 
 // A conta vive em src/lib/precificacao.ts — estava duplicada aqui e no
 // Catálogo, e as duas calculavam MARKUP sob o rótulo "Margem".
-
-/**
- * Selo da grade. Mostra MARKUP, que é o que sempre mostrou — só o nome estava
- * errado. A margem real vai no title, porque a coluna não comporta as duas e
- * quem decide preço na listagem está olhando formação, não resultado.
- */
-const MarkupBadge = ({ venda, custo }: { venda: string | number; custo: string | number }) => {
-  const v  = parseNum(venda);
-  const c  = parseNum(custo);
-  const mk = calcMarkup(v, c);
-  if (mk === null) return <span className="text-gray-600">—</span>;
-  const mg = calcMargem(v, c);
-  return (
-    <span className={`font-bold tabular-nums ${corDoMarkup(mk)}`}
-      title={`Markup ${fmtPct(mk)} (sobre o custo) · Margem ${fmtPct(mg)} (sobre a venda)`}>
-      {fmtPct(mk)}
-    </span>
-  );
-};
-
-// Pré-visualização da etiqueta EAN-13 (adesivo 80×50 mm).
-//
-// O botão da linha baixava o PDF direto. Em aula isso é atrito: mostrar a
-// etiqueta de um produto virava um download por demonstração, e a pasta de
-// Downloads do professor enchia de PDF que ninguém ia abrir. Agora o clique
-// abre o adesivo em tamanho de leitura e o download fica sendo uma escolha.
-//
-// O desenho segue o mesmo layout do PDF (`downloadEan13LabelPdf`): nome em
-// cima, linha de variante · código · preço, barras, dígitos. Não é o mesmo
-// código — o PDF é vetorial em milímetros e este é canvas em pixels — mas o
-// que o aluno vê na tela tem de ser o que sai no papel.
-const EtiquetaPreviewModal = ({ item, onBaixar, onClose }: {
-  item: { ean?: string; nome?: string; codigo?: string; preco?: any; atributos?: any };
-  onBaixar: () => void | Promise<void>;
-  onClose: () => void;
-}) => {
-  const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const [baixando, setBaixando] = useState(false);
-  const norm = normalizeEan13(item.ean);
-  const variante = rotuloVariante(item);
-  const preco = item.preco != null ? parseNum(item.preco) : null;
-
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas || !norm.valid) return;
-    // Resolução alta de propósito (módulo de 3px, barra de 96px): o canvas é
-    // depois esticado por CSS para caber na largura do telemóvel, e partir de
-    // um desenho pequeno deixaria as barras serrilhadas justamente onde o
-    // aluno aponta a câmera para testar a leitura.
-    drawEan13ToCanvas(canvas, norm.value, { moduleWidth: 3, barHeight: 96 });
-    // O helper crava largura/altura em px (bom para o preview do formulário,
-    // que é fixo). Aqui a etiqueta é fluida: a largura manda, a altura segue.
-    canvas.style.width = '100%';
-    canvas.style.height = 'auto';
-  }, [norm.valid, norm.value]);
-
-  // Esc fecha — o modal abre por clique num ícone pequeno e quem está
-  // demonstrando não quer procurar o X.
-  useEffect(() => {
-    const aoTeclar = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
-    window.addEventListener('keydown', aoTeclar);
-    return () => window.removeEventListener('keydown', aoTeclar);
-  }, [onClose]);
-
-  const baixar = async () => {
-    setBaixando(true);
-    try { await onBaixar(); } finally { setBaixando(false); }
-  };
-
-  return (
-    <motion.div
-      initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-      className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4"
-      onClick={onClose}
-    >
-      <motion.div
-        initial={{ scale: 0.96, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.96, opacity: 0 }}
-        onClick={e => e.stopPropagation()}
-        className="neu-flat rounded-3xl p-5 sm:p-6 border border-white/10 w-full max-w-md flex flex-col gap-4 max-h-[90vh] overflow-y-auto main-scrollbar"
-      >
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <h3 className="text-sm font-bold text-gray-200 flex items-center gap-2">
-              <Barcode size={14} className="text-accent shrink-0" /> Etiqueta EAN-13
-            </h3>
-            <p className="text-[11px] text-gray-500 mt-1 truncate">{item.nome}</p>
-          </div>
-          <button type="button" onClick={onClose} title="Fechar"
-            className="action-btn-neutral shrink-0"><XIcon size={14} /></button>
-        </div>
-
-        {/* O adesivo. Fundo branco sempre — etiqueta é papel, não tem tema. */}
-        <div className="bg-white rounded-xl p-4 sm:p-5 flex flex-col items-center gap-2 select-none">
-          <p className="text-[13px] sm:text-sm font-bold text-black text-center leading-tight break-words w-full">
-            {item.nome}
-          </p>
-          {(variante || item.codigo || preco != null) && (
-            <p className="text-[10px] sm:text-[11px] text-neutral-600 text-center">
-              {[variante, item.codigo, preco != null && !Number.isNaN(preco) ? fmtBRL(preco) : null]
-                .filter(Boolean).join('   ·   ')}
-            </p>
-          )}
-          {norm.valid ? (
-            <canvas ref={canvasRef} className="mt-1 max-w-full" />
-          ) : (
-            <p className="text-[11px] text-neutral-500 py-6 text-center">
-              EAN-13 inválido — a etiqueta não pode ser gerada.
-            </p>
-          )}
-        </div>
-
-        {norm.valid && (
-          <p className="text-[10px] text-gray-500 leading-snug text-center">
-            Adesivo de 80 × 50 mm. É este desenho que sai no PDF — dá para conferir a leitura
-            apontando o scanner do PDV para a tela.
-          </p>
-        )}
-
-        <div className="flex flex-col-reverse sm:flex-row gap-2 sm:justify-end">
-          <button type="button" onClick={onClose}
-            className="neu-button py-2.5 px-5 rounded-xl text-sm text-gray-400">
-            Fechar
-          </button>
-          {norm.valid && (
-            <NeuButtonAccent onClick={baixar} isLoading={baixando}>
-              <FileDown size={14} /> Baixar PDF
-            </NeuButtonAccent>
-          )}
-        </div>
-      </motion.div>
-    </motion.div>
-  );
-};
 
 const ProdutosViewInner = ({ showToast, filial, profile }: { showToast: any; filial: FilialOp; profile?: UserProfile | null }) => {
   const [page, setPage] = useState(0);
@@ -2157,1040 +1974,105 @@ const ProdutosViewInner = ({ showToast, filial, profile }: { showToast: any; fil
                 )}
               </div>
 
-              {/* Identificação */}
-              <div>
-                <p className="text-[10px] text-gray-600 uppercase tracking-widest font-bold mb-3">Identificação</p>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  <FormField label="Código *" error={errors.codigo}>
-                    <div className="flex gap-2">
-                      <input className={`neu-input py-2 px-3 rounded-xl text-sm flex-1 min-w-0 font-credencial ${errors.codigo ? 'border border-red-500/40' : ''}`}
-                        value={form.codigo} onChange={e => {
-                          // Digitou por cima do número gerado: a reserva não é
-                          // mais dele, volta para a fila na hora.
-                          if (codigoReservado && e.target.value !== codigoReservado) {
-                            liberarCodigo(codigoReservado);
-                            setCodigoReservado(null);
-                          }
-                          setForm(f => ({ ...f, codigo: e.target.value }));
-                          clearError('codigo');
-                        }}
-                        placeholder="Ex: 001" />
-                      {/* Código à mão foi como "ML-004" e "ML-31" passaram a
-                          conviver na mesma coluna — o problema que a migr. 265
-                          teve de contornar com `codigo_seq`. Sugerir o próximo
-                          é mais barato que ordenar o que já saiu torto. */}
-                      <button type="button" onClick={sugerirCodigo} disabled={sugerindoCodigo}
-                        title={`Reservar o próximo código da ${filial}`}
-                        className="neu-button py-2 px-3 rounded-xl text-[11px] font-bold text-gray-400 hover:text-accent shrink-0 disabled:opacity-50">
-                        {sugerindoCodigo ? '…' : 'Gerar'}
-                      </button>
-                    </div>
-                    <p className="text-[10px] text-gray-500 mt-1">
-                      {codigoReservado === form.codigo && codigoReservado
-                        ? <>O <span className="font-credencial text-accent">{codigoReservado}</span> está reservado para você — quem clicar em Gerar agora recebe o próximo. A reserva cai se você fechar o formulário sem salvar.</>
-                        : <>Código único dentro da <span className="font-mono text-accent">{filial}</span>. Filiais diferentes podem usar o mesmo código.</>}
-                    </p>
-                  </FormField>
-                  {/* A ordem canônica virou a da migr. 480: o produto é
-                      cadastrado ANTES da compra, porque é o código dele que
-                      entra no pedido. Cadastro antecipado é a REGRA, e a tela
-                      chamava isso de exceção.
+              <SecaoIdentificacao
+                errors={errors}
+                clearError={clearError}
+                categoriasProduto={categoriasProduto}
+                subcategoriasProduto={subcategoriasProduto}
+                atrLivre={atrLivre}
+                categoriasDaFilial={categoriasDaFilial}
+                codigoReservado={codigoReservado}
+                editItem={editItem}
+                escolherOrigem={escolherOrigem}
+                exProd={exProd}
+                extras={extras}
+                extrasErrors={extrasErrors}
+                filial={filial}
+                form={form}
+                fornecedoresOrdenados={fornecedoresOrdenados}
+                gruposOrigem={gruposOrigem}
+                itemCompradoSel={itemCompradoSel}
+                itensAguardandoPedido={itensAguardandoPedido}
+                itensComprados={itensComprados}
+                liberarCodigo={liberarCodigo}
+                marcaDaCompra={marcaDaCompra}
+                mostraPesoConteudo={mostraPesoConteudo}
+                nomeDestravado={nomeDestravado}
+                origemExigida={origemExigida}
+                origemOferecida={origemOferecida}
+                origemSemOpcoes={origemSemOpcoes}
+                reservaOrigem={reservaOrigem}
+                setAtrLivre={setAtrLivre}
+                setCodigoReservado={setCodigoReservado}
+                setExtras={setExtras}
+                setExtrasErrors={setExtrasErrors}
+                setForm={setForm}
+                setNomeDestravado={setNomeDestravado}
+                sugerindoCodigo={sugerindoCodigo}
+                sugerirCodigo={sugerirCodigo}
+              />
 
-                      O campo sobrevive à inversão porque continua respondendo a
-                      outra pergunta: existe carga na doca esperando o Confirmar
-                      cujo item não está no catálogo? Se existe, cadastrar do
-                      zero cria o segundo cadastro do mesmo produto — e escolher
-                      da lista traz nome, fornecedor e custo já fechados no
-                      pedido, em vez de grafia nova e custo chutado.
+              <SecaoImagens
+                enviarImagemSlot={enviarImagemSlot}
+                extrasErrors={extrasErrors}
+                form={form}
+                handleImagemChange={handleImagemChange}
+                handleRemoverImagem={handleRemoverImagem}
+                imagemInputRefs={imagemInputRefs}
+                imagemUploading={imagemUploading}
+                imagens={imagens}
+                imagensAviso={imagensAviso}
+              />
 
-                      A lista se esvazia sozinha: pedido novo já nasce amarrado
-                      ao catálogo (`produto_id`) e nem aparece aqui. O que resta
-                      é o passivo de antes da 480. (Era um <datalist> no campo de
-                      nome, que não reabria depois de escolher — datalist filtra
-                      as opções pelo texto digitado.) */}
-                  {origemExigida && origemSemOpcoes && (
-                    // O beco que a régua acima fecharia sem avisar: nada para
-                    // escolher, e "cadastro por conta própria" não é mais saída
-                    // fora da implantação. A tela aponta o caminho em vez de
-                    // oferecer um select vazio, e o Salvar fica desabilitado.
-                    <FormField label="Origem deste cadastro *">
-                      <div className="neu-pressed rounded-xl p-3 border border-amber-400/20 text-[11px] text-amber-300/90 leading-snug">
-                        Nenhuma requisição de compra eventual está esperando este cadastro, e a unidade já
-                        tem recebimento confirmado — isto não é implantação. Mercadoria nova entra pelo
-                        pedido: abra uma requisição em{' '}
-                        <span className="font-bold">Requisições &gt; Do Setor &gt; Compra eventual</span>,
-                        espere a cotação ser aprovada, e volte aqui — o item aparece nesta lista.
-                      </div>
-                    </FormField>
-                  )}
-                  {!editItem && !temEstoque(extras.tipo) && itensAguardandoPedido.length > 0 && (
-                    <FormField label="Origem deste cadastro">
-                      <div className="neu-pressed rounded-xl p-3 border border-white/5 text-[11px] text-gray-400 leading-snug">
-                        Bem de uso não entra pelo fluxo de compra: ele não tem saldo, e o Confirmar do
-                        recebimento daria entrada de mercadoria num item que nunca vai ter saldo. A
-                        aquisição se registra em <span className="font-bold">Financeiro &gt; Contas a Pagar</span>,
-                        marcando a conta como imobilizado — o bem aparece em Financeiro &gt; Patrimônio, com
-                        vida útil e depreciação. Se isto aqui é mercadoria ou material de consumo, corrija o
-                        Tipo acima e a lista de requisições volta.
-                      </div>
-                    </FormField>
-                  )}
-                  {origemOferecida && !origemSemOpcoes && gruposOrigem.length > 0 && (
-                    <FormField label={origemExigida ? 'Origem deste cadastro *' : 'Origem deste cadastro'}
-                      error={extrasErrors.origem_compra}>
-                      <SelectBusca
-                        value={itemCompradoSel}
-                        onChange={escolherOrigem}
-                        grupos={gruposOrigem}
-                        placeholder="Buscar requisição ou item já chegado..."
-                        vazioTexto="Nada encontrado com esse texto."
-                        error={extrasErrors.origem_compra}
-                      />
-                      <p className="text-[10px] text-gray-500 mt-1 leading-snug">
-                        O normal é <span className="text-gray-400">cadastrar antes de comprar</span> — é o código
-                        daqui que entra no pedido.
-                        {itensAguardandoPedido.length > 0 && (
-                          <> As requisições paradas esperam exatamente isto: escolher uma amarra este
-                          cadastro a ela, e o <span className="text-gray-400">Gerar Pedido</span> em Compras &gt; Cotações
-                          passa direto, sem perguntar o item do catálogo.</>
-                        )}
-                        {itensComprados.length > 0 && (
-                          <> A lista &quot;já chegou&quot; são item(ns) que entraram no Recebimento antes de ter
-                          cadastro: escolher um traz nome, fornecedor e custo do pedido, em vez de criar um
-                          segundo cadastro do mesmo produto.</>
-                        )}
-                        {!origemExigida && (
-                          <span className="block mt-1">
-                            Aqui é <span className="text-gray-400">opcional</span>: item de uso e consumo e bem
-                            também entram por implantação, montagem da unidade ou doação. Deixe em branco se
-                            este cadastro não está atendendo nenhuma requisição.
-                          </span>
-                        )}
-                      </p>
-                      {reservaOrigem.travado && (
-                        <p className="text-[11px] text-yellow-400 mt-1">
-                          🔒 {reservaOrigem.dono?.usuario_nome} já está cadastrando este item agora. Escolha
-                          outra origem ou espere.
-                        </p>
-                      )}
-                    </FormField>
-                  )}
-                  <FormField label="Nome do produto *" error={errors.nome}>
-                    {/* Travado quando a origem preencheu, até "Refinar nome"
-                        destravar. O texto da requisição é a necessidade escrita
-                        em português; o nome do catálogo é a identificação do
-                        item — são coisas diferentes, e é o segundo que sai na
-                        etiqueta e no PDV. */}
-                    {itemCompradoSel && itemCompradoSel !== SEM_COMPRA && !nomeDestravado ? (
-                      <div className="flex flex-col gap-1.5">
-                        <div className="neu-pressed py-2 px-3 rounded-xl text-sm text-gray-200 flex items-center gap-2">
-                          <Lock size={13} className="text-gray-500 shrink-0" />
-                          <span className="truncate">{form.nome || '—'}</span>
-                          <button type="button" onClick={() => setNomeDestravado(true)}
-                            className="ml-auto shrink-0 flex items-center gap-1 text-[10px] font-bold text-accent hover:opacity-80">
-                            <Pencil size={11} /> Refinar nome
-                          </button>
-                        </div>
-                        <p className="text-[10px] text-gray-500 leading-snug">
-                          Veio da requisição — refine para o nome comercial do item (marca e gramatura) se
-                          souber. É este nome que sai na etiqueta e no PDV.
-                        </p>
-                      </div>
-                    ) : (
-                    <input className={`neu-input py-2 px-3 rounded-xl text-sm ${errors.nome ? 'border border-red-500/40' : ''}`}
-                      value={form.nome}
-                      onChange={e => { setForm(f => ({ ...f, nome: e.target.value })); clearError('nome'); }}
-                      placeholder={`Ex: ${exProd.nome}`} />
-                    )}
-                  </FormField>
-                  <FormField label={ehVendavel(extras.tipo) ? 'Categoria *' : 'Categoria'} error={extrasErrors.categoria_id}>
-                    {categoriasDaFilial.length > 0 ? (
-                      <select className={`neu-input py-2 px-3 rounded-xl text-sm ${extrasErrors.categoria_id ? 'border border-red-500/40' : ''}`}
-                        value={extras.categoria_id}
-                        onChange={e => {
-                          const cat = categoriasProduto.find((c: any) => c.id === e.target.value);
-                          setExtras(x => ({ ...x, categoria_id: e.target.value, categoria: cat?.nome ?? '', subcategoria_id: '' }));
-                          setExtrasErrors(ev => ({ ...ev, categoria_id: '' }));
-                        }}>
-                        <option value="">— Selecione —</option>
-                        {categoriasDaFilial.filter((c: any) => c.ativo).map((c: any) => (
-                          <option key={c.id} value={c.id}>{c.icone} {c.nome}</option>
-                        ))}
-                      </select>
-                    ) : (
-                      // Era um input livre, e ele levava a um beco: o produto
-                      // nascia com `categoria_id` nulo — sem markup-alvo, sem a
-                      // sugestão de preço — e, em mercadoria, a validação exige
-                      // categoria_id, então o salvar era barrado apontando para
-                      // um select que nem estava na tela. A dependência passa a
-                      // ser dita em voz alta.
-                      <>
-                        <select className={`neu-input py-2 px-3 rounded-xl text-sm opacity-60 ${extrasErrors.categoria_id ? 'border border-red-500/40' : ''}`}
-                          value="" disabled>
-                          <option value="">— Nenhuma categoria cadastrada —</option>
-                        </select>
-                        <p className="text-[10px] text-amber-400/90 mt-1 leading-snug">
-                          A <span className="font-bold">{filial}</span> ainda não tem categoria. Cadastre em{' '}
-                          <span className="text-gray-300 font-semibold">Cadastros → Categorias</span> antes do produto —
-                          é a categoria que carrega o markup-alvo usado para sugerir o preço de venda.
-                        </p>
-                      </>
-                    )}
-                  </FormField>
-                  {extras.categoria_id && (() => {
-                    const subs = subcategoriasProduto.filter((s: any) => s.categoria_id === extras.categoria_id && s.ativo);
-                    return subs.length > 0 ? (
-                      <FormField label="Subcategoria">
-                        <select className="neu-input py-2 px-3 rounded-xl text-sm"
-                          value={extras.subcategoria_id}
-                          onChange={e => setExtras(x => ({ ...x, subcategoria_id: e.target.value }))}>
-                          <option value="">— Sem subcategoria —</option>
-                          {subs.map((s: any) => (
-                            <option key={s.id} value={s.id}>{s.icone} {s.nome}</option>
-                          ))}
-                        </select>
-                      </FormField>
-                    ) : null;
-                  })()}
-                  {/* Só mercadoria tem código de barras. Patrimônio se
-                      identifica pela plaqueta e material de consumo sai por
-                      requisição — nenhum dos dois passa pelo leitor do caixa, e
-                      o campo em branco na tela deles só sugeria que faltava
-                      preencher alguma coisa. */}
-                  {ehVendavel(extras.tipo) && (
-                  <FormField label="Cód. Barras EAN *" error={extrasErrors.ean}>
-                    <div className="flex gap-2">
-                      <input className={`neu-input py-2 px-3 rounded-xl text-sm font-credencial flex-1 min-w-0 ${extrasErrors.ean ? 'border border-red-500/40' : ''}`}
-                        value={extras.ean}
-                        onChange={e => { setExtras(x => ({ ...x, ean: e.target.value })); setExtrasErrors(ev => ({ ...ev, ean: '' })); }}
-                        placeholder="Ex: 7891234567890 (12 ou 13 dígitos)" inputMode="numeric" />
-                      {/* Sem o código do fabricante, o aluno inventava dígitos e
-                          o verificador não fechava. O interno é legítimo:
-                          prefixo 2 é o que a GS1 reserva para a loja. */}
-                      <button type="button"
-                        onClick={() => { setExtras(x => ({ ...x, ean: gerarEanInterno() })); setExtrasErrors(ev => ({ ...ev, ean: '' })); }}
-                        title="Gerar código interno da loja (prefixo 2)"
-                        className="neu-button py-2 px-3 rounded-xl text-[11px] font-bold text-gray-400 hover:text-accent shrink-0">
-                        Gerar
-                      </button>
-                    </div>
-                    <p className="text-[10px] text-gray-500 mt-1 leading-snug">
-                      É o que o PDV lê no caixa, e não se repete dentro da unidade. Produto registrado no Brasil
-                      começa com <span className="font-mono text-gray-400">789</span> ou{' '}
-                      <span className="font-mono text-gray-400">790</span>; importado tem o prefixo do país de
-                      origem. Não tem o código do fabricante? Use “Gerar” — sai um interno da loja, prefixo{' '}
-                      <span className="font-mono text-gray-400">2</span>.
-                    </p>
-                  </FormField>
-                  )}
-                  {/* Sem asterisco desde a migr. 488. O produto é cadastrado
-                      ANTES da compra (migr. 480) — nesse momento ninguém sabe
-                      quem vai fornecer, porque é a cotação que decide comparando
-                      propostas. Exigir aqui só rendia nome escolhido no chute,
-                      igual ao preço de custo que a 480 já tinha soltado. O que
-                      for escolhido vira sugestão: a Cotação abre com ele
-                      pré-selecionado, e o comprador troca se a proposta melhor
-                      vier de outro. */}
-                  <FormField label="Fornecedor habitual">
-                    <select className="neu-input py-2 px-3 rounded-xl text-sm"
-                      value={extras.fornecedor_id}
-                      onChange={e => {
-                        const id = e.target.value;
-                        const nome = fornecedoresOrdenados.find((f: any) => f.id === id)?.nome ?? '';
-                        setExtras(x => ({ ...x, fornecedor_id: id, fornecedor: nome }));
-                      }}>
-                      <option value="">— Ainda não sei (define na cotação) —</option>
-                      {fornecedoresOrdenados.map((f: any) => (
-                        <option key={f.id} value={f.id}>{f.nome}</option>
-                      ))}
-                    </select>
-                    <p className="text-[10px] text-gray-500 mt-1 leading-relaxed">
-                      Opcional. Serve de sugestão na cotação — quem fornece de fato
-                      sai da proposta aprovada, não daqui.
-                    </p>
-                  </FormField>
-                  {/* O asterisco seguia a validação de longe: ela só cobra
-                      marca de mercadoria com embalagem (migr. 438), mas o
-                      rótulo pedia sempre — inclusive no granel da mercearia,
-                      onde banana não tem rótulo, e no patrimônio. */}
-                  <FormField
-                    label={ehVendavel(extras.tipo) && temConteudoDeEmbalagem(extras.unidade) ? 'Marca *' : 'Marca'}
-                    error={extrasErrors.marca}>
-                    <input className={`neu-input py-2 px-3 rounded-xl text-sm ${extrasErrors.marca ? 'border border-red-500/40' : ''}`}
-                      value={extras.marca}
-                      onChange={e => { setExtras(x => ({ ...x, marca: e.target.value })); setExtrasErrors(ev => ({ ...ev, marca: '' })); }}
-                      placeholder={`Ex: ${exProd.marca}`} />
-                    {/* Migr. 526: dizer DE ONDE veio é o que separa sugestão de
-                        dado que apareceu sozinho — e o aluno precisa saber que
-                        pode discordar da proposta se o que chegou foi outro. */}
-                    {marcaDaCompra && extras.marca.trim() === marcaDaCompra && (
-                      <p className="text-[10px] text-cyan-400/80 mt-1 leading-relaxed">
-                        Veio da proposta aprovada desta compra. Se o que chegou é de outra marca,
-                        corrija aqui — o cadastro é o que vale daqui para a frente.
-                      </p>
-                    )}
-                  </FormField>
-                  {/* Peso/Volume é o CONTEÚDO da embalagem, e tem medida própria
-                      (migr. 438). Antes o sufixo era `extras.unidade` — a medida
-                      do estoque — então arroz de 5 kg vendido em pacote lia
-                      "Peso / Volume (UN)" e não havia como dizer "5 KG, 50 UN".
+              <SecaoEtiqueta
+                downloadLabelFor={downloadLabelFor}
+                eanNorm={eanNorm}
+                eanPreviewRef={eanPreviewRef}
+                extras={extras}
+                form={form}
+              />
 
-                      Só aparece em supermercado, e só quando a embalagem tem
-                      conteúdo: item vendido a granel (KG/L) já É a medida, e
-                      pedir peso dele era o que enchia a coluna de `1`. */}
-                  {mostraPesoConteudo && (
-                    <FormField label="Peso / Volume por embalagem *" error={extrasErrors.peso}>
-                      <div className={`neu-input flex items-center rounded-xl text-sm overflow-hidden ${extrasErrors.peso ? 'border border-red-500/40' : ''}`}>
-                        <input className="flex-1 bg-transparent py-2 pl-3 pr-2 outline-none"
-                          value={extras.peso} inputMode="decimal"
-                          onChange={e => { setExtras(x => ({ ...x, peso: formatQtd(e.target.value, true) })); setExtrasErrors(ev => ({ ...ev, peso: '' })); }}
-                          onKeyDown={handleQtdKeyDown(true)}
-                          placeholder="Ex: 5" />
-                        <select
-                          className="bg-transparent text-xs font-bold text-accent px-2 py-2 border-l border-white/5 outline-none shrink-0"
-                          value={extras.peso_unidade}
-                          onChange={e => { setExtras(x => ({ ...x, peso_unidade: e.target.value })); setExtrasErrors(ev => ({ ...ev, peso: '' })); }}
-                          title="Medida do conteúdo da embalagem — nada a ver com a unidade de estoque">
-                          <option value="">— ? —</option>
-                          {UNIDADES_CONTEUDO
-                            // "1 UN contém N UN" é ruído (migr. 593). A opção
-                            // some em vez de virar erro depois de digitada.
-                            .filter(u => !(u === 'UN' && normalizarUnidade(extras.unidade) === 'UN'))
-                            .map(u => <option key={u} value={u}>{u === 'UN' ? 'UN (contagem)' : u}</option>)}
-                        </select>
-                      </div>
-                      {/* O nome do produto costuma trazer a medida ("Arroz 1kg").
-                          Quando ela discorda do que foi preenchido, um dos dois
-                          está errado — e perguntar agora custa menos que
-                          descobrir no preço por quilo. Aviso, não bloqueio: o
-                          nome é texto livre e a leitura dele erra. */}
-                      {(() => {
-                        const aviso = divergenciaDeConteudo(form.nome, extras.peso, extras.peso_unidade);
-                        return aviso ? (
-                          <p className="text-[10px] text-amber-500 mt-1 leading-snug flex items-start gap-1">
-                            <AlertTriangle size={12} className="mt-0.5 shrink-0" />
-                            <span>{aviso}</span>
-                          </p>
-                        ) : null;
-                      })()}
-                      <p className="text-[10px] text-gray-500 mt-1 leading-snug">
-                        O que vem dentro de <span className="font-bold text-gray-400">UMA {extras.unidade || 'UN'}</span> —
-                        {' '}<span className="text-gray-400">5 KG</span> de arroz, ou{' '}
-                        <span className="text-gray-400">6 UN</span> num pacote de sabonete. Não é quanto o
-                        fornecedor entrega: isso é <span className="font-bold text-gray-400">Compra em</span>, lá em Estoque.
-                      </p>
-                    </FormField>
-                  )}
-                </div>
+              <SecaoPrecos
+                errors={errors}
+                clearError={clearError}
+                custoObrigatorio={custoObrigatorio}
+                editItem={editItem}
+                extras={extras}
+                extrasErrors={extrasErrors}
+                form={form}
+                margemAoVivo={margemAoVivo}
+                markupAoVivo={markupAoVivo}
+                markupCategoria={markupCategoria}
+                precoAbaixoDoCusto={precoAbaixoDoCusto}
+                precoSugerido={precoSugerido}
+                setExtras={setExtras}
+                setExtrasErrors={setExtrasErrors}
+                setForm={setForm}
+              />
 
-                {/* ── Atributos por nicho (JSONB em produtos.atributos) ──────
-                    Só aparece em MaxLook (moda) e TechMax (eletrônico). Cada
-                    filial mostra os campos definidos em ATRIBUTOS_PRODUTO. */}
-                {ehVendavel(extras.tipo) && (ATRIBUTOS_PRODUTO[filial] ?? []).length > 0 && (
-                  <div className="mt-6 pt-6 border-t border-white/5">
-                    <div className="flex items-center gap-2 mb-3">
-                      <Tag size={12} className="text-accent" />
-                      <p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">
-                        {filial === 'MaxLook' ? 'Detalhes da peça (Boutique)'
-                          : filial === 'SuperMax' ? 'Conservação (Mercearia)'
-                          : 'Ficha técnica (Loja & Assistência)'}
-                      </p>
-                    </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      {(ATRIBUTOS_PRODUTO[filial] ?? []).map((d) => {
-                        // Campo dependente some quando o pai não está na
-                        // resposta que o libera — era assim que "Validade
-                        // (dias)" ficava aberto para detergente. `dependeDeValor`
-                        // existe porque o pai deixou de ser checkbox: em
-                        // perecível a resposta é 'Sim', não `true`.
-                        if (d.dependeDe) {
-                          const pai = extras.atributos?.[d.dependeDe];
-                          const libera = d.dependeDeValor !== undefined
-                            ? String(pai ?? '') === d.dependeDeValor
-                            : pai === true;
-                          if (!libera) return null;
-                        }
-
-                        const errKey = `atr_${d.key}`;
-                        const err = extrasErrors[errKey];
-                        const val = extras.atributos?.[d.key] ?? '';
-                        const setAtr = (v: any) => {
-                          setExtras(x => ({ ...x, atributos: { ...(x.atributos ?? {}), [d.key]: v } }));
-                          setExtrasErrors(ev => ({ ...ev, [errKey]: '' }));
-                        };
-                        if (d.type === 'bool') {
-                          return (
-                            <label key={d.key}
-                              className={`flex items-center gap-3 cursor-pointer neu-flat rounded-xl px-4 py-3 border border-white/5 ${d.wide ? 'sm:col-span-2' : ''}`}>
-                              <input type="checkbox" checked={!!val}
-                                onChange={e => {
-                                  const marcado = e.target.checked;
-                                  setExtras(x => {
-                                    const atrs = { ...(x.atributos ?? {}), [d.key]: marcado };
-                                    // Desmarcar o pai apaga os filhos: deixar
-                                    // "Validade: 5" gravado num item que não é
-                                    // mais perecível põe o iogurte fantasma na
-                                    // fila de vencimento.
-                                    if (!marcado) {
-                                      for (const f of (ATRIBUTOS_PRODUTO[filial] ?? [])) {
-                                        if (f.dependeDe === d.key) delete atrs[f.key];
-                                      }
-                                    }
-                                    return { ...x, atributos: atrs };
-                                  });
-                                  setExtrasErrors(ev => ({ ...ev, [errKey]: '' }));
-                                }}
-                                className="accent-accent w-4 h-4" />
-                              <span className="text-xs font-bold text-gray-200">{d.label}</span>
-                            </label>
-                          );
-                        }
-                        if (d.type === 'textarea') {
-                          return (
-                            <div key={d.key} className={d.wide ? 'sm:col-span-2' : ''}>
-                              <FormField label={rotuloAtributo(d)} error={err}>
-                                <textarea rows={3}
-                                  className={`neu-input py-2 px-3 rounded-xl text-sm resize-none ${err ? 'border border-red-500/40' : ''}`}
-                                  value={String(val)} onChange={e => setAtr(e.target.value)}
-                                  placeholder={d.placeholder} />
-                              </FormField>
-                            </div>
-                          );
-                        }
-                        if (d.type === 'select' && d.options) {
-                          // `livre`: a lista cobre o comum e "Outro" abre um
-                          // campo para o resto. Fechar de vez travaria a peça
-                          // importada; deixar livre multiplica grafia — e é
-                          // grafia que fabrica variante duplicada na grade.
-                          const v = String(val);
-                          const naLista = (d.options as readonly string[]).includes(v);
-                          const emOutro = !!d.livre && (atrLivre.has(d.key) || (v !== '' && !naLista));
-                          return (
-                            <div key={d.key} className={d.wide ? 'sm:col-span-2' : ''}>
-                              <FormField label={rotuloAtributo(d)} error={err}>
-                                <select className={`neu-input py-2 px-3 rounded-xl text-sm ${err ? 'border border-red-500/40' : ''}`}
-                                  value={emOutro ? OUTRO : v}
-                                  onChange={e => {
-                                    if (e.target.value === OUTRO) {
-                                      setAtrLivre(prev => new Set(prev).add(d.key));
-                                      setAtr('');
-                                      return;
-                                    }
-                                    setAtrLivre(prev => {
-                                      const n = new Set(prev); n.delete(d.key); return n;
-                                    });
-                                    const novo = e.target.value;
-                                    // Pai de campos dependentes: mudar a
-                                    // resposta apaga os filhos. Deixar
-                                    // "Validade: 5" num item que passou a não
-                                    // ser perecível põe o iogurte fantasma na
-                                    // fila de vencimento — mesmo motivo do
-                                    // checkbox, agora no select.
-                                    setExtras(x => {
-                                      const atrs = { ...(x.atributos ?? {}), [d.key]: novo };
-                                      for (const f of (ATRIBUTOS_PRODUTO[filial] ?? [])) {
-                                        if (f.dependeDe === d.key
-                                            && String(novo) !== (f.dependeDeValor ?? '')) {
-                                          delete atrs[f.key];
-                                        }
-                                      }
-                                      return { ...x, atributos: atrs };
-                                    });
-                                    setExtrasErrors(ev => ({ ...ev, [errKey]: '' }));
-                                  }}>
-                                  <option value="">— Selecione —</option>
-                                  {d.options.map((o) => <option key={o} value={o}>{o}</option>)}
-                                  {d.livre && <option value={OUTRO}>Outro…</option>}
-                                </select>
-                                {emOutro && (
-                                  <input autoFocus
-                                    className={`neu-input py-2 px-3 rounded-xl text-sm mt-2 ${err ? 'border border-red-500/40' : ''}`}
-                                    value={v} onChange={e => setAtr(e.target.value)}
-                                    placeholder={d.placeholder ?? 'Digite o valor'} />
-                                )}
-                              </FormField>
-                              {d.dica && <span className="text-[10px] text-gray-500 block mt-1">{d.dica}</span>}
-                            </div>
-                          );
-                        }
-                        return (
-                          <div key={d.key} className={d.wide ? 'sm:col-span-2' : ''}>
-                            <FormField label={rotuloAtributo(d)} error={err}>
-                              <input className={`neu-input py-2 px-3 rounded-xl text-sm ${err ? 'border border-red-500/40' : ''}`}
-                                value={String(val)} inputMode={d.soDigitos ? 'numeric' : undefined}
-                                onChange={e => setAtr(d.soDigitos ? e.target.value.replace(/\D/g, '') : e.target.value)}
-                                placeholder={d.placeholder} />
-                            </FormField>
-                            {d.dica && <span className="text-[10px] text-gray-500 block mt-1">{d.dica}</span>}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* Imagens do produto — capa + até 2 extras */}
-              <div>
-                <p className="text-[10px] text-gray-600 uppercase tracking-widest font-bold mb-3 flex items-center gap-2">
-                  <ImagePlus size={12} /> Imagens do produto (até {PRODUTO_IMAGEM_MAX_SLOTS}) — capa obrigatória *
-                </p>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                  {imagens.map((url, slotIdx) => (
-                    <div key={slotIdx}
-                      className={`neu-pressed rounded-2xl p-3 border flex flex-col items-center gap-2 ${
-                        slotIdx === 0 && extrasErrors.imagens ? 'border-red-500/40' : 'border-white/5'
-                      }`}>
-                      <ProdutoThumb url={url} size="lg" alt={slotIdx === 0 ? (form.nome || 'Produto') : `${form.nome || 'Produto'} — foto ${slotIdx + 1}`} />
-                      <span className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">
-                        {slotIdx === 0 ? 'Capa' : `Extra ${slotIdx}`}
-                      </span>
-                      <input
-                        ref={el => { imagemInputRefs.current[slotIdx] = el; }}
-                        type="file"
-                        accept={PRODUTO_IMAGEM_ACCEPT}
-                        onChange={e => handleImagemChange(slotIdx, e)}
-                        className="hidden"
-                      />
-                      <div className="flex flex-wrap items-center justify-center gap-1.5">
-                        <button
-                          type="button"
-                          onClick={() => imagemInputRefs.current[slotIdx]?.click()}
-                          disabled={imagemUploading === slotIdx}
-                          className="neu-button py-1.5 px-3 rounded-xl text-[11px] font-bold text-gray-300 hover:text-accent transition-colors flex items-center gap-1.5 disabled:opacity-60 disabled:cursor-not-allowed"
-                        >
-                          {imagemUploading === slotIdx
-                            ? <><Loader2 size={11} className="animate-spin" /> Enviando...</>
-                            : <><ImagePlus size={11} /> {url ? 'Trocar' : 'Selecionar'}</>}
-                        </button>
-                        {url && imagemUploading !== slotIdx && (
-                          <button
-                            type="button"
-                            onClick={() => handleRemoverImagem(slotIdx)}
-                            className="neu-button py-1.5 px-2 rounded-xl text-[11px] font-bold text-gray-500 hover:text-red-500 transition-colors flex items-center gap-1"
-                          >
-                            <XIcon size={10} /> Remover
-                          </button>
-                        )}
-                      </div>
-                      <ColarImagem global={false} disabled={imagemUploading !== null}
-                        onImagem={file => enviarImagemSlot(slotIdx, file)} />
-                      {imagensAviso[slotIdx] && (
-                        <p className="text-[10px] text-amber-400/90 leading-snug text-center flex items-start gap-1">
-                          <AlertTriangle size={11} className="shrink-0 mt-px" />
-                          <span>{imagensAviso[slotIdx]}</span>
-                        </p>
-                      )}
-                    </div>
-                  ))}
-                </div>
-                {extrasErrors.imagens && (
-                  <p className="text-[11px] text-red-400 mt-2 flex items-start gap-1">
-                    <AlertTriangle size={12} className="shrink-0 mt-px" />
-                    <span>{extrasErrors.imagens}</span>
-                  </p>
-                )}
-                <p className="text-[11px] text-gray-500 leading-snug mt-2">
-                  Aceita <span className="font-bold text-gray-300">JPG, PNG ou WEBP</span> — cada foto é comprimida
-                  automaticamente para WebP até <span className="font-bold text-gray-300">{PRODUTO_IMAGEM_OUTPUT_MAX_LABEL}</span>,
-                  então pode enviar direto da câmera. Use imagens de pelo menos{' '}
-                  <span className="font-bold text-gray-300">{PRODUTO_IMAGEM_RES_IDEAL} px</span> no menor lado: miniatura
-                  baixada da web fica borrada, porque o sistema reduz mas nunca amplia. Também dá para colar: no Google, abra
-                  a imagem, botão direito → <span className="font-bold text-gray-300">Copiar imagem</span> e Ctrl+V aqui
-                  (vai para o primeiro slot vazio). A capa é a que aparece no PDV, Catálogo e vitrine — e por isso é obrigatória; as duas extras são opcionais.
-                </p>
-              </div>
-
-              {/* Etiqueta EAN-13 */}
-              {extras.ean.replace(/\D/g, '').length > 0 && (
-                <div>
-                  <p className="text-[10px] text-gray-600 uppercase tracking-widest font-bold mb-3 flex items-center gap-2">
-                    <Barcode size={12} /> Etiqueta EAN-13
-                  </p>
-                  <div className="neu-pressed rounded-2xl p-4 border border-white/5 flex flex-col sm:flex-row items-center gap-4">
-                    <div className="bg-white p-3 rounded-lg flex items-center justify-center min-h-[88px]">
-                      {eanNorm.valid ? (
-                        <canvas ref={eanPreviewRef} />
-                      ) : (
-                        <span className="text-[11px] text-gray-500 font-mono px-6 text-center">
-                          Informe 12 ou 13 dígitos para visualizar
-                        </span>
-                      )}
-                    </div>
-                    <div className="flex-1 flex flex-col gap-2 w-full">
-                      {eanNorm.valid ? (
-                        <div className="flex items-center gap-2 text-emerald-400 text-xs">
-                          <Check size={14} />
-                          <span className="font-bold">EAN-13 válido:</span>
-                          <span className="font-mono">{eanNorm.value}</span>
-                          {eanNorm.autoCompleted && (
-                            <span className="text-[10px] text-gray-500">(dígito verificador calculado)</span>
-                          )}
-                        </div>
-                      ) : (
-                        <div className="flex items-center gap-2 text-yellow-400 text-xs">
-                          <AlertCircle size={14} />
-                          <span>
-                            {eanNorm.digits.length === 13
-                              ? 'Dígito verificador inválido — confira os números.'
-                              : `Faltam ${Math.max(0, 12 - eanNorm.digits.length)} dígito(s) para validar.`}
-                          </span>
-                        </div>
-                      )}
-                      <p className="text-[11px] text-gray-500">
-                        Imprima em adesivo 80×50 mm. O código é escaneável por qualquer leitor de código de barras compatível com EAN-13.
-                      </p>
-                      <div className="flex justify-start">
-                        <NeuButtonAccent
-                          onClick={() => downloadLabelFor({ ean: extras.ean, nome: form.nome, codigo: form.codigo, preco: parseBRL(form.preco) })}
-                          disabled={!eanNorm.valid || !form.nome.trim()}
-                        >
-                          <FileDown size={14} /> Baixar etiqueta PDF
-                        </NeuButtonAccent>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* Preços. Quem não vende tem só o lado do custo: o que a empresa
-                  pagou. Preço de venda e margem saem da tela em vez de pedir um
-                  número inventado (migr. 440). */}
-              <div>
-                <p className="text-[10px] text-gray-600 uppercase tracking-widest font-bold mb-3">
-                  {ehVendavel(extras.tipo) ? 'Preços' : 'Valor de aquisição'}
-                </p>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  <FormField
-                    label={extras.tipo === 'patrimonio' ? 'Valor de Aquisição (R$) *'
-                      : extras.tipo === 'consumo'       ? 'Custo Unitário (R$) *'
-                      : `Preço de Custo (R$)${custoObrigatorio ? ' *' : ''}`}
-                    error={extrasErrors.preco_custo}>
-                    <input type="text" inputMode="numeric"
-                      className={`neu-input py-2 px-3 rounded-xl text-sm tabular-nums ${extrasErrors.preco_custo ? 'border border-red-500/40' : ''}`}
-                      value={extras.preco_custo}
-                      onChange={e => { setExtras(x => ({ ...x, preco_custo: formatBRL(e.target.value) })); setExtrasErrors(ev => ({ ...ev, preco_custo: '' })); }}
-                      onKeyDown={handleMoneyKeyDown} placeholder="0,00" />
-                    {/* Cadastro antecipado: a cotação ainda não aconteceu, e o
-                        campo deixa de cobrar um número que ninguém tem. Dizer
-                        isso na tela é o que impede o aluno de inventar um. */}
-                    {!custoObrigatorio && (
-                      <p className="text-[10px] text-gray-500 mt-1 leading-snug">
-                        Pode ficar em branco: você ainda vai cotar. O custo real é apurado no{' '}
-                        <span className="text-gray-400 font-bold">Recebimento</span>, por média ponderada — e
-                        é ele que vale no DRE.
-                      </p>
-                    )}
-                    {/* Custo apurado pela compra (migr. 417). Editar aqui é
-                        permitido — mas o próximo recebimento deste produto
-                        recalcula a média ponderada e assume de volta. */}
-                    {editItem?.custo_origem === 'compra' && (
-                      <p className="text-[10px] text-gray-500 mt-1 leading-snug">
-                        Média ponderada apurada no recebimento
-                        {editItem?.custo_ultima_compra_em ? ` de ${new Date(`${editItem.custo_ultima_compra_em}T12:00:00`).toLocaleDateString('pt-BR')}` : ''}
-                        {editItem?.custo_ultima_compra_valor != null
-                          ? ` — última compra a R$ ${fmtBRL(parseNum(editItem.custo_ultima_compra_valor))} a unidade`
-                          : ''}.
-                      </p>
-                    )}
-                  </FormField>
-                  {ehVendavel(extras.tipo) && (
-                  <FormField label={`Preço de Venda (R$${extras.unidade && extras.unidade !== 'UN' ? ` / ${extras.unidade}` : ''}) *`} error={errors.preco}>
-                    <input type="text" inputMode="numeric" className={`neu-input py-2 px-3 rounded-xl text-sm tabular-nums ${errors.preco ? 'border border-red-500/40' : ''}`}
-                      value={form.preco} onChange={e => { setForm(f => ({ ...f, preco: formatBRL(e.target.value) })); clearError('preco'); }}
-                      onKeyDown={handleMoneyKeyDown} placeholder="0,00" />
-                    {/* Markup da categoria (migr. 360). Sugere, não impõe: o
-                        preço continua editável, e é a diferença entre o
-                        sugerido e o praticado que rende a conversa em aula. */}
-                    {precoSugerido !== null && (
-                      <button type="button"
-                        onClick={() => { setForm(f => ({ ...f, preco: formatBRL(precoSugerido) })); clearError('preco'); }}
-                        className="text-[10px] text-accent hover:underline mt-1 text-left block">
-                        Sugerido pelo markup de {markupCategoria}%: <strong>R$ {formatBRL(precoSugerido)}</strong> — clique para usar
-                      </button>
-                    )}
-                    {extras.unidade && extras.unidade !== 'UN' && (
-                      <p className="text-[10px] text-gray-500 mt-1">
-                        Vendido por <span className="font-bold text-accent">{extras.unidade}</span> — no PDV, o caixa digita a quantidade fracionária ao pesar.
-                      </p>
-                    )}
-                    {/* A exceção só aparece quando o caso existe. Caixa sempre
-                        visível seria um convite a marcar e seguir — aqui ela
-                        surge junto com o problema, com o número na frente. */}
-                    {precoAbaixoDoCusto && (
-                      <label className="mt-2 flex items-start gap-2 text-[10px] leading-snug text-gray-400 cursor-pointer">
-                        <input type="checkbox" className="mt-0.5 accent-amber-500"
-                          checked={extras.venda_abaixo_custo}
-                          onChange={e => {
-                            setExtras(x => ({ ...x, venda_abaixo_custo: e.target.checked }));
-                            setExtrasErrors(ev => ({ ...ev, preco_custo: '' }));
-                          }} />
-                        <span>
-                          <span className="text-amber-400 font-bold">Venda abaixo do custo, de propósito</span> — promoção-isca ou
-                          queima de validade. Sem marcar, o cadastro não salva: custo maior que a venda costuma ser os dois campos trocados.
-                        </span>
-                      </label>
-                    )}
-                  </FormField>
-                  )}
-                  {/* As DUAS contas, lado a lado. Antes havia uma só, rotulada
-                      "Margem de Lucro" e calculando markup — custo 10 e venda 20
-                      exibiam 100%, e a margem real é 50%. Mostrar as duas juntas
-                      é mais barato que escolher uma: são perguntas diferentes, e
-                      é a diferença entre elas que o curso quer ensinar.
-
-                      A cor fica no markup, com a régua de sempre e os mesmos
-                      valores — margem saudável depende do ramo, e inventar um
-                      corte único para as três filiais ensinaria outro erro. */}
-                  {ehVendavel(extras.tipo) && (
-                  <div className="flex flex-col gap-1.5">
-                    {/* Calculado read-only, sem input — span em vez de label */}
-                    <span className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">
-                      Markup <span className="normal-case tracking-normal text-gray-600 font-medium">(sobre o custo)</span>
-                    </span>
-                    <div className={`neu-pressed py-2 px-3 rounded-xl text-sm flex items-center gap-2 border border-white/5 ${corDoMarkup(markupAoVivo)}`}>
-                      <TrendingUp size={13} className="shrink-0 opacity-60" />
-                      <span className="font-bold tabular-nums">{fmtPct(markupAoVivo)}</span>
-                      {markupAoVivo !== null && markupAoVivo < 10 && (
-                        <span className="text-[10px] text-red-400/70 ml-auto">Markup baixo</span>
-                      )}
-                    </div>
-                  </div>
-                  )}
-                  {ehVendavel(extras.tipo) && (
-                  <div className="flex flex-col gap-1.5">
-                    <span className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">
-                      Margem <span className="normal-case tracking-normal text-gray-600 font-medium">(sobre a venda)</span>
-                    </span>
-                    <div className="neu-pressed py-2 px-3 rounded-xl text-sm flex items-center gap-2 border border-white/5 text-gray-300">
-                      <Percent size={13} className="shrink-0 opacity-60" />
-                      <span className="font-bold tabular-nums">{fmtPct(margemAoVivo)}</span>
-                      <span className="text-[10px] text-gray-600 ml-auto">é a do DRE</span>
-                    </div>
-                  </div>
-                  )}
-                </div>
-                {ehVendavel(extras.tipo) && (
-                  <p className="text-[10px] text-gray-500 mt-2 leading-snug">{EXPLICA_MARKUP_MARGEM}</p>
-                )}
-              </div>
-
-              {/* Estoque. Patrimônio não tem saldo: um freezer não se repõe,
-                  não tem estoque mínimo e não gera movimentação. A seção inteira
-                  sai da tela em vez de pedir zeros (migr. 440). */}
-              {temEstoque(extras.tipo) && (
-              <div>
-                <p className="text-[10px] text-gray-600 uppercase tracking-widest font-bold mb-3">Estoque</p>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  <FormField label="Unidade">
-                    <select className={`neu-input py-2 px-3 rounded-xl text-sm ${unidadeTravada ? 'opacity-60 cursor-not-allowed' : ''}`}
-                      disabled={unidadeTravada}
-                      title={unidadeTravada
-                        ? `Há ${qtdBR(saldoAtual)} ${normalizarUnidade(extras.unidade)} em estoque. A unidade dá sentido a esse número — zere o saldo antes de trocá-la.`
-                        : undefined}
-                      value={extras.unidade}
-                      onChange={e => setExtras(x => {
-                        const u = e.target.value;
-                        // Trocar a unidade muda o que os outros campos aceitam.
-                        // Sem remascarar, "12,5" digitado em KG sobrevive à troca
-                        // para UN e vira meia caixa no save.
-                        const frac = UNIDADES_FRACIONARIAS.has(normalizarUnidade(u));
-                        return {
-                          ...x,
-                          unidade:        u,
-                          estoque:        formatQtd(x.estoque, frac),
-                          estoque_minimo: formatQtd(x.estoque_minimo, frac),
-                        };
-                      })}>
-                      {/* Régua única (src/lib/unidades.ts): KG/L/M só em mercearia.
-                          Esta era a última das cinco cópias da lista. */}
-                      {/* Sigla + nome: "PC" e "PCT" são peça e pacote, e a
-                          diferença não se lê em duas letras. O valor gravado
-                          continua sendo a sigla. */}
-                      {unidadesDeProduto(filial).map(u => <option key={u} value={u}>{rotuloUnidade(u)}</option>)}
-                    </select>
-                    {/* O ERRO QUE ESTA FRASE EVITA JÁ ESTÁ NO CATÁLOGO.
-                        "Açúcar Cristal 1 (kg) 30 UN" está cadastrado com
-                        unidade PCT: o aluno usou a unidade de ESTOQUE para
-                        dizer "fardo de 30", porque não havia onde dizer isso.
-                        Aí o estoque conta fardos, o PDV vende o fardo inteiro
-                        ao cliente e o "30" fica no nome, onde não soma. */}
-                    {/* MIGR 594: a trava é do banco; aqui ela aparece ANTES,
-                        com a saída. Deixar o seletor aberto para o save
-                        estourar seria ensinar pelo erro — e o erro chega
-                        depois de a pessoa ter preenchido a tela inteira. */}
-                    {unidadeTravada && (
-                      <p className="text-[10px] text-gray-500 mt-1 leading-snug">
-                        Travada porque há <span className="font-bold text-gray-400">{qtdBR(saldoAtual)} {normalizarUnidade(extras.unidade)}</span> em
-                        estoque: trocar a medida faria esse número virar outra coisa sem entrada nem saída que
-                        explicasse. Para mudar, zere o saldo por um ajuste em{' '}
-                        <span className="text-gray-400">Estoque &gt; Movimentações</span>, troque aqui, e reentre o saldo na medida nova.
-                      </p>
-                    )}
-                    {!unidadeTravada && ['PCT', 'CX', 'PC'].includes(normalizarUnidade(extras.unidade)) && (
-                      <p className="text-[10px] text-amber-500/90 mt-1 leading-snug flex items-start gap-1">
-                        <AlertTriangle size={12} className="mt-0.5 shrink-0" />
-                        <span>
-                          O estoque vai contar <span className="font-bold">{normalizarUnidade(extras.unidade)}</span>, e é
-                          isso que o caixa vende ao cliente — a embalagem fechada. Se a loja vende avulso, a
-                          Unidade é <span className="font-bold">UN</span>, e o pacote do fornecedor vai em{' '}
-                          <span className="font-bold">Compra em</span>, aqui do lado.
-                        </span>
-                      </p>
-                    )}
-                  </FormField>
-                  {/* Embalagem de COMPRA (migr. 589) — a terceira medida do
-                      produto, e a que faltava: "arroz 1 kg, 30 no fardo".
-
-                      Não é a unidade de estoque (esta aqui do lado) nem o
-                      conteúdo da embalagem de venda (o Peso / Volume lá em
-                      cima). É como o FORNECEDOR vende. Sem ela, quem comprava
-                      por fardo punha o estoque em PCT — e aí o PDV passava a
-                      vender fardo ao cliente e o custo unitário ficava 30×
-                      maior. */}
-                  <FormField label="Compra em (embalagem do fornecedor)" error={extrasErrors.embalagem_qtd}>
-                    <div className={`neu-input flex items-center rounded-xl text-sm overflow-hidden ${extrasErrors.embalagem_qtd ? 'border border-red-500/40' : ''}`}>
-                      <select
-                        className="bg-transparent text-xs font-bold text-accent px-2 py-2 border-r border-white/5 outline-none shrink-0"
-                        value={extras.embalagem_compra}
-                        onChange={e => {
-                          const v = e.target.value;
-                          // Tirar a embalagem tira o fator junto: fator órfão é
-                          // o que o CHECK do banco recusa, e guardá-lo na tela
-                          // só faria o erro aparecer no save.
-                          setExtras(x => ({ ...x, embalagem_compra: v, embalagem_qtd: v ? x.embalagem_qtd : '' }));
-                          setExtrasErrors(ev => ({ ...ev, embalagem_qtd: '' }));
-                        }}
-                        title="Como o fornecedor vende este item — nada a ver com a unidade de estoque">
-                        <option value="">— Unidade solta —</option>
-                        {EMBALAGENS_COMPRA.map(e => <option key={e} value={e}>{e}</option>)}
-                      </select>
-                      <input
-                        className="flex-1 bg-transparent py-2 px-3 outline-none tabular-nums disabled:opacity-40"
-                        value={extras.embalagem_qtd} inputMode="decimal"
-                        disabled={!extras.embalagem_compra}
-                        onChange={e => {
-                          // Fracionário segue a unidade de estoque: saco de café
-                          // com 60 KG é legítimo; fardo com 30,5 UN não.
-                          setExtras(x => ({ ...x, embalagem_qtd: formatQtd(e.target.value, fracionario) }));
-                          setExtrasErrors(ev => ({ ...ev, embalagem_qtd: '' }));
-                        }}
-                        onKeyDown={handleQtdKeyDown(fracionario)}
-                        placeholder={extras.embalagem_compra ? `Quantas ${extras.unidade || 'UN'}?` : '—'} />
-                    </div>
-                    <p className="text-[10px] text-gray-500 mt-1 leading-snug">
-                      {extras.embalagem_compra && parseQtd(extras.embalagem_qtd) > 1 ? (
-                        <>
-                          A requisição vai poder pedir <span className="font-bold text-gray-400">em {extras.embalagem_compra.toLowerCase()}</span>:
-                          20 = <span className="text-accent font-bold">{qtdBR(20 * parseQtd(extras.embalagem_qtd))} {extras.unidade || 'UN'}</span> no estoque.
-                        </>
-                      ) : (
-                        <>Como o fornecedor vende — <span className="text-gray-400">fardo com 30</span>. O estoque continua contando em {extras.unidade || 'UN'}.</>
-                      )}
-                    </p>
-                  </FormField>
-                  {/* AS TRÊS MEDIDAS NUMA FRASE SÓ.
-                      Separadas, cada campo está certo e o conjunto continua
-                      confuso — foi a pergunta que abriu esta correção: "e onde
-                      aparece quantas unidades vêm no pacote?". Aqui a cadeia
-                      inteira aparece com os números que a pessoa acabou de
-                      digitar, que é o único jeito de ela conferir se o que
-                      escreveu é o que quis dizer. */}
-                  {(() => {
-                    const un    = normalizarUnidade(extras.unidade);
-                    const fator = parseQtd(extras.embalagem_qtd);
-                    const temEmb = !!extras.embalagem_compra && fator > 1;
-                    const conte = parseQtd(extras.peso);
-                    const temConteudo = mostraPesoConteudo && conte > 0 && !!extras.peso_unidade;
-                    if (!temEmb && !temConteudo) return null;
-                    return (
-                      <div className="md:col-span-2 lg:col-span-3 neu-pressed rounded-xl p-3">
-                        <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-1.5">
-                          Como este produto fica
-                        </p>
-                        <p className="text-xs text-gray-300 leading-relaxed">
-                          {temEmb && (
-                            <>1 <span className="font-bold text-accent">{extras.embalagem_compra}</span> ={' '}
-                            <span className="font-bold">{qtdBR(fator)} {un}</span> — é assim que o fornecedor entrega.<br /></>
-                          )}
-                          {temConteudo && (
-                            <>1 <span className="font-bold text-accent">{un}</span> ={' '}
-                            <span className="font-bold">{qtdBR(conte)} {extras.peso_unidade}</span> — é o que vem dentro
-                            de cada uma.<br /></>
-                          )}
-                          {temEmb && temConteudo && extras.peso_unidade === 'UN' && (
-                            <>Logo, 1 {extras.embalagem_compra} traz{' '}
-                            <span className="font-bold text-accent">{qtdBR(fator * conte)} UN</span> no total.<br /></>
-                          )}
-                          <span className="text-gray-500">
-                            O estoque conta em <span className="font-bold text-gray-400">{un}</span>, e é em {un} que
-                            o caixa vende.{temEmb && (
-                              <> O {extras.embalagem_compra.toLowerCase()} <span className="font-bold text-gray-400">não entra no
-                              saldo</span>: ele é convertido no recebimento, e daí em diante o estoque fala em {un}.</>
-                            )}
-                          </span>
-                        </p>
-                      </div>
-                    );
-                  })()}
-                  {/* Quantidade é `type=text inputMode=decimal`, não `type=number`
-                      (migr. 438): o teclado pt-BR digita vírgula e o número
-                      nativo descarta o valor inteiro quando ela chega. A máscara
-                      só aceita fração se a unidade for fracionária — meio pacote
-                      não existe, meio quilo existe. */}
-                  {/* Saldo de abertura só existe fora do fluxo de compra. Com o
-                      produto vindo de um pedido, o saldo entra pelo Recebimento
-                      — digitar aqui geraria uma Entrada de implantação que soma
-                      com a do recebimento, e o estoque vai ao dobro. É o mesmo
-                      erro que a migr. 438 removeu ao tirar "Quantidade Comprada"
-                      do cadastro, entrando por outra porta. */}
-                  {mostraSaldoAbertura ? (
-                  <FormField label={editItem ? `Estoque Atual (${extras.unidade})` : `Saldo de Abertura (${extras.unidade})`}>
-                    <input
-                      type="text" inputMode="decimal"
-                      className={`neu-input py-2 px-3 rounded-xl text-sm tabular-nums ${editItem ? 'opacity-60 cursor-not-allowed' : ''}`}
-                      value={extras.estoque}
-                      onChange={e => setExtras(x => ({ ...x, estoque: formatQtd(e.target.value, fracionario) }))}
-                      onKeyDown={handleQtdKeyDown(fracionario)}
-                      placeholder="0"
-                      disabled={!!editItem}
-                      readOnly={!!editItem}
-                      title={editItem ? 'Saldo só altera via Recebimentos / Movimentações de Estoque.' : 'Saldo de abertura — gera movimentação de Entrada.'}
-                    />
-                    {editItem ? (
-                      // A direção corrige o que o aluno errou — sem reescrever
-                      // `estoque` na mão. Ver `aplicarCorrecaoSaldo`: o número
-                      // digitado vira um Ajuste da diferença, então o saldo
-                      // chega onde o professor quer E a razão continua fechando.
-                      ehProfessor ? (
-                        <div className="mt-1 flex flex-col gap-2">
-                          {!corrigindoSaldo ? (
-                            <>
-                              <p className="text-[10px] text-gray-500">Saldo controlado por Movimentações / Recebimentos.</p>
-                              <button type="button"
-                                onClick={() => {
-                                  setCorrigindoSaldo(true);
-                                  setSaldoCorrigido(formatQtd(String(editItem.estoque ?? 0), fracionario));
-                                  setMotivoSaldo('');
-                                }}
-                                className="neu-button py-1.5 px-3 rounded-lg text-[11px] font-bold text-accent hover:bg-accent/10 transition-colors self-start flex items-center gap-1.5">
-                                <Pencil size={11} /> Corrigir saldo
-                              </button>
-                            </>
-                          ) : (
-                            <div className="neu-pressed rounded-xl p-3 border border-accent/25 flex flex-col gap-2">
-                              <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">
-                                Saldo correto ({extras.unidade})
-                              </span>
-                              <input
-                                type="text" inputMode="decimal"
-                                className="neu-input py-2 px-3 rounded-xl text-sm tabular-nums w-full"
-                                value={saldoCorrigido}
-                                onChange={e => setSaldoCorrigido(formatQtd(e.target.value, fracionario))}
-                                onKeyDown={handleQtdKeyDown(fracionario)}
-                                placeholder="0" />
-                              <input
-                                className="neu-input py-2 px-3 rounded-xl text-xs w-full"
-                                value={motivoSaldo}
-                                onChange={e => setMotivoSaldo(e.target.value)}
-                                placeholder="Motivo — ex.: aluno lançou saldo de implantação em duplicidade" />
-                              <p className="text-[10px] text-gray-500 leading-snug">
-                                Não reescreve o saldo: lança a <span className="text-gray-400 font-semibold">diferença</span> como
-                                Ajuste em Estoque &gt; Movimentações, com este motivo. O estoque bate com a razão e a
-                                correção fica no histórico, com autor e data.
-                              </p>
-                              <div className="flex gap-2 justify-end">
-                                <button type="button" disabled={salvandoSaldo}
-                                  onClick={() => { setCorrigindoSaldo(false); setSaldoCorrigido(''); setMotivoSaldo(''); }}
-                                  className="neu-button py-1.5 px-3 rounded-lg text-[11px] font-bold text-gray-400 disabled:opacity-50">
-                                  Cancelar
-                                </button>
-                                <button type="button" onClick={aplicarCorrecaoSaldo} disabled={salvandoSaldo}
-                                  className="neu-button-accent py-1.5 px-3 rounded-lg text-[11px] font-bold disabled:opacity-50">
-                                  {salvandoSaldo ? 'Aplicando...' : 'Aplicar correção'}
-                                </button>
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      ) : (
-                      <p className="text-[10px] text-gray-500 mt-1">Saldo controlado por Movimentações / Recebimentos.</p>
-                      )
-                    ) : (
-                      // Implantação não é compra: entra mercadoria e não sai
-                      // dinheiro. Dizer isso aqui é o que impede o campo de
-                      // virar atalho para "comprar" sem fornecedor nem conta.
-                      <p className="text-[10px] text-gray-500 mt-1 leading-snug">
-                        O que já está na prateleira hoje. Gera uma Entrada de implantação —
-                        <span className="text-gray-400"> não cria conta a pagar</span>. Compra de verdade
-                        entra por <span className="font-bold text-gray-400">Compras → Recebimentos</span>.
-                      </p>
-                    )}
-                  </FormField>
-                  ) : (
-                    <div className="flex flex-col gap-1.5">
-                      <span className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">
-                        Saldo inicial
-                      </span>
-                      {/* Dizia só por que o campo NÃO está aqui, e o professor
-                          leu as duas telas como um círculo: "para confirmar o
-                          recebimento preciso do produto, e o saldo do produto
-                          depende do recebimento". Não é círculo, é fila — mas
-                          quem lê precisa ver a fila inteira, com o passo em que
-                          está. Salvar com zero é o certo, e é isso que faltava
-                          estar escrito.
-                          `origemSemOpcoes` muda o texto: aqui não há "salve
-                          assim mesmo" — o botão está desabilitado e o painel
-                          âmbar acima já apontou o caminho (abrir a requisição).
-                          Repetir "salve assim mesmo" contradiria os dois. */}
-                      <div className="neu-pressed py-2.5 px-3 rounded-xl text-[11px] text-gray-400 border border-white/5 leading-snug flex flex-col gap-1.5">
-                        {origemSemOpcoes ? (
-                          <span>
-                            Sem uma origem escolhida, não há como salvar — o saldo deste produto
-                            nasceria de lugar nenhum. Abra a requisição de compra eventual primeiro.
-                          </span>
-                        ) : (
-                        <span>
-                          <span className="font-bold text-gray-300">Salve assim mesmo.</span> Este produto
-                          nasce com saldo <span className="font-bold text-gray-300">zero</span> — e é o certo:
-                          digitar aqui contaria a mesma mercadoria duas vezes.
-                        </span>
-                        )}
-                        <span className="text-gray-500">
-                          A ordem é: <span className="text-gray-400">a carga chega</span> →
-                          <span className="text-gray-400"> registra o recebimento</span> →
-                          <span className="text-accent font-bold"> cadastra o produto (você está aqui)</span> →
-                          <span className="text-gray-400"> volta em Estoque &gt; Recebimentos e clica Confirmar</span>.
-                          É o Confirmar que dá entrada na quantidade, com documento e custo.
-                        </span>
-                      </div>
-                    </div>
-                  )}
-                  <FormField label={`Estoque Mínimo (${extras.unidade}) *`} error={extrasErrors.estoque_minimo}>
-                    <input type="text" inputMode="decimal"
-                      className={`neu-input py-2 px-3 rounded-xl text-sm tabular-nums ${extrasErrors.estoque_minimo ? 'border border-red-500/40' : ''}`}
-                      value={extras.estoque_minimo}
-                      onChange={e => { setExtras(x => ({ ...x, estoque_minimo: formatQtd(e.target.value, fracionario) })); setExtrasErrors(ev => ({ ...ev, estoque_minimo: '' })); }}
-                      onKeyDown={handleQtdKeyDown(fracionario)}
-                      placeholder="0" />
-                  </FormField>
-                </div>
-
-                {/* MaxBank Benefícios só faz sentido no SuperMax (só supermercado
-                    tem itens elegíveis a vale-alimentação). Fora dele, escondido. */}
-                {ehVendavel(extras.tipo) && filial === 'SuperMax' && (
-                  <label className="flex items-center gap-3 cursor-pointer neu-flat rounded-xl px-4 py-3 border border-white/5 mt-4">
-                    <input type="checkbox" checked={extras.elegivel_beneficios}
-                      onChange={e => setExtras(x => ({ ...x, elegivel_beneficios: e.target.checked }))}
-                      className="accent-accent w-4 h-4" />
-                    <div className="flex flex-col">
-                      <span className="text-xs font-bold text-gray-200">Aceita MaxBank Benefícios</span>
-                      <span className="text-[10px] text-gray-500">Colaborador pode pagar este item com saldo de benefícios no PDV.</span>
-                    </div>
-                  </label>
-                )}
-              </div>
-              )}
+              <SecaoEstoque
+                aplicarCorrecaoSaldo={aplicarCorrecaoSaldo}
+                corrigindoSaldo={corrigindoSaldo}
+                editItem={editItem}
+                ehProfessor={ehProfessor}
+                extras={extras}
+                extrasErrors={extrasErrors}
+                filial={filial}
+                fracionario={fracionario}
+                mostraPesoConteudo={mostraPesoConteudo}
+                mostraSaldoAbertura={mostraSaldoAbertura}
+                motivoSaldo={motivoSaldo}
+                origemSemOpcoes={origemSemOpcoes}
+                saldoAtual={saldoAtual}
+                saldoCorrigido={saldoCorrigido}
+                salvandoSaldo={salvandoSaldo}
+                setCorrigindoSaldo={setCorrigindoSaldo}
+                setExtras={setExtras}
+                setExtrasErrors={setExtrasErrors}
+                setMotivoSaldo={setMotivoSaldo}
+                setSaldoCorrigido={setSaldoCorrigido}
+                unidadeTravada={unidadeTravada}
+              />
 
               <div className="flex gap-3 justify-end">
                 <button onClick={closeForm} className="neu-button py-2 px-5 rounded-xl text-sm text-gray-400">Cancelar</button>
