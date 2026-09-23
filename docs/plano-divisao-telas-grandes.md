@@ -1,6 +1,6 @@
 # Plano — dividir as telas grandes (PDV e Produtos)
 
-Escrito em 2026-09-23. **Etapas 1 e 2 feitas em 2026-09-23** (ver abaixo); as demais não foram executadas. Cada etapa é entregável sozinha e **não muda comportamento**.
+Escrito em 2026-09-23. **Etapas 1 a 4 feitas em 2026-09-23** (ver abaixo); a 5 é decisão de produto. Cada etapa é entregável sozinha e **não muda comportamento**.
 
 ## O que a medição mostrou
 
@@ -99,10 +99,34 @@ Cuidado conhecido: a navegação por teclado (`trapTab`, `devolverTabAoPdv`, F-k
 
 Meta: `PDVViewSupermax` abaixo de 2.000 linhas.
 
+**Feito (2026-09-23): 4.708 → 2.259 linhas.** Em `src/components/pdv/` há 28 peças:
+- **os 23 modais e telas**, os quatro lotes do plano mais os que ele não listava:
+  - pagamento, dinheiro e troco;
+  - desconto e autorização do gerente;
+  - gancheira e cancelar venda;
+  - sangria/suprimento e fechar/suspender caixa;
+- **as peças da tela principal:** cabeçalho, cupom com a barra lateral, linha CÓDIGO, rodapé e o card de caixa fechado.
+
+As cores do MaxPOS estão em `coresMaxPos.ts`. A regra de todas as extrações foi a mesma:
+- **O estado que a view valida ou grava continua nela** e desce como props. É o caso do valor recebido, dos campos do gerente, da lista de pagamentos e dos refs de foco.
+- **O estado que só o modal usa foi para dentro dele:** a linha marcada de cada lista, o termo da consulta F7 e a escolha Voltar/Cancelar.
+
+Cada lote é um commit, e o `botoesPadrao` ganhou uma linha por peça com o motivo.
+
+**A meta de 2.000 não foi atingida, de propósito.** O que sobra na view é a lógica do caixa: leitor, carrinho, gancheira, pagamento, Pix/cartão e o listener global de teclado, com cerca de 200 linhas. Tirar o listener para um hook exigiria passar uns 40 valores num objeto sem tipo. Isso trocaria typecheck por contagem de linhas justamente no trecho mais sensível do PDV.
+
+**Achado no roteiro de teclado, e corrigido** (commit à parte, porque muda comportamento): o `trapTab` de um modal deixava o Tab subir até o trap da raiz. No Manual, o foco saía para o cabeçalho e o Esc deixava de fechar.
+
 ### 4. `ProdutosView`: formulário separado da lista (risco baixo)
 - `MarkupBadge` e `EtiquetaPreviewModal` para `src/components/produtos/`.
 - O formulário (1.990 → 3.569) vira `ProdutoForm`, com seções próprias: dados básicos, preço/markup, embalagem, atributos por nicho (JSONB) e imagens.
 - A lista e os filtros ficam na view.
+
+**Feito (2026-09-23): 3.590 → 2.472 linhas.** Em vez de um `ProdutoForm` único com 77 props, o formulário virou cinco seções em `src/components/produtos/`: `SecaoIdentificacao`, `SecaoImagens`, `SecaoEtiqueta`, `SecaoPrecos` e `SecaoEstoque`.
+- O JSX de cada seção saiu **sem nenhuma troca**: as props têm o mesmo nome e o mesmo tipo das variáveis da view, e o `tsc` confere na chamada.
+- `produtoFormComum.ts` guarda o que a view e as seções dividem: `EMPTY_EXTRAS`, os tipos do formulário, os sentinelas e `parseNum`/`fmtBRL`.
+- `MarkupBadge` e `EtiquetaPreviewModal` também saíram do arquivo.
+- Continuam na view o casco do formulário (correção pendente, tipo do item, Salvar/Cancelar), a lista e os filtros.
 
 ### 5. Paridade entre os PDVs: é decisão de produto, não refatoração
 A tabela acima mostra buracos (CPF na nota nos nichos, cupom na SuperMax). Fechar esses buracos é **feature**, então passa pela trava de features. Anotar em `docs/backlog-pos-freeze.md` e decidir à parte. As etapas 1 a 3 deixam esse trabalho barato, porque a capacidade passa a morar num lugar só.
