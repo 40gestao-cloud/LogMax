@@ -1,10 +1,8 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { motion } from 'motion/react';
-import { QRCodeSVG } from 'qrcode.react';
-import { codigoCobranca } from '../lib/cobranca';
 import {
   X, Loader2, Lock, CreditCard, Wallet, Banknote, Users as UsersIcon, HelpCircle,
-  Maximize2, Minimize2, Search, FileDown, PauseCircle, Calculator,
+  Maximize2, Minimize2, PauseCircle, Calculator,
   Pencil, Trash2, DollarSign,
 } from 'lucide-react';
 import { useFetchData } from '../hooks/useSupabaseData';
@@ -17,9 +15,8 @@ import { useVarrerPendentesOrfaos } from '../hooks/usePendentesOrfaos';
 import { useTravaAtualizacao } from '../hooks/useTravaAtualizacao';
 import { supabase, criarClienteEfemero } from '../lib/supabase';
 import { todayBR } from '../lib/dates';
-import { formatBRL, parseBRL, gerarReciboVendaPDF } from '../lib/viewUtils';
+import { formatBRL, parseBRL } from '../lib/viewUtils';
 import { consultarCreditoCliente, bloqueioFiado } from '../lib/credito';
-import { buildPixQrValue, buildCartaoQrValue } from '../lib/pixQr';
 import { playScannerBeep, playKaching } from '../utils/audioUtils';
 import { normalizarBusca as norm, produtoCasa, buscarProdutos, separarQtdETermo } from '../lib/produtoBusca';
 import { UNIDADES_FRACIONARIAS, normalizarUnidade } from '../lib/unidades';
@@ -42,6 +39,8 @@ import { ClientePickerModal } from '../components/pdv/ClientePickerModal';
 import { BuscaProdutoModal } from '../components/pdv/BuscaProdutoModal';
 import { CartaoPickerModal } from '../components/pdv/CartaoPickerModal';
 import { PagadorPickerModal } from '../components/pdv/PagadorPickerModal';
+import { PixAguardandoModal } from '../components/pdv/PixAguardandoModal';
+import { CartaoAguardandoModal } from '../components/pdv/CartaoAguardandoModal';
 import { mascararDocumento } from '../lib/pdv/documento';
 import {
   totaisComDesconto, restanteAPagar, valorDevido as calcValorDevido, mistoAtivo, trocoDoRecebido,
@@ -2771,238 +2770,25 @@ export const PDVViewSupermax = ({
 
       {/* PIX aguardando — Esc pede confirmação (não cancela direto) */}
       {pixModal && (
-        <div
-          className="fixed inset-0 z-[200] flex items-center justify-center p-4"
-          style={{ background: 'rgba(0,0,0,0.7)' }}
-          tabIndex={-1}
-          // contains(activeElement): a callback ref roda a cada render (nova
-          // identidade sempre); sem a guarda o foco era arrancado de volta pro
-          // overlay a cada refetch/tick enquanto o cliente pagava.
-          ref={(el) => { if (el && pixModal && !confirmPixCancel && !el.contains(document.activeElement)) el.focus(); }}
-          onKeyDown={(e) => {
-            if (e.key === 'Tab') { trapTab(e, e.currentTarget as HTMLElement); return; }
-            if (e.key === 'Escape' && !confirmPixCancel) {
-              e.preventDefault(); e.stopPropagation();
-              setConfirmPixCancel(true);
-              return;
-            }
-            if (/^F\d+$/.test(e.key)) e.stopPropagation();
-          }}
-        >
-          <div className="bg-white border-4 max-w-md w-full shadow-2xl" style={{ borderColor: NAVY_DARK }}>
-            <div className="px-5 py-4 text-white" style={{ background: NAVY_DARK }}>
-              <div className="text-xs font-black uppercase tracking-[0.3em] opacity-90">Aguardando pagamento</div>
-              <div className="text-2xl font-black tracking-wide mt-0.5">PIX</div>
-            </div>
-            <div className="p-6 space-y-4 text-center">
-              {/* QR didático — payload tem id+valor; o MaxBank lê e marca
-                  como 'pago', daí o realtime fecha a venda. Não é PIX real
-                  (BR Code do BACEN), só simulação pedagógica. */}
-              <div className="flex justify-center">
-                <div className="p-3 bg-white border-4" style={{ borderColor: NAVY_DARK }}>
-                  <QRCodeSVG
-                    value={buildPixQrValue(pixModal.id)}
-                    size={220}
-                    level="M"
-                  />
-                </div>
-              </div>
-              <div>
-                <div className="text-xs font-black uppercase tracking-widest text-gray-600 mb-1">Valor</div>
-                <div className="text-4xl font-black tabular-nums" style={{ color: MONEY }}>
-                  R$ {fmt(pixModal.valor)}
-                </div>
-                {/* O mesmo número que a MaxPay mostra no desempate. */}
-                <div className="text-xs font-black uppercase tracking-widest text-gray-600 mt-2">
-                  Cobrança nº <span className="font-mono tracking-normal" style={{ color: NAVY_DARK }}>{codigoCobranca(pixModal.id)}</span>
-                </div>
-              </div>
-              {pixError ? (
-                <div className="border-2 p-4 space-y-3 text-left" style={{ borderColor: RED }}>
-                  <div className="text-xs font-black uppercase tracking-widest" style={{ color: RED }}>
-                    ⚠ PIX recebido — falha ao registrar venda
-                  </div>
-                  <div className="text-sm text-gray-900 font-mono whitespace-pre-wrap break-words bg-gray-50 p-2 border" style={{ borderColor: '#d1d5db' }}>
-                    {pixError}
-                  </div>
-                  <div className="text-xs text-gray-700 leading-relaxed">
-                    O cliente já pagou no MaxBank. <b>NÃO cancele</b> — corrija o problema acima e clique em Tentar Novamente.
-                  </div>
-                  <button
-                    onClick={processarPagamentoPix}
-                    disabled={pixProcessing}
-                    className="w-full px-4 py-3 text-white font-black uppercase tracking-wide text-sm disabled:opacity-50"
-                    style={{ background: NAVY_DARK }}
-                  >
-                    {pixProcessing ? 'Tentando...' : 'Tentar Novamente'}
-                  </button>
-                </div>
-              ) : (
-                <p className="text-sm text-gray-700 leading-relaxed">
-                  Cliente lê o QR no <b>MaxBank</b>. A venda fecha sozinha quando o pagamento for confirmado.
-                  {/* A MaxPay acha a cobrança pelo VALOR (janela de 5 min), não pelo
-                      QR: sem dizer isso, o operador digita um valor arredondado,
-                      a maquininha não casa nada e fica em "aguardando" para sempre. */}
-                  <br /><span className="text-gray-600">Pela <b>MaxPay</b>, cobre <b>este mesmo valor</b> — é assim que ela acha a cobrança.
-                  Havendo outra do mesmo valor, ela pergunta qual: informe o <b>nº acima</b>.</span>
-                </p>
-              )}
-              <button
-                onClick={() => setConfirmPixCancel(true)}
-                className="w-full px-4 py-3 border-2 text-gray-700 font-bold uppercase text-sm tracking-wide"
-                style={{ borderColor: '#9ca3af' }}
-              >
-                {pixError ? 'Descartar (PIX já pago — vai perder o registro)' : 'Cancelar PIX'}
-              </button>
-            </div>
-          </div>
-
-          {/* Sub-modal: confirma cancelamento — protege contra Esc por engano */}
-          {confirmPixCancel && (
-            <div
-              className="fixed inset-0 z-[215] flex items-center justify-center p-4"
-              style={{ background: 'rgba(0,0,0,0.85)' }}
-              tabIndex={-1}
-              ref={(el) => { if (el && confirmPixCancel) el.focus(); }}
-              onKeyDown={(e) => {
-                if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); setConfirmPixCancel(false); return; }
-                if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); cancelarPix(); return; }
-                if (/^F\d+$/.test(e.key)) e.stopPropagation();
-              }}
-            >
-              <div className="bg-white border-4 max-w-md w-full shadow-2xl" style={{ borderColor: RED }}>
-                <div className="px-5 py-4 text-white" style={{ background: RED }}>
-                  <div className="text-xs font-black uppercase tracking-[0.3em] opacity-90">Confirmar</div>
-                  <div className="text-2xl font-black tracking-wide mt-0.5">Cancelar PIX?</div>
-                </div>
-                <div className="p-6 space-y-4">
-                  <p className="text-sm text-gray-700 leading-relaxed">
-                    Se o cliente já confirmou o pagamento no MaxBank, este cancelamento <b>não estorna</b> o valor — é só do nosso lado. Continue só se o cliente desistiu.
-                  </p>
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => setConfirmPixCancel(false)}
-                      autoFocus
-                      className="flex-1 px-4 py-3 border-2 font-black uppercase tracking-wide text-sm"
-                      style={{ borderColor: NAVY_DARK, color: NAVY_DARK }}
-                    >
-                      Voltar (Esc)
-                    </button>
-                    <button
-                      onClick={cancelarPix}
-                      className="flex-1 px-4 py-3 text-white font-black uppercase tracking-wide text-sm"
-                      style={{ background: RED }}
-                    >
-                      Cancelar PIX (Enter)
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
+        <PixAguardandoModal
+          cobranca={pixModal}
+          erro={pixError}
+          processando={pixProcessing}
+          onTentarDeNovo={processarPagamentoPix}
+          confirmando={confirmPixCancel}
+          onConfirmando={setConfirmPixCancel}
+          onCancelar={cancelarPix}
+        />
       )}
 
       {/* Cartão (Maquininha) aguardando — MaxPay/MaxBank autoriza */}
       {cartaoModal && (
-        <div
-          className="fixed inset-0 z-[200] flex items-center justify-center p-4"
-          style={{ background: 'rgba(0,0,0,0.7)' }}
-          tabIndex={-1}
-          ref={(el) => { if (el && cartaoModal && !confirmCartaoCancel && !el.contains(document.activeElement)) el.focus(); }}
-          onKeyDown={(e) => {
-            if (e.key === 'Escape' && !confirmCartaoCancel) {
-              e.preventDefault(); e.stopPropagation();
-              setConfirmCartaoCancel(true);
-              return;
-            }
-            if (/^F\d+$/.test(e.key)) e.stopPropagation();
-          }}
-        >
-          <div className="bg-white border-4 max-w-md w-full shadow-2xl" style={{ borderColor: NAVY_DARK }}>
-            <div className="px-5 py-4 text-white" style={{ background: NAVY_DARK }}>
-              <div className="text-xs font-black uppercase tracking-[0.3em] opacity-90">Aguardando maquininha</div>
-              <div className="text-2xl font-black tracking-wide mt-0.5">
-                Cartão {cartaoModal.metodo === 'debito' ? 'Débito' : 'Crédito'}
-                {cartaoModal.parcelas > 1 && ` ${cartaoModal.parcelas}x`}
-              </div>
-            </div>
-            <div className="p-6 space-y-4 text-center">
-              <div className="flex justify-center">
-                <div className="p-3 bg-white border-4" style={{ borderColor: NAVY_DARK }}>
-                  <QRCodeSVG
-                    value={buildCartaoQrValue(cartaoModal.id)}
-                    size={220}
-                    level="M"
-                  />
-                </div>
-              </div>
-              <div>
-                <div className="text-xs font-black uppercase tracking-widest text-gray-600 mb-1">Valor</div>
-                <div className="text-4xl font-black tabular-nums" style={{ color: MONEY }}>
-                  R$ {fmt(cartaoModal.valor)}
-                </div>
-                <div className="text-xs font-black uppercase tracking-widest text-gray-600 mt-2">
-                  Cobrança nº <span className="font-mono tracking-normal" style={{ color: NAVY_DARK }}>{codigoCobranca(cartaoModal.id)}</span>
-                </div>
-              </div>
-              <p className="text-sm text-gray-700 leading-relaxed">
-                Operador digita o valor na <b>MaxPay</b> e o cliente aproxima o cartão (lendo o QR no <b>MaxBank</b>). A venda fecha sozinha quando for autorizado.
-                Se a maquininha perguntar qual cobrança é, informe o <b>nº acima</b>.
-              </p>
-              <button
-                onClick={() => setConfirmCartaoCancel(true)}
-                className="w-full px-4 py-3 border-2 text-gray-700 font-bold uppercase text-sm tracking-wide"
-                style={{ borderColor: '#9ca3af' }}
-              >
-                Cancelar Cartão
-              </button>
-            </div>
-          </div>
-
-          {confirmCartaoCancel && (
-            <div
-              className="fixed inset-0 z-[215] flex items-center justify-center p-4"
-              style={{ background: 'rgba(0,0,0,0.85)' }}
-              tabIndex={-1}
-              ref={(el) => { if (el && confirmCartaoCancel) el.focus(); }}
-              onKeyDown={(e) => {
-                if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); setConfirmCartaoCancel(false); return; }
-                if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); cancelarCartao(); return; }
-                if (/^F\d+$/.test(e.key)) e.stopPropagation();
-              }}
-            >
-              <div className="bg-white border-4 max-w-md w-full shadow-2xl" style={{ borderColor: RED }}>
-                <div className="px-5 py-4 text-white" style={{ background: RED }}>
-                  <div className="text-xs font-black uppercase tracking-[0.3em] opacity-90">Confirmar</div>
-                  <div className="text-2xl font-black tracking-wide mt-0.5">Cancelar Cartão?</div>
-                </div>
-                <div className="p-6 space-y-4">
-                  <p className="text-sm text-gray-700 leading-relaxed">
-                    Se o cliente já autorizou no MaxBank, este cancelamento <b>não estorna</b> o valor — é só do nosso lado.
-                  </p>
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => setConfirmCartaoCancel(false)}
-                      autoFocus
-                      className="flex-1 px-4 py-3 border-2 font-black uppercase tracking-wide text-sm"
-                      style={{ borderColor: NAVY_DARK, color: NAVY_DARK }}
-                    >
-                      Voltar (Esc)
-                    </button>
-                    <button
-                      onClick={cancelarCartao}
-                      className="flex-1 px-4 py-3 text-white font-black uppercase tracking-wide text-sm"
-                      style={{ background: RED }}
-                    >
-                      Cancelar (Enter)
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
+        <CartaoAguardandoModal
+          cobranca={cartaoModal}
+          confirmando={confirmCartaoCancel}
+          onConfirmando={setConfirmCartaoCancel}
+          onCancelar={cancelarCartao}
+        />
       )}
 
       {/* Confirmar cancelar venda — ← → escolher · Enter confirma · Esc volta */}
