@@ -59,6 +59,8 @@ const FORA_DA_FAMILIA: Record<string, string> = {
     'modal do PDVViewSupermax, chrome MaxPOS.',
   'components/pdv/ClientePickerModal.tsx':
     'modal do PDVViewSupermax, chrome MaxPOS.',
+  'components/pdv/PagamentoModal.tsx':
+    'modal do PDVViewSupermax, chrome MaxPOS (inclui o lápis/lixeira da linha de pagamento).',
   'components/ArteLightbox.tsx':
     'visor de arte em tela cheia sobre `bg-black/95`: os controles (tela cheia, fechar, anterior/próxima) são chrome do visor — redondos e translúcidos sobre a foto. `.modal-close-btn` pinta var(--color-bg-base) e viraria um quadrado opaco no meio da arte.',
   'components/CrachaVirtual.tsx':
