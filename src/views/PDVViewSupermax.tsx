@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import { motion } from 'motion/react';
 import {
   X, Loader2, Lock, CreditCard, Wallet, Banknote, Users as UsersIcon, HelpCircle,
-  Maximize2, Minimize2, PauseCircle, Calculator,
+  Maximize2, Minimize2,
   Pencil, Trash2, DollarSign,
 } from 'lucide-react';
 import { useFetchData } from '../hooks/useSupabaseData';
@@ -41,6 +41,14 @@ import { CartaoPickerModal } from '../components/pdv/CartaoPickerModal';
 import { PagadorPickerModal } from '../components/pdv/PagadorPickerModal';
 import { PixAguardandoModal } from '../components/pdv/PixAguardandoModal';
 import { CartaoAguardandoModal } from '../components/pdv/CartaoAguardandoModal';
+import { DinheiroModal } from '../components/pdv/DinheiroModal';
+import { TrocoTela } from '../components/pdv/TrocoTela';
+import { DescontoAutorizacaoModal } from '../components/pdv/DescontoAutorizacaoModal';
+import { GancheiraOcupadaModal } from '../components/pdv/GancheiraOcupadaModal';
+import { CancelarVendaModal } from '../components/pdv/CancelarVendaModal';
+import { DescontoModal } from '../components/pdv/DescontoModal';
+import { MovimentoCaixaModal } from '../components/pdv/MovimentoCaixaModal';
+import { OperacaoCaixaModal } from '../components/pdv/OperacaoCaixaModal';
 import { mascararDocumento } from '../lib/pdv/documento';
 import {
   totaisComDesconto, restanteAPagar, valorDevido as calcValorDevido, mistoAtivo, trocoDoRecebido,
@@ -138,7 +146,6 @@ export const PDVViewSupermax = ({
 
   // Índices de seleção por teclado nos modais (Arrow keys + Enter).
   const [payChoiceIdx, setPayChoiceIdx]       = useState(0);
-  const [confirmFocusIdx, setConfirmFocusIdx] = useState<0 | 1>(0);
 
   // Busca por nome/código (F8) — replica o classicSearch do MaxPOS.
   // Quantidade ARMADA — a régua do caixa de mercado: o operador informa quantos
@@ -755,7 +762,6 @@ export const PDVViewSupermax = ({
 
   const cancelSale = useCallback(() => {
     if (cart.length === 0) return;
-    setConfirmFocusIdx(0); // foco default = "Voltar" (mais seguro)
     setConfirmCancel(true);
   }, [cart.length]);
 
@@ -2622,118 +2628,22 @@ export const PDVViewSupermax = ({
       )}
 
       {/* Dinheiro com cálculo de troco — em misto, valorDevido = parcial */}
-      {cashModalOpen && (() => {
-        const parcial = parseBRL(parcialValor);
-        const valorDevido = calcValorDevido(parcial, restante);
-        const recebido = parseBRL(cashReceived);
-        const trocoLocal = Math.max(0, recebido - valorDevido);
-        return (
-        <div
-          className="fixed inset-0 z-[190] flex items-center justify-center p-4"
-          style={{ background: 'rgba(0,0,0,0.85)' }}
-          onKeyDown={(e) => {
-            if (e.key === 'Tab') trapTab(e, e.currentTarget as HTMLElement);
-            // Bloqueia F-keys vazarem
-            if (/^F\d+$/.test(e.key)) e.stopPropagation();
-          }}
-        >
-          <div className="bg-white border-4 max-w-xl w-full shadow-2xl" style={{ borderColor: NAVY_DARK }}>
-            <div className="px-5 py-4 text-white" style={{ background: NAVY_DARK }}>
-              <div className="text-xs font-black uppercase tracking-[0.3em] opacity-90">Dinheiro</div>
-              <div className="text-2xl font-black tracking-wide mt-0.5">
-                {valorDevido < totalFinal - 0.001 ? `Parcial R$ ${fmt(valorDevido)} de ${fmt(totalFinal)}` : `Total R$ ${fmt(totalFinal)}`}
-              </div>
-            </div>
-            <div className="p-6 space-y-4">
-              <div>
-                <label className="text-xs font-black uppercase tracking-widest text-gray-600 block mb-2">Valor recebido</label>
-                <input
-                  ref={cashInputRef}
-                  type="text"
-                  inputMode="numeric"
-                  value={cashReceived}
-                  onChange={(e) => setCashReceived(formatBRL(parseBRL(e.target.value)))}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      e.preventDefault(); e.stopPropagation();
-                      handleCashConfirm();
-                    } else if (e.key === 'Escape') {
-                      e.preventDefault(); e.stopPropagation();
-                      setCashModalOpen(false);
-                    }
-                  }}
-                  placeholder="0,00"
-                  className="w-full border-2 text-4xl font-black tabular-nums px-4 py-3 outline-none focus:border-blue-700"
-                  style={{ borderColor: '#9ca3af', color: NAVY_DARK }}
-                />
-              </div>
-              <div className="flex justify-between items-baseline">
-                <span className="text-sm font-bold uppercase tracking-widest text-gray-600">Troco</span>
-                <span className="text-3xl font-black tabular-nums" style={{ color: MONEY }}>
-                  R$ {fmt(trocoLocal)}
-                </span>
-              </div>
-              <div className="flex gap-2 pt-2">
-                <button onClick={() => setCashModalOpen(false)} className="flex-1 px-4 py-3 border-2 font-black uppercase tracking-wide text-sm" style={{ borderColor: '#9ca3af', color: NAVY_DARK }}>
-                  Voltar
-                </button>
-                <button
-                  onClick={handleCashConfirm}
-                  disabled={recebido < valorDevido - 0.001 || isClosing}
-                  className="flex-[2] px-4 py-3 text-white font-black uppercase tracking-wide text-sm disabled:opacity-30 flex items-center justify-center gap-2"
-                  style={{ background: MONEY }}
-                >
-                  {isClosing ? <><Loader2 size={16} className="animate-spin" /> Confirmando...</> : 'Confirmar'}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-        );
-      })()}
+      {cashModalOpen && (
+        <DinheiroModal
+          valorDevido={calcValorDevido(parseBRL(parcialValor), restante)}
+          totalFinal={totalFinal}
+          recebidoTexto={cashReceived}
+          onRecebido={setCashReceived}
+          inputRef={cashInputRef}
+          processando={isClosing}
+          onConfirmar={handleCashConfirm}
+          onVoltar={() => setCashModalOpen(false)}
+        />
+      )}
 
       {/* Troco / Pagamento exato em tela cheia — Enter fecha + abre agradecimento */}
       {changeModal && (
-        <div
-          className="fixed inset-0 z-[200] flex items-center justify-center p-4"
-          style={{ background: changeModal.amount > 0 ? NAVY_DARK : MONEY }}
-          tabIndex={-1}
-          ref={(el) => { if (el && changeModal) el.focus(); }}
-          onKeyDown={(e) => {
-            if (e.key === 'Tab') { trapTab(e, e.currentTarget as HTMLElement); return; }
-            if (e.key === 'Enter' || e.key === 'Escape' || e.key === ' ') {
-              e.preventDefault(); e.stopPropagation();
-              setChangeModal(null);
-              setReciboModalOpen(true);
-            }
-            if (/^F\d+$/.test(e.key)) e.stopPropagation();
-          }}
-        >
-          <div className="text-center text-white">
-            {changeModal.amount > 0 ? (
-              <>
-                <div className="text-2xl font-bold uppercase tracking-[0.3em] opacity-80 mb-4">Troco a entregar</div>
-                <div className="text-9xl font-black tabular-nums leading-none" style={{ color: YELLOW }}>
-                  R$ {fmt(changeModal.amount)}
-                </div>
-              </>
-            ) : (
-              <>
-                <div className="text-2xl font-bold uppercase tracking-[0.3em] opacity-90 mb-4">Pagamento</div>
-                <div className="text-9xl font-black uppercase leading-none">EXATO</div>
-                <div className="mt-4 text-xl font-bold uppercase tracking-widest opacity-90">Sem troco a entregar</div>
-              </>
-            )}
-            <button
-              onClick={() => { setChangeModal(null); setReciboModalOpen(true); }}
-              className="mt-12 px-10 py-4 text-white font-black uppercase tracking-wide text-lg border-2"
-              style={{ background: changeModal.amount > 0 ? MONEY : NAVY_DARK, borderColor: 'white' }}
-              autoFocus
-            >
-              OK · Enter
-            </button>
-          </div>
-        </div>
+        <TrocoTela valor={changeModal.amount} onContinuar={() => { setChangeModal(null); setReciboModalOpen(true); }} />
       )}
 
       {/* Manual do PDV — passo a passo + tabela de atalhos */}
@@ -2795,217 +2705,38 @@ export const PDVViewSupermax = ({
       {/* Autorização do gerente para o desconto (padrão "desconto supervisionado"
           dos PDVs de supermercado: o operador pede, o gerente libera). */}
       {descAuth && (
-        <div
-          className="fixed inset-0 z-[205] flex items-center justify-center p-4"
-          style={{ background: 'rgba(0,0,0,0.7)' }}
-          tabIndex={-1}
-          ref={(el) => { if (el && descAuth && !el.contains(document.activeElement)) el.focus(); }}
-          onKeyDown={(e) => {
-            if (e.key === 'Tab') { trapTab(e, e.currentTarget as HTMLElement); return; }
-            if (e.key === 'Escape') {
-              e.preventDefault(); e.stopPropagation();
-              setDescAuth(null); setDescAuthSenha('');
-              requestAnimationFrame(() => codeInputRef.current?.focus());
-              return;
-            }
-            if (e.key === 'Enter' && (e.target as HTMLElement)?.tagName !== 'BUTTON') {
-              e.preventDefault(); e.stopPropagation();
-              if (!descAuthLoading) confirmarAutorizacaoDesconto();
-              return;
-            }
-            if (e.key.length === 1 || /^F\d+$/.test(e.key)) e.stopPropagation();
-          }}
-        >
-          <div className="bg-white border-4 max-w-md w-full shadow-2xl" style={{ borderColor: NAVY_DARK }}>
-            <div className="px-5 py-4 text-white" style={{ background: NAVY_DARK }}>
-              <div className="text-xs font-black uppercase tracking-[0.3em] opacity-90">Autorização do gerente</div>
-              <div className="text-2xl font-black tracking-wide mt-0.5">Desconto de R$ {fmt(descAuth.valor)}</div>
-            </div>
-            <div className="p-6 space-y-4">
-              <p className="text-xs text-gray-600 leading-relaxed">
-                No caixa, desconto sai com o gerente de <b>{filial}</b> — é para divergência de etiqueta
-                e avaria, não para negociação. Promoção já vem no preço. O motivo fica gravado na venda.
-              </p>
-              <div>
-                <label className="text-[11px] font-bold uppercase tracking-wider text-gray-500 block mb-1.5">Motivo</label>
-                <select
-                  value={descAuthMotivo}
-                  onChange={(e) => setDescAuthMotivo(e.target.value)}
-                  className="w-full bg-white border-2 text-sm font-bold px-3 py-2 outline-none focus:border-blue-700"
-                  style={{ borderColor: '#9ca3af', color: NAVY_DARK }}
-                >
-                  <option>Divergência de preço na gôndola</option>
-                  <option>Produto avariado</option>
-                  <option>Produto perto do vencimento</option>
-                  <option value="Outro">Outro (descrever)</option>
-                </select>
-              </div>
-              {descAuthMotivo === 'Outro' && (
-                <input
-                  type="text"
-                  maxLength={120}
-                  value={descAuthObs}
-                  onChange={(e) => setDescAuthObs(e.target.value)}
-                  placeholder="Descreva o motivo"
-                  className="w-full bg-white border-2 text-sm px-3 py-2 outline-none focus:border-blue-700"
-                  style={{ borderColor: '#9ca3af' }}
-                />
-              )}
-              <div>
-                <label className="text-[11px] font-bold uppercase tracking-wider text-gray-500 block mb-1.5">E-mail do gerente</label>
-                <input
-                  autoFocus
-                  type="email"
-                  autoComplete="off"
-                  value={descAuthEmail}
-                  onChange={(e) => setDescAuthEmail(e.target.value)}
-                  placeholder="gerente@empresa.com"
-                  className="w-full bg-white border-2 text-sm px-3 py-2 outline-none focus:border-blue-700"
-                  style={{ borderColor: '#9ca3af' }}
-                />
-              </div>
-              <div>
-                <label className="text-[11px] font-bold uppercase tracking-wider text-gray-500 block mb-1.5">Senha</label>
-                <input
-                  type="password"
-                  autoComplete="new-password"
-                  value={descAuthSenha}
-                  onChange={(e) => setDescAuthSenha(e.target.value)}
-                  placeholder="••••••••"
-                  className="w-full bg-white border-2 text-sm px-3 py-2 outline-none focus:border-blue-700"
-                  style={{ borderColor: '#9ca3af' }}
-                />
-              </div>
-              <div className="flex gap-2 pt-1">
-                <button
-                  onClick={() => { setDescAuth(null); setDescAuthSenha(''); requestAnimationFrame(() => codeInputRef.current?.focus()); }}
-                  className="flex-1 px-4 py-3 border-2 font-black uppercase tracking-wide text-sm"
-                  style={{ borderColor: '#9ca3af', color: NAVY_DARK }}
-                >
-                  Cancelar
-                </button>
-                <button
-                  onClick={confirmarAutorizacaoDesconto}
-                  disabled={descAuthLoading}
-                  className="flex-[2] px-4 py-3 text-white font-black uppercase tracking-wide text-sm disabled:opacity-40 flex items-center justify-center gap-2"
-                  style={{ background: NAVY_DARK }}
-                >
-                  {descAuthLoading ? <><Loader2 size={16} className="animate-spin" /> Conferindo…</> : 'Autorizar (Enter)'}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
+        <DescontoAutorizacaoModal
+          valor={descAuth.valor}
+          filial={filial}
+          motivo={descAuthMotivo}
+          onMotivo={setDescAuthMotivo}
+          obs={descAuthObs}
+          onObs={setDescAuthObs}
+          email={descAuthEmail}
+          onEmail={setDescAuthEmail}
+          senha={descAuthSenha}
+          onSenha={setDescAuthSenha}
+          carregando={descAuthLoading}
+          onAutorizar={confirmarAutorizacaoDesconto}
+          onCancelar={() => { setDescAuth(null); setDescAuthSenha(''); requestAnimationFrame(() => codeInputRef.current?.focus()); }}
+        />
       )}
 
       {/* Gancheira ocupada — suspender de novo descarta a venda que está lá. */}
       {confirmSuspender && (
-        <div
-          className="fixed inset-0 z-[210] flex items-center justify-center p-4"
-          style={{ background: 'rgba(0,0,0,0.7)' }}
-          tabIndex={-1}
-          ref={(el) => { if (el && confirmSuspender && !el.contains(document.activeElement)) el.focus(); }}
-          onKeyDown={(e) => {
-            if (e.key === 'Escape') {
-              e.preventDefault(); e.stopPropagation();
-              setConfirmSuspender(false);
-              requestAnimationFrame(() => codeInputRef.current?.focus());
-              return;
-            }
-            if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); doSuspenderVenda(); return; }
-            if (/^F\d+$/.test(e.key)) e.stopPropagation();
-          }}
-        >
-          <div className="bg-white border-4 max-w-md w-full shadow-2xl" style={{ borderColor: YELLOW_DARK }}>
-            <div className="px-5 py-4" style={{ background: YELLOW, color: NAVY_DARK }}>
-              <div className="text-xs font-black uppercase tracking-[0.3em] opacity-80">Gancheira ocupada</div>
-              <div className="text-2xl font-black tracking-wide mt-0.5">Já há uma venda suspensa</div>
-            </div>
-            <div className="p-6 space-y-4">
-              <p className="text-sm text-gray-700 leading-relaxed">
-                A gancheira guarda <b>uma venda por vez</b>. A que está lá tem{' '}
-                <b>{vendaSuspensa?.cart.length ?? 0} item(s)</b>, suspensa às{' '}
-                <b>{vendaSuspensa ? new Date(vendaSuspensa.suspensaEm).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '—'}</b>.
-                Suspender esta descarta aquela.
-              </p>
-              <div className="flex gap-2">
-                <button
-                  onClick={() => { setConfirmSuspender(false); requestAnimationFrame(() => codeInputRef.current?.focus()); }}
-                  className="flex-1 px-4 py-3 border-2 font-black uppercase tracking-wide text-sm"
-                  style={{ borderColor: '#9ca3af', color: NAVY_DARK }}
-                >
-                  Voltar
-                </button>
-                <button
-                  onClick={doSuspenderVenda}
-                  className="flex-1 px-4 py-3 text-white font-black uppercase tracking-wide text-sm"
-                  style={{ background: NAVY_DARK }}
-                >
-                  Suspender (Enter)
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
+        <GancheiraOcupadaModal
+          suspensa={vendaSuspensa ? { itens: vendaSuspensa.cart.length, suspensaEm: vendaSuspensa.suspensaEm } : null}
+          onSuspender={doSuspenderVenda}
+          onVoltar={() => { setConfirmSuspender(false); requestAnimationFrame(() => codeInputRef.current?.focus()); }}
+        />
       )}
 
       {confirmCancel && (
-        <div
-          className="fixed inset-0 z-[210] flex items-center justify-center p-4"
-          style={{ background: 'rgba(0,0,0,0.7)' }}
-          tabIndex={-1}
-          ref={(el) => { if (el && confirmCancel) el.focus(); }}
-          onKeyDown={(e) => {
-            if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); setConfirmCancel(false); requestAnimationFrame(() => codeInputRef.current?.focus()); return; }
-            if (e.key === 'Tab') {
-              e.preventDefault(); e.stopPropagation();
-              setConfirmFocusIdx(i => (i === 0 ? 1 : 0));
-              return;
-            }
-            if (e.key === 'ArrowLeft')  { e.preventDefault(); e.stopPropagation(); setConfirmFocusIdx(0); return; }
-            if (e.key === 'ArrowRight') { e.preventDefault(); e.stopPropagation(); setConfirmFocusIdx(1); return; }
-            if (e.key === 'Enter') {
-              e.preventDefault(); e.stopPropagation();
-              if (confirmFocusIdx === 1) reallyCancelSale();
-              else { setConfirmCancel(false); requestAnimationFrame(() => codeInputRef.current?.focus()); }
-              return;
-            }
-            if (/^F\d+$/.test(e.key)) e.stopPropagation();
-          }}
-        >
-          <div className="bg-white border-4 max-w-md w-full shadow-2xl" style={{ borderColor: RED }}>
-            <div className="px-5 py-4 text-white" style={{ background: RED }}>
-              <div className="text-xs font-black uppercase tracking-[0.3em] opacity-90">Confirmar</div>
-              <div className="text-2xl font-black tracking-wide mt-0.5">Cancelar venda?</div>
-            </div>
-            <div className="p-6 space-y-4">
-              <p className="text-sm text-gray-700 leading-relaxed">
-                Todos os {cart.length} item(s) serão removidos do carrinho. Esta ação não pode ser desfeita.
-              </p>
-              <div className="flex gap-2">
-                <button
-                  onClick={() => { setConfirmCancel(false); requestAnimationFrame(() => codeInputRef.current?.focus()); }}
-                  onMouseEnter={() => setConfirmFocusIdx(0)}
-                  className={`flex-1 px-4 py-3 border-2 font-black uppercase tracking-wide text-sm ${confirmFocusIdx === 0 ? 'bg-gray-100' : ''}`}
-                  style={{ borderColor: confirmFocusIdx === 0 ? NAVY_DARK : '#9ca3af', color: NAVY_DARK, boxShadow: confirmFocusIdx === 0 ? `inset 0 0 0 2px ${NAVY_DARK}` : undefined }}
-                >
-                  Voltar
-                </button>
-                <button
-                  onClick={reallyCancelSale}
-                  onMouseEnter={() => setConfirmFocusIdx(1)}
-                  className="flex-1 px-4 py-3 text-white font-black uppercase tracking-wide text-sm"
-                  style={{ background: RED, boxShadow: confirmFocusIdx === 1 ? `inset 0 0 0 2px white` : undefined }}
-                >
-                  Cancelar venda
-                </button>
-              </div>
-              <div className="text-xs text-gray-500 font-bold uppercase tracking-wider text-center">
-                ← → escolher · Enter confirmar · Esc voltar
-              </div>
-            </div>
-          </div>
-        </div>
+        <CancelarVendaModal
+          itens={cart.length}
+          onCancelarVenda={reallyCancelSale}
+          onVoltar={() => { setConfirmCancel(false); requestAnimationFrame(() => codeInputRef.current?.focus()); }}
+        />
       )}
 
       {/* Busca de produto (F8) — ↑↓ navega · Enter adiciona · Esc fecha */}
@@ -3091,279 +2822,55 @@ export const PDVViewSupermax = ({
       )}
 
       {/* Desconto (F6) — % ou R$ aplicado no total · Enter aplica · Esc cancela */}
-      {discountModalOpen && (() => {
-        const parsed = parseBRL(discountValue);
-        const valorReais = discountKind === 'percent'
-          ? parseFloat(((subtotal * parsed) / 100).toFixed(2))
-          : parsed;
-        const valorClamp = Math.min(valorReais, subtotal);
-        const novoTotal = Math.max(0, subtotal - valorClamp);
-        const fecharDesconto = () => {
-          setDiscountModalOpen(false);
-          requestAnimationFrame(() => codeInputRef.current?.focus());
-        };
-        const aplicar = () => {
-          if (valorClamp <= 0) { showToast?.('Informe um desconto maior que zero.', 'error', true); return; }
-          // Não aplica aqui: em supermercado o desconto sai com a senha do
-          // gerente. O modal seguinte pede a autorização e o motivo.
-          setDiscountModalOpen(false);
-          setDescAuth({ valor: valorClamp });
-        };
-        return (
-          <div
-            className="fixed inset-0 z-[195] flex items-center justify-center p-4"
-            style={{ background: 'rgba(0,0,0,0.7)' }}
-            onKeyDown={(e) => {
-              if (e.key === 'Tab') trapTab(e, e.currentTarget as HTMLElement);
-              if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); fecharDesconto(); }
-              if (e.key === '%') { e.preventDefault(); setDiscountKind('percent'); }
-              if (e.key === '$') { e.preventDefault(); setDiscountKind('reais'); }
-              if (/^F\d+$/.test(e.key)) e.stopPropagation();
-            }}
-          >
-            <div className="bg-white border-4 max-w-md w-full shadow-2xl" style={{ borderColor: NAVY_DARK }}>
-              <div className="px-5 py-4 text-white" style={{ background: NAVY_DARK }}>
-                <div className="text-xs font-black uppercase tracking-[0.3em] opacity-90">F6 · Desconto no total (com o gerente)</div>
-                <div className="text-2xl font-black tracking-wide mt-0.5">Subtotal R$ {fmt(subtotal)}</div>
-              </div>
-              <div className="p-6 space-y-4">
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => setDiscountKind('percent')}
-                    className={`flex-1 px-3 py-2 border-2 font-black uppercase tracking-wide text-sm ${discountKind === 'percent' ? 'bg-yellow-100' : ''}`}
-                    style={{ borderColor: discountKind === 'percent' ? NAVY_DARK : '#cbd5e1', color: NAVY_DARK }}
-                  >
-                    % Percentual
-                  </button>
-                  <button
-                    onClick={() => setDiscountKind('reais')}
-                    className={`flex-1 px-3 py-2 border-2 font-black uppercase tracking-wide text-sm ${discountKind === 'reais' ? 'bg-yellow-100' : ''}`}
-                    style={{ borderColor: discountKind === 'reais' ? NAVY_DARK : '#cbd5e1', color: NAVY_DARK }}
-                  >
-                    R$ Valor
-                  </button>
-                </div>
-                <div>
-                  <label className="text-xs font-black uppercase tracking-widest text-gray-600 block mb-2">
-                    {discountKind === 'percent' ? 'Percentual (0-100)' : 'Valor em R$'}
-                  </label>
-                  <input
-                    autoFocus
-                    type="text"
-                    inputMode="numeric"
-                    value={discountValue}
-                    onChange={(e) => setDiscountValue(formatBRL(parseBRL(e.target.value)))}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') { e.preventDefault(); aplicar(); }
-                      if (e.key === 'Escape') { e.preventDefault(); fecharDesconto(); }
-                    }}
-                    placeholder="0,00"
-                    className="w-full border-2 text-3xl font-black tabular-nums px-3 py-2 outline-none focus:border-blue-700"
-                    style={{ borderColor: '#9ca3af', color: NAVY_DARK }}
-                  />
-                </div>
-                <div className="border-2 px-3 py-2 bg-gray-50" style={{ borderColor: '#e5e7eb' }}>
-                  <div className="flex justify-between text-sm text-gray-600">
-                    <span>Desconto aplicado</span>
-                    <span className="font-bold tabular-nums" style={{ color: RED }}>− R$ {fmt(valorClamp)}</span>
-                  </div>
-                  <div className="flex justify-between text-base font-bold mt-1">
-                    <span>Novo total</span>
-                    <span className="tabular-nums" style={{ color: MONEY }}>R$ {fmt(novoTotal)}</span>
-                  </div>
-                </div>
-                <div className="flex gap-2">
-                  <button onClick={() => { setDesconto(0); setDescontoAutorizacao(null); fecharDesconto(); }} className="flex-1 px-4 py-3 border-2 font-black uppercase tracking-wide text-sm" style={{ borderColor: '#9ca3af', color: NAVY_DARK }}>
-                    {desconto > 0 ? 'Remover' : 'Voltar'}
-                  </button>
-                  <button onClick={aplicar} className="flex-[2] px-4 py-3 text-white font-black uppercase tracking-wide text-sm" style={{ background: NAVY_DARK }}>
-                    Pedir autorização (Enter)
-                  </button>
-                </div>
-                <div className="text-xs text-gray-500 font-bold uppercase tracking-wider text-center">
-                  Atalhos: % percentual · $ valor R$
-                </div>
-              </div>
-            </div>
-          </div>
-        );
-      })()}
+      {discountModalOpen && (
+        <DescontoModal
+          subtotal={subtotal}
+          tipo={discountKind}
+          onTipo={setDiscountKind}
+          valorTexto={discountValue}
+          onValorTexto={setDiscountValue}
+          temDesconto={desconto > 0}
+          onPedirAutorizacao={(valor) => {
+            if (valor <= 0) { showToast?.('Informe um desconto maior que zero.', 'error', true); return; }
+            // Não aplica aqui: em supermercado o desconto sai com a senha do
+            // gerente. O modal seguinte pede a autorização e o motivo.
+            setDiscountModalOpen(false);
+            setDescAuth({ valor });
+          }}
+          onRemover={() => { setDesconto(0); setDescontoAutorizacao(null); setDiscountModalOpen(false); requestAnimationFrame(() => codeInputRef.current?.focus()); }}
+          onFechar={() => { setDiscountModalOpen(false); requestAnimationFrame(() => codeInputRef.current?.focus()); }}
+        />
+      )}
 
       {/* Suprimento (F11) / Sangria (F12) — Enter confirma · Esc fecha */}
       {cashMoveModal && (
-        <div
-          className="fixed inset-0 z-[195] flex items-center justify-center p-4"
-          style={{ background: 'rgba(0,0,0,0.7)' }}
-          onKeyDown={(e) => {
-            if (e.key === 'Tab') trapTab(e, e.currentTarget as HTMLElement);
-            if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); setCashMoveModal(null); requestAnimationFrame(() => codeInputRef.current?.focus()); }
-            if (/^F\d+$/.test(e.key)) e.stopPropagation();
-          }}
-        >
-          <div className="bg-white border-4 max-w-md w-full shadow-2xl" style={{ borderColor: NAVY_DARK }}>
-            <div className="px-5 py-4 text-white" style={{ background: cashMoveModal.tipo === 'suprimento' ? MONEY : RED }}>
-              <div className="text-xs font-black uppercase tracking-[0.3em] opacity-90">
-                {cashMoveModal.tipo === 'suprimento' ? 'F11 · Entrada de dinheiro' : 'F12 · Saída de dinheiro'}
-              </div>
-              <div className="text-2xl font-black tracking-wide mt-0.5">
-                {cashMoveModal.tipo === 'suprimento' ? 'Suprimento' : 'Sangria'}
-              </div>
-            </div>
-            <div className="p-6 space-y-4">
-              <div>
-                <label className="text-xs font-black uppercase tracking-widest text-gray-600 block mb-2">Valor</label>
-                <input
-                  autoFocus
-                  type="text"
-                  inputMode="numeric"
-                  value={cashMoveValor}
-                  onChange={(e) => setCashMoveValor(formatBRL(parseBRL(e.target.value)))}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') { e.preventDefault(); handleCashMoveConfirm(); }
-                    if (e.key === 'Escape') { e.preventDefault(); setCashMoveModal(null); requestAnimationFrame(() => codeInputRef.current?.focus()); }
-                  }}
-                  placeholder="0,00"
-                  className="w-full border-2 text-3xl font-black tabular-nums px-3 py-2 outline-none focus:border-blue-700"
-                  style={{ borderColor: '#9ca3af', color: NAVY_DARK }}
-                />
-              </div>
-              <div>
-                <label className="text-xs font-black uppercase tracking-widest text-gray-600 block mb-2">
-                  Motivo {cashMoveModal.tipo === 'sangria' ? '(obrigatório registrar onde foi)' : '(opcional)'}
-                </label>
-                <input
-                  type="text"
-                  value={cashMoveMotivo}
-                  onChange={(e) => setCashMoveMotivo(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') { e.preventDefault(); handleCashMoveConfirm(); }
-                    if (e.key === 'Escape') { e.preventDefault(); setCashMoveModal(null); requestAnimationFrame(() => codeInputRef.current?.focus()); }
-                  }}
-                  placeholder={cashMoveModal.tipo === 'sangria' ? 'Depósito no banco, pagto fornecedor...' : 'Troco inicial, reforço...'}
-                  className="w-full border-2 text-base px-3 py-2 outline-none focus:border-blue-700"
-                  style={{ borderColor: '#9ca3af' }}
-                />
-              </div>
-              <div className="flex gap-2">
-                <button onClick={() => { setCashMoveModal(null); requestAnimationFrame(() => codeInputRef.current?.focus()); }} className="flex-1 px-4 py-3 border-2 font-black uppercase tracking-wide text-sm" style={{ borderColor: '#9ca3af', color: NAVY_DARK }}>
-                  Voltar
-                </button>
-                <button
-                  onClick={handleCashMoveConfirm}
-                  disabled={parseBRL(cashMoveValor) <= 0 || isClosing}
-                  className="flex-[2] px-4 py-3 text-white font-black uppercase tracking-wide text-sm disabled:opacity-30 flex items-center justify-center gap-2"
-                  style={{ background: cashMoveModal.tipo === 'suprimento' ? MONEY : RED }}
-                >
-                  {isClosing ? <><Loader2 size={16} className="animate-spin" /> Registrando...</> : 'Confirmar (Enter)'}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
+        <MovimentoCaixaModal
+          tipo={cashMoveModal.tipo}
+          valorTexto={cashMoveValor}
+          onValorTexto={setCashMoveValor}
+          motivo={cashMoveMotivo}
+          onMotivo={setCashMoveMotivo}
+          processando={isClosing}
+          onConfirmar={handleCashMoveConfirm}
+          onFechar={() => { setCashMoveModal(null); requestAnimationFrame(() => codeInputRef.current?.focus()); }}
+        />
       )}
 
       {/* Modal fechar/suspender caixa pelo operador (F3) */}
       {caixaOpModal && (
-        <div
-          className="fixed inset-0 z-[195] flex items-center justify-center p-4"
-          style={{ background: 'rgba(0,0,0,0.7)' }}
-          onKeyDown={(e) => {
-            if (e.key === 'Tab') trapTab(e, e.currentTarget as HTMLElement);
-            if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); setCaixaOpModal(null); requestAnimationFrame(() => codeInputRef.current?.focus()); }
-            if (/^F\d+$/.test(e.key)) e.stopPropagation();
-          }}
-        >
-          <div className="bg-white border-4 max-w-lg w-full shadow-2xl" style={{ borderColor: NAVY_DARK }}>
-            <div className="px-5 py-4 text-white" style={{ background: NAVY_DARK }}>
-              <div className="text-xs font-black uppercase tracking-[0.3em] opacity-90">F3 · Operador</div>
-              <div className="text-2xl font-black tracking-wide mt-0.5">Fechar / Suspender Caixa</div>
-            </div>
-            <div className="p-6 space-y-4">
-              <div className="flex gap-2">
-                <button
-                  onClick={() => setCaixaOpModal('fechar')}
-                  className={`flex-1 px-4 py-3 border-2 font-black uppercase tracking-wide text-sm flex items-center justify-center gap-2 ${caixaOpModal === 'fechar' ? 'text-white' : ''}`}
-                  style={caixaOpModal === 'fechar' ? { background: RED, borderColor: RED, color: 'white' } : { borderColor: '#9ca3af', color: NAVY_DARK }}
-                >
-                  <Calculator size={16} /> Fechar
-                </button>
-                <button
-                  onClick={() => setCaixaOpModal('suspender')}
-                  className={`flex-1 px-4 py-3 border-2 font-black uppercase tracking-wide text-sm flex items-center justify-center gap-2 ${caixaOpModal === 'suspender' ? 'text-white' : ''}`}
-                  style={caixaOpModal === 'suspender' ? { background: YELLOW_DARK, borderColor: YELLOW_DARK, color: 'white' } : { borderColor: '#9ca3af', color: NAVY_DARK }}
-                >
-                  <PauseCircle size={16} /> Suspender
-                </button>
-              </div>
-
-              {caixaOpModal === 'fechar' && (
-                <>
-                  <p className="text-xs text-gray-500">
-                    Conte o dinheiro fisicamente e informe abaixo. O sistema calcula o esperado e mostra a diferença para conferência do financeiro.
-                  </p>
-                  <div>
-                    <label className="text-xs font-black uppercase tracking-widest text-gray-600 block mb-2">Valor contado em dinheiro</label>
-                    <input
-                      autoFocus
-                      type="text"
-                      inputMode="numeric"
-                      value={caixaOpValor}
-                      onChange={(e) => setCaixaOpValor(formatBRL(parseBRL(e.target.value)))}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') { e.preventDefault(); handleCaixaOpConfirm(); }
-                      }}
-                      placeholder="0,00"
-                      className="w-full border-2 text-3xl font-black tabular-nums px-3 py-2 outline-none focus:border-blue-700"
-                      style={{ borderColor: '#9ca3af', color: NAVY_DARK }}
-                    />
-                  </div>
-                </>
-              )}
-              {caixaOpModal === 'suspender' && (
-                <p className="text-xs text-gray-500">
-                  Suspender pausa o caixa temporariamente (troca de turno, intervalo). O financeiro poderá reabrir ou fechar definitivamente.
-                </p>
-              )}
-
-              <div>
-                <label className="text-xs font-black uppercase tracking-widest text-gray-600 block mb-2">Observação (opcional)</label>
-                <input
-                  autoFocus={caixaOpModal === 'suspender'}
-                  type="text"
-                  value={caixaOpObs}
-                  onChange={(e) => setCaixaOpObs(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') { e.preventDefault(); handleCaixaOpConfirm(); }
-                  }}
-                  placeholder={caixaOpModal === 'suspender' ? 'Ex: troca de turno, intervalo...' : 'Ex: fechamento fim do expediente'}
-                  className="w-full border-2 text-base px-3 py-2 outline-none focus:border-blue-700"
-                  style={{ borderColor: '#9ca3af' }}
-                />
-              </div>
-
-              <div className="flex gap-2">
-                <button
-                  onClick={() => { setCaixaOpModal(null); requestAnimationFrame(() => codeInputRef.current?.focus()); }}
-                  className="flex-1 px-4 py-3 border-2 font-black uppercase tracking-wide text-sm"
-                  style={{ borderColor: '#9ca3af', color: NAVY_DARK }}
-                >
-                  Voltar
-                </button>
-                <button
-                  onClick={handleCaixaOpConfirm}
-                  disabled={isClosing || (caixaOpModal === 'fechar' && parseBRL(caixaOpValor) <= 0)}
-                  className="flex-[2] px-4 py-3 text-white font-black uppercase tracking-wide text-sm disabled:opacity-30 flex items-center justify-center gap-2"
-                  style={{ background: caixaOpModal === 'fechar' ? RED : YELLOW_DARK }}
-                >
-                  {isClosing
-                    ? <><Loader2 size={16} className="animate-spin" /> Processando...</>
-                    : caixaOpModal === 'fechar' ? 'Fechar caixa (Enter)' : 'Suspender caixa (Enter)'}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
+        <OperacaoCaixaModal
+          modo={caixaOpModal}
+          onModo={setCaixaOpModal}
+          valorTexto={caixaOpValor}
+          onValorTexto={setCaixaOpValor}
+          obs={caixaOpObs}
+          onObs={setCaixaOpObs}
+          processando={isClosing}
+          onConfirmar={handleCaixaOpConfirm}
+          onFechar={() => { setCaixaOpModal(null); requestAnimationFrame(() => codeInputRef.current?.focus()); }}
+        />
       )}
+
 
     </motion.div>
   );
