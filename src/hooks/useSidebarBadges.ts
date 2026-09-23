@@ -74,7 +74,10 @@ type BadgeDef = {
 const BADGE_DEFS: BadgeDef[] = [
   // ─── Compras ──────────────────────────────────────────────────────────────
   { viewId: 'compras-requisiçõesdecompra', modulo: 'compras', listenTables: ['requisicoes'] },
-  { viewId: 'compras-cotações',            modulo: 'compras', listenTables: ['cotacoes'] },
+  // Soma as três linhas da faixa da tela (migr. 620): requisição aprovada sem
+  // cotação viva, cotação em correção e cotação aprovada sem pedido — por isso
+  // envelhece com requisição e pedido também.
+  { viewId: 'compras-cotações',            modulo: 'compras', listenTables: ['cotacoes', 'requisicoes', 'pedidos'] },
   { viewId: 'compras-pedidos',             modulo: 'compras', listenTables: ['pedidos'] },
 
   // ─── Requisições ──────────────────────────────────────────────────────────
