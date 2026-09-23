@@ -358,14 +358,26 @@ export function ancorarRelogioNoServidor(): void {
       return medido;
     }
     // Sem rede no boot (comum no laboratório): tenta de novo quando voltar.
+    //
+    // O `typeof window` não é paranoia: este caminho é o NORMAL fora do
+    // navegador. Em teste, sem `VITE_SUPABASE_URL`, `medirOffset()` devolve
+    // null e cai aqui — e como isto roda dentro de um `.then()`, o
+    // `ReferenceError: window is not defined` virava rejeição não tratada, não
+    // erro de teste. Vitest a contava em "Errors" e saía 1 com todos os testes
+    // verdes: 384 passando e exit code 1.
+    //
+    // Ficou escondido porque o job único do CI morria antes, no setup.ts, e
+    // localmente a rejeição costuma chegar depois de o vitest fechar o resumo.
+    // Apareceu na primeira execução do job de unidade separado — que é para
+    // isso que ele existe.
     const aoVoltar = async () => {
       const tardio = await medirOffset();
       if (tardio !== null) {
         adotar(tardio);
-        window.removeEventListener('online', aoVoltar);
+        if (typeof window !== 'undefined') window.removeEventListener('online', aoVoltar);
       }
     };
-    window.addEventListener('online', aoVoltar);
+    if (typeof window !== 'undefined') window.addEventListener('online', aoVoltar);
     return null;
   });
 }

@@ -22,11 +22,17 @@ const ESTATICOS = [
   'tests/botoesPadrao.test.ts',
   'tests/catalogoNichoPdf.test.ts',
   'tests/confirm.test.ts',
+  // Puro: só `src/lib/disjuntor`, com `fetch` de mentira. Estava caindo no
+  // grupo `integracao` — a mesma armadilha do produtoBusca descrita acima.
+  'tests/disjuntor.test.ts',
   'tests/falhaConexao.test.ts',
   'tests/fichaProduto.test.ts',
   'tests/horaServidor.test.ts',
   'tests/imei.test.ts',
   'tests/importarProdutos.test.ts',
+  // Puro desde que o "maior número de NF" passou para o banco (migr. 618): só
+  // sobrou aritmética de padding. Também estava no grupo errado.
+  'tests/notaFiscal.test.ts',
   'tests/orcamentoFases.test.ts',
   'tests/perecivel.test.ts',
   'tests/precificacao.test.ts',
