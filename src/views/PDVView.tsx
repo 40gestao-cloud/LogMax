@@ -1,4 +1,3 @@
-import { isConselheiro } from '../lib/rbac';
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Search, Trash2, Plus, Minus, ShoppingCart, CheckCircle2, X, Loader2, User, AlertTriangle, Lock, CreditCard, Smartphone, QrCode, FileDown, Scale, Ticket, Maximize2, Minimize2, Package, ArrowLeft, Store, Undo2, Wrench, Info } from 'lucide-react';
@@ -31,6 +30,9 @@ import { PDVFecharCaixa } from '../components/PDVFecharCaixa';
 import { ProdutoDetalheModal } from '../components/ProdutoDetalheModal';
 import { normalizarBusca, produtoCasa, buscarProdutos, separarQtdETermo } from '../lib/produtoBusca';
 import { trapTab, devolverTabAoPdv } from '../lib/focoPdv';
+import { isProdutoFracionario, fmtQtdArmada, formatQtd } from '../lib/pdv/quantidade';
+import { podeAlternarFilial, podeDevolver, formasDaUnidade, rotuloFiado } from '../lib/pdv/regrasUnidade';
+import { montarVendaPdv } from '../lib/pdv/venda';
 
 // Unidades operacionais do PDV. Matriz é administrativa, não vende — fica fora.
 // Cada filial tem caixa próprio em `controle_caixa`; PDV só opera com o caixa
@@ -38,41 +40,6 @@ import { trapTab, devolverTabAoPdv } from '../lib/focoPdv';
 // gerente podem alternar entre as três.
 const FILIAIS_PDV = ['SuperMax', 'MaxLook', 'TechMax'] as const;
 type FilialPDV = typeof FILIAIS_PDV[number];
-
-// Unidades em que a venda é por peso/volume — o PDV pede peso em vez de
-// incrementar +1. Operador digita "1,250" pra 1 kg e 250 g.
-// Vem de src/lib/unidades.ts — mesma régua do cadastro e da requisição.
-const isProdutoFracionario = (p: any): boolean =>
-  UNIDADES_FRACIONARIAS.has(String(p?.unidade ?? 'UN').toUpperCase());
-
-// Quantidade armada na tela: 2 e não "2"→"2,000"; peso mantém as 3 casas.
-// Separado de `formatQtd` porque aquele arredonda para inteiro quando a
-// unidade não é fracionária — e a armada é mostrada antes de existir item, ou
-// seja, antes de existir unidade.
-const fmtQtdArmada = (n: number): string =>
-  Number.isInteger(n) ? String(n) : n.toLocaleString('pt-BR', { minimumFractionDigits: 3, maximumFractionDigits: 3 });
-
-const formatQtd = (qtd: number, unidade: string): string => {
-  const u = (unidade || 'UN').toUpperCase();
-  if (UNIDADES_FRACIONARIAS.has(u)) {
-    return qtd.toLocaleString('pt-BR', { minimumFractionDigits: 3, maximumFractionDigits: 3 });
-  }
-  return String(Math.round(qtd));
-};
-
-// Só admin, CEO e Conselheiro alternam entre filiais (modo Matriz). Gerente
-// fica travado na própria unidade, igual colaborador — gerente não cobre
-// outras filiais (regra de negócio).
-const podeAlternarFilial = (profile: any): boolean =>
-  profile?.role === 'admin' || profile?.role === 'ceo' || isConselheiro(profile);
-
-// Devolução é ato de alçada (migr. 459): mexe em estoque, dinheiro e cobrança
-// na mesma transação. Espelha o guard de `criar_devolucao_venda` —
-// `auth_is_admin() OR auth_gerente_da(filial)`. A tela só evita o erro seco; a
-// regra que vale é a do banco.
-const podeDevolver = (profile: any, filial: string): boolean =>
-  profile?.role === 'admin' || profile?.role === 'ceo' || isConselheiro(profile)
-  || (profile?.role === 'gerente' && profile?.filial === filial);
 
 interface CartItem {
   produto_id: string;
@@ -83,24 +50,6 @@ interface CartItem {
   estoque: number;
   unidade: string;
 }
-
-// MaxLook/TechMax não aceitam MaxBank Benefícios — só faz sentido no
-// SuperMax (supermercado tem itens elegíveis, roupa e eletrônico não).
-//
-// A prazo muda de nome e de existência conforme a unidade:
-//   MaxLook — a loja de moda chama de CREDIÁRIO. É só o rótulo do balcão: o
-//             valor gravado em `vendas.forma_pagamento` continua 'Fiado',
-//             porque é ele que faz `criar_venda_pdv` abrir a conta a receber
-//             em vez de dar a venda por recebida.
-//   TechMax — não vende a prazo: o aparelho não sai da loja sem pagamento, e
-//             quem quer parcelar usa Cartão Crédito.
-const FORMAS_BASE = ['Dinheiro', 'Cartão Débito', 'Cartão Crédito', 'PIX'];
-
-const formasDaUnidade = (filial: string): string[] =>
-  filial === 'TechMax' ? FORMAS_BASE : [...FORMAS_BASE, 'Fiado'];
-
-const rotuloFiado = (filial: string): string =>
-  filial === 'MaxLook' ? 'Crediário' : 'Fiado';
 
 // `subtitulo` aparece no header do PDV aberto (personalidade da unidade);
 // `layout` define o estilo do card na grade; `accentBar` é a cor decorativa da
@@ -987,13 +936,6 @@ const PDVViewInner = ({ showToast, profile, filialInicial, onVoltar }: {
     cupomCodigo?: string | null; cupomDesconto?: number;
   }, forma: string, parcelasEfetivas: number) => {
     if (!supabase) throw new Error('Supabase indisponível.');
-    const itensPayload = snap.cart.map(item => ({
-      produto_id:    item.produto_id,
-      nome_produto:  item.nome_produto,
-      qtd:           item.qtd,
-      preco_unitario: item.preco_unitario,
-      subtotal:      item.subtotal,
-    }));
     // Filial da venda = filial atualmente selecionada no PDV. O filtro
     // garante que só produtos dessa unidade entram no carrinho, então
     // a venda é sempre coesa por filial.
@@ -1007,19 +949,19 @@ const PDVViewInner = ({ showToast, profile, filialInicial, onVoltar }: {
     // dinheiro é forma única, então é o total ou zero. Vai explícito porque a
     // RPC não deve mais deduzir "espécie" do texto da forma de pagamento.
     const dinheiroEmEspecie = forma === 'Dinheiro' ? snap.totalFinal : 0;
-    const { data: vendaId, error: rpcErr } = await supabase.rpc('criar_venda_pdv', {
-      p_cliente_id:      snap.clienteId || null,
-      p_total:           snap.subtotal,
-      p_desconto:        descontoEnviado,
-      p_total_final:     snap.totalFinal,
-      p_forma_pagamento: forma,
-      p_parcelas:        forma === 'Cartão Crédito' ? parcelasEfetivas : 1,
-      p_itens:           itensPayload,
-      p_filial:          filialFiltro,
-      p_cupom_codigo:    cupomCod,
-      p_cupom_desconto:  cupomDesc,
-      p_valor_dinheiro:  parseFloat(dinheiroEmEspecie.toFixed(2)),
-    });
+    const { data: vendaId, error: rpcErr } = await supabase.rpc('criar_venda_pdv', montarVendaPdv({
+      clienteId:     snap.clienteId || null,
+      subtotal:      snap.subtotal,
+      desconto:      descontoEnviado,
+      totalFinal:    snap.totalFinal,
+      forma,
+      parcelas:      forma === 'Cartão Crédito' ? parcelasEfetivas : 1,
+      itens:         snap.cart,
+      filial:        filialFiltro,
+      cupomCodigo:   cupomCod,
+      cupomDesconto: cupomDesc,
+      dinheiroEmEspecie,
+    }));
     if (rpcErr || !vendaId) throw new Error(rpcErr?.message ?? 'Falha ao registrar venda.');
 
     // Info nicho grava em vendas.observacao (a RPC não recebe observação hoje).

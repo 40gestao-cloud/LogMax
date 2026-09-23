@@ -1,6 +1,6 @@
 # Plano — dividir as telas grandes (PDV e Produtos)
 
-Escrito em 2026-09-23. Nada deste plano foi executado. Cada etapa é entregável sozinha e **não muda comportamento**.
+Escrito em 2026-09-23. **Etapa 1 feita em 2026-09-23** (ver abaixo); as demais não foram executadas. Cada etapa é entregável sozinha e **não muda comportamento**.
 
 ## O que a medição mostrou
 
@@ -45,6 +45,12 @@ Funções sem React, extraídas dos dois PDVs e usadas pelos dois:
 - Regras por unidade: `formasDaUnidade`, `rotuloFiado`, `podeDevolver`.
 
 Pronto quando: os dois PDVs chamam `montarVendaPdv`, os testes cobrem o payload de cada forma de pagamento, e o diff de comportamento é nenhum.
+
+**Feito (2026-09-23).** `src/lib/pdv/` tem quatro arquivos: `venda.ts` (`montarVendaPdv`), `pagamento.ts` (misto, troco, gaveta, crédito do misto), `quantidade.ts` e `regrasUnidade.ts`. Os testes estão em `tests/pdvLogica.test.ts` (22 casos). Os dois PDVs chamam `montarVendaPdv`. `p_cpf_nota` só entra quando quem chama passa o CPF, então o PDV dos nichos continua sem mandar a chave. O que ficou de fora:
+- Os totais do PDV dos nichos (`subtotal - desconto - cupom`, sem arredondar nem limitar o desconto) não passaram por `totaisComDesconto`, porque isso mudaria o comportamento.
+- `isProdutoFracionario` compara a unidade com `toUpperCase`, e a SuperMax usa `normalizarUnidade`. Não foram unificados pelo mesmo motivo.
+- A extração saiu num commit só, e não num por função: as quatro mexem nas mesmas linhas dos dois PDVs.
+Resultado: `PDVViewSupermax` com 4.672 linhas e `PDVView` com 3.206.
 
 ### 2. Hook `usePagamentoPendente` (Pix e cartão) (risco médio)
 A espera do Pix ou do cartão (polling, realtime, cancelar com confirmação, `onAutorizado`) existe nos dois PDVs. Ela vira um hook só e os dois passam a usá-lo. É o trecho em que um defeito custa mais caro, porque envolve cobrança na MaxPay e casamento por valor, então é o que mais ganha com ter uma versão só.

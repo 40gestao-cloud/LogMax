@@ -24,6 +24,14 @@ import { playScannerBeep, playKaching } from '../utils/audioUtils';
 import { normalizarBusca as norm, produtoCasa, buscarProdutos, separarQtdETermo } from '../lib/produtoBusca';
 import { UNIDADES_FRACIONARIAS, normalizarUnidade } from '../lib/unidades';
 import { trapTab, devolverTabAoPdv } from '../lib/focoPdv';
+// Quantidade na tela: 2 e não "2,000"; 0,350 mantém o peso.
+import { fmtQtdArmada as fmtQtd } from '../lib/pdv/quantidade';
+import { montarVendaPdv } from '../lib/pdv/venda';
+import {
+  totaisComDesconto, restanteAPagar, valorDevido as calcValorDevido, mistoAtivo, trocoDoRecebido,
+  valorEditado, formaDoMisto, trocoTotal, dinheiroNaGaveta as calcDinheiroNaGaveta,
+  parcelasDaVenda, creditoDoMisto,
+} from '../lib/pdv/pagamento';
 
 // PDV do LogMax em modo SuperMax — réplica visual e UX do MaxPOS.
 // Camada de dados continua sendo LogMax: /api/produtosview, RPC criar_venda_pdv,
@@ -421,10 +429,7 @@ export const PDVViewSupermax = ({
   [produtos, filial]);
 
   const subtotal   = cart.reduce((s, i) => s + i.subtotal, 0);
-  // desconto pode ser maior que subtotal se o operador errou — clampa pra
-  // evitar totalFinal negativo (a RPC criar_venda_pdv rejeita valores < 0).
-  const descontoAplicado = Math.min(desconto, subtotal);
-  const totalFinal = Math.max(0, parseFloat((subtotal - descontoAplicado).toFixed(2)));
+  const { descontoAplicado, totalFinal } = totaisComDesconto(subtotal, desconto);
   // Só é oferta se o "de" for maior que o preço que está sendo cobrado — o
   // preço do catálogo é a fonte da verdade da venda, a promoção só explica.
   const ofertaDoItem = (produto_id: string, precoCobrado: number) => {
@@ -438,11 +443,8 @@ export const PDVViewSupermax = ({
     return o ? s + (o.de - i.preco_unitario) * i.qtd : s;
   }, 0);
   const totalItens = cart.reduce((s, i) => s + i.qtd, 0);
-  const totalPago  = pagamentos.reduce((s, p) => s + p.valor, 0);
-  const restante   = Math.max(0, parseFloat((totalFinal - totalPago).toFixed(2)));
+  const restante   = restanteAPagar(totalFinal, pagamentos);
   const fmt = (n: number) => formatBRL(n);
-  // Quantidade na tela: 2 e não "2,000"; 0,350 mantém o peso.
-  const fmtQtd = (n: number) => Number.isInteger(n) ? String(n) : n.toLocaleString('pt-BR', { minimumFractionDigits: 3 });
 
   // Banner visível dentro do PDV (toast global tem z-50 e fica atrás do overlay
   // fullscreen z-100 — invisível). Aqui é a única mensagem que o operador vê.
@@ -606,9 +608,7 @@ export const PDVViewSupermax = ({
     setEditPagValor('');
     if (novo <= 0) return;
     setPagamentos(prev => {
-      const outros = prev.reduce((acc, p, i) => i === idx ? acc : acc + p.valor, 0);
-      const teto = parseFloat((totalFinal - outros).toFixed(2));
-      const valor = parseFloat(Math.min(novo, Math.max(teto, 0)).toFixed(2));
+      const valor = valorEditado(totalFinal, prev, idx, novo);
       return prev.map((p, i) => i === idx ? { ...p, valor } : p);
     });
   };
@@ -1140,27 +1140,18 @@ export const PDVViewSupermax = ({
     // Sem override (Fiado escolhe o pagador), vale o cliente vinculado na tela
     // de fechamento — é o que carimba a venda, a conta a receber e a nota.
     const cid = cidOverride !== undefined ? cidOverride : (clienteVinculado?.id ?? null);
-    const itensPayload = cart.map(item => ({
-      produto_id:     item.produto_id,
-      nome_produto:   item.nome_produto,
-      qtd:            item.qtd,
-      preco_unitario: item.preco_unitario,
-      subtotal:       item.subtotal,
+    const { data: vendaId, error: rpcErr } = await supabase.rpc('criar_venda_pdv', montarVendaPdv({
+      clienteId:  cid,
+      subtotal,
+      desconto:   descontoAplicado,
+      totalFinal,
+      forma,
+      parcelas,
+      itens:      cart,
+      filial,
+      dinheiroEmEspecie,
+      cpfNota:    cpfNota || null,
     }));
-    const { data: vendaId, error: rpcErr } = await supabase.rpc('criar_venda_pdv', {
-      p_cliente_id:      cid,
-      p_total:           subtotal,
-      p_desconto:        descontoAplicado,
-      p_total_final:     totalFinal,
-      p_forma_pagamento: forma,
-      p_parcelas:        parcelas,
-      p_itens:           itensPayload,
-      p_filial:          filial,
-      p_cupom_codigo:    null,
-      p_cupom_desconto:  0,
-      p_valor_dinheiro:  parseFloat(dinheiroEmEspecie.toFixed(2)),
-      p_cpf_nota:        cpfNota || null,
-    });
     if (rpcErr || !vendaId) throw new Error(rpcErr?.message ?? 'Falha ao registrar venda.');
     // Desconto autorizado deixa rastro na própria venda. A RPC não recebe
     // observação, então vai num update logo depois — mesmo caminho que o PDV
@@ -1186,7 +1177,7 @@ export const PDVViewSupermax = ({
       // para a economia: ela é calculada sobre o carrinho, que some em seguida.
       cpfNota: cpfNota || null,
       economia: parseFloat(economiaOfertas.toFixed(2)),
-      itens: itensPayload.map(i => ({
+      itens: cart.map(i => ({
         nome_produto: i.nome_produto,
         qtd: i.qtd,
         preco_unitario: i.preco_unitario,
@@ -1328,39 +1319,17 @@ export const PDVViewSupermax = ({
     return !!data && data.length > 0;
   }, []);
 
-  // Concatena pagamentos em uma string única pra passar no p_forma_pagamento.
-  // RPC criar_venda_pdv cai no ELSE genérico (status='Pago') quando a string
-  // não bate em 'Cartão Crédito'/'Fiado'/'Cartão Crédito Nx' — exatamente o
-  // que queremos pra venda já totalmente paga em múltiplas formas.
-  const composeFormaMisto = (lista: PaymentLine[]): string => {
-    if (lista.length <= 1) return lista[0]?.forma ?? '';
-    const parts = lista.map(p => `${p.forma} R$ ${formatBRL(p.valor)}`);
-    return `Misto: ${parts.join(' + ')}`;
-  };
-
   const finalizarVendaMisto = async () => {
     if (pagamentos.length === 0) return;
     // Captura tudo do estado ANTES do await — clearAll() vai zerar.
-    const forma = composeFormaMisto(pagamentos);
-    // Troco = soma dos trocos por linha (Dinheiro). Recalcular daqui
-    // garante que remover/editar pagamento Dinheiro mantenha o troco
-    // coerente — versão antiga usava trocoStash agregado e ficava
-    // dessincronizado ao remover linha.
-    const trocoFinal = parseFloat(pagamentos.reduce((s, p) => s + (p.troco ?? 0), 0).toFixed(2));
+    const forma = formaDoMisto(pagamentos);
+    const trocoFinal = trocoTotal(pagamentos);
     const houveDinheiro = pagamentos.some(p => p.forma === 'Dinheiro');
-    // Parcelamento só aplica quando Cartão Crédito é forma única; em
-    // misto a RPC cai no ELSE genérico (status='Pago') e ignora p_parcelas.
-    const parcelas = (pagamentos.length === 1 && pagamentos[0].forma === 'Cartão Crédito')
-      ? (pagamentos[0].parcelas ?? 1)
-      : 1;
+    const parcelas = parcelasDaVenda(pagamentos);
     // Parte da venda paga em crédito. A RPC de venda marca o misto inteiro
     // como recebido no dia; o crédito só é repassado pela operadora depois,
     // e é isso que `pdv_registrar_credito_misto` corrige (migr. 415).
-    // Linhas de crédito com parcelamentos diferentes são raras no balcão —
-    // somamos os valores e usamos o maior parcelamento lançado.
-    const linhasCredito = pagamentos.filter(p => p.forma === 'Cartão Crédito');
-    const creditoValor = parseFloat(linhasCredito.reduce((s, p) => s + p.valor, 0).toFixed(2));
-    const creditoParcelas = linhasCredito.reduce((mx, p) => Math.max(mx, p.parcelas ?? 1), 1);
+    const { valor: creditoValor, parcelas: creditoParcelas } = creditoDoMisto(pagamentos);
     try {
       setIsClosing(true);
       setPaymentError(null);
@@ -1368,12 +1337,7 @@ export const PDVViewSupermax = ({
       // handlePayChoice. O tempo entre cash modal e FECHAR VENDA é de
       // segundos; revalidar gera falso-negativo silencioso (toast some
       // atrás do overlay fullscreen z-100) e mata a venda.
-      // Só o VALOR das linhas em Dinheiro — `troco` fica fora, porque volta
-      // para o cliente e não para a gaveta.
-      const dinheiroNaGaveta = parseFloat(
-        pagamentos.filter(p => p.forma === 'Dinheiro').reduce((s, p) => s + p.valor, 0).toFixed(2),
-      );
-      const vendaId = await finalizarVenda(forma, undefined, parcelas, dinheiroNaGaveta);
+      const vendaId = await finalizarVenda(forma, undefined, parcelas, calcDinheiroNaGaveta(pagamentos));
       // Só em misto com crédito. Falha aqui não desfaz a venda — ela já
       // persistiu, e o aviso diz exatamente o que ficou pendente de ajuste
       // pro Financeiro não descobrir isso no fechamento do mês.
@@ -1414,14 +1378,14 @@ export const PDVViewSupermax = ({
     // do payment modal.
     if (isClosing) return;
     const parcial = parseBRL(parcialValor);
-    const valorDevido = parcial > 0 ? Math.min(parcial, restante) : restante;
+    const valorDevido = calcValorDevido(parcial, restante);
     if (valorDevido <= 0 && pagamentos.length > 0) return;
 
     // PIX e Fiado precisam de etapa assíncrona (realtime, picker de cliente)
     // e a RPC criar_venda_pdv trata cada um especificamente — então só
     // funcionam como pagamento único, na venda inteira.
     if (forma === 'PIX' || forma === 'Fiado' || forma === 'Vale-Alimentação') {
-      if (pagamentos.length > 0 || (parcial > 0 && parcial < restante - 0.001)) {
+      if (mistoAtivo(pagamentos.length, parcial, restante)) {
         showToast?.(`${forma} não aceita pagamento parcial — use só como forma única.`, 'error', true);
         return;
       }
@@ -1506,7 +1470,7 @@ export const PDVViewSupermax = ({
     }
 
     // Só Cartão Débito chega aqui: Dinheiro, PIX e Fiado retornaram acima.
-    const isMistoActive = pagamentos.length > 0 || (parcial > 0 && parcial < restante - 0.001);
+    const isMistoActive = mistoAtivo(pagamentos.length, parcial, restante);
     setPaymentModalOpen(false);
     await criarCartaoPendente('debito', parseFloat(valorDevido.toFixed(2)), 1, isMistoActive ? 'linha' : 'venda');
   };
@@ -1569,8 +1533,8 @@ export const PDVViewSupermax = ({
   // à lista, cria cartao_pendentes para a maquininha.
   const confirmarParcelas = async (n: number) => {
     const parcial = parseBRL(parcialValor);
-    const valorDevido = parcial > 0 ? Math.min(parcial, restante) : restante;
-    const isMistoActive = pagamentos.length > 0 || (parcial > 0 && parcial < restante - 0.001);
+    const valorDevido = calcValorDevido(parcial, restante);
+    const isMistoActive = mistoAtivo(pagamentos.length, parcial, restante);
     setParcelasModalOpen(false);
     setParcialValor('');
     setPaymentModalOpen(false);
@@ -1583,12 +1547,12 @@ export const PDVViewSupermax = ({
   const handleCashConfirm = () => {
     const recebido = parseBRL(cashReceived);
     const parcial  = parseBRL(parcialValor);
-    const valorDevido = parcial > 0 ? Math.min(parcial, restante) : restante;
-    if (recebido < valorDevido - 0.001) {
+    const valorDevido = calcValorDevido(parcial, restante);
+    const trocoDessaForma = trocoDoRecebido(recebido, valorDevido);
+    if (trocoDessaForma === null) {
       showToast?.(`Valor recebido (R$ ${formatBRL(recebido)}) menor que devido (R$ ${formatBRL(valorDevido)}).`, 'error', true);
       return;
     }
-    const trocoDessaForma = parseFloat((recebido - valorDevido).toFixed(2));
     setPagamentos(prev => [...prev, {
       forma: 'Dinheiro',
       valor: parseFloat(valorDevido.toFixed(2)),
@@ -2678,7 +2642,7 @@ export const PDVViewSupermax = ({
                   // por causa de realtime / RPC que cria conta_receber pelo
                   // valor cheio. Dinheiro e Cartão D/C aceitam misto.
                   const parcial = parseBRL(parcialValor);
-                  const isMistoActive = pagamentos.length > 0 || (parcial > 0 && parcial < restante - 0.001);
+                  const isMistoActive = mistoAtivo(pagamentos.length, parcial, restante);
                   const isPixOrFiado = forma === 'PIX' || forma === 'Fiado' || forma === 'Vale-Alimentação';
                   const isDisabled = restante <= 0.001 || (isMistoActive && isPixOrFiado);
                   return (
@@ -2815,7 +2779,7 @@ export const PDVViewSupermax = ({
       {/* Dinheiro com cálculo de troco — em misto, valorDevido = parcial */}
       {cashModalOpen && (() => {
         const parcial = parseBRL(parcialValor);
-        const valorDevido = parcial > 0 ? Math.min(parcial, restante) : restante;
+        const valorDevido = calcValorDevido(parcial, restante);
         const recebido = parseBRL(cashReceived);
         const trocoLocal = Math.max(0, recebido - valorDevido);
         return (
@@ -4288,7 +4252,7 @@ export const PDVViewSupermax = ({
       {/* Parcelas Cartão Crédito (1x-12x) — só forma única; misto não pergunta */}
       {parcelasModalOpen && (() => {
         const parcial = parseBRL(parcialValor);
-        const valorDevido = parcial > 0 ? Math.min(parcial, restante) : restante;
+        const valorDevido = calcValorDevido(parcial, restante);
         return (
         <div
           className="fixed inset-0 z-[195] flex items-center justify-center p-4"
