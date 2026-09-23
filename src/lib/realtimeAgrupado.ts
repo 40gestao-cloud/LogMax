@@ -47,6 +47,7 @@
 import type { RealtimeChannel } from '@supabase/supabase-js';
 import { supabase } from './supabase';
 import { freshToken } from './authFetch';
+import { observarDisjuntor, podeLerPorAutomacao } from './disjuntor';
 
 /** Tabela a ouvir. `filtro` é a sintaxe do PostgREST: `filial=eq.SuperMax`. */
 export type AlvoRealtime = string | { tabela: string; filtro?: string };
@@ -163,8 +164,44 @@ export function assinarRealtime(opts: {
   let semSessao = false;
   const pendentes = new Set<string>();
 
+  // Disjuntor aberto: a leitura não acontece agora, mas NÃO se perde. As
+  // tabelas do lote voltam para `pendentes` e saem juntas quando ele fechar.
+  //
+  // Guardar é o ponto todo. Um disjuntor que simplesmente descarta a releitura
+  // troca tela travada por tela velha em silêncio — o aluno passa a ver saldo
+  // de um minuto atrás sem nada na tela dizendo isso, e aí o F5 (que é o que
+  // queremos evitar) volta a ser a única saída que ele tem.
+  let soltarAoFechar: (() => void) | null = null;
+  let naFila = false;
+  const esperarDisjuntor = () => {
+    if (naFila) return; // já estamos na fila
+    naFila = true;
+    // `observarDisjuntor` chama de volta na hora com o estado atual, ANTES de
+    // devolver o cancelador. Por isso o cancelamento é marcado por bandeira e
+    // executado depois: ler `soltarAoFechar` dentro do próprio callback pegaria
+    // `null` e deixaria o ouvinte pendurado — e ouvinte pendurado aqui significa
+    // lote que nunca sai.
+    let sairAgora = false;
+    soltarAoFechar = observarDisjuntor(estado => {
+      if (estado === 'aberto' || parado) return;
+      if (soltarAoFechar) { soltarAoFechar(); soltarAoFechar = null; }
+      else sairAgora = true;
+      naFila = false;
+      if (pendentes.size === 0) return;
+      const lote = new Set(pendentes);
+      pendentes.clear();
+      void disparar(lote);
+    });
+    if (sairAgora && soltarAoFechar) { soltarAoFechar(); soltarAoFechar = null; }
+  };
+
   const disparar = async (tabelas: Set<string>) => {
     if (parado) return;
+    if (!podeLerPorAutomacao()) {
+      for (const t of tabelas) pendentes.add(t);
+      esperarDisjuntor();
+      return;
+    }
     if (!(await freshToken())) {
       semSessao = true;
       return;
@@ -206,6 +243,7 @@ export function assinarRealtime(opts: {
   return () => {
     parado = true;
     if (janela !== null) clearTimeout(janela);
+    if (soltarAoFechar) { soltarAoFechar(); soltarAoFechar = null; }
     auth.data.subscription.unsubscribe();
     for (const f of sair) f();
   };

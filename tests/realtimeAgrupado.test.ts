@@ -33,6 +33,7 @@ vi.mock('../src/lib/supabase', () => {
 });
 
 import { assinarRealtime } from '../src/lib/realtimeAgrupado';
+import { _resetDisjuntor, medirResposta } from '../src/lib/disjuntor';
 
 describe('assinarRealtime', () => {
   let lotes: Set<string>[];
@@ -47,6 +48,7 @@ describe('assinarRealtime', () => {
 
   beforeEach(() => {
     vi.useFakeTimers();
+    _resetDisjuntor();
     sb.handlers.clear();
     sb.inscricoes = [];
     sb.aoStatus = null;
@@ -160,5 +162,78 @@ describe('assinarRealtime', () => {
 
     parar2();
     expect(sb.removidos).toBe(2);
+  });
+
+  // ─── Freio do disjuntor ──────────────────────────────────────────────────
+  // O ponto destes testes não é "para de ler" — é "para de ler E NÃO PERDE o
+  // que ia ler". Um disjuntor que descarta a releitura troca tela travada por
+  // tela velha em silêncio, e aí o F5 volta a ser a única saída do aluno, que
+  // é exatamente o que o disjuntor existe para evitar.
+
+  const abrirDisjuntor = () => { medirResposta(1_000, 504); };
+
+  it('disjuntor aberto: o lote não vai à rede, mas fica guardado', async () => {
+    abrirDisjuntor();
+    sb.handlers.get('pedidos')!({ eventType: 'INSERT' });
+    await esgotarJanela();
+    expect(lotes).toHaveLength(0);
+  });
+
+  it('e sai inteiro quando o disjuntor fecha', async () => {
+    abrirDisjuntor();
+    sb.handlers.get('pedidos')!({ eventType: 'INSERT' });
+    sb.handlers.get('controle_caixa')!({ eventType: 'UPDATE' });
+    await esgotarJanela();
+    expect(lotes).toHaveLength(0);
+
+    await vi.advanceTimersByTimeAsync(40_100);  // aberto → meio-aberto
+    medirResposta(120, 200);                    // sonda sadia → fecha
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(lotes).toHaveLength(1);
+    // As DUAS tabelas do lote guardado, não só a última.
+    expect([...lotes[0]].sort()).toEqual(['controle_caixa', 'pedidos']);
+  });
+
+  it('eventos que chegam com o disjuntor aberto entram no mesmo lote guardado', async () => {
+    abrirDisjuntor();
+    sb.handlers.get('pedidos')!({ eventType: 'INSERT' });
+    await esgotarJanela();
+    sb.handlers.get('controle_caixa')!({ eventType: 'UPDATE' });
+    await esgotarJanela();
+    expect(lotes).toHaveLength(0);
+
+    await vi.advanceTimersByTimeAsync(40_100);
+    medirResposta(120, 200);
+    await vi.advanceTimersByTimeAsync(0);
+
+    // Um lote só, com tudo — e não dois, nem só um dos dois.
+    expect(lotes).toHaveLength(1);
+    expect([...lotes[0]].sort()).toEqual(['controle_caixa', 'pedidos']);
+  });
+
+  it('parar com lote guardado não dispara leitura quando o disjuntor fecha', async () => {
+    abrirDisjuntor();
+    sb.handlers.get('pedidos')!({ eventType: 'INSERT' });
+    await esgotarJanela();
+    parar();
+
+    await vi.advanceTimersByTimeAsync(40_100);
+    medirResposta(120, 200);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(lotes).toHaveLength(0);
+  });
+
+  it('a reconexão do websocket também respeita o freio, e guarda', async () => {
+    abrirDisjuntor();
+    sb.aoStatus!('SUBSCRIBED');          // reconexão → relê tudo
+    await vi.advanceTimersByTimeAsync(0);
+    expect(lotes).toHaveLength(0);
+
+    await vi.advanceTimersByTimeAsync(40_100);
+    medirResposta(120, 200);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(lotes).toHaveLength(1);
+    expect([...lotes[0]].sort()).toEqual(['controle_caixa', 'pedidos']);
   });
 });

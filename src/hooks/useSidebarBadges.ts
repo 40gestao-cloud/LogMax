@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { freshToken } from '../lib/authFetch';
 import { assinarRealtime } from '../lib/realtimeAgrupado';
+import { podeLerPorAutomacao } from '../lib/disjuntor';
 import { SETOR_MODULES } from '../lib/sectorAccess';
 import { allSetores } from '../lib/rbac';
 import type { UserProfile } from './useUserProfile';
@@ -297,6 +298,12 @@ export function useSidebarBadges(
     const refazer = () => {
       const agora = Date.now();
       if (agora - ultimoFocoRef.current < FOCO_INTERVALO_MIN_MS) return;
+      // Disjuntor aberto: não conta, e não marca o relógio — assim o primeiro
+      // Alt+Tab depois de ele fechar conta de novo, em vez de esperar mais um
+      // minuto. Aqui não há o que guardar: bolinha de menu velha é o menor dos
+      // problemas de uma sala que está sem resposta, e a releitura do realtime
+      // (que guarda) cobre o que mudou nesse meio-tempo.
+      if (!podeLerPorAutomacao()) return;
       ultimoFocoRef.current = agora;
       fetchBadges();
     };

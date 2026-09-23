@@ -43,6 +43,7 @@ import {
   Presentation, FileText, Hourglass, Dices,
 } from 'lucide-react';
 import { NotificationBell } from './components/NotificationBell';
+import { AvisoDisjuntor } from './components/AvisoDisjuntor';
 import { AIAssistantFAB } from './components/AIAssistantFAB';
 import { PendenciasFAB } from './components/PendenciasFAB';
 import { PerfilFotoModal } from './components/PerfilFotoModal';
@@ -1730,6 +1731,11 @@ function LogMaxAppInner() {
                 está sob a whitelist — evita vazamento de contexto de módulos
                 fora da aula (notificação de outro setor, IA respondendo sobre
                 dados que o aluno não deveria ver naquela sessão). */}
+            {/* Fica ANTES do sino e visível em Modo Aula também: rede lenta é
+                informação de infraestrutura, não conteúdo de módulo, e é
+                justamente o aluno sob a whitelist que tem menos pistas do que
+                está acontecendo. */}
+            <AvisoDisjuntor />
             {!aulaFiltro && <NotificationBell setor={profile.setor} filial={filialAtiva} onNavigate={navigate} />}
             {canUseMaxAI && !aulaFiltro && <AIAssistantFAB />}
             {podeEscolherFilial && (

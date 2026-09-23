@@ -23,6 +23,7 @@
 
 import { supabase } from './supabase';
 import { freshToken } from './authFetch';
+import { observarDisjuntor, podeLerPorAutomacao } from './disjuntor';
 
 export type ReservaLinha = {
   id: string;
@@ -55,7 +56,33 @@ export function acompanharReservas<T extends ReservaLinha>(opts: {
   let janela: ReturnType<typeof setTimeout> | null = null;
   let semSessao = false;
 
+  // Fila de uma vaga: enquanto o disjuntor está aberto basta saber que HÁ
+  // leitura devendo — não importa quantas vezes foi pedida, o estado das
+  // reservas é lido por inteiro de uma vez.
+  let soltarAoFechar: (() => void) | null = null;
+  let naFila = false;
+  const pedirReleituraAoFechar = () => {
+    if (naFila) return;
+    naFila = true;
+    let sairAgora = false;
+    soltarAoFechar = observarDisjuntor(estado => {
+      if (estado === 'aberto' || parado) return;
+      if (soltarAoFechar) { soltarAoFechar(); soltarAoFechar = null; }
+      else sairAgora = true;
+      naFila = false;
+      void lerAgora();
+    });
+    if (sairAgora && soltarAoFechar) { soltarAoFechar(); soltarAoFechar = null; }
+  };
+
   const lerAgora = async () => {
+    // Disjuntor aberto: não lê agora, e mantém o cadeado que está na tela —
+    // mesma regra do "sem sessão" logo abaixo, e pelo mesmo motivo (apagar
+    // diria "livre" sem saber). Este módulo tem canal próprio e não passa pelo
+    // `assinarRealtime`, então o freio precisa estar escrito aqui também: no
+    // dia 22 a `trabalho_reservas` levou 111 chamadas com p95 de 190 s.
+    // `pedirReleituraAoFechar` refaz a leitura quando o disjuntor fecha.
+    if (!podeLerPorAutomacao()) { pedirReleituraAoFechar(); return; }
     // Sem sessão não lê. Depois dos 504 de login de 15/09, máquinas com a tela
     // aberta e a sessão perdida seguiam lendo como anon e colhendo 401. O
     // cadeado que está na tela fica como está: apagar diria "livre" sem saber.
@@ -116,6 +143,7 @@ export function acompanharReservas<T extends ReservaLinha>(opts: {
     parar: () => {
       parado = true;
       if (janela !== null) clearTimeout(janela);
+      if (soltarAoFechar) { soltarAoFechar(); soltarAoFechar = null; }
       clearInterval(conferencia);
       auth?.data.subscription.unsubscribe();
       if (ch) supabase?.removeChannel(ch);

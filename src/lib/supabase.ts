@@ -1,6 +1,7 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { purgarSessaoSeExpirada } from './sessaoGuard';
 import { ancorarRelogioNoServidor } from './horaServidor';
+import { fetchMedido } from './disjuntor';
 
 // Relógio ancorado no servidor (ver `horaServidor.ts`). PRIMEIRA linha de tudo,
 // antes do guard de sessão e do createClient: os dois decidem por hora, e numa
@@ -31,8 +32,14 @@ if (!supabaseUrl || !supabaseKey) {
   );
 }
 
+// O `fetch` passa pelo disjuntor (ver `disjuntor.ts`). É aqui porque este é o
+// único ponto por onde TUDO passa — REST, RPC, auth, storage —, então a medição
+// não depende de nenhuma tela lembrar de reportar. O wrapper só mede: quem corta
+// tráfego são os geradores de leitura automática, que sabem a intenção.
 export const supabase: SupabaseClient | null =
-  supabaseUrl && supabaseKey ? createClient(supabaseUrl, supabaseKey) : null;
+  supabaseUrl && supabaseKey
+    ? createClient(supabaseUrl, supabaseKey, { global: { fetch: fetchMedido() } })
+    : null;
 
 export const isSupabaseConfigured = Boolean(supabaseUrl && supabaseKey);
 
