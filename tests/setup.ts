@@ -23,10 +23,37 @@ export const TEM_BANCO = !!url && !!serviceKey;
 // silêncio seria pior ainda: o CI passaria verde sem ter testado nada.
 const NO_CI = process.env.CI === 'true' || process.env.CI === '1';
 
-if (!TEM_BANCO && NO_CI) {
+/**
+ * `LOGMAX_SUITE=unidade` diz: este job é o de UNIDADE, e a falta de banco aqui
+ * é o combinado, não um acidente.
+ *
+ * Por que isto passou a existir. A regra acima estava certa no princípio e
+ * errada no efeito. O `test.yml` tinha um job só, que rodava `npm test`
+ * inteiro; sem os secrets cadastrados ele morria AQUI, no import, antes de
+ * qualquer teste começar. Resultado medido em 23/09: os oito últimos commits
+ * do repo com o CI vermelho, e os ~384 testes que não precisam de banco nenhum
+ * nunca executados em CI. Alarme sempre vermelho informa tanto quanto alarme
+ * sempre verde — ninguém conseguia olhar o CI e saber se um push quebrou algo.
+ *
+ * O combinado agora é entre DOIS jobs, e é o outro que protege esta régua:
+ *   · `unidade`   — sem segredo, com este opt-out, obrigatório. Verde aqui
+ *                   significa "os testes que não precisam de banco passaram",
+ *                   o que é uma afirmação verdadeira e útil.
+ *   · `integracao`— sem o opt-out. Com secrets, roda de verdade e falha de
+ *                   verdade; sem eles, avisa em voz alta no resumo da execução.
+ *
+ * Ou seja: continua não existindo caminho em que a suíte de integração
+ * desapareça em silêncio. O que mudou é que a ausência dela deixou de cegar o
+ * resto. Quem mexer nisto tem de manter os dois lados — tirar o job de
+ * integração e deixar só o opt-out é o cenário que a régua original proíbe.
+ */
+const SUITE_UNIDADE = process.env.LOGMAX_SUITE === 'unidade';
+
+if (!TEM_BANCO && NO_CI && !SUITE_UNIDADE) {
   throw new Error(
     'VITE_SUPABASE_URL e SUPABASE_SERVICE_ROLE_KEY são obrigatórios no CI. ' +
-    'Configure os secrets no GitHub — pular os testes de integração aqui esconderia regressão.',
+    'Configure os secrets no GitHub — pular os testes de integração aqui esconderia regressão. ' +
+    '(No job de unidade, que roda de propósito sem banco, use LOGMAX_SUITE=unidade.)',
   );
 }
 

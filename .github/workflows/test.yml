@@ -1,12 +1,55 @@
 name: tests
 
+# Dois jobs, e a divisão é o ponto.
+#
+# ─── O QUE ESTAVA ACONTECENDO ───────────────────────────────────────────────
+#
+# Havia um job só, `pdv-smoke`, que rodava `npm test` inteiro. Os secrets do
+# Supabase nunca foram cadastrados, então o `tests/setup.ts` lançava no import —
+# de propósito, com a régua certa: CI verde sem ter testado nada é pior que
+# teste ausente.
+#
+# O efeito, medido em 23/09: os oito últimos commits do repo com o CI vermelho,
+# incluindo commits que não tinham nada de errado. E os ~384 testes que não
+# precisam de banco nenhum — PDV sem banco, RBAC, datas, unidades, juros, o
+# disjuntor, a régua de realtime — NUNCA executados em CI.
+#
+# Alarme sempre vermelho informa tanto quanto alarme sempre verde: nos dois
+# casos ninguém consegue olhar o CI e saber se um push quebrou algo. Era o mesmo
+# defeito do vigia das turmas (scripts/saude-turmas.mjs), na outra ponta.
+#
+# ─── A DIVISÃO ──────────────────────────────────────────────────────────────
+#
+#   unidade     não precisa de segredo, roda sempre, e é a que dá sinal. Verde
+#               aqui significa "os testes que não precisam de banco passaram" —
+#               afirmação verdadeira e útil. Vermelho aqui é código quebrado.
+#
+#   integracao  fala com um Supabase de verdade (insere produto, cria venda pela
+#               `criar_venda_pdv`, confere contas_receber/itens_venda/
+#               movimentacoes_estoque e limpa depois). Com secrets, roda e falha
+#               de verdade. Sem secrets, avisa em voz alta no resumo e não
+#               esconde nada — mas também não cega o job de cima.
+#
+# A régua do setup.ts segue inteira: não existe caminho em que a integração
+# desapareça em silêncio. Quem mexer aqui tem de manter os dois lados.
+#
+# ─── SOBRE CADASTRAR OS SECRETS ─────────────────────────────────────────────
+#
+# Quando for cadastrar, NÃO aponte para uma das quatro turmas. Estes testes
+# ESCREVEM com `service_role` (que ignora RLS) e limpam com DELETE por padrão
+# LIKE. Um push durante a aula faria aparecer e desaparecer produto do catálogo,
+# venda no DRE e movimentação de estoque na frente dos alunos — e resíduo, se a
+# limpeza falhar no meio. O lugar certo é um projeto Supabase descartável, sem
+# aluno dentro, com o schema do docs/setup-turma/.
+
 on:
   push:
     branches: [master]
   pull_request:
 
 jobs:
-  pdv-smoke:
+  unidade:
+    name: unidade (sem banco)
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -21,7 +64,63 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Run PDV smoke tests
+      # `lint` é `tsc --noEmit`. Entra aqui porque erro de tipo é a falha mais
+      # comum e a mais barata de pegar, e não precisa de banco nenhum.
+      - name: Tipos
+        run: npm run lint
+
+      # LOGMAX_SUITE=unidade diz ao setup.ts que a falta de banco é o combinado
+      # deste job. As suítes de integração se pulam sozinhas (describe.skipIf).
+      - name: Testes de unidade
+        run: npm run test
+        env:
+          LOGMAX_SUITE: unidade
+
+  integracao:
+    name: integração (precisa de banco)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      # O aviso é o ponto: sem os secrets este job não testa nada, e isso tem de
+      # ficar escrito no resumo da execução, não sumir. `::warning::` aparece na
+      # página do run; o resumo fica no painel do job.
+      - name: Tem credenciais?
+        id: cred
+        env:
+          CHAVE: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          URL_SB: ${{ secrets.VITE_SUPABASE_URL }}
+        run: |
+          if [ -n "$CHAVE" ] && [ -n "$URL_SB" ]; then
+            echo "tem=sim" >> "$GITHUB_OUTPUT"
+          else
+            echo "tem=nao" >> "$GITHUB_OUTPUT"
+            echo "::warning title=Integração não rodou::Os secrets VITE_SUPABASE_URL e SUPABASE_SERVICE_ROLE_KEY não estão cadastrados. A suíte que exercita criar_venda_pdv contra um banco de verdade NÃO foi executada neste push."
+            {
+              echo "### Integração não rodou"
+              echo
+              echo "Faltam os secrets \`VITE_SUPABASE_URL\` e \`SUPABASE_SERVICE_ROLE_KEY\`."
+              echo
+              echo "A suíte de integração exercita a \`criar_venda_pdv\` contra um banco real —"
+              echo "é a RPC mais crítica do sistema e hoje ela não tem cobertura automática."
+              echo
+              echo "**Ao cadastrar, aponte para um projeto descartável, nunca para uma turma:**"
+              echo "os testes escrevem com \`service_role\` e limpam com DELETE por padrão LIKE."
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Testes de integração
+        if: steps.cred.outputs.tem == 'sim'
         run: npm run test
         env:
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
