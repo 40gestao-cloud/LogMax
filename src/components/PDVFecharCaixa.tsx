@@ -3,7 +3,6 @@ import { motion, AnimatePresence } from 'motion/react';
 import { X, Lock, Loader2, ClipboardCheck, ArrowDownToLine, ArrowUpFromLine, DollarSign, TrendingDown, TrendingUp } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { formatBRL, parseBRL, handleMoneyKeyDown } from '../lib/viewUtils';
-import { todayBR } from '../lib/dates';
 
 const fmtBRL = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
@@ -29,39 +28,34 @@ export function PDVFecharCaixa({ caixa, showToast, onFechamentoSolicitado, class
   const [sangrias, setSangrias] = useState(0);
   const [suprimentos, setSuprimentos] = useState(0);
   const [loadingSummary, setLoadingSummary] = useState(false);
+  const [erroPrevia, setErroPrevia] = useState<string | null>(null);
 
-  // Ao abrir o modal, recalcula o resumo do turno em tempo real. A RPC final
-  // também recalcula — este preview é só orientação pro operador contar o
-  // dinheiro. Se divergir na hora do envio, quem manda é o servidor.
+  // Ao abrir o modal, pede ao banco o resumo DESTE caixa (migr. 621) — a mesma
+  // conta que `solicitar_fechamento_caixa` vai gravar. Antes a prévia era
+  // refeita aqui e errava sozinha: somava o dia inteiro da unidade (o segundo
+  // caixa do dia herdava o dinheiro do primeiro), deixava de fora a parte em
+  // espécie do pagamento misto, contava venda cancelada e montava o dia sem
+  // fuso. Se a prévia falhar, o envio segue valendo: quem manda é o servidor.
   useEffect(() => {
     if (!open || !supabase) return;
     let cancelled = false;
     setLoadingSummary(true);
+    setErroPrevia(null);
     (async () => {
-      const today = todayBR();
-      const [vRes, mRes] = await Promise.all([
-        supabase.from('vendas')
-          .select('total_final')
-          .eq('filial', caixa.filial)
-          .ilike('forma_pagamento', 'dinheiro%')
-          .eq('ativo', true)
-          .gte('created_at', `${today}T00:00:00`)
-          .lte('created_at', `${today}T23:59:59`),
-        supabase.from('movimentacoes_caixa')
-          .select('tipo, valor')
-          .eq('controle_caixa_id', caixa.id),
-      ]);
+      const { data, error } = await supabase.rpc('previa_fechamento_caixa', { p_controle_id: caixa.id });
       if (cancelled) return;
-      const vend = (vRes.data ?? []).reduce((s: number, r: any) => s + Number(r.total_final || 0), 0);
-      const sang = (mRes.data ?? []).filter((m: any) => m.tipo === 'sangria').reduce((s: number, m: any) => s + Number(m.valor || 0), 0);
-      const supr = (mRes.data ?? []).filter((m: any) => m.tipo === 'suprimento').reduce((s: number, m: any) => s + Number(m.valor || 0), 0);
-      setVendasDinheiro(vend);
-      setSangrias(sang);
-      setSuprimentos(supr);
+      if (error || !data) {
+        setErroPrevia(error?.message ?? 'Não foi possível calcular a prévia.');
+      } else {
+        const r = data as { vendas_dinheiro: number; sangrias: number; suprimentos: number };
+        setVendasDinheiro(Number(r.vendas_dinheiro || 0));
+        setSangrias(Number(r.sangrias || 0));
+        setSuprimentos(Number(r.suprimentos || 0));
+      }
       setLoadingSummary(false);
     })();
     return () => { cancelled = true; };
-  }, [open, caixa.id, caixa.filial]);
+  }, [open, caixa.id]);
 
   const esperado = useMemo(
     () => Number(caixa.valor_abertura || 0) + vendasDinheiro + suprimentos - sangrias,
@@ -132,6 +126,15 @@ export function PDVFecharCaixa({ caixa, showToast, onFechamentoSolicitado, class
                   </div>
                 ) : (
                   <>
+                    {erroPrevia ? (
+                      // Sem prévia não se mostra esperado nenhum: um zero aqui
+                      // seria lido como "a gaveta deveria estar vazia".
+                      <div className="neu-flat rounded-xl p-4 border border-amber-400/30 text-xs text-gray-300 leading-relaxed">
+                        <p className="text-[10px] font-bold uppercase tracking-widest text-amber-400 mb-1">Resumo indisponível</p>
+                        Não deu para calcular o esperado agora ({erroPrevia}). Conte a gaveta e envie mesmo assim — o
+                        Financeiro recebe a conta feita pelo sistema.
+                      </div>
+                    ) : (
                     <div className="flex flex-col gap-2 neu-flat rounded-xl p-4 border border-white/5">
                       <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-1">Resumo do turno</p>
                       <Linha icon={DollarSign} label="Valor de abertura" value={fmtBRL(Number(caixa.valor_abertura || 0))} />
@@ -142,6 +145,7 @@ export function PDVFecharCaixa({ caixa, showToast, onFechamentoSolicitado, class
                         <Linha icon={ClipboardCheck} label="Esperado em caixa" value={fmtBRL(esperado)} valueClass="text-accent font-black" />
                       </div>
                     </div>
+                    )}
 
                     <div className="flex flex-col gap-1.5">
                       <label className="text-[10px] font-bold uppercase tracking-widest text-gray-500">Valor contado (dinheiro) *</label>
@@ -153,7 +157,7 @@ export function PDVFecharCaixa({ caixa, showToast, onFechamentoSolicitado, class
                         placeholder="R$ 0,00"
                         inputMode="numeric"
                       />
-                      {contado > 0 && (
+                      {contado > 0 && !erroPrevia && (
                         <p className={`text-xs font-bold ${tipoDif === 'exato' ? 'text-gray-400' : tipoDif === 'sobra' ? 'text-green-400' : 'text-red-400'}`}>
                           {tipoDif === 'exato'
                             ? 'Fechamento exato.'
