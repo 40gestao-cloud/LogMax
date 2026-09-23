@@ -305,13 +305,28 @@ function traduzErroDeLeitura(error: { message?: string }): string {
   return msg;
 }
 
-function traduzErroDeGravacao(error: { code?: string; message?: string }): string {
+export function traduzErroDeGravacao(error: { code?: string; message?: string }): string {
   const msg = error?.message ?? '';
 
   if (error?.code === '23505') {
     for (const [constraint, amigavel] of Object.entries(MSG_POR_CONSTRAINT)) {
       if (msg.includes(constraint)) return amigavel;
     }
+  }
+
+  // Chave estrangeira. Nas duas direções o texto do Postgres não diz nada a
+  // quem está na tela. Em 22/09 três cadastros de produto morreram em
+  // `produtos_categoria_id_fkey`: um colega apagou a categoria enquanto o
+  // formulário estava aberto, e a lista da tela continuava oferecendo-a.
+  if (error?.code === '23503') {
+    if (/insert or update/i.test(msg)) {
+      return 'Um item escolhido numa lista deste formulário (categoria, fornecedor, '
+        + 'produto…) não existe mais: outra pessoa o apagou depois que a tela abriu. '
+        + 'Escolha outro na lista. Se a lista ainda mostrar o que foi apagado, '
+        + 'recarregue a tela.';
+    }
+    return 'Este registro está sendo usado em outro lugar do sistema e não pode ser '
+      + 'apagado. Desative-o em vez de excluir, ou apague primeiro o que depende dele.';
   }
 
   const ehRls = error?.code === '42501' || /row-level security|violates row-level/i.test(msg);
