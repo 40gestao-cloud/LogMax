@@ -10,8 +10,9 @@ import { parseNum, fmtBRL, type FormProduto, type ExtrasProduto } from './produt
 // Seção do formulário de ProdutosView: o estado é da view e desce com o
 // mesmo nome que tem lá.
 export function SecaoPrecos({
-  errors, clearError, custoObrigatorio, editItem, extras, extrasErrors, form, margemAoVivo, markupAoVivo, markupCategoria, precoAbaixoDoCusto, precoSugerido, setExtras, setExtrasErrors, setForm,
+  custoDaCotacao, errors, clearError, custoObrigatorio, editItem, extras, extrasErrors, form, margemAoVivo, markupAoVivo, markupCategoria, precoAbaixoDoCusto, precoSugerido, setExtras, setExtrasErrors, setForm,
 }: {
+  custoDaCotacao: boolean;
   errors: Partial<Record<keyof FormProduto, string>>;
   clearError: (key: keyof FormProduto) => void;
   custoObrigatorio: boolean;
@@ -51,7 +52,12 @@ export function SecaoPrecos({
             {/* Cadastro antecipado: a cotação ainda não aconteceu, e o
                 campo deixa de cobrar um número que ninguém tem. Dizer
                 isso na tela é o que impede o aluno de inventar um. */}
-            {!custoObrigatorio && (
+            {custoDaCotacao ? (
+              <p className="text-[10px] text-gray-500 mt-1 leading-snug">
+                <span className="text-accent font-bold">Previsto pela cotação aprovada</span> — o{' '}
+                <span className="text-gray-400 font-bold">Recebimento</span> confirma o custo real, e é ele que vale no DRE.
+              </p>
+            ) : !custoObrigatorio && (
               <p className="text-[10px] text-gray-500 mt-1 leading-snug">
                 Pode ficar em branco: você ainda vai cotar. O custo real é apurado no{' '}
                 <span className="text-gray-400 font-bold">Recebimento</span>, por média ponderada — e

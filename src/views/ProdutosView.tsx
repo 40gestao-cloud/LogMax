@@ -321,6 +321,10 @@ const ProdutosViewInner = ({ showToast, filial, profile }: { showToast: any; fil
         // para `produtos.nome`.
         const desc = String(r.item ?? '').replace(/\s+/g, ' ').trim();
         const cot  = cotPorReq.get(r.id);
+        // `qtd` da requisição é sempre na unidade base, mesmo pedida em fardo
+        // (migr. 589) — é o mesmo divisor que o pedido e a migr. 417 usam.
+        const qtdReq   = Number(r.qtd ?? 0);
+        const totalCot = Number(cot?.valor_total ?? 0);
         return {
           id: r.id,
           descricao: desc,
@@ -334,6 +338,7 @@ const ProdutosViewInner = ({ showToast, filial, profile }: { showToast: any; fil
           marca: String(cot?.marca ?? '').trim(),
           fornecedor: cot ? (fornecedoresList.find((f: any) => f.id === cot.fornecedor_id)?.nome ?? '') : '',
           fornecedor_id: cot?.fornecedor_id ?? '',
+          custoPrevisto: qtdReq > 0 && totalCot > 0 ? totalCot / qtdReq : null,
         };
       })
       .filter(i => i.descricao && !nomesCatalogo.has(i.descricao.toLowerCase()))
@@ -419,6 +424,9 @@ const ProdutosViewInner = ({ showToast, filial, profile }: { showToast: any; fil
   // select precisa voltar para o vazio quando o formulário fecha — senão o
   // próximo cadastro abre com a escolha do anterior.
   const [itemCompradoSel, setItemCompradoSel] = useState('');
+  // Custo que a última origem escolhida pôs no campo — para a troca de origem
+  // saber se o número é dela (troca) ou do aluno (fica).
+  const custoAutoRef = useRef('');
 
   // Trava de trabalho (migr. 537) — nasce no exato momento que o usuário
   // descreveu: escolher a origem. `SEM_COMPRA` (implantação) não reserva —
@@ -730,13 +738,26 @@ const ProdutosViewInner = ({ showToast, filial, profile }: { showToast: any; fil
       if (!req) return;
       setForm(f => ({ ...f, nome: req.descricao }));
       clearError('nome');
-      setExtras(x => ({
+      // A requisição oferece SERV (serviço) além das unidades de produto:
+      // jogar isso no select do cadastro deixaria o campo em branco, com
+      // valor que nenhuma opção representa.
+      const unidade = extras.unidade === 'UN' && unidadesDeProduto(filial).includes(normalizarUnidade(req.unidade))
+        ? normalizarUnidade(req.unidade) : extras.unidade;
+      // Cotação aprovada = preço já decidido, e o Recebimento sobrescreve de
+      // qualquer jeito (estoque zero, migr. 417). Só com a MESMA unidade: o
+      // custo por KG da requisição num produto vendido por UN seria outro número.
+      const custoCot = req.custoPrevisto != null && normalizarUnidade(req.unidade) === unidade
+        ? formatBRL(req.custoPrevisto) : '';
+      // Trocar de origem troca o custo que a origem anterior pôs; o que o
+      // aluno digitou fica.
+      const custoAnterior = custoAutoRef.current;
+      custoAutoRef.current = custoCot;
+      setExtras(x => {
+        const preco_custo = !x.preco_custo || x.preco_custo === custoAnterior ? custoCot : x.preco_custo;
+        return {
         ...x,
-        // A requisição oferece SERV (serviço) além das unidades de produto:
-        // jogar isso no select do cadastro deixaria o campo em branco, com
-        // valor que nenhuma opção representa.
-        unidade: x.unidade === 'UN' && unidadesDeProduto(filial).includes(normalizarUnidade(req.unidade))
-          ? normalizarUnidade(req.unidade) : x.unidade,
+        unidade,
+        preco_custo,
         fornecedor:    x.fornecedor    || req.fornecedor,
         fornecedor_id: x.fornecedor_id || req.fornecedor_id,
         // Migr. 526: a marca decidida na proposta aprovada. Sugestão, como o
@@ -745,7 +766,8 @@ const ProdutosViewInner = ({ showToast, filial, profile }: { showToast: any; fil
         marca:         x.marca         || req.marca,
         // Nada chegou ainda: o saldo entra pelo Recebimento.
         estoque: '',
-      }));
+        };
+      });
       return;
     }
     const comprado = itensComprados.find(i => i.descricao === desc);
@@ -1063,6 +1085,7 @@ const ProdutosViewInner = ({ showToast, filial, profile }: { showToast: any; fil
     setImagensAviso(Array(PRODUTO_IMAGEM_MAX_SLOTS).fill(null));
     setErrors({});
     setItemCompradoSel('');
+    custoAutoRef.current = '';
     setNomeDestravado(false);
     // Trocar de produto com o painel de correção aberto aplicaria o número
     // digitado para o anterior no saldo do novo.
@@ -1082,6 +1105,7 @@ const ProdutosViewInner = ({ showToast, filial, profile }: { showToast: any; fil
     setShowForm(false);
     setEditItem(null);
     setItemCompradoSel('');
+    custoAutoRef.current = '';
     setNomeDestravado(false);
     setCorrigindoSaldo(false);
     setSaldoCorrigido('');
@@ -2033,6 +2057,9 @@ const ProdutosViewInner = ({ showToast, filial, profile }: { showToast: any; fil
               />
 
               <SecaoPrecos
+                custoDaCotacao={reqVinculo?.custoPrevisto != null
+                  && extras.preco_custo !== ''
+                  && extras.preco_custo === formatBRL(reqVinculo.custoPrevisto)}
                 errors={errors}
                 clearError={clearError}
                 custoObrigatorio={custoObrigatorio}
