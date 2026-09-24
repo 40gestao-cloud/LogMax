@@ -611,11 +611,16 @@ const ProdutosViewInner = ({ showToast, filial, profile, onNavigate }: { showToa
 
   // Requisição escolhida como origem — é ela que recebe o `produto_id` assim que
   // o produto existir.
+  //
+  // Só enquanto o tipo tem estoque: trocar para Patrimônio esconde o campo de
+  // origem (vide `origemOferecida`), mas a escolha feita antes ficava valendo
+  // por baixo — o bem era gravado na requisição e o pedido dela passava a ser
+  // recusado para sempre (migr. 515), porque o vínculo só se grava uma vez.
   const reqVinculo = useMemo(
-    () => itemCompradoSel.startsWith(REQ_PREFIX)
+    () => itemCompradoSel.startsWith(REQ_PREFIX) && temEstoque(extras.tipo)
       ? itensAguardandoPedido.find(i => i.id === itemCompradoSel.slice(REQ_PREFIX.length)) ?? null
       : null,
-    [itemCompradoSel, itensAguardandoPedido],
+    [itemCompradoSel, itensAguardandoPedido, extras.tipo],
   );
 
   // Mercadoria para revenda SEMPRE exige origem — mesmo quando as duas listas

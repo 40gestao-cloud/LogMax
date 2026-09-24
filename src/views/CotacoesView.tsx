@@ -146,7 +146,7 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode, onNavigate }: { s
     '/api/cotacoesview', { filial }, true,
     { page }
   );
-  const { data: requisicoes, setData: setRequisicoes } = useFetchData<any>('/api/requisicoesview', { filial }, true);
+  const { data: requisicoes, setData: setRequisicoes, isLoading: requisicoesCarregando } = useFetchData<any>('/api/requisicoesview', { filial }, true);
   // `isLoading` importa aqui: durante o carregamento a lista chega vazia, e
   // sem distinguir os dois casos a tela anunciaria "nenhum fornecedor
   // cadastrado" por um instante toda vez que abrisse.
@@ -155,9 +155,11 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode, onNavigate }: { s
   // requisição a um item de verdade (migr. 480). Realtime porque o produto
   // pode estar sendo cadastrado noutra tela, agora, exatamente para este
   // pedido sair.
-  const { data: produtos } = useFetchData<any>('/api/produtosview', { filial }, true);
+  const { data: produtos, isLoading: produtosCarregando } = useFetchData<any>('/api/produtosview', { filial }, true);
+  // Patrimônio fica fora: bem de uso não entra pelo pedido de compra (migr.
+  // 515), então oferecê-lo no select ou como sugestão é oferecer a recusa.
   const produtosOrdenados = useMemo(
-    () => [...produtos].sort((a: any, b: any) =>
+    () => produtos.filter((p: any) => p.tipo !== 'patrimonio').sort((a: any, b: any) =>
       String(a.nome ?? '').localeCompare(String(b.nome ?? ''), 'pt-BR')),
     [produtos],
   );
@@ -195,7 +197,7 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode, onNavigate }: { s
   // `data` traz 50 linhas; usá-la para isso fazia o contador de propostas, o
   // modal de comparação e o cancelamento automático ignorarem toda proposta
   // que tivesse caído na página seguinte.
-  const { data: todasCotacoes, setData: setTodasCotacoes } = useFetchData<any>('/api/cotacoesview', { filial }, true);
+  const { data: todasCotacoes, setData: setTodasCotacoes, isLoading: todasCotacoesCarregando } = useFetchData<any>('/api/cotacoesview', { filial }, true);
   const [isSaving, setIsSaving] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [generating, setGenerating] = useState<string | null>(null);
@@ -560,6 +562,9 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode, onNavigate }: { s
   //    `rows ?? []` e o conjunto virava vazio — ou seja, TODA cotação aprovada
   //    voltava a exibir "Gerar Pedido", e o aluno só descobria clicando.
   const [cotacoesComPedido, setCotacoesComPedido] = useState<Set<string>>(new Set());
+  // Antes da primeira leitura o conjunto vazio diz "nenhuma tem pedido" — e o
+  // painel de prontas mostraria, por um instante, aprovadas já atendidas.
+  const [pedidosLidos, setPedidosLidos] = useState(false);
   const carregarCotacoesComPedido = useCallback(async () => {
     if (!supabase) return;
     const { data: rows, error } = await supabase
@@ -572,6 +577,7 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode, onNavigate }: { s
       console.warn('[Cotacoes] não consegui ler os pedidos já gerados:', error.message);
       return;
     }
+    setPedidosLidos(true);
     setCotacoesComPedido(new Set<string>(
       (rows ?? [])
         .map((p: any) => p.cotacao_id)
@@ -1136,15 +1142,37 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode, onNavigate }: { s
   //                esforço que a migr. 596 existe para fechar.
   //  • sem_cadastro — nada parecido no catálogo: o atalho abre o cadastro com
   //                a origem já escolhida, e o vínculo nasce lá (migr. 494).
+  //  • bloqueado — a requisição aponta para um produto que o banco vai recusar
+  //                (inativo, apagado ou patrimônio). O vínculo gravado vence o
+  //                que a tela mandar, então o caminho é consertar o cadastro.
+  //
+  // A sugestão segue as MESMAS recusas da RPC (migr. 515/596) — sugerir o que
+  // o banco nega transformaria o "É este — gerar" num botão de erro.
+  const normNome = (t: string) => String(t ?? '')
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/\s+/g, ' ').trim();
   const afinidadeVinculo = (itemReq: string, nomeCatalogo: string): number => {
+    // Nome idêntico ganha sempre. Sem isto "Sal" e "Gás" — palavras curtas
+    // demais para a régua — caíam em "não cadastrado" com o item no catálogo,
+    // e o atalho de cadastro levaria a uma requisição que Produtos já não
+    // oferece (lá, nome existente não é "a cadastrar").
+    if (normNome(itemReq) !== '' && normNome(itemReq) === normNome(nomeCatalogo)) return 100;
     const a = palavrasVinculo(itemReq);
     const b = palavrasVinculo(nomeCatalogo);
     if (a.length === 0 || b.length === 0) return 0;
     return a.filter(x => b.some(y => x.slice(0, 4) === y.slice(0, 4))).length;
   };
-  type EstadoPronta = 'ligado' | 'sugerido' | 'sem_cadastro';
+  type EstadoPronta = 'ligado' | 'sugerido' | 'sem_cadastro' | 'bloqueado';
+  // Enquanto as leituras não chegam, "sem cadastro" e "sem pedido" são o
+  // vazio falando — o painel espera para não piscar a linha errada.
+  const prontasCarregando = !pedidosLidos || requisicoesCarregando || produtosCarregando || todasCotacoesCarregando;
   const prontasParaPedido = useMemo(() => {
-    const ordem: Record<EstadoPronta, number> = { ligado: 0, sugerido: 1, sem_cadastro: 2 };
+    if (prontasCarregando) return [];
+    const ordem: Record<EstadoPronta, number> = { ligado: 0, sugerido: 1, sem_cadastro: 2, bloqueado: 3 };
+    // Código do catálogo que já é de OUTRA requisição, de outro item: a
+    // segunda recusa da migr. 596. Reposição do mesmo item continua valendo.
+    const codigoDeOutroItem = (produtoId: string, req: any) => requisicoes.some((r: any) =>
+      r.produto_id === produtoId && r.id !== req?.id && r.ativo !== false
+      && !vinculoParece(r.item ?? '', req?.item ?? ''));
     return todasCotacoes
       .filter((c: any) => c.ativo !== false && c.status === 'Aprovado' && !cotacoesComPedido.has(c.id))
       .map((c: any) => {
@@ -1155,15 +1183,23 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode, onNavigate }: { s
         let estado: EstadoPronta = 'sem_cadastro';
         let alvo: any = null;
         let parecidos = 0;
+        let motivo = '';
         if (req?.produto_id) {
-          estado = 'ligado';
-          alvo = produtos.find((p: any) => p.id === req.produto_id) ?? { nome: 'Produto do catálogo' };
+          alvo = produtos.find((p: any) => p.id === req.produto_id) ?? null;
+          estado = alvo && alvo.tipo !== 'patrimonio' ? 'ligado' : 'bloqueado';
+          motivo = !alvo
+            ? 'O produto ligado a esta requisição foi inativado — reative-o em Cadastros > Produtos'
+            : alvo.tipo === 'patrimonio'
+              ? `"${alvo.nome}" está como Patrimônio — corrija o Tipo em Cadastros > Produtos`
+              : '';
         } else if (req?.servico_id) {
-          estado = 'ligado';
-          alvo = servicos.find((s: any) => s.id === req.servico_id) ?? { nome: 'Serviço do catálogo' };
-        } else {
-          const texto = String(req?.item ?? '');
+          alvo = servicos.find((sv: any) => sv.id === req.servico_id) ?? null;
+          estado = alvo ? 'ligado' : 'bloqueado';
+          if (!alvo) motivo = 'O serviço ligado a esta requisição foi inativado — reative-o em Cadastros > Serviços';
+        } else if (req) {
+          const texto = String(req.item ?? '');
           const candidatos = (servico ? servicosOrdenados : produtosOrdenados)
+            .filter((p: any) => servico || !codigoDeOutroItem(p.id, req))
             .map((p: any) => ({ p, n: afinidadeVinculo(texto, p.nome ?? '') }))
             .filter(x => x.n > 0)
             .sort((x, y) => y.n - x.n);
@@ -1172,12 +1208,17 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode, onNavigate }: { s
             alvo = candidatos[0].p;
             parecidos = candidatos.length - 1;
           }
+        } else {
+          // Requisição inativada depois da aprovação: sem ela não há item a
+          // cadastrar nem a ligar, e o atalho levaria a uma origem que não existe.
+          estado = 'bloqueado';
+          motivo = 'A requisição de origem não está mais ativa — fale com o professor antes de comprar';
         }
-        return { cot, servico, estado, alvo, parecidos };
+        return { cot, servico, estado, alvo, parecidos, motivo };
       })
       .sort((a, b) => ordem[a.estado as EstadoPronta] - ordem[b.estado as EstadoPronta]
         || String(a.cot.req?.item ?? '').localeCompare(String(b.cot.req?.item ?? ''), 'pt-BR'));
-  }, [todasCotacoes, cotacoesComPedido, requisicoes, fornecedores, produtos, servicos, produtosOrdenados, servicosOrdenados]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [prontasCarregando, todasCotacoes, cotacoesComPedido, requisicoes, fornecedores, produtos, servicos, produtosOrdenados, servicosOrdenados]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Seleção do lote — só linhas ligadas. Recortada a cada render pelo que
   // ainda está na fila: o pedido que o colega gerou sai da seleção sozinho.
@@ -1521,7 +1562,7 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode, onNavigate }: { s
           </div>
 
           <div className="flex flex-col divide-y divide-white/5">
-            {prontasParaPedido.map(({ cot, servico, estado, alvo, parecidos }) => {
+            {prontasParaPedido.map(({ cot, servico, estado, alvo, parecidos, motivo }) => {
               const ocupada = generating === cot.id || gerandoLote;
               return (
                 <div key={cot.id} className="py-2.5 flex flex-wrap items-center gap-x-4 gap-y-2">
@@ -1567,6 +1608,12 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode, onNavigate }: { s
                           {alvo?.codigo && <span className="text-gray-500"> · {alvo.codigo}</span>}
                           {parecidos > 0 && <span className="text-gray-500"> (+{parecidos} parecido{parecidos === 1 ? '' : 's'})</span>}
                         </span>
+                      </p>
+                    )}
+                    {estado === 'bloqueado' && (
+                      <p className="text-xs text-red-300/90 flex items-start gap-1.5 leading-snug">
+                        <Ban size={13} className="shrink-0 mt-px" />
+                        {motivo}
                       </p>
                     )}
                     {estado === 'sem_cadastro' && (
