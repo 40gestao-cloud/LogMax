@@ -10,6 +10,8 @@ export type FilialSelectorValue = FilialOp | 'Matriz';
 
 const FILIAL_META: Record<FilialOp, {
   logo: string;
+  segmento: string;
+  corTexto: string;
   glowHover: string;
   borderIdle: string;
   borderHover: string;
@@ -25,24 +27,30 @@ const FILIAL_META: Record<FilialOp, {
 }> = {
   SuperMax: {
     logo:        '/icon-supermax-view.png',
+    segmento:    'Supermercado',
+    corTexto:    'rgb(130,165,255)',
     glowHover:   'rgba(29,78,216,0.28)',
-    borderIdle:  'rgba(29,78,216,0.40)',
+    borderIdle:  'rgba(70,115,240,0.58)',
     borderHover: 'rgba(29,78,216,0.70)',
     peak:        'rgba(96,140,255,0.95)',
     plate:       '#ffffff',
   },
   MaxLook: {
     logo:        '/icon-maxlook.png',
+    segmento:    'Moda',
+    corTexto:    'rgb(222,195,160)',
     glowHover:   'rgba(201,168,130,0.28)',
-    borderIdle:  'rgba(201,168,130,0.38)',
+    borderIdle:  'rgba(201,168,130,0.55)',
     borderHover: 'rgba(201,168,130,0.70)',
     peak:        'rgba(232,205,168,0.95)',
     plate:       '#000000',
   },
   TechMax: {
     logo:        '/icon-techmax.png',
+    segmento:    'Tecnologia',
+    corTexto:    'rgb(255,160,90)',
     glowHover:   'rgba(249,115,22,0.20)',
-    borderIdle:  'rgba(249,115,22,0.36)',
+    borderIdle:  'rgba(249,115,22,0.55)',
     borderHover: 'rgba(249,115,22,0.60)',
     peak:        'rgba(255,150,70,0.95)',
     plate:       '#ffffff',
@@ -131,12 +139,15 @@ export function FilialSelector({ onSelect, onVoltar }: Props) {
         // empurrava a altura de todo o resto para baixo da dobra.
         className={`relative flex flex-col items-center rounded-3xl py-3 px-6 sm:py-5 sm:px-20 text-center overflow-hidden z-10 max-w-full bg-white/3 ${CARD_BASE}`}
         style={{
-          '--fs-bd': 'rgba(212,175,55,0.42)',
+          '--fs-bd': 'rgba(212,175,55,0.55)',
           '--fs-bd-hv': 'rgba(212,175,55,0.70)',
           '--fs-glow': 'rgba(212,175,55,0.25)',
         } as React.CSSProperties}
       >
         <img src="/icon.matriz.png" alt="Matriz" className="w-56 h-32 sm:w-[22rem] sm:h-52 object-contain" />
+        <span className="mt-1 sm:mt-2 text-[10px] sm:text-xs font-semibold uppercase tracking-[0.2em]" style={{ color: 'rgb(226,194,98)' }}>
+          Holding · visão consolidada
+        </span>
       </motion.button>
 
       {/* Cards das 3 unidades */}
@@ -175,6 +186,9 @@ export function FilialSelector({ onSelect, onVoltar }: Props) {
                     marca contra o overflow-hidden e comia a borda dela. */}
                 <img src={m.logo} alt={f} className="w-full h-full object-contain" />
               </div>
+              <span className="mt-2 sm:mt-4 text-[10px] sm:text-xs font-semibold uppercase tracking-[0.04em] sm:tracking-[0.2em]" style={{ color: m.corTexto }}>
+                {m.segmento}
+              </span>
             </motion.button>
           );
         })}

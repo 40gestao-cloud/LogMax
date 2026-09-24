@@ -40,7 +40,7 @@ import {
   Sun, Moon, Megaphone, ArrowLeft, Monitor, Eye,
   Star, MessageSquare, BookOpen, Database, Target, Brain, ListTodo,
   Layers, Landmark, GraduationCap, Lock, Trophy, ClipboardList, Inbox,
-  Presentation, FileText, Hourglass, Dices, FileSignature,
+  Presentation, FileText, Hourglass, Dices, FileSignature, PanelLeftClose, PanelLeftOpen,
 } from 'lucide-react';
 import { NotificationBell } from './components/NotificationBell';
 import { AvisoDisjuntor } from './components/AvisoDisjuntor';
@@ -1064,6 +1064,15 @@ function LogMaxAppInner() {
   const [openModules, setOpenModules] = useState<Record<string, boolean>>({ empresa: true });
   const [toast, setToast] = useState({ show: false, message: '', type: 'info' });
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [sidebarRecolhida, setSidebarRecolhida] = useState(() => {
+    try { return localStorage.getItem('logmax:sidebar-recolhida') === '1'; } catch { return false; }
+  });
+  const alternarSidebar = useCallback(() => {
+    setSidebarRecolhida(v => {
+      try { localStorage.setItem('logmax:sidebar-recolhida', v ? '0' : '1'); } catch { /* aba privada */ }
+      return !v;
+    });
+  }, []);
   const [perfilFotoOpen, setPerfilFotoOpen] = useState(false);
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -1315,22 +1324,9 @@ function LogMaxAppInner() {
         <div className="shrink-0 flex justify-end items-center px-6 py-4 border-b border-white/5">
           <button
             onClick={handleSignOut}
-            className="btn-shimmer btn-shimmer-gold relative flex items-center gap-2.5 px-5 py-2.5 rounded-2xl text-sm font-bold transition-all duration-200 hover:scale-[1.03] active:scale-[0.97]"
-            // Dourado solido, nao mais vidro tingido: o botao vivia sozinho no
-            // preto e o fundo translucido o deixava com cara de placeholder. O
-            // shimmer continua sendo o sweep do ::before (.btn-shimmer-gold) —
-            // so trocou o que ele varre. Texto escuro porque sobre dourado
-            // cheio o dourado no texto perde contraste.
-            style={{
-              // Sem background-size 200%: com o gradiente esticado ao dobro, a
-              // janela visivel pegava so um pedaco dele e a ponta #B8860B
-              // ficava parada no canto como uma mancha escura. Dourado cheio
-              // de cima pra baixo, o brilho fica por conta do sweep.
-              background: 'linear-gradient(180deg, #F6C948 0%, #E9B02E 55%, #C9901A 100%)',
-              border: '1px solid rgba(255,224,140,0.75)',
-              boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.38), 0 4px 16px rgba(212,175,55,0.28)',
-              color: '#1b1405',
-            }}
+            // Discreto de propósito: sair é a ação secundária da tela, e em
+            // dourado cheio ela competia com os cards — que são a escolha.
+            className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium text-gray-400 border border-white/10 hover:text-red-400 hover:border-red-500/40 hover:bg-red-500/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500/40 transition-colors"
           >
             <LogOut size={15} />
             <span>Sair</span>
@@ -1702,7 +1698,7 @@ function LogMaxAppInner() {
       </AnimatePresence>
 
       {/* SIDEBAR */}
-      <aside className="hidden lg:flex w-72 h-full flex-col pt-8 pb-5 px-5 gap-6 shrink-0 z-10 neu-flat sidebar-dark relative">
+      <aside className={`hidden ${sidebarRecolhida ? '' : 'lg:flex'} w-72 h-full flex-col pt-8 pb-5 px-5 gap-6 shrink-0 z-10 neu-flat sidebar-dark relative`}>
         <SidebarNav
           activeView={activeView} navigate={navigate}
           openModules={openModules} toggleModule={toggleModule}
@@ -1721,6 +1717,13 @@ function LogMaxAppInner() {
             <button onClick={() => setMobileMenuOpen(true)}
               className="lg:hidden neu-button w-9 h-9 rounded-xl flex items-center justify-center text-gray-400 hover:text-accent transition-colors">
               <Menu size={18} />
+            </button>
+            <button onClick={alternarSidebar}
+              title={sidebarRecolhida ? 'Mostrar menu lateral' : 'Recolher menu lateral'}
+              aria-label={sidebarRecolhida ? 'Mostrar menu lateral' : 'Recolher menu lateral'}
+              aria-pressed={sidebarRecolhida}
+              className="hidden lg:flex neu-button w-9 h-9 rounded-xl items-center justify-center text-gray-400 hover:text-accent transition-colors shrink-0">
+              {sidebarRecolhida ? <PanelLeftOpen size={18} /> : <PanelLeftClose size={18} />}
             </button>
             {viewHistory.length > 0 && (
               <button
