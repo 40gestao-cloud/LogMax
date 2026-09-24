@@ -50,6 +50,7 @@ import { SecaoEstoque } from '../components/produtos/SecaoEstoque';
 import { SecaoPrecos } from '../components/produtos/SecaoPrecos';
 import { SecaoEtiqueta } from '../components/produtos/SecaoEtiqueta';
 import { SecaoImagens } from '../components/produtos/SecaoImagens';
+import { lerCadastroDaCotacao, esquecerCadastroDaCotacao } from '../lib/cadastroDaCotacao';
 
 /**
  * O custo vive em `produtos_custo`, tabela irmã com RLS própria (migração 262) —
@@ -109,7 +110,7 @@ const REQ_PREFIX = '__req__:';
 // A conta vive em src/lib/precificacao.ts — estava duplicada aqui e no
 // Catálogo, e as duas calculavam MARKUP sob o rótulo "Margem".
 
-const ProdutosViewInner = ({ showToast, filial, profile }: { showToast: any; filial: FilialOp; profile?: UserProfile | null }) => {
+const ProdutosViewInner = ({ showToast, filial, profile, onNavigate }: { showToast: any; filial: FilialOp; profile?: UserProfile | null; onNavigate?: (view: string) => void }) => {
   const [page, setPage] = useState(0);
   const confirm = useConfirm();
   const [search, setSearch] = useState('');
@@ -156,7 +157,7 @@ const ProdutosViewInner = ({ showToast, filial, profile }: { showToast: any; fil
   // é aqui que o vínculo tem de nascer — senão o comprador redigita o nome, salva
   // um produto que não sabe de qual requisição está falando, e volta para a
   // cotação para procurá-lo num select.
-  const { data: requisicoesDaFilial, setData: setRequisicoesDaFilial } = useFetchData<any>('/api/requisicoesview', { filial });
+  const { data: requisicoesDaFilial, setData: setRequisicoesDaFilial, isLoading: requisicoesCarregando } = useFetchData<any>('/api/requisicoesview', { filial });
   const { data: cotacoesDaFilial }    = useFetchData<any>('/api/cotacoesview', { filial });
 
 
@@ -424,6 +425,9 @@ const ProdutosViewInner = ({ showToast, filial, profile }: { showToast: any; fil
   // select precisa voltar para o vazio quando o formulário fecha — senão o
   // próximo cadastro abre com a escolha do anterior.
   const [itemCompradoSel, setItemCompradoSel] = useState('');
+  // O formulário foi aberto pelo "Cadastrar produto" das Cotações: salvo e
+  // amarrado, a tela devolve o comprador para lá, onde o pedido já está pronto.
+  const voltarParaCotacoesRef = useRef(false);
   // Custo que a última origem escolhida pôs no campo — para a troca de origem
   // saber se o número é dela (troca) ou do aluno (fica).
   const custoAutoRef = useRef('');
@@ -1105,6 +1109,7 @@ const ProdutosViewInner = ({ showToast, filial, profile }: { showToast: any; fil
     setShowForm(false);
     setEditItem(null);
     setItemCompradoSel('');
+    voltarParaCotacoesRef.current = false;
     custoAutoRef.current = '';
     setNomeDestravado(false);
     setCorrigindoSaldo(false);
@@ -1122,6 +1127,31 @@ const ProdutosViewInner = ({ showToast, filial, profile }: { showToast: any; fil
     setExtrasErrors({});
     imagemInputRefs.current.forEach(ref => { if (ref) ref.value = ''; });
   };
+
+  // Chegou pelo "Cadastrar produto" das Cotações: abre o Novo já com a
+  // requisição na origem, em vez de mandar o comprador procurá-la no select.
+  // Espera as requisições carregarem — antes disso a lista vazia leria como
+  // "essa requisição não espera mais cadastro".
+  const [origemPedida, setOrigemPedida] = useState<string | null>(() => lerCadastroDaCotacao(filial));
+  useEffect(() => {
+    if (!origemPedida || requisicoesCarregando) return;
+    esquecerCadastroDaCotacao();
+    setOrigemPedida(null);
+    const valor = `${REQ_PREFIX}${origemPedida}`;
+    const req = itensAguardandoPedido.find(i => i.id === origemPedida);
+    if (!req) {
+      showToast('A requisição que veio das Cotações não está mais esperando cadastro — outra pessoa pode já ter cadastrado o produto. Volte às Cotações: se ela já estiver ligada, o pedido sai direto.', 'error', true);
+      return;
+    }
+    if (origemTravadaPorOutro(valor)) {
+      showToast(`${reservasOrigem[chaveDeOrigem(valor)]?.usuario_nome ?? 'Outra pessoa'} já está cadastrando o produto desta requisição. Espere terminar e volte às Cotações.`, 'error', true);
+      return;
+    }
+    closeForm();
+    setShowForm(true);
+    escolherOrigem(valor);
+    voltarParaCotacoesRef.current = true;
+  }, [origemPedida, requisicoesCarregando, itensAguardandoPedido]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Upload de imagem: valida formato/tamanho bruto ANTES de decodificar.
   // Se aceito, faz upload para o bucket e guarda a URL pública no slot;
@@ -1667,9 +1697,15 @@ const ProdutosViewInner = ({ showToast, filial, profile }: { showToast: any; fil
                 // o próximo passo é o pedido, que agora sai sem perguntar nada.
                 ? (vinculoFalhou
                     ? `Produto criado, mas a requisição ${reqVinculo.numero} não ficou vinculada (${vinculoFalhou}). Em Compras > Cotações, o Gerar Pedido ainda vai pedir o item do catálogo — escolha este produto lá.`
-                    : `Produto criado e vinculado à requisição ${reqVinculo.numero}. Agora é só ir em Compras > Cotações e clicar em Gerar Pedido — ele não vai mais pedir o item do catálogo.`)
+                    : voltarParaCotacoesRef.current && onNavigate
+                      ? `Produto criado e vinculado à requisição ${reqVinculo.numero}. De volta às Cotações — a linha dela já está em "Prontas para pedido".`
+                      : `Produto criado e vinculado à requisição ${reqVinculo.numero}. Em Compras > Cotações ela já aparece em "Prontas para pedido" — o Gerar Pedido não vai mais pedir o item do catálogo.`)
                 : 'Produto criado com sucesso!',
           vinculoFalhou ? 'error' : 'success', true);
+        // Veio do atalho das Cotações: o próximo passo é lá, então a tela leva.
+        if (reqVinculo && !vinculoFalhou && voltarParaCotacoesRef.current && onNavigate) {
+          onNavigate('compras-cotações');
+        }
       }
       closeForm();
     } catch (err: any) {
@@ -2475,7 +2511,7 @@ const ProdutosViewInner = ({ showToast, filial, profile }: { showToast: any; fil
   );
 };
 
-export const ProdutosView = ({ showToast, profile }: any) => {
+export const ProdutosView = ({ showToast, profile, onNavigate }: any) => {
   const { filialAtiva } = useFilial();
   if (!filialAtiva) {
     return (
@@ -2495,5 +2531,5 @@ export const ProdutosView = ({ showToast, profile }: any) => {
       />
     );
   }
-  return <ProdutosViewInner showToast={showToast} filial={filialAtiva} profile={profile} />;
+  return <ProdutosViewInner showToast={showToast} filial={filialAtiva} profile={profile} onNavigate={onNavigate} />;
 };

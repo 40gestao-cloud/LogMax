@@ -1446,7 +1446,7 @@ function LogMaxAppInner() {
       case 'empresa-filiais':                 return <FiliaisView showToast={st} />;
       case 'requisicoes-dosetor':             return <RequisicoesSetorView showToast={st} profile={profile} />;
       case 'cadastros-fornecedores':          return <CRMView type="fornecedores" showToast={st} />;
-      case 'cadastros-produtos':              return <ProdutosView showToast={st} profile={profile} />;
+      case 'cadastros-produtos':              return <ProdutosView showToast={st} profile={profile} onNavigate={navigate} />;
       case 'cadastros-serviços':              return <ServicosView showToast={st} />;
       case 'cadastros-lixeira':               return <LixeiraView showToast={st} profile={profile} />;
       case 'empresa-projetos':                return <GenericCRUDView showToast={st} filialScoped title="Projetos" subtitle="Gerencie os projetos em andamento." endpoint="/api/projetosview"

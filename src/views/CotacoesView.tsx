@@ -24,6 +24,7 @@ import { useFornecedorDesempenho, SeloDesempenho } from '../components/Fornecedo
 import { useReservaTrabalho } from '../hooks/useReservaTrabalho';
 import type { FilialOp } from '../components/FilialSelector';
 import { useFilial } from '../contexts/FilialContext';
+import { pedirCadastroDaCotacao } from '../lib/cadastroDaCotacao';
 
 // Status considerados "propostas vivas" para contagem de concorrentes.
 // Cancelado/Negado são histórico — aparecem na comparação mas não contam.
@@ -627,7 +628,7 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode, onNavigate }: { s
     : [
         { label: 'requisição(ões) aprovada(s) sem cotação', count: semNenhumaCotacao, hint: 'use "Nova cotação" para pedir preço ao fornecedor' },
         { label: 'cotação(ões) devolvida(s) para correção', count: emCorrecao, hint: 'clique em "Corrigir" na linha para ajustar e reenviar' },
-        { label: 'cotação(ões) aprovada(s) sem pedido', count: aprovadasSemPedido, hint: 'clique em "Gerar pedido" na linha da cotação' },
+        { label: 'cotação(ões) aprovada(s) sem pedido', count: aprovadasSemPedido, hint: 'estão no painel "Prontas para pedido", logo abaixo' },
       ];
 
   // Requisições aprovadas da filial selecionada, ordenadas por item.
@@ -1117,6 +1118,140 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode, onNavigate }: { s
   const produtosDoSelect = recorteAtivo ? produtosProvaveis : produtosOrdenados;
   const servicosDoSelect = recorteAtivo ? servicosProvaveis : servicosOrdenados;
 
+  // ── Prontas para pedido ────────────────────────────────────────────────
+  // A fila que o SAP chama de requisições atribuídas (ME57) e o Protheus
+  // juntou no Novo Fluxo de Compras: só o que já foi aprovado e ainda não
+  // virou pedido, com o item do catálogo à mostra NA LINHA. Antes as aprovadas
+  // ficavam misturadas na lista geral, com o mesmo botão amarelo estivessem
+  // amarradas ou não — o comprador só descobria qual abria o modal clicando,
+  // e para saber se o produto já tinha sido cadastrado ia olhar em Produtos.
+  //
+  // Três estados, na ordem em que o trabalho anda:
+  //  • ligado    — a requisição já aponta para o catálogo (reposição ou
+  //                cadastro com "Origem deste cadastro"): o pedido sai direto,
+  //                e é o único que entra no lote.
+  //  • sugerido  — o catálogo tem um item com palavra em comum: a sugestão
+  //                aparece escrita ao lado do pedido e a confirmação é por
+  //                linha, de propósito — caixinha em lote é o caminho de menor
+  //                esforço que a migr. 596 existe para fechar.
+  //  • sem_cadastro — nada parecido no catálogo: o atalho abre o cadastro com
+  //                a origem já escolhida, e o vínculo nasce lá (migr. 494).
+  const afinidadeVinculo = (itemReq: string, nomeCatalogo: string): number => {
+    const a = palavrasVinculo(itemReq);
+    const b = palavrasVinculo(nomeCatalogo);
+    if (a.length === 0 || b.length === 0) return 0;
+    return a.filter(x => b.some(y => x.slice(0, 4) === y.slice(0, 4))).length;
+  };
+  type EstadoPronta = 'ligado' | 'sugerido' | 'sem_cadastro';
+  const prontasParaPedido = useMemo(() => {
+    const ordem: Record<EstadoPronta, number> = { ligado: 0, sugerido: 1, sem_cadastro: 2 };
+    return todasCotacoes
+      .filter((c: any) => c.ativo !== false && c.status === 'Aprovado' && !cotacoesComPedido.has(c.id))
+      .map((c: any) => {
+        const req = requisicoes.find((r: any) => r.id === c.requisicao_id);
+        const forn = fornecedores.find((f: any) => f.id === c.fornecedor_id);
+        const cot = { ...c, req, forn };
+        const servico = pediuServico(cot) || !!req?.servico_id;
+        let estado: EstadoPronta = 'sem_cadastro';
+        let alvo: any = null;
+        let parecidos = 0;
+        if (req?.produto_id) {
+          estado = 'ligado';
+          alvo = produtos.find((p: any) => p.id === req.produto_id) ?? { nome: 'Produto do catálogo' };
+        } else if (req?.servico_id) {
+          estado = 'ligado';
+          alvo = servicos.find((s: any) => s.id === req.servico_id) ?? { nome: 'Serviço do catálogo' };
+        } else {
+          const texto = String(req?.item ?? '');
+          const candidatos = (servico ? servicosOrdenados : produtosOrdenados)
+            .map((p: any) => ({ p, n: afinidadeVinculo(texto, p.nome ?? '') }))
+            .filter(x => x.n > 0)
+            .sort((x, y) => y.n - x.n);
+          if (candidatos.length > 0) {
+            estado = 'sugerido';
+            alvo = candidatos[0].p;
+            parecidos = candidatos.length - 1;
+          }
+        }
+        return { cot, servico, estado, alvo, parecidos };
+      })
+      .sort((a, b) => ordem[a.estado as EstadoPronta] - ordem[b.estado as EstadoPronta]
+        || String(a.cot.req?.item ?? '').localeCompare(String(b.cot.req?.item ?? ''), 'pt-BR'));
+  }, [todasCotacoes, cotacoesComPedido, requisicoes, fornecedores, produtos, servicos, produtosOrdenados, servicosOrdenados]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Seleção do lote — só linhas ligadas. Recortada a cada render pelo que
+  // ainda está na fila: o pedido que o colega gerou sai da seleção sozinho.
+  const [selLote, setSelLote] = useState<Set<string>>(new Set());
+  const idsLigados = prontasParaPedido.filter(p => p.estado === 'ligado').map(p => p.cot.id);
+  const selecionadas = idsLigados.filter(id => selLote.has(id));
+  const alternarLote = (id: string) => setSelLote(prev => {
+    const n = new Set(prev);
+    if (n.has(id)) n.delete(id); else n.add(id);
+    return n;
+  });
+  const [gerandoLote, setGerandoLote] = useState(false);
+
+  // "Cadastrar produto" da fila: leva a Cadastros > Produtos com a requisição
+  // já na origem. Serviço não tem campo de origem — o atalho só abre a tela.
+  const podeCadastrarDaFila = temAcessoCadastros && !!onNavigate;
+  const cadastrarDaFila = (cot: any, servico: boolean) => {
+    if (!onNavigate) return;
+    if (servico) { onNavigate('cadastros-serviços'); return; }
+    if (cot.requisicao_id) pedirCadastroDaCotacao(cot.requisicao_id, filial);
+    onNavigate('cadastros-produtos');
+  };
+
+  // O que acontece na tela depois que a RPC devolve o pedido — o mesmo para
+  // o clique na linha e para o lote.
+  const registrarPedidoGerado = (cotacao: any) => {
+    setCotacoesComPedido(prev => new Set(prev).add(cotacao.id));
+    // A requisição saiu de 'Aprovado' — tira do dropdown de Nova Cotação sem
+    // esperar o próximo fetch.
+    if (cotacao.requisicao_id) {
+      setRequisicoes((prev: any[]) =>
+        prev.map(r => r.id === cotacao.requisicao_id ? { ...r, status: 'Atendida' } : r));
+    }
+    setSelLote(prev => { const n = new Set(prev); n.delete(cotacao.id); return n; });
+  };
+
+  // Um pedido por cotação, como sempre (a RPC é 1:1); o lote só poupa os
+  // cliques. Em série de propósito: são poucas linhas, e N chamadas paralelas
+  // da turma inteira é o que enche o pool (incidente de 15/09).
+  const handleGerarLote = async () => {
+    if (!supabase || selecionadas.length === 0) return;
+    const alvo = prontasParaPedido.filter(p => selecionadas.includes(p.cot.id)).map(p => p.cot);
+    if (!await confirm(
+      `Gerar ${alvo.length} pedido(s) de compra?\n\n` +
+      alvo.map(c => `• ${c.req?.item ?? numeroCotacao(c)} — ${c.forn?.nome ?? 'fornecedor'}`).join('\n'))) return;
+    setGerandoLote(true);
+    const gerados: string[] = [];
+    const falhas: string[] = [];
+    try {
+      for (const cot of alvo) {
+        const { data: pedido, error } = await supabase.rpc('gerar_pedido_de_cotacao', {
+          p_cotacao_id: cot.id, p_produto_id: null, p_servico_id: null,
+        });
+        if (error) { falhas.push(`${cot.req?.item ?? numeroCotacao(cot)}: ${error.message}`); continue; }
+        registrarPedidoGerado(cot);
+        const novo: any = Array.isArray(pedido) ? pedido[0] : pedido;
+        gerados.push(numeroPedido(novo));
+      }
+    } finally {
+      setGerandoLote(false);
+    }
+    // Falha de "já tem pedido" é tela atrasada: relê para a linha sumir.
+    if (falhas.length > 0) await carregarCotacoesComPedido();
+    if (gerados.length > 0) {
+      showToast(
+        `${gerados.length} pedido(s) gerado(s): ${gerados.join(', ')}. As contas a pagar nasceram junto. ` +
+        'Marque "em entrega" em Compras → Pedidos para avisar o Estoque.' +
+        (falhas.length > 0 ? ` Não saíram: ${falhas.join(' · ')}` : ''),
+        falhas.length > 0 ? 'error' : 'success', true);
+    } else if (falhas.length > 0) {
+      showToast(`Nenhum pedido gerado. ${falhas.join(' · ')}`, 'error', true);
+    }
+  };
+
   const handleGerarPedido = async (
     cotacao: any,
     vinculo?: { produtoId?: string; servicoId?: string },
@@ -1144,13 +1279,7 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode, onNavigate }: { s
         p_servico_id: vinculo?.servicoId ?? null,
       });
       if (error) throw new Error(error.message);
-      setCotacoesComPedido(prev => new Set(prev).add(cotacao.id));
-      // A requisição saiu de 'Aprovado' — tira do dropdown de Nova Cotação sem
-      // esperar o próximo fetch.
-      if (cotacao.requisicao_id) {
-        setRequisicoes((prev: any[]) =>
-          prev.map(r => r.id === cotacao.requisicao_id ? { ...r, status: 'Atendida' } : r));
-      }
+      registrarPedidoGerado(cotacao);
       const novo: any = Array.isArray(pedido) ? pedido[0] : pedido;
       setVinculando(null);
       setProdutoVinculo('');
@@ -1358,6 +1487,149 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode, onNavigate }: { s
       </div>
 
       <FilaDeTrabalho itens={filaDaTela} />
+
+      {/* Prontas para pedido — a bancada do comprador. Ver o comentário de
+          `prontasParaPedido`. */}
+      {!modoFinanceiro && isCompras && prontasParaPedido.length > 0 && (
+        <div className="neu-flat rounded-3xl p-5 border border-yellow-400/15 shrink-0 flex flex-col gap-3">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="min-w-0">
+              <h3 className="text-sm font-bold text-gray-100 flex items-center gap-2">
+                <ShoppingBag size={15} className="text-yellow-400" />
+                Prontas para pedido
+                <span className="text-[11px] font-bold text-yellow-400/90">({prontasParaPedido.length})</span>
+              </h3>
+              <p className="text-[11px] text-gray-500 mt-1 leading-snug max-w-2xl">
+                Cotações aprovadas pelo Financeiro que ainda não viraram pedido. O pedido sai com o item do
+                catálogo: as <span className="text-emerald-400 font-semibold">ligadas</span> já têm, as demais
+                pedem uma confirmação ou o cadastro do produto.
+              </p>
+            </div>
+            {idsLigados.length > 0 && (
+              <div className="flex items-center gap-2 flex-wrap">
+                <button type="button"
+                  onClick={() => setSelLote(selecionadas.length === idsLigados.length ? new Set() : new Set(idsLigados))}
+                  className="neu-button px-3 py-2 rounded-xl text-[11px] font-bold text-gray-400 hover:text-gray-200">
+                  {selecionadas.length === idsLigados.length ? 'Limpar seleção' : `Selecionar ligadas (${idsLigados.length})`}
+                </button>
+                <NeuButtonAccent onClick={handleGerarLote} isLoading={gerandoLote}
+                  disabled={selecionadas.length === 0 || gerandoLote || !!generating}>
+                  <ShoppingBag size={14} /> Gerar {selecionadas.length > 0 ? selecionadas.length : ''} pedido{selecionadas.length === 1 ? '' : 's'}
+                </NeuButtonAccent>
+              </div>
+            )}
+          </div>
+
+          <div className="flex flex-col divide-y divide-white/5">
+            {prontasParaPedido.map(({ cot, servico, estado, alvo, parecidos }) => {
+              const ocupada = generating === cot.id || gerandoLote;
+              return (
+                <div key={cot.id} className="py-2.5 flex flex-wrap items-center gap-x-4 gap-y-2">
+                  <div className="w-5 shrink-0 flex justify-center">
+                    {estado === 'ligado' && (
+                      <input type="checkbox" className="accent-yellow-400 w-4 h-4 cursor-pointer"
+                        aria-label={`Incluir ${cot.req?.item ?? numeroCotacao(cot)} no lote`}
+                        checked={selLote.has(cot.id)} disabled={ocupada}
+                        onChange={() => alternarLote(cot.id)} />
+                    )}
+                  </div>
+
+                  {/* O que foi pedido, por quem vai fornecer e quanto. */}
+                  <div className="min-w-[12rem] flex-1">
+                    <p className="text-sm font-semibold text-gray-200 leading-tight">
+                      {cot.req?.item ?? '—'}
+                      {cot.marca && <span className="ml-1.5 text-[10px] font-bold text-gray-400">{cot.marca}</span>}
+                    </p>
+                    <p className="text-[11px] text-gray-500 mt-0.5">
+                      <span className="font-credencial text-accent/70">{numeroCotacao(cot)}</span>
+                      {' · '}{cot.req ? rotuloQtdReq(cot.req) : '—'}
+                      {' · '}{cot.forn?.nome ?? 'fornecedor'}
+                      {' · '}<span className="font-mono text-gray-400">R$ {formatBRL(Number(cot.valor_total ?? 0))}</span>
+                    </p>
+                  </div>
+
+                  {/* O item do catálogo que vai entrar no pedido — ou a falta dele. */}
+                  <div className="min-w-[12rem] flex-1">
+                    {estado === 'ligado' && (
+                      <p className="text-xs text-emerald-300 flex items-center gap-1.5">
+                        <Check size={13} className="shrink-0" />
+                        <span className="truncate">
+                          {alvo?.nome}
+                          {alvo?.codigo && <span className="text-gray-500"> · {alvo.codigo}</span>}
+                        </span>
+                      </p>
+                    )}
+                    {estado === 'sugerido' && (
+                      <p className="text-xs text-amber-200/90 flex items-center gap-1.5">
+                        <Search size={13} className="shrink-0" />
+                        <span className="truncate">
+                          É este? <span className="font-semibold">{alvo?.nome}</span>
+                          {alvo?.codigo && <span className="text-gray-500"> · {alvo.codigo}</span>}
+                          {parecidos > 0 && <span className="text-gray-500"> (+{parecidos} parecido{parecidos === 1 ? '' : 's'})</span>}
+                        </span>
+                      </p>
+                    )}
+                    {estado === 'sem_cadastro' && (
+                      <p className="text-xs text-red-300/90 flex items-center gap-1.5">
+                        <AlertTriangle size={13} className="shrink-0" />
+                        {servico ? 'Serviço ainda não está no catálogo' : 'Produto ainda não cadastrado'}
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="flex items-center gap-1.5 justify-end ml-auto">
+                    {estado === 'ligado' && (
+                      <button type="button" onClick={() => handleGerarPedido(cot)} disabled={ocupada}
+                        className="neu-button rounded-lg text-xs font-bold flex items-center gap-1 h-8 px-3 text-yellow-400 hover:bg-yellow-400/10 border border-yellow-400/15 disabled:opacity-50">
+                        {generating === cot.id ? <Loader2 size={12} className="animate-spin" /> : <ShoppingBag size={12} />}
+                        Gerar pedido
+                      </button>
+                    )}
+                    {estado === 'sugerido' && (
+                      <>
+                        <button type="button" onClick={() => handleGerarPedido(cot)} disabled={ocupada}
+                          title="Abrir o catálogo para escolher outro item"
+                          className="neu-button rounded-lg text-xs font-bold h-8 px-3 text-gray-400 hover:text-gray-200 disabled:opacity-50">
+                          Outro
+                        </button>
+                        <button type="button" disabled={ocupada}
+                          onClick={() => handleGerarPedido(cot, servico ? { servicoId: alvo.id } : { produtoId: alvo.id })}
+                          title="Confirmar que é este item do catálogo e gerar o pedido"
+                          className="neu-button rounded-lg text-xs font-bold flex items-center gap-1 h-8 px-3 text-yellow-400 hover:bg-yellow-400/10 border border-yellow-400/15 disabled:opacity-50">
+                          {generating === cot.id ? <Loader2 size={12} className="animate-spin" /> : <Check size={12} />}
+                          É este — gerar
+                        </button>
+                      </>
+                    )}
+                    {estado === 'sem_cadastro' && (
+                      <>
+                        <button type="button" onClick={() => handleGerarPedido(cot)} disabled={ocupada}
+                          title="Procurar no catálogo inteiro"
+                          className="neu-button rounded-lg text-xs font-bold h-8 px-3 text-gray-400 hover:text-gray-200 disabled:opacity-50">
+                          Catálogo
+                        </button>
+                        {podeCadastrarDaFila ? (
+                          <button type="button" onClick={() => cadastrarDaFila(cot, servico)}
+                            title={servico
+                              ? 'Abrir Cadastros > Serviços — cadastre como "Contratado de terceiro" e volte'
+                              : 'Abrir o cadastro já com esta requisição na origem — salvo, o produto fica ligado e você volta para cá'}
+                            className="neu-button rounded-lg text-xs font-bold flex items-center gap-1 h-8 px-3 text-accent hover:bg-accent/10 border border-accent/20">
+                            <Plus size={12} /> {servico ? 'Cadastrar serviço' : 'Cadastrar produto'}
+                          </button>
+                        ) : (
+                          <span className="text-[10px] text-gray-500 max-w-[11rem] leading-tight">
+                            Cadastro fora do seu acesso — peça à Logística.
+                          </span>
+                        )}
+                      </>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       <AnimatePresence>
         {showForm && isCompras && !modoFinanceiro && (
@@ -2519,6 +2791,12 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode, onNavigate }: { s
                   Não está na lista? Vá em <span className="font-bold">Cadastros &gt; Produtos &gt; Novo</span> e,
                   no campo <span className="font-bold">Origem deste cadastro</span>, escolha esta requisição —
                   o produto já nasce amarrado a ela e este passo aqui deixa de aparecer.
+                  {podeCadastrarDaFila && (
+                    <button type="button" onClick={() => { const c = vinculando; setVinculando(null); cadastrarDaFila(c, false); }}
+                      className="block mt-2 text-accent font-bold underline hover:text-accent/80">
+                      Cadastrar agora, com esta requisição na origem
+                    </button>
+                  )}
                 </span>
               </p>
               ) : (
