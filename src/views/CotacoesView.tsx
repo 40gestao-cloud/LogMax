@@ -1505,9 +1505,10 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode, onNavigate }: { s
           {([
             { id: 'cotacoes' as const, label: 'Cotações', n: totalCount ?? todasCotacoes.length,
               dica: 'Todas as propostas: aguardando o Financeiro, devolvidas, aprovadas e o histórico',
-              // Dourado translúcido (vidro), chapado — o design é flat: sem
-              // degradê nem sombra, que deixavam o botão com cara de sujo.
-              estilo: 'bg-accent/85 backdrop-blur-sm border-accent text-black hover:bg-accent' },
+              // O mesmo dourado dos botões de ação do app (`neu-button-accent`,
+              // o de "Nova Cotação"). O dourado translúcido lia escurecido
+              // sobre o fundo preto.
+              estilo: 'neu-button-accent btn-shimmer border-transparent' },
             { id: 'gerar' as const, label: 'Gerar pedidos', n: prontasParaPedido.length,
               dica: 'Cotações aprovadas que ainda não viraram pedido',
               // Preto com borda dourada.
