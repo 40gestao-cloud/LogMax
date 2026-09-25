@@ -347,17 +347,21 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode, onNavigate }: { s
   // preenchida na proposta porque o caso comum é cotar o que foi pedido — e
   // continua editável, porque o fornecedor pode oferecer outra e é isso que a
   // comparação entre propostas precisa mostrar.
-  useEffect(() => {
-    const pedida = String(reqSelecionada?.marca ?? '').trim();
-    if (!pedida) return;
-    setExtras(x => (x.marca ? x : { ...x, marca: pedida }));
-  }, [reqSelecionada]);
   // O prazo de entrega nasce na data em que a requisição precisa do item; o
-  // comprador troca se o fornecedor prometer outra.
+  // comprador troca se o fornecedor prometer outra. Trocar de requisição troca
+  // o que veio da anterior, mas não o que o comprador digitou.
+  const autoReqRef = useRef({ marca: '', prazo: '' });
   useEffect(() => {
-    const alvo = String(reqSelecionada?.data_necessidade ?? '');
-    if (!alvo || alvo < todayBR()) return;
-    setExtras(x => (x.prazo_entrega ? x : { ...x, prazo_entrega: alvo }));
+    const marca = String(reqSelecionada?.marca ?? '').trim();
+    const alvo  = String(reqSelecionada?.data_necessidade ?? '');
+    const prazo = alvo && alvo >= todayBR() ? alvo : '';
+    const ant = autoReqRef.current;
+    autoReqRef.current = { marca, prazo };
+    setExtras(x => ({
+      ...x,
+      marca:         !x.marca || x.marca === ant.marca ? marca : x.marca,
+      prazo_entrega: !x.prazo_entrega || x.prazo_entrega === ant.prazo ? prazo : x.prazo_entrega,
+    }));
   }, [reqSelecionada]);
 
   // Trocar de requisição troca a quantidade E a medida: "R$ 135,00" que era o

@@ -65,6 +65,7 @@ export function SecaoIdentificacao({
 
   const escolherCom = () => {
     if (itemCompradoSel === SEM_COMPRA) escolherOrigem('');
+    setExtrasErrors(ev => ({ ...ev, origem_compra: '' }));
     setModoOrigem('com');
   };
   const escolherSem = () => {

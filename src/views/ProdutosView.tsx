@@ -1299,6 +1299,15 @@ const ProdutosViewInner = ({ showToast, filial, profile, onNavigate }: { showToa
     // resma de papel e para freezer. A régua passou a depender do tipo (migr.
     // 440), então a checagem base é escrita aqui.
     const vendavel = ehVendavel(extras.tipo);
+    // Origem primeiro: sem a escolha o campo de nome nem aparece, e o erro dele
+    // cairia num campo escondido.
+    if (origemOferecida && !origemSemOpcoes && !itemCompradoSel && modoOrigem !== 'sem') {
+      setExtrasErrors(ev => ({ ...ev, origem_compra: modoOrigem === 'com'
+        ? 'Escolha a requisição que este cadastro atende.'
+        : 'Escolha "Cadastro com requisição" ou "Cadastro sem requisição".' }));
+      showToast('Escolha a origem do cadastro.', 'error', true);
+      return;
+    }
     const eb: Record<string, string> = {};
     if (!form.codigo.trim())            eb.codigo = 'Campo obrigatório';
     if (!form.nome.trim())              eb.nome   = 'Campo obrigatório';
@@ -1399,9 +1408,16 @@ const ProdutosViewInner = ({ showToast, filial, profile, onNavigate }: { showToa
     if (origemSemOpcoes) {
       ee.origem_compra = 'Nenhuma requisição está esperando este cadastro. Abra uma em Requisições > Do Setor > Compra eventual.';
     } else if (origemExigida && !itemCompradoSel) {
-      ee.origem_compra = emImplantacao
-        ? 'Escolha a requisição que este cadastro atende, um dos itens que já chegaram — ou "saldo de implantação".'
-        : 'Escolha a requisição que este cadastro atende, ou um dos itens que já chegaram.';
+      ee.origem_compra = modoOrigem === 'com'
+        ? 'Escolha a requisição que este cadastro atende.'
+        : emImplantacao
+          ? 'Escolha "Cadastro com requisição" ou "Cadastro sem requisição".'
+          : 'Escolha "Cadastro com requisição" e a requisição que este cadastro atende.';
+    } else if (origemOferecida && !itemCompradoSel && modoOrigem !== 'sem') {
+      // O nome só aparece depois da escolha: sem ela, o erro do nome cairia num campo escondido.
+      ee.origem_compra = modoOrigem === 'com'
+        ? 'Escolha a requisição que este cadastro atende.'
+        : 'Escolha "Cadastro com requisição" ou "Cadastro sem requisição".';
     }
 
     // EAN só entra se for EAN. Dígito verificador errado não é "quase certo":

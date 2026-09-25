@@ -318,38 +318,47 @@ const modeloServicos = (filial: string): Modelo => ({
 });
 
 // Requisição segue a ordem da tela: tipo, prazo, urgência, centro de custo,
-// justificativa e então os itens. Uma linha por item — que é exatamente como o
-// LogMax grava (cada item vira uma requisição própria, e o cabeçalho se repete).
+// os itens (nome, marca, quantidade e em quê) e a justificativa por último.
+// Uma linha por item — que é como o LogMax grava (cada item vira uma requisição
+// própria, e o cabeçalho se repete).
 //
-// Os três tipos e a justificativa condicional espelham a migr. 358: quem
-// preenche a planilha aprende a mesma distinção que vai encontrar na tela —
-// reposição se explica pelo saldo, compra eventual precisa de texto.
-const modeloRequisicoes = (filial: string): Modelo => ({
-  acao: 'Requisição',
-  titulo: `Requisições — ${filial}`,
-  arquivo: `modelo-requisicoes-${filial.toLowerCase()}`,
-  intro: 'Uma linha por item solicitado. Os cinco primeiros campos são o cabeçalho do pedido — repita-os igual em todas as linhas da mesma requisição. A Justificativa só é obrigatória em Compra eventual: na Reposição o motivo é o saldo do produto, que o LogMax registra sozinho.',
-  campos: [
-    { col: 'O que você precisa', obrigatorio: true,
-      lista: ['Reposição', 'Compra eventual', 'Material do estoque'], exemplo: 'Reposição',
-      dica: 'Reposição = item do catálogo que acabou ou bateu o mínimo. Compra eventual = não está no catálogo, é serviço ou foge do normal. Material do estoque = já existe no almoxarifado.' },
-    { col: 'Necessário até', obrigatorio: true, formato: 'data', exemplo: '15/09/2026' },
-    { col: 'Urgência', obrigatorio: true, lista: ['Normal', 'Alta', 'Urgente'], exemplo: 'Normal' },
-    { col: 'Centro de custo', exemplo: 'TI', fonte: 'centrosCusto',
-      dica: 'Setor que arca com o gasto. Precisa existir em Empresa > Centros de custo.' },
-    // Deixou de ser obrigatória na planilha pelo mesmo motivo que deixou na
-    // tela (migr. 358): na reposição o motivo é o saldo, e exigir texto aqui
-    // reproduziria em .xlsx o "nao temos ou acabou" que a 358 foi corrigir.
-    { col: 'Justificativa',
-      exemplo: 'Compressor da câmara fria parou e não há peça no mercado local.',
-      dica: 'Obrigatória só em Compra eventual — Compras não tem histórico do item para decidir sozinho. Em Reposição, deixe em branco: o motivo é o saldo.' },
-    { col: 'Item', obrigatorio: true, exemplo: itemExemploDaFilial(filial), fonte: 'itensCatalogo',
-      dica: 'Em Reposição, escolha na lista o produto do catálogo — o nome tem de bater exatamente. Em Compra eventual o item não está no catálogo: digite por cima da lista, descrevendo o suficiente para Compras cotar sem precisar perguntar.' },
-    { col: 'Quantidade', obrigatorio: true, formato: 'decimal', exemplo: '10' },
-    { col: 'Unidade', obrigatorio: true, lista: unidadesDeRequisicao(filial), exemplo: 'CX',
-      dica: 'Em Reposição o LogMax usa a unidade do cadastro do produto, então esta coluna serve de conferência.' },
-  ],
-});
+// "Em quê" é uma pergunta só, como na tela (migr. 591): uma unidade de medida
+// ou uma embalagem fechada "com N" unidades. Caixa e pacote vivem só como
+// embalagem — como unidade, "10 CX" e "10 UN, caixa com 12" pareciam a mesma
+// coisa.
+const modeloRequisicoes = (filial: string): Modelo => {
+  const unidades = unidadesDeRequisicao(filial).filter(u => u !== 'CX' && u !== 'PCT');
+  const embalagens = EMBALAGENS_COMPRA.map(e => e.charAt(0) + e.slice(1).toLowerCase());
+  // Exemplo coerente com o item de exemplo da loja: só a mercearia compra em fardo.
+  const emFardo = filial === 'SuperMax';
+  return {
+    acao: 'Requisição',
+    titulo: `Requisições — ${filial}`,
+    arquivo: `modelo-requisicoes-${filial.toLowerCase()}`,
+    intro: 'Uma linha por item. Os quatro primeiros campos são o cabeçalho — repita-os em todas as linhas da mesma requisição.',
+    campos: [
+      { col: 'O que você precisa', obrigatorio: true,
+        lista: ['Compra eventual', 'Reposição', 'Material do estoque'], exemplo: 'Compra eventual',
+        dica: 'Compra eventual = fora do catálogo ou serviço. Reposição = item do catálogo que acabou. Material do estoque = retirar do almoxarifado.' },
+      { col: 'Necessário até', obrigatorio: true, formato: 'data', exemplo: '15/09/2026' },
+      { col: 'Urgência', obrigatorio: true, lista: ['Normal', 'Alta', 'Urgente'], exemplo: 'Normal' },
+      { col: 'Centro de custo', exemplo: 'TI', fonte: 'centrosCusto' },
+      { col: 'Item', obrigatorio: true, exemplo: itemExemploDaFilial(filial), fonte: 'itensCatalogo',
+        dica: 'Reposição: o nome do produto do catálogo, igual. Compra eventual: descreva o item.' },
+      { col: 'Marca',
+        dica: 'Opcional. Em branco = qualquer marca.' },
+      { col: 'Quantidade', obrigatorio: true, formato: 'decimal', exemplo: emFardo ? '5' : '2' },
+      { col: 'Em quê', obrigatorio: true, lista: [...unidades, ...embalagens], exemplo: emFardo ? 'Fardo' : 'UN',
+        dica: 'Uma unidade (UN, KG…) ou uma embalagem fechada (Fardo, Caixa…).' },
+      { col: 'Com quantas', formato: 'decimal', exemplo: emFardo ? '500' : undefined,
+        dica: 'Só com embalagem: quantas unidades vêm em cada uma.' },
+      { col: 'Unidade da embalagem', lista: unidades.filter(u => u !== 'SV'), exemplo: emFardo ? 'UN' : undefined,
+        dica: 'Só com embalagem: em que unidade é o "com quantas".' },
+      { col: 'Justificativa', exemplo: 'O estoque do setor acaba nesta semana e não há outro fornecedor na cidade.',
+        dica: 'Obrigatória em Compra eventual. Em Reposição, deixe em branco.' },
+    ],
+  };
+};
 
 // ---------------------------------------------------------------------------
 // Listas vindas do LogMax
