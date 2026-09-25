@@ -1024,97 +1024,15 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode, onNavigate }: { s
   // requisição para 'Atendida' no mesmo COMMIT. Antes isso era insert solto no
   // cliente com guard só por cotação — foi assim que uma requisição de 24
   // unidades virou 2 pedidos e 2 contas a pagar em produção.
-  // Cotação de SERVIÇO esperando o vínculo com o catálogo, e o serviço
-  // escolhido no modal.
-  //
-  // Produto não passa mais por aqui (24/09): escolher mercadoria num select era
-  // onde o erro nascia — "Carregador de Tomada USB-C 20W" saiu como Power Bank
-  // porque os dois têm "Carregador" no nome e a régua da migr. 596 deixou. O
-  // produto só se liga pelo cadastro com "Origem deste cadastro" (migr. 494) ou
-  // pelo nome idêntico. Serviço fica no modal porque o cadastro de serviços não
-  // tem campo de origem.
-  const [vinculando, setVinculando] = useState<any | null>(null);
-  const [servicoVinculo, setServicoVinculo] = useState('');
-
+  // O modal "Qual item do catálogo?" saiu em 24/09. Escolher o item num select
+  // era onde o erro nascia — "Carregador de Tomada USB-C 20W" saiu como Power
+  // Bank porque os dois têm "Carregador" no nome e a régua da migr. 596
+  // deixou. Agora o vínculo é fato, nunca escolha: produto pelo cadastro com
+  // "Origem deste cadastro" (migr. 494), produto ou serviço pelo NOME IDÊNTICO
+  // ao da requisição (migr. 627/628). Ver `prontasParaPedido`.
   /** A requisição pediu serviço? A unidade SV é a declaração (src/lib/unidades.ts). */
   const pediuServico = (cot: any) =>
     String(cot?.req?.unidade ?? '').trim().toUpperCase() === 'SV';
-
-  // Conferência do vínculo (o clique que ninguém revisa depois).
-  //
-  // O select do modal lista o catálogo inteiro da unidade, e o item da
-  // requisição é texto livre — nada impedia abrir "Óleo de cozinha" e amarrar
-  // "Leite condensado". O erro é silencioso e definitivo: o produto errado
-  // entra no pedido, a requisição guarda o vínculo (a próxima compra do mesmo
-  // item já nasce errada como Reposição), e o Recebimento abre com o item
-  // travado — a doca dá entrada de estoque no produto errado.
-  //
-  // A régua é grosseira de propósito: não decide por ninguém, só percebe que
-  // as duas frases não têm palavra nenhuma em comum.
-  //
-  // MIGR 596: a mesma régua vive no banco, em `public.vinculo_item_parece()` —
-  // é ela que RECUSA o pedido. O que está aqui existe para dizer a mesma coisa
-  // antes do clique; mudou de um lado, muda do outro, senão a tela oferece o
-  // que o banco vai negar (ou, pior, bloqueia o que ele aceitaria).
-  const RUIDO_VINCULO = new Set([
-    'para', 'com', 'sem', 'dos', 'das', 'por', 'una', 'uma', 'unidade', 'unidades',
-    'caixa', 'caixas', 'pacote', 'pacotes', 'fardo', 'fardos', 'kit', 'novo', 'nova',
-    'tamanho', 'cor', 'marca', 'tipo', 'modelo', 'linha',
-    // Qualificadores não identificam o item: "Meia masculina" e "Corrente
-    // masculina" combinariam por "masculin" e o alerta nunca apareceria.
-    'masculino', 'masculina', 'masculinos', 'masculinas',
-    'feminino', 'feminina', 'femininos', 'femininas',
-    'infantil', 'unissex', 'adulto', 'importado', 'importada',
-    'preto', 'preta', 'branco', 'branca', 'azul', 'verde', 'vermelho', 'vermelha',
-    'amarelo', 'amarela', 'cinza', 'rosa', 'bege', 'dourado', 'dourada', 'prata',
-    'grande', 'pequeno', 'pequena', 'medio', 'media',
-  ]);
-  const palavrasVinculo = (texto: string): string[] =>
-    String(texto ?? '')
-      .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, ' ')
-      .split(' ')
-      .filter(w => w.length >= 4 && !RUIDO_VINCULO.has(w));
-
-  /** As duas frases falam do mesmo item? Radical de 4 letras basta (plural, gênero). */
-  const vinculoParece = (itemReq: string, nomeCatalogo: string): boolean => {
-    const a = palavrasVinculo(itemReq);
-    const b = palavrasVinculo(nomeCatalogo);
-    // Sem palavra utilizável de um dos lados não dá para afirmar nada — e
-    // acusar sem base treinaria o aluno a ignorar o aviso.
-    if (a.length === 0 || b.length === 0) return true;
-    return a.some(x => b.some(y => x.slice(0, 4) === y.slice(0, 4)));
-  };
-
-  // O item escolhido no modal, para mostrar lado a lado com o que foi pedido.
-  const itemVinculoEscolhido = useMemo(() => {
-    if (!vinculando) return null;
-    return servicos.find((sv: any) => sv.id === servicoVinculo) ?? null;
-  }, [vinculando, servicoVinculo, servicos]);
-
-  const vinculoDivergente = !!(
-    vinculando && itemVinculoEscolhido &&
-    !vinculoParece(vinculando.req?.item ?? '', itemVinculoEscolhido.nome ?? '')
-  );
-
-  // MIGR 596: o select mostrava o catálogo inteiro, e a escolha errada estava
-  // sempre a um clique de distância — foi assim que uma corrente virou bermuda
-  // na MaxLook. Agora a lista abre já recortada no que tem palavra em comum
-  // com o que a requisição pediu; o resto continua alcançável, mas exige dizer
-  // que se quer ver o catálogo todo.
-  const [verCatalogoTodo, setVerCatalogoTodo] = useState(false);
-  useEffect(() => { setVerCatalogoTodo(false); }, [vinculando]);
-  const itemPedido = String(vinculando?.req?.item ?? '');
-  const servicosProvaveis = useMemo(
-    () => servicosOrdenados.filter((s: any) => vinculoParece(itemPedido, s.nome ?? '')),
-    [servicosOrdenados, itemPedido], // eslint-disable-line react-hooks/exhaustive-deps
-  );
-  // Sem nenhum parecido, esconder o catálogo seria mostrar um select vazio de
-  // um catálogo cheio. Nesse caso a lista abre inteira — e o alerta abaixo é
-  // que segura o clique errado.
-  const recorteAtivo = servicosProvaveis.length > 0 && !verCatalogoTodo;
-  const servicosDoSelect = recorteAtivo ? servicosProvaveis : servicosOrdenados;
 
   // ── Prontas para pedido ────────────────────────────────────────────────
   // A fila que o SAP chama de requisições atribuídas (ME57) e o Protheus
@@ -1240,14 +1158,15 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode, onNavigate }: { s
   });
   const [gerandoLote, setGerandoLote] = useState(false);
 
-  // "Cadastrar produto" da fila: leva a Cadastros > Produtos com a requisição
-  // já na origem. Serviço não tem campo de origem — o atalho só abre a tela.
+  // "Cadastrar produto/serviço" da fila: abre o cadastro já com a requisição.
+  // Produto nasce com ela na origem (migr. 494); serviço nasce contratado e
+  // com o nome dela, que é o que o pedido reconhece (migr. 628). Salvo, o
+  // cadastro devolve o comprador para cá.
   const podeCadastrarDaFila = temAcessoCadastros && !!onNavigate;
   const cadastrarDaFila = (cot: any, servico: boolean) => {
-    if (!onNavigate) return;
-    if (servico) { onNavigate('cadastros-serviços'); return; }
-    if (cot.requisicao_id) pedirCadastroDaCotacao(cot.requisicao_id, filial);
-    onNavigate('cadastros-produtos');
+    if (!onNavigate || !cot.requisicao_id) return;
+    pedirCadastroDaCotacao(servico ? 'servico' : 'produto', cot.requisicao_id, filial, String(cot.req?.item ?? ''));
+    onNavigate(servico ? 'cadastros-serviços' : 'cadastros-produtos');
   };
 
   // O que acontece na tela depois que a RPC devolve o pedido — o mesmo para
@@ -1318,13 +1237,11 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode, onNavigate }: { s
     // antes, em vez de deixar o erro estourar depois do clique.
     const jaVinculada = !!(cotacao.req?.produto_id || cotacao.req?.servico_id);
     if (!jaVinculada && !vinculo?.produtoId && !vinculo?.servicoId) {
-      if (pediuServico(cotacao)) {
-        setServicoVinculo('');
-        setVinculando(cotacao);
-      } else if (podeCadastrarDaFila) {
-        cadastrarDaFila(cotacao, false);
+      const servico = pediuServico(cotacao);
+      if (podeCadastrarDaFila) {
+        cadastrarDaFila(cotacao, servico);
       } else {
-        showToast('O produto desta requisição ainda não foi cadastrado. O cadastro fica em Cadastros > Produtos, fora do seu acesso — peça à Logística.', 'error', true);
+        showToast(`${servico ? 'O serviço' : 'O produto'} desta requisição ainda não foi cadastrado. O cadastro fica em Cadastros, fora do seu acesso — peça à Logística.`, 'error', true);
       }
       return;
     }
@@ -1338,8 +1255,6 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode, onNavigate }: { s
       if (error) throw new Error(error.message);
       registrarPedidoGerado(cotacao);
       const novo: any = Array.isArray(pedido) ? pedido[0] : pedido;
-      setVinculando(null);
-      setServicoVinculo('');
       // Serviço não chega em caixa: o que fecha o pedido é o aceite da execução,
       // e é ele que libera o pagamento. Mandar o aluno avisar o Estoque de uma
       // dedetização seria mandá-lo esperar uma carga que não vem.
@@ -1362,7 +1277,6 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode, onNavigate }: { s
       // continuar ali convidando ao mesmo clique.
       if (/já tem pedido|já foi atendida/i.test(msg)) {
         await carregarCotacoesComPedido();
-        setVinculando(null);
         showToast(
           `${msg} Esta tela estava desatualizada — provavelmente outra pessoa gerou o pedido antes. A lista já foi atualizada; o pedido está em Compras > Pedidos.`,
           'error', true);
@@ -1524,18 +1438,9 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode, onNavigate }: { s
     }
     return (
       <>
-        {/* Serviço não tem campo de origem no cadastro: depois de cadastrar,
-            o vínculo se faz escolhendo aqui. Produto não tem essa porta. */}
-        {servico && (
-          <button type="button" onClick={() => handleGerarPedido(cot)} disabled={ocupada}
-            title="Escolher o serviço já cadastrado no catálogo"
-            className={`${base} text-gray-400 hover:text-gray-200`}>
-            <Search size={12} /> {rotulo('Escolher serviço')}
-          </button>
-        )}
         <button type="button" onClick={() => cadastrarDaFila(cot, servico)}
           title={servico
-            ? 'Abrir Cadastros > Serviços — cadastre como "Contratado de terceiro" e volte para escolher'
+            ? 'Abrir o cadastro de serviço já como contratado e com o nome desta requisição — salvo, você volta para cá'
             : 'Abrir o cadastro já com esta requisição na origem — salvo, o produto fica ligado e você volta para cá'}
           className={`${base} text-accent hover:bg-accent/10 border border-accent/20`}>
           <Plus size={12} /> {rotulo(servico ? 'Cadastrar serviço' : 'Cadastrar produto')}
@@ -1590,26 +1495,41 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode, onNavigate }: { s
 
       <FilaDeTrabalho itens={filaDaTela} />
 
-      {/* Abas da porta de Compras — ver o comentário de `abaEscolhida`. Mesmo
-          desenho das fases de Orçamentos. */}
+      {/* Abas da porta de Compras — ver o comentário de `abaEscolhida`. Na
+          ordem do trabalho: primeiro se cota, depois se gera o pedido. Cada
+          aba tem cara própria e nenhuma fica apagada — com as duas em cinza,
+          a inativa lia como botão desabilitado. A ativa ganha um traço
+          embaixo, e a quantidade fica num card ao lado. */}
       {mostraAbas && (
-        <div className="flex gap-2 flex-wrap shrink-0">
+        <div className="flex gap-3 flex-wrap shrink-0" role="tablist">
           {([
-            { id: 'gerar' as const, label: 'Gerar pedidos', n: prontasParaPedido.length,
-              dica: 'Cotações aprovadas que ainda não viraram pedido' },
             { id: 'cotacoes' as const, label: 'Cotações', n: totalCount ?? todasCotacoes.length,
-              dica: 'Todas as propostas: aguardando o Financeiro, devolvidas, aprovadas e o histórico' },
+              dica: 'Todas as propostas: aguardando o Financeiro, devolvidas, aprovadas e o histórico',
+              // Dourado translúcido (vidro), chapado — o design é flat: sem
+              // degradê nem sombra, que deixavam o botão com cara de sujo.
+              estilo: 'bg-accent/85 backdrop-blur-sm border-accent text-black hover:bg-accent' },
+            { id: 'gerar' as const, label: 'Gerar pedidos', n: prontasParaPedido.length,
+              dica: 'Cotações aprovadas que ainda não viraram pedido',
+              // Preto com borda dourada.
+              estilo: 'bg-black border-accent text-accent hover:bg-accent/10' },
           ]).map(a => {
             const ativa = abaAtiva === a.id;
             return (
-              <button key={a.id} type="button" title={a.dica}
-                onClick={() => setAbaEscolhida(a.id)}
-                className={`py-2 px-3.5 rounded-xl text-[11px] font-bold uppercase tracking-widest border transition-all flex items-center gap-2 ${
-                  ativa ? 'border-accent text-accent' : 'border-white/5 text-gray-500 hover:text-gray-300 hover:border-white/15'
-                } ${!ativa && a.n === 0 ? 'opacity-50' : ''}`}>
-                {a.label}
-                <span className="font-mono tabular-nums text-gray-500">{a.n}</span>
-              </button>
+              <div key={a.id} className="flex items-stretch gap-1.5">
+                <button type="button" title={a.dica} role="tab" aria-selected={ativa}
+                  onClick={() => setAbaEscolhida(a.id)}
+                  className={`relative py-2.5 px-4 rounded-xl text-[11px] font-bold uppercase tracking-widest border transition-colors flex items-center ${a.estilo}`}>
+                  {a.label}
+                  {/* A aba ativa: um traço embaixo, sem mexer na cor do botão. */}
+                  {ativa && <span aria-hidden className="absolute left-3 right-3 -bottom-2 h-0.5 rounded-full bg-accent" />}
+                </button>
+                {/* A quantidade num card próprio, ao lado: dentro do botão, em
+                    fonte pequena, ninguém via. */}
+                <div title={a.dica}
+                  className="min-w-[2.75rem] px-3 rounded-xl border border-white/10 bg-white/[0.03] flex items-center justify-center">
+                  <span className="text-base font-black tabular-nums text-accent">{a.n}</span>
+                </div>
+              </div>
             );
           })}
         </div>
@@ -2695,174 +2615,6 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode, onNavigate }: { s
                 </button>
                 <NeuButtonAccent onClick={handleReenviarCorrigida} isLoading={reenviando}>
                   <Send size={14} /> Reenviar ao Financeiro
-                </NeuButtonAccent>
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* ── Vínculo com o catálogo (migr. 480) ──────────────────────────────
-          O item chega aqui como a frase que o setor escreveu na requisição.
-          Quem compra é que sabe — e é quem tem de dizer — qual item de catálogo
-          é aquilo, porque é o código que entra no pedido. Feito isto, o pedido
-          nasce amarrado, o Recebimento abre com o produto travado e ninguém
-          cadastra nada na doca.
-
-          Só aparece na compra Eventual: Reposição já veio do catálogo. */}
-      <AnimatePresence>
-        {vinculando && (
-          <motion.div
-            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4"
-            onClick={() => !generating && setVinculando(null)}>
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95, y: 10 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 10 }}
-              onClick={e => e.stopPropagation()}
-              className="neu-flat rounded-3xl p-6 border border-white/10 w-full max-w-lg">
-              <div className="flex items-center justify-between mb-5">
-                <h3 className="text-sm font-bold text-gray-300">
-                  Qual serviço do catálogo?
-                  <span className="text-accent ml-2">— {vinculando.forn?.nome ?? 'fornecedor'}</span>
-                </h3>
-                <button onClick={() => !generating && setVinculando(null)}
-                  className="w-7 h-7 neu-button rounded-lg flex items-center justify-center text-gray-500 hover:text-white">
-                  <X size={14} />
-                </button>
-              </div>
-
-              <div className="neu-inset rounded-xl p-3 mb-4 border border-white/5">
-                <p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-1">O que a requisição pediu</p>
-                <p className="text-xs text-gray-200">
-                  {String(vinculando.req?.item ?? 'item').replace(/\s+/g, ' ').trim()}
-                  {vinculando.req?.qtd != null && (
-                    <span className="text-gray-500"> · {vinculando.req.qtd} {vinculando.req.unidade ?? ''}</span>
-                  )}
-                </p>
-              </div>
-
-              <FormField label="Serviço do catálogo *">
-                <select className="neu-input py-2 px-3 rounded-xl text-sm w-full"
-                  value={servicoVinculo}
-                  onChange={e => setServicoVinculo(e.target.value)}>
-                  <option value="">
-                    {servicosOrdenados.length === 0
-                      ? 'Nenhum serviço cadastrado'
-                      : 'Selecione o serviço...'}
-                  </option>
-                  {servicosDoSelect.map((sv: any) => (
-                    <option key={sv.id} value={sv.id}>
-                      {sv.nome}{sv.filial ? '' : ' — todas as unidades'}
-                    </option>
-                  ))}
-                </select>
-                {servicosOrdenados.length > 0 && (
-                  <p className="text-[10px] text-gray-500 mt-1 leading-snug">
-                    {recorteAtivo ? (
-                      <>
-                        A lista está mostrando {servicosProvaveis.length} de {servicosOrdenados.length}{' '}
-                        {servicosOrdenados.length === 1 ? 'serviço' : 'serviços'} — os que têm palavra em comum
-                        com o que foi pedido.{' '}
-                        <button type="button" onClick={() => setVerCatalogoTodo(true)}
-                          className="underline text-gray-400 hover:text-gray-200">
-                          Ver o catálogo todo
-                        </button>
-                      </>
-                    ) : servicosProvaveis.length > 0 ? (
-                      <>
-                        Catálogo inteiro à mostra.{' '}
-                        <button type="button" onClick={() => setVerCatalogoTodo(false)}
-                          className="underline text-gray-400 hover:text-gray-200">
-                          Voltar aos parecidos
-                        </button>
-                      </>
-                    ) : (
-                      <>Nenhum serviço do catálogo parece com o que foi pedido — a lista abriu inteira.</>
-                    )}
-                  </p>
-                )}
-              </FormField>
-
-              <p className="text-[11px] text-gray-500 leading-snug mt-3">
-                Serviço contratado não vira mercadoria: não tem saldo, não tem lote e não tem
-                validade. O “recebimento” dele é o <span className="text-gray-300 font-semibold">aceite</span> —
-                alguém confirma que foi executado —, e é o aceite que libera o pagamento. O custo
-                entra no resultado como despesa do período, no grupo do centro de custo que a
-                requisição informou.
-                <span className="block mt-1.5 text-gray-400">
-                  Não está na lista? Cadastre em <span className="font-bold">Cadastros &gt; Serviços &gt; Novo</span>,
-                  marcando a natureza <span className="font-bold">Contratado de terceiro</span>, e volte aqui.
-                  Esta lista não mostra o que a unidade PRESTA: aquilo é o que ela vende ao cliente, não o
-                  que ela compra.
-                </span>
-              </p>
-
-              {/* O par, escrito lado a lado. O erro que se quer evitar aqui é
-                  amarrar "Óleo de cozinha" em "Leite condensado" — e ele só é
-                  visível se as duas frases estiverem na mesma tela, no momento
-                  do clique. */}
-              {itemVinculoEscolhido && (
-                <div className={`neu-inset rounded-xl p-3 mt-3 border ${
-                  vinculoDivergente ? 'border-red-400/40' : 'border-emerald-400/20'}`}>
-                  <p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-1">
-                    Vai entrar no pedido
-                  </p>
-                  <p className="text-xs text-gray-200">
-                    {itemVinculoEscolhido.nome}
-                    {itemVinculoEscolhido.codigo && (
-                      <span className="text-gray-500"> · {itemVinculoEscolhido.codigo}</span>
-                    )}
-                    {itemVinculoEscolhido.marca && (
-                      <span className="text-gray-500"> · {itemVinculoEscolhido.marca}</span>
-                    )}
-                  </p>
-                </div>
-              )}
-
-              {/* MIGR 596: isto era um aviso com caixinha de "Conferi", e a
-                  caixinha é o caminho de menor esforço — na MaxLook a corrente
-                  virou bermuda exatamente assim, com o alerta na tela. Agora o
-                  banco recusa, e a tela diz a mesma coisa antes do clique em
-                  vez de deixar o erro estourar depois. */}
-              {vinculoDivergente && (
-                <div className="mt-3 rounded-xl p-3 border border-red-400/40 bg-red-500/5">
-                  <p className="text-[11px] text-red-300 leading-snug flex gap-2">
-                    <AlertTriangle size={14} className="shrink-0 mt-px" />
-                    <span>
-                      A requisição pediu <span className="font-bold">
-                        “{String(vinculando.req?.item ?? 'este item').replace(/\s+/g, ' ').trim()}”
-                      </span> e você escolheu <span className="font-bold">“{itemVinculoEscolhido?.nome}”</span>.
-                      Não são o mesmo item, e o pedido sairia com o produto trocado: a requisição guardaria
-                      esse vínculo para as próximas compras e o Recebimento daria entrada de estoque no item
-                      errado. <span className="font-bold">O pedido não vai ser gerado assim.</span>
-                      <span className="block mt-1.5 text-red-300/80">
-                        Se o catálogo ainda não tem este item, cadastre-o em{' '}
-                        <span className="font-bold">Cadastros &gt; Serviços &gt; Novo</span>
-                        {' '}com a natureza <span className="font-bold">Contratado de terceiro</span>.
-                        {' '}Se quem pediu é que escreveu errado, devolva a requisição para correção.
-                      </span>
-                    </span>
-                  </p>
-                </div>
-              )}
-
-              <p className="text-[11px] text-emerald-400/80 leading-snug mt-3">
-                A requisição guarda esse vínculo: a próxima compra do mesmo item já nasce como
-                Reposição, escolhida do catálogo, sem passar por aqui.
-              </p>
-
-              <div className="flex justify-end gap-2 mt-6">
-                <button onClick={() => setVinculando(null)} disabled={!!generating}
-                  className="px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-widest neu-button text-gray-400 hover:text-gray-200 disabled:opacity-50">
-                  Cancelar
-                </button>
-                <NeuButtonAccent
-                  onClick={() => handleGerarPedido(vinculando, { servicoId: servicoVinculo })}
-                  isLoading={generating === vinculando.id}
-                  disabled={!servicoVinculo || vinculoDivergente}>
-                  <ShoppingBag size={14} /> Gerar Pedido
                 </NeuButtonAccent>
               </div>
             </motion.div>
