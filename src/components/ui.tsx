@@ -302,7 +302,6 @@ export const COR_ABA = {
   amarelo:  { botao: 'btn-shimmer--glass-yellow', numero: 'text-yellow-300' },
   azul:     { botao: 'btn-shimmer--glass-blue',   numero: 'text-blue-300' },
   roxo:     { botao: 'btn-shimmer--glass-purple', numero: 'text-purple-300' },
-  roxo:     { botao: 'btn-shimmer--glass-purple', numero: 'text-purple-300' },
   verde:    { botao: 'btn-shimmer--glass-green',  numero: 'text-green-400' },
   cinza:    { botao: 'btn-shimmer--glass-gray',   numero: 'text-gray-300' },
   vermelho: { botao: 'btn-shimmer--glass-red',    numero: 'text-red-300' },
