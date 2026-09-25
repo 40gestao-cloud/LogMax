@@ -387,7 +387,8 @@ const RecebimentosViewInner = ({ showToast, filial }: { showToast: any; filial: 
   const [recebEmEmb, setRecebEmEmb] = useState(false);
   // Trocar de pedido troca de produto: o modo do pedido anterior não pode
   // sobreviver e multiplicar a quantidade pelo fardo errado.
-  useEffect(() => { setRecebEmEmb(false); }, [form.pedido_id]);
+  // Produto com embalagem de compra começa contando nela: é como a carga chega.
+  useEffect(() => { setRecebEmEmb(!!embPedidoSel); }, [form.pedido_id, embPedidoSel?.nome, embPedidoSel?.fator]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleSave = async () => {
     if (!validate()) return;
@@ -678,9 +679,6 @@ const RecebimentosViewInner = ({ showToast, filial }: { showToast: any; filial: 
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
             <div className="neu-flat rounded-2xl p-6 border border-white/5 flex flex-col gap-4">
               <h3 className="text-sm font-bold text-gray-200">Novo Recebimento</h3>
-              <p className="text-[11px] text-gray-500 -mt-2">
-                O produto que entra no estoque é escolhido na hora de confirmar. Item que ainda não existe no catálogo precisa ser cadastrado antes, em Cadastros &gt; Produtos — o item deste pedido já aparece lá como sugestão.
-              </p>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <FormField label="Pedido *" error={errors.pedido_id}><select className={`neu-input py-2 px-3 rounded-xl text-sm ${errors.pedido_id ? 'border border-red-500/40' : ''}`} value={form.pedido_id} onChange={e => { setForm(f => ({ ...f, pedido_id: e.target.value })); clearError('pedido_id'); }}><option value="">Selecione...</option>{pedidosAtivos.map((p: any) => {
                   const desc = p.item_descricao ?? p.req?.item ?? '';
@@ -709,9 +707,6 @@ const RecebimentosViewInner = ({ showToast, filial }: { showToast: any; filial: 
                   onModo={setRecebEmEmb}
                   value={extras.qtd_recebida}
                   onChange={v => setExtras(x => ({ ...x, qtd_recebida: v }))}
-                  ajuda={embPedidoSel
-                    ? `Conte como a carga chegou na doca. O fardo não entra no saldo: a conversão é aqui, e daí em diante o estoque fala só em ${unidadePedidoSel || 'UN'} — é esse número que o Confirmar dá entrada.`
-                    : undefined}
                 />
                 <FormField label="Data da chegada">
                   <input type="date" className="neu-input py-2 px-3 rounded-xl text-sm"

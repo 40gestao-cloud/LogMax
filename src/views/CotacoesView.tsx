@@ -352,6 +352,13 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode, onNavigate }: { s
     if (!pedida) return;
     setExtras(x => (x.marca ? x : { ...x, marca: pedida }));
   }, [reqSelecionada]);
+  // O prazo de entrega nasce na data em que a requisição precisa do item; o
+  // comprador troca se o fornecedor prometer outra.
+  useEffect(() => {
+    const alvo = String(reqSelecionada?.data_necessidade ?? '');
+    if (!alvo || alvo < todayBR()) return;
+    setExtras(x => (x.prazo_entrega ? x : { ...x, prazo_entrega: alvo }));
+  }, [reqSelecionada]);
 
   // Trocar de requisição troca a quantidade E a medida: "R$ 135,00" que era o
   // preço de um fardo de 30 não é preço de nada na requisição seguinte. Antes
@@ -1482,6 +1489,8 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode, onNavigate }: { s
               const abrindo = !showForm;
               closeForm();
               setShowForm(abrindo);
+              // O formulário vive na aba Cotações: aberto na outra, nascia fora da vista.
+              if (abrindo && mostraAbas) setAbaEscolhida('cotacoes');
               if (abrindo) setExtras(x => ({ ...x, validade: emDias(VALIDADE_PADRAO_DIAS) }));
             }}>
               <Plus size={16} /> Nova Cotação
@@ -1654,9 +1663,6 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode, onNavigate }: { s
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="shrink-0">
             <div className="neu-flat rounded-2xl p-6 border border-white/5 flex flex-col gap-4">
               <h3 className="text-sm font-bold text-gray-200">Nova Cotação</h3>
-              <p className="text-[11px] text-gray-500 -mt-2">
-                Ao salvar, a cotação será enviada ao <span className="text-cyan-400 font-bold">Financeiro</span> para aprovação.
-              </p>
               {semFornecedor ? (
                 <div className="neu-pressed rounded-2xl p-6 border border-yellow-500/30 flex flex-col items-center text-center gap-3">
                   <AlertTriangle size={22} className="text-yellow-400" />
@@ -1693,8 +1699,7 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode, onNavigate }: { s
                       tela ficava idêntica com tudo cotado e com nada cotado. */}
                   {requisicoesParaCotar.pendentes.length === 0 && (
                     <p className="text-[11px] text-emerald-400/80 -mt-2">
-                      Todas as requisições aprovadas já têm proposta. Escolha uma de "Já cotadas" só se for
-                      acrescentar outra proposta concorrente.
+                      Todas as requisições aprovadas já têm proposta.
                     </p>
                   )}
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -1835,9 +1840,6 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode, onNavigate }: { s
                             </span>
                           )}
                         </div>
-                        <p className="text-[10px] text-gray-500 mt-1 leading-relaxed">
-                          Quem pediu definiu a medida. Cotar é dar preço para esta quantidade — não para outra.
-                        </p>
                       </FormField>
                     )}
                     {/* O ÚNICO campo de preço que se digita, na medida em que o
@@ -1851,12 +1853,6 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode, onNavigate }: { s
                           onChange={e => { setFonte(e.target.value); setErrosExtras(x => ({ ...x, valor_total: undefined })); }}
                           onKeyDown={handleMoneyKeyDown}
                           placeholder="0,00" />
-                        <p className="text-[10px] text-gray-500 mt-1 leading-relaxed">
-                          {/* Sem adjetivo: "caixa" é feminino e "fardo" masculino. */}
-                          {embReq
-                            ? `O que o fornecedor cobra por 1 ${embReq.nome} de ${qtdBR(embReq.fator)} ${unidadeReq}. O total sai daqui × ${qtdBR(embReq.qtd)}.`
-                            : `O preço de uma ${unidadeReq}. O total sai daqui × ${qtdBR(qtdReq)}.`}
-                        </p>
                       </FormField>
                     )}
                     {/* Unitário só aparece quando NÃO é a fonte — senão seria o
@@ -1868,9 +1864,6 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode, onNavigate }: { s
                         <div className="neu-pressed py-2 px-3 rounded-xl text-sm text-gray-300 tabular-nums">
                           {precoUnitario(parseBRL(extras.valor_total), qtdReq) || '—'}
                         </div>
-                        <p className="text-[10px] text-gray-500 mt-1 leading-relaxed">
-                          Resultado, não campo: o total dividido por {qtdBR(qtdReq)} {unidadeReq}. É assim que duas propostas se comparam.
-                        </p>
                       </FormField>
                     )}
                     <FormField label="Valor Total (R$) *" error={errosExtras.valor_total}>
@@ -1883,18 +1876,10 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode, onNavigate }: { s
                       {/* Mexer no total é legítimo (frete, desconto fechado),
                           mas deixa de ser a conta da fonte — e isso tem de
                           estar dito na tela, não descoberto depois no pedido. */}
-                      {temAjuste ? (
+                      {temAjuste && (
                         <p className="text-[10px] text-amber-400 mt-1 leading-relaxed">
-                          Ajustado à mão: a conta dava R$ {formatBRL(totalBase)} ({extras.valor_fonte} × {qtdBR(fonte!.mult)}),
-                          {' '}{ajusteTotal > 0 ? 'com R$ ' : 'menos R$ '}{formatBRL(Math.abs(ajusteTotal))}{ajusteTotal > 0 ? ' a mais' : ''}.
-                          {' '}Frete ou desconto fechado entram assim — na prática o total sai a
-                          {' '}R$ {precoUnitario(parseBRL(extras.valor_total), qtdReq)} por {unidadeReq}.
-                        </p>
-                      ) : (
-                        <p className="text-[10px] text-gray-500 mt-1 leading-relaxed">
-                          {fonte
-                            ? 'Calculado pela quantidade da requisição. É este valor que vai ao Financeiro — frete ou desconto fechado você digita aqui.'
-                            : 'Escolha a requisição para o total ser calculado pela quantidade.'}
+                          Ajustado à mão: a conta dava R$ {formatBRL(totalBase)}
+                          {' '}({ajusteTotal > 0 ? '+' : '−'} R$ {formatBRL(Math.abs(ajusteTotal))}).
                         </p>
                       )}
                     </FormField>
@@ -1906,15 +1891,9 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode, onNavigate }: { s
                           requisição é a DEMANDA (quando eu preciso); esta é a
                           OFERTA (quando o fornecedor promete). Comparar as duas
                           é metade do critério de compra — a outra é o preço. */}
-                      {reqSelecionada?.data_necessidade ? (
-                        <p className={`text-[10px] mt-1 leading-relaxed ${prazoEstoura ? 'text-red-400' : 'text-gray-500'}`}>
-                          {prazoEstoura
-                            ? `Entrega depois do necessário (${dataBR(reqSelecionada.data_necessidade)}). Dá para enviar assim mesmo — o Financeiro decide se o preço compensa o atraso.`
-                            : `A requisição precisa do item até ${dataBR(reqSelecionada.data_necessidade)}.`}
-                        </p>
-                      ) : (
-                        <p className="text-[10px] text-gray-500 mt-1 leading-relaxed">
-                          Quando o fornecedor promete entregar — não é a data em que a requisição precisa do item.
+                      {prazoEstoura && (
+                        <p className="text-[10px] mt-1 leading-relaxed text-red-400">
+                          Depois do necessário ({dataBR(reqSelecionada.data_necessidade)}).
                         </p>
                       )}
                     </FormField>
@@ -1926,9 +1905,6 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode, onNavigate }: { s
                       {/* Preço de fornecedor vence. Depois desta data o
                           Financeiro não aprova (migr. 583) — a saída é devolver
                           para Compras revalidar, que é o que se faz na rua. */}
-                      <p className="text-[10px] text-gray-500 mt-1 leading-relaxed">
-                        Até quando o fornecedor garante este preço. Passou disso, o Financeiro devolve para revalidar.
-                      </p>
                     </FormField>
                     {/* MIGR 584. Prazo é negociação, não detalhe: duas
                         propostas de mesmo valor não são a mesma compra se uma
@@ -1940,17 +1916,6 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode, onNavigate }: { s
                         onChange={e => setExtras(x => ({ ...x, condicao_pagamento: e.target.value }))}>
                         {CONDICOES_PAGAMENTO.map(c => <option key={c} value={c}>{c}</option>)}
                       </select>
-                      <p className="text-[10px] text-gray-500 mt-1 leading-relaxed">
-                        {(() => {
-                          const n = parcelasDaCondicao(extras.condicao_pagamento);
-                          const base = extras.prazo_entrega
-                            ? `a partir da entrega (${dataBR(extras.prazo_entrega)})`
-                            : 'a partir da entrega prevista';
-                          return extras.condicao_pagamento === 'À vista'
-                            ? `Vira 1 título vencendo ${base}.`
-                            : `Vira ${n} ${n > 1 ? 'títulos' : 'título'} no contas a pagar, contados ${base}.`;
-                        })()}
-                      </p>
                     </FormField>
                     {/* Marca (migr. 526). Na eventual é campo da proposta; na
                         reposição é o que o catálogo já diz, em cinza. */}
@@ -1960,27 +1925,17 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode, onNavigate }: { s
                           value={extras.marca}
                           onChange={e => setExtras(x => ({ ...x, marca: e.target.value }))}
                           placeholder="Ex.: Foxton" />
-                        {reqSelecionada?.marca && (
-                          <p className="text-[10px] text-cyan-400/80 mt-1 leading-relaxed">
-                            Marca pedida na requisição: <span className="font-bold">{reqSelecionada.marca}</span>.
-                            Propor outra é legítimo — só deixe explícito aqui, porque é isso que o Financeiro compara.
+                        {reqSelecionada?.marca && extras.marca.trim() !== String(reqSelecionada.marca).trim() && (
+                          <p className="text-[10px] text-cyan-400/80 mt-1">
+                            Pedida na requisição: <span className="font-bold">{reqSelecionada.marca}</span>
                           </p>
                         )}
-                        <p className="text-[10px] text-gray-500 mt-1 leading-relaxed">
-                          Compra eventual: o item ainda não está no catálogo, e a marca faz parte do que
-                          está sendo oferecido. Quem cadastrar o produto depois recebe esta marca já
-                          preenchida — se esta for a proposta aprovada.
-                        </p>
                       </FormField>
                     ) : (
                       <FormField label="Marca">
                         <div className="neu-pressed py-2 px-3 rounded-xl text-sm text-gray-300">
                           {produtoDaReq?.marca || '—'}
                         </div>
-                        <p className="text-[10px] text-gray-500 mt-1 leading-relaxed">
-                          Reposição: a marca é a do produto do catálogo. Proposta de outra marca não é a
-                          mesma compra — é outro item, e pede outra requisição.
-                        </p>
                       </FormField>
                     ))}
                     {/* MIGR 583. Proposta real não é só um número: vem com
@@ -1994,9 +1949,6 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode, onNavigate }: { s
                         value={extras.observacao}
                         onChange={e => setExtras(x => ({ ...x, observacao: e.target.value }))}
                         placeholder="Ex.: frete incluso; garantia de 12 meses; troca em até 7 dias" />
-                      <p className="text-[10px] text-gray-500 mt-1 leading-relaxed">
-                        O que veio junto do preço. Duas propostas com o mesmo valor podem não ser a mesma compra.
-                      </p>
                     </FormField>
                   </div>
                   <div className="flex gap-3 justify-end">

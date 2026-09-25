@@ -341,6 +341,9 @@ const ProdutosViewInner = ({ showToast, filial, profile, onNavigate }: { showToa
           fornecedor: cot ? (fornecedoresList.find((f: any) => f.id === cot.fornecedor_id)?.nome ?? '') : '',
           fornecedor_id: cot?.fornecedor_id ?? '',
           custoPrevisto: qtdReq > 0 && totalCot > 0 ? totalCot / qtdReq : null,
+          // Migr. 591: a embalagem que quem pediu declarou (fardo com 30).
+          embalagemNome: String(r.embalagem_nome ?? '').trim().toUpperCase(),
+          embalagemFator: Number(r.embalagem_fator) > 1 ? Number(r.embalagem_fator) : null,
         };
       })
       .filter(i => i.descricao && !nomesCatalogo.has(i.descricao.toLowerCase()))
@@ -744,6 +747,13 @@ const ProdutosViewInner = ({ showToast, filial, profile, onNavigate }: { showToa
         // fornecedor (migr. 488) — quem cadastra confirma, e o que já foi
         // digitado não se perde.
         marca:         x.marca         || req.marca,
+        // A embalagem que a requisição declarou — o fator é na unidade dela,
+        // então só vale quando a unidade do cadastro é a mesma.
+        ...(!x.embalagem_compra && req.embalagemNome && req.embalagemFator
+            && normalizarUnidade(req.unidade) === unidade
+          ? { embalagem_compra: req.embalagemNome,
+              embalagem_qtd: formatQtd(String(req.embalagemFator).replace('.', ','), UNIDADES_FRACIONARIAS.has(unidade)) }
+          : {}),
         // Nada chegou ainda: o saldo entra pelo Recebimento.
         estoque: '',
         };
@@ -1319,7 +1329,9 @@ const ProdutosViewInner = ({ showToast, filial, profile, onNavigate }: { showToa
     // Conteúdo da embalagem: cobrado só de quem tem embalagem (migr. 438).
     // Antes era obrigatório em toda a SuperMax, inclusive no granel — e é por
     // isso que a coluna acumulou `1` como valor mais comum.
-    if (mostraPesoConteudo) {
+    // Obrigatório só em mercadoria (vai na etiqueta); em uso e consumo é opcional,
+    // mas se vier, vem com medida.
+    if (mostraPesoConteudo && (ehVendavel(extras.tipo) || extras.peso.trim())) {
       if (!extras.peso.trim())        ee.peso = 'Obrigatório';
       // Número sem medida é o defeito que a 438 veio desfazer: não deixa nascer
       // um valor novo sem unidade, mesmo que exista dado herdado assim.
@@ -1369,12 +1381,10 @@ const ProdutosViewInner = ({ showToast, filial, profile, onNavigate }: { showToa
     if (temEstoque(extras.tipo) && extras.estoque_minimo === '') {
       ee.estoque_minimo = 'Obrigatório';
     }
-    // Foto de capa obrigatória. Vale para os três tipos: a capa é o que o PDV,
-    // o Catálogo, a vitrine e a conferência do recebimento mostram, e produto
-    // sem foto vira uma lista de nomes parecidos em que ninguém confere se
-    // pegou o item certo. É a CAPA, e não "uma das três": gravar só um extra
-    // deixa `imagem_url` nulo e a lista continua com o ícone padrão.
-    if (!(imagens[0] ?? '').trim()) {
+    // Foto de capa obrigatória só em mercadoria: é ela que o PDV, o Catálogo e a
+    // vitrine mostram. Uso e consumo e patrimônio não passam por nenhum dos três.
+    // É a CAPA, e não "uma das três": só um extra deixa `imagem_url` nulo.
+    if (ehVendavel(extras.tipo) && !(imagens[0] ?? '').trim()) {
       ee.imagens = 'Adicione a foto de capa — é ela que aparece no PDV, no Catálogo e na vitrine.';
     }
     // A pergunta não é mais "de qual compra veio", e sim "já chegou ou ainda
@@ -2040,6 +2050,7 @@ const ProdutosViewInner = ({ showToast, filial, profile, onNavigate }: { showToa
               />
 
               <SecaoImagens
+                capaObrigatoria={ehVendavel(extras.tipo)}
                 enviarImagemSlot={enviarImagemSlot}
                 extrasErrors={extrasErrors}
                 form={form}

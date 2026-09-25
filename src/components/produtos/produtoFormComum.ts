@@ -78,6 +78,8 @@ export interface ItemAguardandoPedido {
   marca: string;
   fornecedor: string;
   fornecedor_id: string;
+  embalagemNome: string;
+  embalagemFator: number | null;
 }
 
 /** Item de pedido já recebido que ainda não tem produto no catálogo. */

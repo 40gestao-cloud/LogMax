@@ -115,7 +115,7 @@ const PedidosViewInner = ({ showToast, profile, filial }: { showToast: any; prof
     return {
       ...p,
       forn: fornecedores.find((f: any) => f.id === p.fornecedor_id),
-      req: cotacao ? requisicoes.find((r: any) => r.id === cotacao.requisicao_id) : null,
+      req: requisicoes.find((r: any) => r.id === (p.requisicao_id ?? cotacao?.requisicao_id)) ?? null,
     };
   });
 

@@ -9,8 +9,9 @@ import { type FormProduto } from './produtoFormComum';
 // Seção do formulário de ProdutosView: o estado é da view e desce com o
 // mesmo nome que tem lá.
 export function SecaoImagens({
-  enviarImagemSlot, extrasErrors, form, handleImagemChange, handleRemoverImagem, imagemInputRefs, imagemUploading, imagens, imagensAviso,
+  capaObrigatoria, enviarImagemSlot, extrasErrors, form, handleImagemChange, handleRemoverImagem, imagemInputRefs, imagemUploading, imagens, imagensAviso,
 }: {
+  capaObrigatoria: boolean;
   enviarImagemSlot: (slotIdx: number, file: File) => void | Promise<void>;
   extrasErrors: Record<string, string>;
   form: FormProduto;
@@ -26,7 +27,7 @@ export function SecaoImagens({
       {/* Imagens do produto — capa + até 2 extras */}
       <div>
         <p className="text-[10px] text-gray-600 uppercase tracking-widest font-bold mb-3 flex items-center gap-2">
-          <ImagePlus size={12} /> Imagens do produto (até {PRODUTO_IMAGEM_MAX_SLOTS}) — capa obrigatória *
+          <ImagePlus size={12} /> Imagens do produto (até {PRODUTO_IMAGEM_MAX_SLOTS}){capaObrigatoria ? " — capa obrigatória *" : ""}
         </p>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           {imagens.map((url, slotIdx) => (

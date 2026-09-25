@@ -259,7 +259,7 @@ export function SecaoIdentificacao({
           </FormField>
           {/* Conteúdo da embalagem (migr. 438): só supermercado, e só fora do granel. */}
           {mostraPesoConteudo && (
-            <FormField label="Peso / Volume por embalagem *" error={extrasErrors.peso}>
+            <FormField label={ehVendavel(extras.tipo) ? "Peso / Volume por embalagem *" : "Peso / Volume por embalagem"} error={extrasErrors.peso}>
               <div className={`neu-input flex items-center rounded-xl text-sm overflow-hidden ${extrasErrors.peso ? 'border border-red-500/40' : ''}`}>
                 <input className="flex-1 bg-transparent py-2 pl-3 pr-2 outline-none"
                   value={extras.peso} inputMode="decimal"
