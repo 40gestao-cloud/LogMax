@@ -1885,7 +1885,8 @@ const ProdutosViewInner = ({ showToast, filial, profile, onNavigate }: { showToa
             type="button"
             onClick={() => setImportando(true)}
             title="Ler um arquivo preenchido e cadastrar em lote"
-            className="neu-button py-2 px-4 rounded-xl text-xs font-bold text-gray-300 hover:text-accent transition-colors flex items-center gap-2"
+            // Grava no catálogo: vidro amarelo, o de ação que pede atenção.
+            className="btn-shimmer btn-shimmer--glass-yellow !py-2 !px-4 !rounded-xl !text-xs"
           >
             <Upload size={14} /> Importar planilha
           </button>
@@ -1895,6 +1896,7 @@ const ProdutosViewInner = ({ showToast, filial, profile, onNavigate }: { showToa
                 label={selecionados.size > 0 ? `Etiquetas (${selecionados.size})` : 'Etiquetas'}
                 onClick={handleExportEtiquetas}
                 icon={Barcode}
+                variante="etiqueta"
               />
               {selecionados.size > 0 && (
                 <button
