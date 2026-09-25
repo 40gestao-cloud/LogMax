@@ -210,7 +210,7 @@ export const MaxShowsView = ({ showToast, profile }: any) => {
     <div className="p-3 sm:p-6 max-w-5xl mx-auto">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
         <div className="min-w-0">
-          <h1 className="text-xl sm:text-2xl font-black text-gray-100 flex items-center gap-2">
+          <h1 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight flex items-center gap-2">
             <Presentation size={22} className="text-accent shrink-0" /> Max Show
           </h1>
         </div>

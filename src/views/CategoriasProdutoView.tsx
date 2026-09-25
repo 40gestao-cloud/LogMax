@@ -709,7 +709,7 @@ const CategoriasProdutoViewInner = ({ showToast, filial }: {
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="p-4 sm:p-6 space-y-4 max-w-5xl mx-auto">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-black text-gray-100">Categorias{filial ? ` — ${filial}` : ' — Consolidado'}</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Categorias{filial ? ` — ${filial}` : ' — Consolidado'}</h1>
         </div>
         <div className="flex items-center gap-4 shrink-0 neu-flat border border-white/5 rounded-xl px-4 py-2.5">
           <div className="text-center">

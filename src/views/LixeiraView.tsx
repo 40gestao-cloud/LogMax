@@ -175,7 +175,7 @@ export const LixeiraView = ({ showToast, profile }: { showToast: any; profile?: 
     <div className="p-4 md:p-6 space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-xl md:text-2xl font-black flex items-center gap-2">
+          <h1 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight flex items-center gap-2">
             <Trash2 size={22} /> Lixeira
           </h1>
           <p className="text-xs opacity-70 mt-1">

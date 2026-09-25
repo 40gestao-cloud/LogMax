@@ -165,7 +165,7 @@ export function MandatosView({
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-gray-100">Mandatos</h1>
+        <h1 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Mandatos</h1>
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">

@@ -144,7 +144,7 @@ export const MatrizConteudoView: React.FC<Props> = ({ profile, showToast }) => {
   if (profile?.role !== 'admin') {
     return (
       <div className="flex flex-col h-full gap-4">
-        <h2 className="text-3xl font-bold text-accent tracking-tight">Conteúdo</h2>
+        <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Conteúdo</h2>
         <p className="text-sm text-gray-400">Restrito ao professor (role admin).</p>
       </div>
     );
@@ -153,7 +153,7 @@ export const MatrizConteudoView: React.FC<Props> = ({ profile, showToast }) => {
   return (
     <div className="flex flex-col h-full gap-6">
       <div>
-        <h2 className="text-3xl font-bold text-accent tracking-tight flex items-center gap-2">
+        <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight flex items-center gap-2">
           <Dices size={26} /> Conteúdo — Sorteio de Catálogo
         </h2>
       </div>

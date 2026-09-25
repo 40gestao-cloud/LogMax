@@ -201,7 +201,7 @@ export function MatrizAvaliacoesView({ profile, showToast }: { profile: UserProf
             >
               <ArrowLeft size={11} /> Todas as competições
             </button>
-            <h2 className="text-xl sm:text-2xl font-bold text-accent tracking-tight truncate">Central de Avaliação — Matriz</h2>
+            <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight truncate">Central de Avaliação — Matriz</h2>
             <div className="flex items-center gap-2 text-xs text-gray-400 flex-wrap">
               <Trophy size={12} className="text-amber-400" />
               <span className="font-mono font-bold text-gray-200">{competicao.nome}</span>

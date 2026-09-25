@@ -323,7 +323,7 @@ export const ServicosView = ({ showToast, onNavigate }: { showToast: any; onNavi
     <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col gap-4">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h2 className="text-lg sm:text-xl font-black text-accent tracking-tight">Serviços — {filial}</h2>
+          <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Serviços — {filial}</h2>
         </div>
         <div className="flex flex-wrap gap-2 items-center">
           <BotaoModeloPlanilha entidade="servicos" filial={filial} showToast={showToast} />

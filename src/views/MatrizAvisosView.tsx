@@ -105,7 +105,7 @@ export function MatrizAvisosView({ profile, showToast }: { profile: UserProfile;
         <div className="min-w-0">
           <div className="flex items-center gap-2">
             <Megaphone size={16} className="text-amber-300" />
-            <h2 className="text-lg sm:text-xl font-bold text-accent tracking-tight">Avisos da Matriz</h2>
+            <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Avisos da Matriz</h2>
           </div>
         </div>
         <button

@@ -158,7 +158,7 @@ export function RelogioMaquinasView({ profile, showToast }: {
     <div className="p-4 md:p-6 space-y-5">
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div>
-          <h2 className="text-xl font-bold text-gray-100 flex items-center gap-2">
+          <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight flex items-center gap-2">
             <AlarmClock size={20} className="text-red-400" />
             Relógio das Máquinas
           </h2>

@@ -300,7 +300,7 @@ export const AulaAtividadeView: React.FC<Props> = ({ profile, showToast }) => {
           <ClipboardList size={22} className="text-accent" />
         </div>
         <div className="flex-1">
-          <h1 className="text-2xl font-bold text-gray-100">Atividade da aula</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Atividade da aula</h1>
         </div>
       </div>
 

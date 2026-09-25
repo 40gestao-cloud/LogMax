@@ -314,7 +314,7 @@ export const AulaModoView: React.FC<Props> = ({ showToast, profile }) => {
           <GraduationCap size={22} className="text-accent" />
         </div>
         <div className="flex-1">
-          <h1 className="text-2xl font-bold text-gray-100">Modo Aula</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Modo Aula</h1>
         </div>
       </div>
 
