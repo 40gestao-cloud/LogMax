@@ -193,7 +193,9 @@ export default defineConfig(({ mode }) => {
     },
     server: {
       hmr: process.env.DISABLE_HMR !== 'true',
-      port: 3000,
+      // PORT vem do painel de preview quando a porta padrão já está ocupada
+      // (autoPort no .claude/launch.json). Sem ela, 3000 como sempre.
+      port: Number(process.env.PORT) || 3000,
       host: '0.0.0.0',
     },
   };
