@@ -43,6 +43,8 @@ const AprovacoesComprasViewInner = ({ showToast, profile, filial }: { showToast:
   const [processing, setProcessing] = useState<string | null>(null);
   const [devolvendo, setDevolvendo] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<string | null>(null);
+  // Decisão tomada aberta para ver os detalhes (a aba da direção).
+  const [decisaoAberta, setDecisaoAberta] = useState<string | null>(null);
   const [obs, setObs] = useState<Record<string, string>>({});
 
   const isLoading = loadingAp || loadingReq;
@@ -349,6 +351,73 @@ const AprovacoesComprasViewInner = ({ showToast, profile, filial }: { showToast:
   // A decisão já tomada guarda só o id da requisição; o nome vem da linha
   // correspondente. Quando ela não é legível (inativada ou fora da RLS) o
   // documento cai no grupo "sem solicitante" do filtro em vez de sumir.
+  // A ficha da requisição — os campos, a fotografia do estoque (reposição) e a
+  // justificativa. Função porque são dois lugares que precisam mostrar a MESMA
+  // coisa: o card de quem vai decidir e a decisão já tomada, aberta pela
+  // direção para conferir o que foi aprovado ou negado.
+  const fichaDaRequisicao = (req: any) => (
+    <>
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {[
+          { label: 'Origem', val: tipoDaReq(req).label },
+          { label: 'Solicitante', val: req.solicitante || '—' },
+          { label: 'Setor', val: req.setor_solicitante || '—' },
+          { label: 'Centro de Custo', val: req.centro_custo || '—' },
+          { label: 'Urgência', val: req.urgencia ?? 'Normal' },
+          { label: 'Quantidade', val: `${qtdBR(req.qtd)} ${normalizarUnidade(req.unidade)}`.trim() },
+          // Migr. 589: o fator é o do DIA DO PEDIDO — o
+          // cadastro pode ter mudado desde então.
+          ...(req.embalagem_nome && req.qtd_embalagens != null ? [{
+            label: 'Pedido em embalagem',
+            val: `${qtdBR(req.qtd_embalagens)} ${pluralEmbalagem(req.embalagem_nome, Number(req.qtd_embalagens))} de ${qtdBR(req.embalagem_fator)} ${normalizarUnidade(req.unidade)}`,
+          }] : []),
+          // Vazio não é omissão: é o solicitante dizendo que
+          // serve qualquer marca. O gerente decide sabendo.
+          { label: 'Marca', val: req.marca || 'Qualquer marca' },
+          { label: 'Necessário até', val: req.data_necessidade ?? '—' },
+          { label: 'Aberta em', val: req.data ?? '—' },
+        ].map(({ label, val }) => (
+          <div key={label} className="neu-pressed p-3 rounded-xl">
+            <span className="text-[10px] text-gray-500 uppercase tracking-widest font-bold block mb-1">{label}</span>
+            <span className="text-xs text-gray-200 font-semibold capitalize">{val}</span>
+          </div>
+        ))}
+      </div>
+
+      {/* Na Reposição isto ocupa o lugar da justificativa: é a
+          fotografia do estoque no instante do pedido (migr.
+          358), e não depende de ninguém ter escrito bem. É
+          também a conferência que o gerente precisa fazer —
+          saldo acima do mínimo é reposição sem motivo. */}
+      {req.saldo_no_pedido != null && (
+        <div className="neu-pressed p-3 rounded-xl">
+          <span className="text-[10px] text-gray-500 uppercase tracking-widest font-bold block mb-1">
+            Saldo quando foi pedido
+          </span>
+          <span className="text-xs text-gray-300">
+            <strong className={Number(req.minimo_no_pedido) > 0 && Number(req.saldo_no_pedido) <= Number(req.minimo_no_pedido)
+              ? 'text-red-400' : 'text-gray-200'}>
+              {req.saldo_no_pedido}
+            </strong>
+            {req.minimo_no_pedido != null && Number(req.minimo_no_pedido) > 0 && (
+              <> em estoque, para um mínimo de <strong className="text-gray-200">{req.minimo_no_pedido}</strong></>
+            )}
+            {' '}{req.unidade ?? ''}
+          </span>
+        </div>
+      )}
+
+      {/* A justificativa é o que se lê para decidir — por isso
+          vem antes dos botões, não escondida num tooltip. */}
+      {req.justificativa && (
+        <div className="neu-pressed p-3 rounded-xl">
+          <span className="text-[10px] text-gray-500 uppercase tracking-widest font-bold block mb-1">Justificativa do solicitante</span>
+          <span className="text-xs text-gray-200">{req.justificativa}</span>
+        </div>
+      )}
+    </>
+  );
+
   const reqDaDecisao = (ap: AprovacaoCompras) =>
     requisicoes.find(r => r.id === ap.requisicao_id) ?? avulsas[ap.requisicao_id];
   const decididasFiltradas = decididas.filter(ap => casaSolicitante(reqDaDecisao(ap)?.solicitante));
@@ -523,64 +592,7 @@ const AprovacoesComprasViewInner = ({ showToast, profile, filial }: { showToast:
                         {/* A decisão fica mais fácil quando se vê o que ela
                             destrava: aprovar aqui não compra, libera a cotação. */}
                         <FluxoCompra etapa={etapaDaRequisicao(req.status)} />
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                          {[
-                            { label: 'Origem', val: tipoDaReq(req).label },
-                            { label: 'Solicitante', val: req.solicitante || '—' },
-                            { label: 'Setor', val: req.setor_solicitante || '—' },
-                            { label: 'Centro de Custo', val: req.centro_custo || '—' },
-                            { label: 'Urgência', val: req.urgencia ?? 'Normal' },
-                            { label: 'Quantidade', val: `${qtdBR(req.qtd)} ${normalizarUnidade(req.unidade)}`.trim() },
-                            // Migr. 589: o fator é o do DIA DO PEDIDO — o
-                            // cadastro pode ter mudado desde então.
-                            ...(req.embalagem_nome && req.qtd_embalagens != null ? [{
-                              label: 'Pedido em embalagem',
-                              val: `${qtdBR(req.qtd_embalagens)} ${pluralEmbalagem(req.embalagem_nome, Number(req.qtd_embalagens))} de ${qtdBR(req.embalagem_fator)} ${normalizarUnidade(req.unidade)}`,
-                            }] : []),
-                            // Vazio não é omissão: é o solicitante dizendo que
-                            // serve qualquer marca. O gerente decide sabendo.
-                            { label: 'Marca', val: req.marca || 'Qualquer marca' },
-                            { label: 'Necessário até', val: req.data_necessidade ?? '—' },
-                            { label: 'Aberta em', val: req.data ?? '—' },
-                          ].map(({ label, val }) => (
-                            <div key={label} className="neu-pressed p-3 rounded-xl">
-                              <span className="text-[10px] text-gray-500 uppercase tracking-widest font-bold block mb-1">{label}</span>
-                              <span className="text-xs text-gray-200 font-semibold capitalize">{val}</span>
-                            </div>
-                          ))}
-                        </div>
-
-                        {/* Na Reposição isto ocupa o lugar da justificativa: é a
-                            fotografia do estoque no instante do pedido (migr.
-                            358), e não depende de ninguém ter escrito bem. É
-                            também a conferência que o gerente precisa fazer —
-                            saldo acima do mínimo é reposição sem motivo. */}
-                        {req.saldo_no_pedido != null && (
-                          <div className="neu-pressed p-3 rounded-xl">
-                            <span className="text-[10px] text-gray-500 uppercase tracking-widest font-bold block mb-1">
-                              Saldo quando foi pedido
-                            </span>
-                            <span className="text-xs text-gray-300">
-                              <strong className={Number(req.minimo_no_pedido) > 0 && Number(req.saldo_no_pedido) <= Number(req.minimo_no_pedido)
-                                ? 'text-red-400' : 'text-gray-200'}>
-                                {req.saldo_no_pedido}
-                              </strong>
-                              {req.minimo_no_pedido != null && Number(req.minimo_no_pedido) > 0 && (
-                                <> em estoque, para um mínimo de <strong className="text-gray-200">{req.minimo_no_pedido}</strong></>
-                              )}
-                              {' '}{req.unidade ?? ''}
-                            </span>
-                          </div>
-                        )}
-
-                        {/* A justificativa é o que se lê para decidir — por isso
-                            vem antes dos botões, não escondida num tooltip. */}
-                        {req.justificativa && (
-                          <div className="neu-pressed p-3 rounded-xl">
-                            <span className="text-[10px] text-gray-500 uppercase tracking-widest font-bold block mb-1">Justificativa do solicitante</span>
-                            <span className="text-xs text-gray-200">{req.justificativa}</span>
-                          </div>
-                        )}
+                        {fichaDaRequisicao(req)}
                         {irmasVivas(req).length > 0 && (
                           <div className="neu-pressed p-3 rounded-xl border border-amber-400/20">
                             <span className="text-[10px] text-amber-300/90 uppercase tracking-widest font-bold block mb-1">
@@ -729,9 +741,18 @@ const AprovacoesComprasViewInner = ({ showToast, profile, filial }: { showToast:
               const req = requisicoes.find(r => r.id === ap.requisicao_id) ?? avulsas[ap.requisicao_id];
               const negado = ap.status === 'Negado';
               const indo = devolvendo === ap.id;
+              const aberta = decisaoAberta === ap.id;
               return (
-                <div key={ap.id} className="neu-pressed rounded-xl p-3 flex items-center justify-between gap-3">
-                  <div className="min-w-0">
+                <div key={ap.id} className="neu-pressed rounded-xl">
+                <div className="p-3 flex items-center justify-between gap-3">
+                  {/* A linha inteira abre a ficha — os botões ficam fora dela,
+                      para devolver não abrir junto. Requisição excluída não
+                      tem ficha para mostrar. */}
+                  <button type="button" disabled={!req}
+                    onClick={() => setDecisaoAberta(aberta ? null : ap.id)}
+                    title={req ? (aberta ? 'Fechar os detalhes' : 'Ver os detalhes da requisição') : undefined}
+                    className="min-w-0 flex-1 text-left flex items-center gap-3 enabled:cursor-pointer group/dec">
+                  <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
                       <span className="text-[10px] font-credencial text-gray-500 tracking-wider">
                         {req ? numeroRequisicao(req) : `#${String(ap.requisicao_id).slice(-6).toUpperCase()}`}
@@ -748,6 +769,10 @@ const AprovacoesComprasViewInner = ({ showToast, profile, filial }: { showToast:
                       {ap.observacao ? ` · ${ap.observacao}` : ''}
                     </p>
                   </div>
+                  {req && (
+                    <ChevronDown size={16} className={`shrink-0 text-gray-500 group-hover/dec:text-gray-300 transition-transform duration-200 ${aberta ? 'rotate-180' : ''}`} />
+                  )}
+                  </button>
                   <div className="flex items-center gap-2 shrink-0">
                     <button onClick={() => devolver(ap, req)} disabled={indo}
                       title="Devolver para correção" className="action-btn-warning disabled:opacity-50">
@@ -764,6 +789,35 @@ const AprovacoesComprasViewInner = ({ showToast, profile, filial }: { showToast:
                       />
                     )}
                   </div>
+                </div>
+                <AnimatePresence>
+                  {aberta && req && (
+                    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+                      <div className="px-3 pb-3 flex flex-col gap-3 border-t border-white/5 pt-3">
+                        {/* A decisão primeiro: é o que se veio conferir. A
+                            observação aparece inteira — na linha ela é cortada. */}
+                        <div className={`p-3 rounded-xl border ${negado ? 'border-red-500/25 bg-red-500/5' : 'border-green-500/25 bg-green-500/5'}`}>
+                          <span className={`text-[10px] uppercase tracking-widest font-bold block mb-1 ${negado ? 'text-red-400' : 'text-green-400'}`}>
+                            {negado ? 'Negada' : 'Aprovada'}
+                            {ap.aprovador ? ` por ${ap.aprovador}` : ''}
+                            {ap.created_at ? ` em ${formatDataHoraBR(ap.created_at)}` : ''}
+                          </span>
+                          <span className="text-xs text-gray-200">
+                            {ap.observacao || (negado ? 'Sem motivo registrado.' : 'Sem observação.')}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <HistoricoOperacoes entidade="requisicoes" entidadeId={req.id} titulo={`${numeroRequisicao(req)} · ${req.item}`} criadoEm={req.created_at} atualizadoEm={req.updated_at} />
+                          <span className="text-[10px] text-gray-500">Histórico desta requisição</span>
+                        </div>
+                        {/* Onde a compra está agora — aprovar não compra, então
+                            a pergunta seguinte é quase sempre "e depois?". */}
+                        <FluxoCompra etapa={etapaDaRequisicao(req.status)} />
+                        {fichaDaRequisicao(req)}
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
                 </div>
               );
             })}
