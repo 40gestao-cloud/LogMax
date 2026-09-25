@@ -1475,11 +1475,11 @@ const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: 
                 <th className="py-3 px-4 text-[10px] font-bold text-gray-500 uppercase tracking-widest text-left hidden lg:table-cell">Tipo</th>
                 <th className="py-3 px-4 text-[10px] font-bold text-gray-500 uppercase tracking-widest text-left hidden md:table-cell">Solicitante</th>
                 <th className="py-3 px-4 text-[10px] font-bold text-gray-500 uppercase tracking-widest text-left">Qtd</th>
-                <th className="py-3 px-4 text-[10px] font-bold text-gray-500 uppercase tracking-widest text-left hidden lg:table-cell">Necessario ate</th>
-                <th className="py-3 px-4 text-[10px] font-bold text-gray-500 uppercase tracking-widest text-left">Urgencia</th>
+                <th className="py-3 px-4 text-[10px] font-bold text-gray-500 uppercase tracking-widest text-left hidden lg:table-cell">Necessário até</th>
+                <th className="py-3 px-4 text-[10px] font-bold text-gray-500 uppercase tracking-widest text-left">Urgência</th>
                 <th className="py-3 px-4 text-[10px] font-bold text-gray-500 uppercase tracking-widest text-left hidden sm:table-cell">Aberto em</th>
-                <th className="py-3 px-4 text-[10px] font-bold text-gray-500 uppercase tracking-widest text-left">Situacao</th>
-                <th className="py-3 px-4 text-[10px] font-bold text-gray-500 uppercase tracking-widest text-left">Historico</th>
+                <th className="py-3 px-4 text-[10px] font-bold text-gray-500 uppercase tracking-widest text-left">Situação</th>
+                <th className="py-3 px-4 text-[10px] font-bold text-gray-500 uppercase tracking-widest text-left">Histórico</th>
               </tr>
             </thead>
             <tbody>
