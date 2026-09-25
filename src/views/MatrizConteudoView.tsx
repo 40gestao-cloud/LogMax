@@ -246,7 +246,7 @@ export const MatrizConteudoView: React.FC<Props> = ({ profile, showToast }) => {
                 <tr className="text-left text-gray-400">
                   <th className="p-2">Produto</th>
                   <th className="p-2">Marca</th>
-                  <th className="p-2">Categoria</th>
+                  <th className="p-2">Categoria › Subcategoria</th>
                   <th className="p-2">Conteúdo</th>
                   <th className="p-2">Unid.</th>
                   <th className="p-2">Nicho</th>
@@ -258,7 +258,7 @@ export const MatrizConteudoView: React.FC<Props> = ({ profile, showToast }) => {
                   <tr key={`${i.nome}|${i.marca}`} className="border-t border-white/5 text-gray-200">
                     <td className="p-2">{i.nome}</td>
                     <td className="p-2">{i.marca}</td>
-                    <td className="p-2 text-gray-400">{i.categoria}</td>
+                    <td className="p-2 text-gray-400">{i.categoria} › {i.subcategoria}</td>
                     <td className="p-2">{formatarConteudo(i.peso, i.pesoUnidade) || '—'}</td>
                     <td className="p-2">{i.unidade}</td>
                     <td className="p-2 text-gray-400">{i.nicho}</td>

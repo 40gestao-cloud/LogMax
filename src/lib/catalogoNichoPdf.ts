@@ -81,13 +81,13 @@ export async function exportSorteioCatalogoPDF(
 
   autoTable(doc, {
     startY: cursorY + 5,
-    head: [['', 'Nº', 'Produto', 'Marca', 'Categoria', 'Conteúdo', 'Unid.', 'Código gerado', 'Preço']],
+    head: [['', 'Nº', 'Produto', 'Marca', 'Categoria › Subcategoria', 'Conteúdo', 'Unid.', 'Código gerado', 'Preço']],
     body: itens.map((i, idx) => [
       '',
       String(idx + 1),
       i.nome,
       i.marca,
-      i.categoria,
+      `${i.categoria} › ${i.subcategoria}`,
       formatarConteudo(i.peso, i.pesoUnidade) || '—',
       i.unidade,
       '',

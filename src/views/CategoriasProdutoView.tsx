@@ -165,7 +165,7 @@ async function anexarImagem(
 }
 
 // ── Form inline ───────────────────────────────────────────────────────────────
-function InlineForm({ initial, onSave, onCancel, saving, comMargem, comSubcategorias, nomesEmUso, titulo }: {
+function InlineForm({ initial, onSave, onCancel, saving, comMargem, comSubcategorias, nomeTravado, nomesEmUso, titulo }: {
   initial: FormData;
   /** Grava o cadastro e, só depois, anexa `novaImagem` — ver handleSubmit.
    *  `subcategorias`: os nomes digitados no campo de etiquetas (categoria nova). */
@@ -175,6 +175,8 @@ function InlineForm({ initial, onSave, onCancel, saving, comMargem, comSubcatego
   comMargem?: boolean;
   /** Categoria nova já nasce com as filhas: o campo de etiquetas aparece. */
   comSubcategorias?: boolean;
+  /** Linha da lista padrão (migr. 629): o nome não muda — o banco recusa. */
+  nomeTravado?: boolean;
   /** Nomes já cadastrados no mesmo nível, para barrar duplicata antes do save. */
   nomesEmUso: string[];
   titulo: string;
@@ -272,9 +274,15 @@ function InlineForm({ initial, onSave, onCancel, saving, comMargem, comSubcatego
         </div>
 
         <FormField label="Nome *" error={duplicado ? 'Já existe um registro com este nome.' : undefined}>
-          <input className="neu-input w-full text-sm" value={f.nome}
-            onChange={e => setF(p => ({ ...p, nome: e.target.value }))}
-            placeholder="Ex: Mercearia, Bebidas, Smartphones…" autoFocus />
+          <input className={`neu-input w-full text-sm ${nomeTravado ? 'opacity-60 cursor-not-allowed' : ''}`} value={f.nome}
+            readOnly={nomeTravado}
+            onChange={e => { if (!nomeTravado) setF(p => ({ ...p, nome: e.target.value })); }}
+            placeholder="Ex: Mercearia, Bebidas, Smartphones…" autoFocus={!nomeTravado} />
+          {nomeTravado && (
+            <span className="text-[10px] text-gray-500 leading-relaxed">
+              Faz parte da lista padrão da loja: o nome é o mesmo em todas as turmas. Imagem, cor, ícone e markup continuam livres.
+            </span>
+          )}
         </FormField>
 
         {comMargem && (
@@ -359,7 +367,9 @@ function InlineForm({ initial, onSave, onCancel, saving, comMargem, comSubcatego
 
 // ── Botões de ação de uma linha ───────────────────────────────────────────────
 function AcoesLinha({ ativo, onToggle, onEdit, onDelete }: {
-  ativo: boolean; onToggle: () => void; onEdit: () => void; onDelete: () => void;
+  ativo: boolean; onToggle: () => void; onEdit: () => void;
+  /** Ausente na linha da lista padrão: ela não se exclui, só se desativa. */
+  onDelete?: () => void;
 }) {
   return (
     <div className="flex gap-0.5 shrink-0 pr-1.5">
@@ -371,10 +381,12 @@ function AcoesLinha({ ativo, onToggle, onEdit, onDelete }: {
         className="action-btn-edit">
         <Edit2 size={12} />
       </button>
-      <button onClick={onDelete} title="Excluir"
-        className="action-btn-delete">
-        <Trash2 size={12} />
-      </button>
+      {onDelete && (
+        <button onClick={onDelete} title="Excluir"
+          className="action-btn-delete">
+          <Trash2 size={12} />
+        </button>
+      )}
     </div>
   );
 }
@@ -514,7 +526,7 @@ function ArvoreCategorias({
 
       <AnimatePresence>
         {showForm && !editItem && (
-          <InlineForm titulo="Nova categoria" comMargem comSubcategorias nomesEmUso={nomesEmUso()} initial={{ ...EMPTY }}
+          <InlineForm titulo="Nova categoria própria — fora da lista padrão" comMargem comSubcategorias nomesEmUso={nomesEmUso()} initial={{ ...EMPTY }}
             onSave={handleSave} onCancel={() => setShowForm(false)} saving={saving} />
         )}
       </AnimatePresence>
@@ -540,6 +552,7 @@ function ArvoreCategorias({
                 <InlineForm key={cat.id}
                   titulo={`Editando "${cat.nome}"`}
                   comMargem
+                  nomeTravado={!!cat.padrao}
                   nomesEmUso={nomesEmUso(cat.id)}
                   initial={{
                     nome: cat.nome, cor: cat.cor ?? '#6b7280', icone: cat.icone ?? '📦',
@@ -566,6 +579,12 @@ function ArvoreCategorias({
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-1.5 min-w-0">
                         <p className="text-sm font-semibold text-gray-200 truncate">{cat.nome}</p>
+                        {!cat.padrao && (
+                          <span title="Criada pela unidade — fora da lista padrão"
+                            className="text-[9px] uppercase tracking-wider font-bold text-sky-300 bg-sky-400/10 px-1.5 py-0.5 rounded shrink-0">
+                            Própria
+                          </span>
+                        )}
                         {!cat.ativo && (
                           <span className="text-[9px] uppercase tracking-wider font-bold text-amber-400 bg-amber-400/10 px-1.5 py-0.5 rounded shrink-0">
                             Inativa
@@ -588,7 +607,7 @@ function ArvoreCategorias({
                       ativo={cat.ativo}
                       onToggle={() => handleToggle(cat)}
                       onEdit={() => { setEditItem(cat); setShowForm(false); }}
-                      onDelete={() => handleDelete(cat)} />
+                      onDelete={cat.padrao ? undefined : () => handleDelete(cat)} />
                   )}
                 </div>
                 <AnimatePresence initial={false}>
@@ -696,6 +715,7 @@ function SubcategoriasDaCategoria({ categoria, canEdit, data, error, reload, sho
         editItem?.id === sub.id ? (
           <InlineForm key={sub.id}
             titulo={`Editando "${sub.nome}"`}
+            nomeTravado={!!sub.padrao}
             nomesEmUso={nomesEmUso(sub.id)}
             initial={{
               nome: sub.nome, cor: sub.cor ?? '#6b7280', icone: sub.icone ?? '📦',
@@ -708,6 +728,12 @@ function SubcategoriasDaCategoria({ categoria, canEdit, data, error, reload, sho
             <div className="flex-1 min-w-0 flex items-center gap-2.5 pl-3.5 pr-2 py-2">
               <CatThumb imagem_url={sub.imagem_url} icone={sub.icone} cor={sub.cor} size={24} />
               <p className="flex-1 text-sm font-medium text-gray-200 truncate">{sub.nome}</p>
+              {!sub.padrao && (
+                <span title="Criada pela unidade — fora da lista padrão"
+                            className="text-[9px] uppercase tracking-wider font-bold text-sky-300 bg-sky-400/10 px-1.5 py-0.5 rounded shrink-0">
+                            Própria
+                          </span>
+              )}
               {!sub.ativo && (
                 <span className="text-[9px] uppercase tracking-wider font-bold text-amber-400 bg-amber-400/10 px-1.5 py-0.5 rounded shrink-0">
                   Inativa
@@ -719,7 +745,7 @@ function SubcategoriasDaCategoria({ categoria, canEdit, data, error, reload, sho
                 ativo={sub.ativo}
                 onToggle={() => handleToggle(sub)}
                 onEdit={() => setEditItem(sub)}
-                onDelete={() => handleDelete(sub)} />
+                onDelete={sub.padrao ? undefined : () => handleDelete(sub)} />
             )}
           </div>
         )

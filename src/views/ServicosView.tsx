@@ -37,8 +37,14 @@ const ATRIBUTOS_SERVICO: Record<string, AtributoDef[]> = {
     { key: 'garantia_dias', label: 'Garantia (dias)', type: 'number', placeholder: 'Ex: 30' },
   ],
   TechMax: [
+    // Taxonomia padrão (migr. 629): serviço de assistência não é categoria de
+    // PRODUTO — as categorias dele vivem aqui. A 629 levou os valores antigos
+    // (Formatação, Software → "Formatação e instalação de software";
+    // Instalação → "Configuração").
     { key: 'categoria_svc', label: 'Categoria *', type: 'select', req: true,
-      options: ['Troca de tela', 'Troca de bateria', 'Formatação', 'Reparo de placa', 'Software', 'Instalação', 'Diagnóstico', 'Outro'] as const },
+      options: ['Diagnóstico', 'Troca de tela', 'Troca de bateria', 'Reparo de conector', 'Reparo de placa',
+                'Manutenção e limpeza', 'Formatação e instalação de software', 'Recuperação de dados',
+                'Configuração', 'Orientação técnica', 'Outro'] as const },
     { key: 'tempo_estimado_min', label: 'Tempo estimado (min)', type: 'number', placeholder: 'Ex: 120' },
     { key: 'marcas_atendidas', label: 'Marcas atendidas', placeholder: 'Ex: Apple, Samsung, Motorola' },
     { key: 'garantia_dias', label: 'Garantia do serviço (dias) *', type: 'number', placeholder: 'Ex: 90', req: true },

@@ -188,6 +188,10 @@ export async function lerPlanilhaProdutos(
 
   const catPorNome = new Map(contexto.categorias.map(c => [norm(c.nome), c]));
   const subPorNome = new Map(contexto.subcategorias.map(s => [norm(s.nome), s]));
+  // Dentro da categoria primeiro: uma subcategoria Própria pode repetir o nome
+  // de uma da lista padrão noutra categoria (migr. 629), e o mapa só por nome
+  // ficaria com a última.
+  const subPorCatENome = new Map(contexto.subcategorias.map(s => [`${s.categoria_id}|${norm(s.nome)}`, s]));
   const fornSet    = new Set(contexto.fornecedores.map(norm));
   const codigosJa  = new Set(contexto.codigosExistentes.map(norm));
   const nomesJa    = new Set(contexto.nomesExistentes.map(norm));
@@ -273,7 +277,9 @@ export async function lerPlanilhaProdutos(
     if (bruto['Categoria'] && !cat) {
       erros.push(`Categoria "${bruto['Categoria']}" não existe — cadastre em Cadastros > Categorias antes`);
     }
-    let sub = bruto['Subcategoria'] ? subPorNome.get(norm(bruto['Subcategoria'])) : undefined;
+    let sub = bruto['Subcategoria']
+      ? (cat && subPorCatENome.get(`${cat.id}|${norm(bruto['Subcategoria'])}`)) || subPorNome.get(norm(bruto['Subcategoria']))
+      : undefined;
     if (bruto['Subcategoria'] && !sub) {
       avisos.push(`Subcategoria "${bruto['Subcategoria']}" não existe — o produto entra sem ela`);
     } else if (sub && cat && sub.categoria_id !== cat.id) {

@@ -99,6 +99,22 @@ Se o `logmax-erp` teve migrations aplicadas **depois** da data do baseline, apli
 
 Isso mantém as instâncias em sync sem re-rodar tudo do zero.
 
+### 6.1. Categorias padrão das lojas
+
+As categorias e subcategorias de produto são uma **lista padrão** (migr. 629/630,
+tabela `taxonomia_padrao`) — o aluno não digita, só põe imagem e markup. Se o
+baseline veio sem categorias (ou com as de outra época), monte a lista em cada
+loja no SQL Editor:
+
+```sql
+select public.aplicar_taxonomia_padrao('SuperMax');
+select public.aplicar_taxonomia_padrao('MaxLook');
+select public.aplicar_taxonomia_padrao('TechMax');
+```
+
+É idempotente: adota a categoria que já tem o mesmo nome e só cria o que falta.
+Detalhes e a lista em `docs/taxonomia-padrao-proposta.md`.
+
 ---
 
 ## 7. Deploy no Vercel

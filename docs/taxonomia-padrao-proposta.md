@@ -158,11 +158,12 @@ por gênero continua possível, e uma camiseta unissex deixa de não ter lugar.
 
 ---
 
-## Lista aplicada (migração 629)
+## Lista aplicada (migrações 629 e 630)
 
-Gerada da mesma fonte que o SQL. Alguns nomes mudaram entre a proposta e a
-aplicação: "Vassouras, rodos e baldes", "Power banks", "Descartáveis" e
-"Papel-toalha, guardanapos e alumínio".
+Gerada da mesma fonte que o SQL. Mudou entre a proposta e a aplicação:
+"Vassouras, rodos e baldes", "Power banks", "Descartáveis" e "Papel-toalha,
+guardanapos e alumínio"; a 630 incluiu "Câmeras e segurança" (TechMax) e
+"Cachecóis, luvas e gorros" (MaxLook), que o catálogo semente mostrou faltar.
 
 ### SuperMax — 17 categorias, 153 subcategorias
 
@@ -186,7 +187,7 @@ aplicação: "Vassouras, rodos e baldes", "Power banks", "Descartáveis" e
 | **Pet** | Ração para cães · Ração para gatos · Ração para outros animais · Petiscos · Higiene e areia · Acessórios e brinquedos |
 | **Bazar e utilidades** | Utensílios de cozinha · Descartáveis · Papel-toalha, guardanapos e alumínio · Organização · Churrasco · Camping, praia e piscina · Ferramentas · Automotivo · Pilhas e lâmpadas · Papelaria · Brinquedos · Festas · Velas e fósforos |
 
-### TechMax — 13 categorias, 72 subcategorias
+### TechMax — 14 categorias, 75 subcategorias
 
 | Categoria | Subcategorias |
 |---|---|
@@ -198,13 +199,14 @@ aplicação: "Vassouras, rodos e baldes", "Power banks", "Descartáveis" e
 | **Hardware** | Processadores · Placas-mãe · Placas de vídeo · Memórias RAM · SSDs e HDs · Fontes · Gabinetes · Coolers e refrigeração |
 | **Periféricos** | Teclados · Mouses · Kits teclado e mouse · Headsets · Webcams · Mousepads · Hubs e adaptadores |
 | **Armazenamento externo** | HDs e SSDs externos · Pendrives · Cartões de memória |
+| **Câmeras e segurança** | Câmeras digitais · Câmeras de ação · Câmeras de segurança |
 | **Games** | Consoles · Jogos · Controles · Acessórios para consoles · Cartões e gift cards · Cadeiras e mesas gamer |
 | **Redes** | Roteadores · Repetidores e mesh · Switches · Adaptadores Wi-Fi e Bluetooth · Cabos e conectores de rede · Modems |
 | **Energia** | Nobreaks · Estabilizadores · Filtros de linha · Pilhas e baterias · Fontes e carregadores universais |
 | **Peças para assistência** | Telas e displays · Baterias · Conectores de carga · Cabos flex · Câmeras · Alto-falantes e microfones · Carcaças e tampas · Placas e componentes |
 | **Ferramentas e insumos de reparo** | Ferramentas · Pasta térmica · Adesivos e colas · Solda e insumos |
 
-### MaxLook — 6 categorias, 47 subcategorias
+### MaxLook — 6 categorias, 48 subcategorias
 
 | Categoria | Subcategorias |
 |---|---|
@@ -213,7 +215,7 @@ aplicação: "Vassouras, rodos e baldes", "Power banks", "Descartáveis" e
 | **Moda praia** | Biquínis · Maiôs · Sungas · Bermudas de praia · Saídas de praia |
 | **Moda esportiva** | Leggings · Tops esportivos · Camisetas e regatas esportivas · Shorts e bermudas esportivos · Calças e agasalhos esportivos |
 | **Calçados** | Tênis · Sapatos · Sapatênis · Sapatilhas · Scarpins · Sandálias e rasteirinhas · Chinelos · Botas · Tamancos e mules |
-| **Acessórios** | Bolsas · Mochilas · Carteiras · Cintos · Bonés e chapéus · Óculos · Relógios · Bijuterias |
+| **Acessórios** | Bolsas · Mochilas · Carteiras · Cintos · Bonés e chapéus · Óculos · Relógios · Bijuterias · Cachecóis, luvas e gorros |
 
 ## Como a migração tratou o que existia
 
