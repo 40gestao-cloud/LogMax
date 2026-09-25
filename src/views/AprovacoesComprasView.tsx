@@ -457,7 +457,10 @@ const AprovacoesComprasViewInner = ({ showToast, profile, filial }: { showToast:
   const visiveis = abaAtiva === 'devolvidas' ? devolvidas : paraDecidir;
 
   return (
-    <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col h-full gap-8">
+    // Sem `h-full` e sem rolagem interna nas listas: a tela rola inteira, no
+    // <main> do app. Com a lista rolando por dentro, cabeçalho, abas e filtro
+    // comiam a altura e sobrava espaço para dois cards.
+    <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col gap-8">
       <div className="flex flex-wrap justify-between items-start gap-3 shrink-0">
         <div>
           <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Aprovações — {filial}</h2>
@@ -517,7 +520,7 @@ const AprovacoesComprasViewInner = ({ showToast, profile, filial }: { showToast:
           ? 'Nada devolvido para correção — o que você mandar consertar fica aqui até o solicitante reenviar.'
           : 'Nenhuma aprovação pendente'} />
       ) : (
-        <div className="flex flex-col gap-4 flex-1 min-h-0 overflow-y-auto main-scrollbar pr-2 pb-6">
+        <div className="flex flex-col gap-4 pb-6">
           {visiveis.map(ap => {
             const req = ap.req;
             const isExpanded = expanded === ap.id;
@@ -581,7 +584,12 @@ const AprovacoesComprasViewInner = ({ showToast, profile, filial }: { showToast:
                 <AnimatePresence>
                   {isExpanded && (
                     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-                      <div className="px-5 pb-5 flex flex-col gap-4 border-t border-white/5 pt-4">
+                      {/* Duas colunas: a ficha à esquerda, a decisão à direita
+                          e grudada no topo (no celular ela vem primeiro). Antes
+                          os botões ficavam depois da ficha inteira, e decidir
+                          exigia rolar até o fim de cada card. */}
+                      <div className="px-5 pb-5 border-t border-white/5 pt-4 grid gap-5 lg:grid-cols-[minmax(0,1fr)_22rem] items-start">
+                      <div className="flex flex-col gap-4 min-w-0">
                         {/* Antes de decidir, dá para ver o que já aconteceu com
                             este documento — inclusive se ele voltou para cá
                             porque Compras corrigiu o item depois de aprovado. */}
@@ -593,6 +601,9 @@ const AprovacoesComprasViewInner = ({ showToast, profile, filial }: { showToast:
                             destrava: aprovar aqui não compra, libera a cotação. */}
                         <FluxoCompra etapa={etapaDaRequisicao(req.status)} />
                         {fichaDaRequisicao(req)}
+                      </div>
+
+                      <div className="flex flex-col gap-3 order-first lg:order-none lg:sticky lg:top-4">
                         {irmasVivas(req).length > 0 && (
                           <div className="neu-pressed p-3 rounded-xl border border-amber-400/20">
                             <span className="text-[10px] text-amber-300/90 uppercase tracking-widest font-bold block mb-1">
@@ -653,57 +664,59 @@ const AprovacoesComprasViewInner = ({ showToast, profile, filial }: { showToast:
                               : 'Requisição de compra é decidida pelo gerente da filial (ou pela Matriz).'}
                           </div>
                         ) : (
-                        <>
-                        <p className="text-[11px] text-gray-500 leading-snug">
+                        <div className="neu-pressed rounded-xl p-3 flex flex-col gap-3">
+                        <span className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Sua decisão</span>
+                        <div className="flex flex-col gap-2">
+                          <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">
+                            Observação <span className="text-red-500/70">(obrigatória para negar e para devolver)</span>
+                          </label>
+                          <textarea
+                            className="neu-input py-2 px-3 rounded-xl text-sm resize-none h-16"
+                            placeholder="Justificativa da decisão..."
+                            value={obs[ap.id] ?? ''}
+                            onChange={e => setObs(prev => ({ ...prev, [ap.id]: e.target.value }))}
+                          />
+                        </div>
+                        {/* Aprovar em cima, ocupando a largura: é a saída mais
+                            comum. Devolver e Negar lado a lado embaixo — as
+                            três são do mesmo momento de decisão. */}
+                        <button
+                          onClick={() => handleAprovar(ap)}
+                          disabled={isProcessing}
+                          className="neu-button-accent py-2.5 px-6 rounded-xl text-sm font-bold flex items-center justify-center gap-2 disabled:opacity-50"
+                        >
+                          {isProcessing ? <Loader2 size={14} className="animate-spin text-[#0A0A0A]" /> : <ThumbsUp size={14} />}
+                          Aprovar
+                        </button>
+                        <div className="grid grid-cols-2 gap-2">
+                          <button
+                            onClick={() => devolverParaCorrecao(ap)}
+                            disabled={isProcessing}
+                            title="O pedido está mal feito: volta para quem abriu, com o seu motivo, e não conta como negado."
+                            className="neu-button py-2 px-3 rounded-xl text-xs font-bold text-amber-400 hover:border-amber-400/20 border border-transparent transition-all disabled:opacity-50 flex items-center justify-center gap-1.5"
+                          >
+                            {isProcessing ? <Loader2 size={14} className="animate-spin" /> : <RotateCcw size={14} />}
+                            Devolver
+                          </button>
+                          <button
+                            onClick={() => handleNegar(ap)}
+                            disabled={isProcessing}
+                            className="neu-button py-2 px-3 rounded-xl text-xs font-bold text-red-500 hover:border-red-500/20 border border-transparent transition-all disabled:opacity-50 flex items-center justify-center gap-1.5"
+                          >
+                            {isProcessing ? <Loader2 size={14} className="animate-spin" /> : <ThumbsDown size={14} />}
+                            Negar
+                          </button>
+                        </div>
+                        <p className="text-[10px] text-gray-500 leading-snug">
                           <span className="text-gray-300 font-bold">Negar</span> é decisão de mérito — a unidade
                           não vai comprar isto, e o documento se encerra.{' '}
                           <span className="text-amber-400/90 font-bold">Devolver</span> é para o pedido mal feito:
                           quantidade errada, item impreciso, justificativa que não explica. Volta para quem abriu,
                           com o seu motivo, e o mesmo documento retorna corrigido — sem virar requisição nova.
                         </p>
-                        <div className="flex flex-col gap-2">
-                          <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">
-                            Observação <span className="text-red-500/70">(obrigatória para negar e para devolver)</span>
-                          </label>
-                          <textarea
-                            className="neu-input py-2 px-3 rounded-xl text-sm resize-none h-20"
-                            placeholder="Justificativa da decisão..."
-                            value={obs[ap.id] ?? ''}
-                            onChange={e => setObs(prev => ({ ...prev, [ap.id]: e.target.value }))}
-                          />
                         </div>
-                        <div className="flex flex-wrap gap-3 justify-end">
-                          {/* Entre Negar e Aprovar de propósito: as três saídas
-                              são do mesmo momento de decisão, e a do meio é a
-                              que o gerente mais vai usar em aula. */}
-                          <button
-                            onClick={() => devolverParaCorrecao(ap)}
-                            disabled={isProcessing}
-                            title="O pedido está mal feito: volta para quem abriu, com o seu motivo, e não conta como negado."
-                            className="neu-button py-2 px-5 rounded-xl text-sm font-bold text-amber-400 hover:border-amber-400/20 border border-transparent transition-all disabled:opacity-50 flex items-center gap-2"
-                          >
-                            {isProcessing ? <Loader2 size={14} className="animate-spin" /> : <RotateCcw size={14} />}
-                            Devolver p/ correção
-                          </button>
-                          <button
-                            onClick={() => handleNegar(ap)}
-                            disabled={isProcessing}
-                            className="neu-button py-2 px-5 rounded-xl text-sm font-bold text-red-500 hover:border-red-500/20 border border-transparent transition-all disabled:opacity-50 flex items-center gap-2"
-                          >
-                            {isProcessing ? <Loader2 size={14} className="animate-spin" /> : <ThumbsDown size={14} />}
-                            Negar
-                          </button>
-                          <button
-                            onClick={() => handleAprovar(ap)}
-                            disabled={isProcessing}
-                            className="neu-button-accent py-2 px-6 rounded-xl text-sm font-bold flex items-center gap-2 disabled:opacity-50"
-                          >
-                            {isProcessing ? <Loader2 size={14} className="animate-spin text-[#0A0A0A]" /> : <ThumbsUp size={14} />}
-                            Aprovar
-                          </button>
-                        </div>
-                        </>
                         )}
+                      </div>
                       </div>
                     </motion.div>
                   )}
@@ -721,7 +734,7 @@ const AprovacoesComprasViewInner = ({ showToast, profile, filial }: { showToast:
           o que deixava cada lista com espaço para um card. Rolagem dentro de
           rolagem é o mesmo defeito que as abas vieram resolver. */}
       {abaAtiva === 'decididas' && (
-        <div className="flex-1 min-h-0 overflow-y-auto main-scrollbar pr-2 pb-6 flex flex-col gap-6">
+        <div className="pb-6 flex flex-col gap-6">
         <div className="neu-flat rounded-2xl p-5 border border-white/5 flex flex-col shrink-0">
           <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500">Decisões já tomadas</p>
           <p className="text-xs text-gray-500 mt-1 mb-4">
