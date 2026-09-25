@@ -6,7 +6,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Plus, X, Trash2, Calendar, CheckCircle2, ExternalLink, FileText, AlertTriangle, Gavel, ShieldCheck, Clock, Ban } from 'lucide-react';
 import { useFetchData, dbInsert, dbDelete, dbUpdate } from '../hooks/useSupabaseData';
 import { supabase } from '../lib/supabase';
-import { LoadingSpinner, EmptyState, NeuButtonAccent } from '../components/ui';
+import { LoadingSpinner, EmptyState, NeuButtonAccent, CardContador, type TomContador } from '../components/ui';
 import { hasSetor } from '../lib/rbac';
 import { useConfirm } from '../contexts/ConfirmContext';
 import { usePontoCorteTurma } from '../hooks/useJornadaTurma';
@@ -273,11 +273,11 @@ const AfastamentosViewInner = ({ showToast, profile, filial }: { showToast: any;
     .reduce((s: number, a: any) => s + diasNoPeriodo(a.data_inicio, a.data_fim), 0);
 
   const kpis = [
-    { label: 'Total',                value: afastamentos.length, warn: false },
-    { label: 'Vigentes hoje',        value: ativosHoje,          warn: false },
-    { label: 'Aguardando Matriz',    value: aguardandoMatriz,    warn: aguardandoMatriz > 0 },
-    { label: 'Dias afastados (mês)', value: totalDiasMes,        warn: false },
-    { label: 'Pendentes aplicar',    value: pendentesAplicar,    warn: pendentesAplicar > 0 },
+    { tom: 'neutro' as TomContador, label: 'Total',                value: afastamentos.length, warn: false },
+    { tom: 'azul' as TomContador, label: 'Vigentes hoje',        value: ativosHoje,          warn: false },
+    { tom: 'amarelo' as TomContador, label: 'Aguardando Matriz',    value: aguardandoMatriz,    warn: aguardandoMatriz > 0 },
+    { tom: 'roxo' as TomContador, label: 'Dias afastados (mês)', value: totalDiasMes,        warn: false },
+    { tom: 'laranja' as TomContador, label: 'Pendentes aplicar',    value: pendentesAplicar,    warn: pendentesAplicar > 0 },
   ];
 
   return (
@@ -290,11 +290,8 @@ const AfastamentosViewInner = ({ showToast, profile, filial }: { showToast: any;
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 shrink-0">
-        {kpis.map((k) => (
-          <div key={k.label} className="neu-flat rounded-2xl p-5 border border-white/5">
-            <p className="text-[10px] text-gray-500 uppercase tracking-tight sm:tracking-widest font-bold mb-1 sm:mb-2">{k.label}</p>
-            <p className={`text-2xl font-black ${k.warn ? 'text-yellow-400' : 'text-gray-100'} tabular-nums`}>{k.value}</p>
-          </div>
+        {kpis.map((k: any) => (
+          <CardContador key={k.label} label={k.label} value={k.value} sub={k.sub} tom={k.tom} />
         ))}
       </div>
 

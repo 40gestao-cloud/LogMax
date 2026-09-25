@@ -1,3 +1,4 @@
+import { CondicaoCompra } from '../components/CondicaoCompra';
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Plus, Save, Check, X, ShoppingBag, MessageSquare, Send, Loader2, Search, GitCompare, Award, RotateCcw, Ban, CornerUpLeft, Pencil, AlertTriangle } from 'lucide-react';
@@ -1418,12 +1419,12 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode, onNavigate }: { s
     const { cot, servico, estado, vinculo } = pronta;
     const ocupada = generating === cot.id || gerandoLote;
     const rotulo = (t: string) => <span>{t}</span>;
-    const base = 'neu-button rounded-lg text-xs font-bold flex items-center gap-1 shrink-0 h-8 px-3 justify-center transition-colors disabled:opacity-50';
+    const base = 'btn-solido !h-8 !py-0 !px-3 !rounded-lg !text-[11px] justify-center';
     if (estado === 'ligado') {
       return (
         <button type="button" onClick={() => handleGerarPedido(cot, vinculo)} disabled={ocupada}
           title="Gerar o pedido de compra desta cotação"
-          className={`${base} text-yellow-400 hover:bg-yellow-400/10 border border-yellow-400/15`}>
+          className={`${base} btn-solido--verde`}>
           {generating === cot.id ? <Loader2 size={12} className="animate-spin" /> : <ShoppingBag size={12} />}
           {rotulo('Gerar pedido')}
         </button>
@@ -1443,7 +1444,7 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode, onNavigate }: { s
           title={servico
             ? 'Abrir o cadastro de serviço já como contratado e com o nome desta requisição — salvo, você volta para cá'
             : 'Abrir o cadastro já com esta requisição na origem — salvo, o produto fica ligado e você volta para cá'}
-          className={`${base} text-accent hover:bg-accent/10 border border-accent/20`}>
+          className={`${base} btn-solido--dourado`}>
           <Plus size={12} /> {rotulo(servico ? 'Cadastrar serviço' : 'Cadastrar produto')}
         </button>
       </>
@@ -1499,9 +1500,9 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode, onNavigate }: { s
       {mostraAbas && (
         <div className="flex gap-3 flex-wrap shrink-0" role="tablist">
           {([
-            { id: 'cotacoes' as const, label: 'Cotações', n: totalCount ?? todasCotacoes.length, cor: 'dourado' as const,
+            { id: 'cotacoes' as const, label: 'Cotações', n: totalCount ?? todasCotacoes.length, cor: 'navy' as const,
               dica: 'Todas as propostas: aguardando o Financeiro, devolvidas, aprovadas e o histórico' },
-            { id: 'gerar' as const, label: 'Gerar pedidos', n: prontasParaPedido.length, cor: 'preto' as const,
+            { id: 'gerar' as const, label: 'Gerar pedidos', n: prontasParaPedido.length, cor: 'verdeEscuro' as const,
               dica: 'Cotações aprovadas que ainda não viraram pedido' },
           ]).map(a => (
             <AbaComContador key={a.id} label={a.label} n={a.n} cor={a.cor} title={a.dica}
@@ -1520,96 +1521,130 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode, onNavigate }: { s
           : 'Nenhuma cotação aprovada esperando pedido. Quando o Financeiro aprovar uma proposta, ela aparece aqui.'} />
       )}
       {abaAtiva === 'gerar' && prontasVisiveis.length > 0 && (
-        <div className="neu-flat rounded-3xl p-5 border border-yellow-400/15 shrink-0 flex flex-col gap-3">
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div className="min-w-0">
-              <h3 className="text-sm font-bold text-gray-100 flex items-center gap-2">
-                <ShoppingBag size={15} className="text-yellow-400" />
-                Aprovadas esperando o pedido
-                <span className="text-[11px] font-bold text-yellow-400/90">({prontasVisiveis.length})</span>
-              </h3>
-              <p className="text-[11px] text-gray-500 mt-1 leading-snug max-w-2xl">
-                Cotações aprovadas pelo Financeiro que ainda não viraram pedido. As{' '}
-                <span className="text-emerald-400 font-semibold">cadastradas</span> geram o pedido direto; as{' '}
-                <span className="text-red-300 font-semibold">não cadastradas</span> pedem o cadastro do produto,
-                que já abre ligado a esta requisição.
-              </p>
-            </div>
+        <div className="neu-flat rounded-3xl p-4 sm:p-6 border border-white/5 shrink-0 flex flex-col gap-4 mb-6">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <h3 className="text-sm font-bold text-gray-100 flex items-center gap-2">
+              <ShoppingBag size={15} className="text-green-500" />
+              Aprovadas esperando o pedido
+              <span className="text-[11px] font-bold text-green-400">({prontasVisiveis.length})</span>
+            </h3>
             {idsLigados.length > 0 && (
-              <div className="flex items-center gap-2 flex-wrap">
-                <button type="button"
-                  onClick={() => setSelLote(selecionadas.length === idsLigados.length ? new Set() : new Set(idsLigados))}
-                  className="neu-button px-3 py-2 rounded-xl text-[11px] font-bold text-gray-400 hover:text-gray-200">
-                  {selecionadas.length === idsLigados.length ? 'Limpar seleção' : `Selecionar cadastradas (${idsLigados.length})`}
-                </button>
-                <NeuButtonAccent onClick={handleGerarLote} isLoading={gerandoLote}
-                  disabled={selecionadas.length === 0 || gerandoLote || !!generating}>
-                  <ShoppingBag size={14} /> Gerar {selecionadas.length > 0 ? selecionadas.length : ''} pedido{selecionadas.length === 1 ? '' : 's'}
-                </NeuButtonAccent>
-              </div>
+              <button type="button" onClick={handleGerarLote}
+                disabled={selecionadas.length === 0 || gerandoLote || !!generating}
+                title={selecionadas.length === 0 ? 'Marque as cotações cadastradas que vão virar pedido' : undefined}
+                className="btn-solido btn-solido--verde-escuro">
+                {gerandoLote ? <Loader2 size={14} className="animate-spin" /> : <ShoppingBag size={14} />}
+                Gerar {selecionadas.length > 0 ? selecionadas.length : ''} pedido{selecionadas.length === 1 ? '' : 's'}
+              </button>
             )}
           </div>
 
-          <div className="flex flex-col divide-y divide-white/5">
-            {prontasVisiveis.map(pronta => {
-              const { cot, servico, estado, alvo, motivo } = pronta;
-              const ocupada = generating === cot.id || gerandoLote;
-              return (
-                <div key={cot.id} className="py-2.5 flex flex-wrap items-center gap-x-4 gap-y-2">
-                  <div className="w-5 shrink-0 flex justify-center">
-                    {estado === 'ligado' && (
-                      <input type="checkbox" className="accent-yellow-400 w-4 h-4 cursor-pointer"
-                        aria-label={`Incluir ${cot.req?.item ?? numeroCotacao(cot)} no lote`}
-                        checked={selLote.has(cot.id)} disabled={ocupada}
-                        onChange={() => alternarLote(cot.id)} />
+          <div className="overflow-x-auto main-scrollbar">
+            {/* Mesma régua das outras listas: a seleção abre a linha, o item
+                é o texto principal, e "Catálogo" diz se o pedido já pode sair
+                (cadastrado) ou se falta o cadastro do produto. */}
+            <table className="tabela col-guia w-full text-left border-collapse">
+              <thead>
+                <tr className={CABECALHO_TABELA}>
+                  <th className="w-px">
+                    {idsLigados.length > 0 && (
+                      <input type="checkbox" className="accent-black w-4 h-4 cursor-pointer align-middle"
+                        aria-label="Selecionar todas as cadastradas"
+                        title={selecionadas.length === idsLigados.length ? 'Limpar seleção' : `Selecionar as ${idsLigados.length} cadastradas`}
+                        checked={idsLigados.length > 0 && selecionadas.length === idsLigados.length}
+                        disabled={gerandoLote}
+                        onChange={() => setSelLote(selecionadas.length === idsLigados.length ? new Set() : new Set(idsLigados))} />
                     )}
-                  </div>
-
-                  {/* O que foi pedido, por quem vai fornecer e quanto. */}
-                  <div className="min-w-[12rem] flex-1">
-                    <p className="text-sm font-semibold text-gray-200 leading-tight">
-                      {cot.req?.item ?? '—'}
-                      {cot.marca && <span className="ml-1.5 text-[10px] font-bold text-gray-400">{cot.marca}</span>}
-                    </p>
-                    <p className="text-[11px] text-gray-500 mt-0.5">
-                      <span className="font-credencial text-accent/70">{numeroCotacao(cot)}</span>
-                      {' · '}{cot.req ? rotuloQtdReq(cot.req) : '—'}
-                      {' · '}{cot.forn?.nome ?? 'fornecedor'}
-                      {' · '}<span className="font-mono text-gray-400">R$ {formatBRL(Number(cot.valor_total ?? 0))}</span>
-                    </p>
-                  </div>
-
-                  {/* O item do catálogo que vai entrar no pedido — ou a falta dele. */}
-                  <div className="min-w-[12rem] flex-1">
-                    {estado === 'ligado' && (
-                      <p className="text-xs text-emerald-300 flex items-center gap-1.5">
-                        <Check size={13} className="shrink-0" />
-                        <span className="truncate">
-                          {alvo?.nome}
-                          {alvo?.codigo && <span className="text-gray-500"> · {alvo.codigo}</span>}
+                  </th>
+                  <th className="text-center">Item</th>
+                  <th className="text-center hidden md:table-cell w-52">Fornecedor</th>
+                  <th className="text-center w-28">Qtd</th>
+                  <th className="text-center w-32">Valor</th>
+                  <th className="text-center hidden lg:table-cell w-56">Catálogo</th>
+                  <th className="text-center w-px">Ação</th>
+                </tr>
+              </thead>
+              <tbody>
+                {prontasVisiveis.map(pronta => {
+                  const { cot, servico, estado, alvo, motivo } = pronta;
+                  const ocupada = generating === cot.id || gerandoLote;
+                  const req = cot.req;
+                  return (
+                    <tr key={cot.id}>
+                      <td className="py-3 px-3">
+                        {estado === 'ligado' && (
+                          <input type="checkbox" className="accent-green-600 w-4 h-4 cursor-pointer align-middle"
+                            aria-label={`Incluir ${req?.item ?? numeroCotacao(cot)} no lote`}
+                            checked={selLote.has(cot.id)} disabled={ocupada}
+                            onChange={() => alternarLote(cot.id)} />
+                        )}
+                      </td>
+                      <td className="py-3 px-3 min-w-[14rem]">
+                        <span className="flex flex-wrap items-center gap-x-2 gap-y-0.5 font-credencial text-[10px] tracking-wider whitespace-nowrap">
+                          <span className="text-accent/70">{numeroCotacao(cot)}</span>
+                          {req && <span className="text-gray-600">← {numeroRequisicao(req)}</span>}
                         </span>
-                      </p>
-                    )}
-                    {estado === 'sem_cadastro' && (
-                      <p className="text-xs text-red-300/90 flex items-center gap-1.5">
-                        <AlertTriangle size={13} className="shrink-0" />
-                        {servico ? 'Serviço ainda não cadastrado' : 'Produto ainda não cadastrado'}
-                      </p>
-                    )}
-                    {estado === 'bloqueado' && (
-                      <p className="text-xs text-red-300/90 flex items-start gap-1.5 leading-snug">
-                        <Ban size={13} className="shrink-0 mt-px" />
-                        {motivo}
-                      </p>
-                    )}
-                  </div>
-
-                  <div className="flex items-center gap-1.5 justify-end ml-auto">
-                    {botoesDaPronta(pronta)}
-                  </div>
-                </div>
-              );
-            })}
+                        <span className="block text-sm font-semibold text-gray-100 leading-snug mt-1 line-clamp-2 break-words" title={req?.item ?? ''}>
+                          {req?.item ?? '—'}
+                          {cot.marca && <span className="text-xs text-gray-500 font-normal"> · {cot.marca}</span>}
+                        </span>
+                        <span className="md:hidden block text-[11px] text-gray-500 mt-0.5 truncate">{cot.forn?.nome ?? '—'}</span>
+                      </td>
+                      <td className="py-3 px-3 hidden md:table-cell">
+                        <span className="block text-xs text-gray-300 line-clamp-2 max-w-[12rem] mx-auto" title={cot.forn?.nome ?? ''}>
+                          {cot.forn?.nome ?? '—'}
+                        </span>
+                      </td>
+                      <td className="py-3 px-3 whitespace-nowrap">
+                        {req ? (
+                          <>
+                            <span className="text-sm font-semibold text-gray-200 tabular-nums">{qtdBR(req.qtd)}</span>
+                            <span className="text-[10px] text-gray-500 ml-1 uppercase">{normalizarUnidade(req.unidade)}</span>
+                            {Number(req.qtd_embalagens ?? 0) > 0 && req.embalagem_nome && (
+                              <span className="block text-[10px] text-gray-500 leading-tight">
+                                {qtdBR(req.qtd_embalagens)} {pluralEmbalagem(req.embalagem_nome, Number(req.qtd_embalagens)).toLowerCase()}
+                              </span>
+                            )}
+                          </>
+                        ) : <span className="text-xs text-gray-600">—</span>}
+                      </td>
+                      <td className="py-3 px-3 whitespace-nowrap">
+                        <span className="block text-sm font-semibold text-gray-100 tabular-nums">R$ {formatBRL(Number(cot.valor_total ?? 0))}</span>
+                        <CondicaoCompra condicao={cot.condicao_pagamento} />
+                      </td>
+                      <td className="py-3 px-3 hidden lg:table-cell">
+                        {/* Etiqueta no formato das de situação: o nome do
+                            produto ligado quase sempre repete o do Item, então
+                            ele fica no title e a célula mostra o código. */}
+                        {estado === 'ligado' && (
+                          <span className="inline-flex flex-col items-center gap-1" title={alvo?.nome ? `Vai para o pedido como: ${alvo.nome}` : undefined}>
+                            <span className="px-2.5 py-1 rounded-md text-[10px] uppercase tracking-widest font-bold bg-green-600 text-white">Cadastrado</span>
+                            {alvo?.codigo && <span className="font-mono text-[10px] text-gray-400">cód. {alvo.codigo}</span>}
+                          </span>
+                        )}
+                        {estado === 'sem_cadastro' && (
+                          <span className="px-2.5 py-1 rounded-md text-[10px] uppercase tracking-widest font-bold bg-red-600 text-white"
+                            title={servico ? 'Serviço ainda não cadastrado — cadastre para gerar o pedido' : 'Produto ainda não cadastrado — cadastre para gerar o pedido'}>
+                            Sem cadastro
+                          </span>
+                        )}
+                        {estado === 'bloqueado' && (
+                          <span className="inline-flex flex-col items-center gap-1 max-w-[14rem]" title={motivo ?? undefined}>
+                            <span className="px-2.5 py-1 rounded-md text-[10px] uppercase tracking-widest font-bold bg-zinc-600 text-white">Bloqueado</span>
+                            <span className="text-[10px] text-gray-400 leading-snug line-clamp-2">{motivo}</span>
+                          </span>
+                        )}
+                      </td>
+                      <td className="py-3 px-3">
+                        <div className="flex justify-center items-center gap-1.5 whitespace-nowrap">
+                          {botoesDaPronta(pronta)}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
         </div>
       )}
@@ -1992,7 +2027,7 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode, onNavigate }: { s
                   <th className="text-center w-32">Valor</th>
                   <th className="text-center w-36">Prazos</th>
                   <th className="text-center w-36">Situação</th>
-                  <th className="text-center w-32">Ações</th>
+                  <th className="text-center w-px">Ações</th>
                 </tr>
               </thead>
               <tbody>
@@ -2066,7 +2101,7 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode, onNavigate }: { s
                         {/* Preço sem prazo é meia informação: o Financeiro
                             decide com os dois na mesma célula. */}
                         {item.condicao_pagamento && (
-                          <span className="block text-[10px] text-gray-500">{item.condicao_pagamento}</span>
+                          <CondicaoCompra condicao={item.condicao_pagamento} />
                         )}
                       </td>
                       {/* Entrega em vermelho quando passa da data em que a
@@ -2090,7 +2125,7 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode, onNavigate }: { s
                         </span>
                       </td>
                       <td className="py-3 px-3 text-center whitespace-nowrap">
-                        <StatusBadge status={item.status} />
+                        <StatusBadge status={item.status} solido />
                         {item.status === 'Aguardando Financeiro' && (() => {
                           const a = alcadaLabel(item);
                           return (
@@ -2131,36 +2166,25 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode, onNavigate }: { s
                           {item.status === 'Em correção' && podeCorrigir(item) && (
                             <button onClick={() => abrirCorrecao(item)}
                               title="Corrigir e reenviar ao Financeiro"
-                              className="neu-button rounded-lg text-xs font-bold flex items-center gap-1 shrink-0 h-8 w-8 2xl:w-auto 2xl:px-3 justify-center transition-colors text-amber-400 hover:bg-amber-400/10 border border-amber-400/15">
-                              <Pencil size={12} /> <span className="hidden 2xl:inline">Corrigir</span>
-                            </button>
-                          )}
-                          {/* O que o Financeiro escreveu — era uma coluna
-                              inteira, quase sempre vazia. */}
-                          {item.feedback && (
-                            <button onClick={() => setFeedbackAberto(item.feedback)}
-                              title={`Feedback do Financeiro: “${item.feedback}”`}
-                              className={`w-8 h-8 neu-button rounded-lg flex items-center justify-center ${
-                                item.status === 'Em correção' ? 'text-amber-400' : 'text-gray-400 hover:text-cyan-400'}`}>
-                              <MessageSquare size={12} />
+                              className="action-btn-laranja">
+                              <Pencil size={13} />
                             </button>
                           )}
                           {/* Compras: cancelar enquanto a proposta está viva e
                               sem decisão — inclui a devolvida, senão a que
                               nasceu errada ficaria presa em correção. */}
-                          {/* Aprovado e ainda sem pedido: o trabalho é na aba
-                              "Gerar pedidos". */}
-                          {item.status === 'Aprovado' && !cotacoesComPedido.has(item.id) && mostraAbas && (
-                            <button type="button"
-                              onClick={() => { setAbaEscolhida('gerar'); setSearch(item.req?.item ?? ''); }}
-                              title="Esta cotação está esperando o pedido — abrir na aba Gerar pedidos"
-                              className="neu-button rounded-lg text-xs font-bold flex items-center gap-1 shrink-0 h-8 w-8 2xl:w-auto 2xl:px-3 justify-center transition-colors text-yellow-400/80 hover:bg-yellow-400/10">
-                              <ShoppingBag size={12} /> <span className="hidden 2xl:inline">Gerar pedido</span>
-                            </button>
-                          )}
                             <MenuMais>
                               {fechar => (
                                 <>
+                                  {/* O que o Financeiro escreveu — era uma coluna
+                                      inteira, quase sempre vazia; na correção,
+                                      o próprio modal já mostra. */}
+                                  {item.feedback && (
+                                    <ItemMenu onClick={() => { fechar(); setFeedbackAberto(item.feedback); }}
+                                      cor="text-gray-200 hover:bg-white/5" icon={MessageSquare}>
+                                      Ver feedback do Financeiro
+                                    </ItemMenu>
+                                  )}
                                   <HistoricoOperacoes variante="menu" onAbrir={fechar} entidade="cotacoes" entidadeId={item.id} titulo={`${numeroCotacao(item)} · ${item.req?.item ?? 'Cotação'}`} criadoEm={item.created_at} atualizadoEm={item.updated_at} />
                                   {podeCancelar && (
                                     <ItemMenu onClick={() => { fechar(); handleCancelar(item.id); }}
@@ -2314,7 +2338,7 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode, onNavigate }: { s
                               </span>
                             ) : <span className="text-gray-500">—</span>}
                           </td>
-                          <td className="py-2.5 px-3 text-center"><StatusBadge status={c.status} /></td>
+                          <td className="py-2.5 px-3 text-center"><StatusBadge status={c.status} solido /></td>
                           {podeDecidir && (
                             <td className="py-2.5 px-3 text-right">
                               {c.status === 'Aguardando Financeiro' && podeDecidirCotacao(c) && (

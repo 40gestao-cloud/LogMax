@@ -4,18 +4,32 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Package, Landmark } from 'lucide-react';
 import { diasDesde } from '../lib/dates';
 
-export const StatusBadge = ({ status }: { status: string }) => {
+// `solido`: cor cheia e sem transparência para as três saídas de uma decisão
+// (aprovado verde, negado vermelho, em correção laranja) — nas telas em que a
+// lista é justamente essas decisões, como Cotações. O resto segue a régua comum.
+const STATUS_SOLIDO: Record<string, string> = {
+  'Aprovado':    'bg-green-600 text-white font-bold',
+  'Negado':      'bg-red-600 text-white font-bold',
+  'Cancelado':   'bg-red-600 text-white font-bold',
+  'Em correção': 'bg-orange-600 text-white font-bold',
+};
+
+export const StatusBadge = ({ status, solido = false }: { status: string; solido?: boolean }) => {
   let colorClass = 'text-gray-400';
   let style: React.CSSProperties = { background: 'var(--color-badge-neutral-bg)' };
 
   if (['Aprovado','Atendida','Vinculada','Entregue','Autorizado','Despachado','Recebido','Pago'].includes(status)) {
     colorClass = 'bg-accent/20 text-accent font-bold shadow-[0_0_8px_var(--color-accent)]';
     style = {};
-  } else if (['Parcial', 'Em correção'].includes(status)) {
+  } else if (status === 'Em correção') {
+    // Devolvida (migr. 467): a proposta está viva, só voltou para quem a
+    // cadastrou — não é recusa. Laranja: no âmbar ela se confundia com o
+    // dourado de Aprovado/Pendente na mesma lista.
+    colorClass = 'bg-orange-500/15 text-orange-400 font-bold';
+    style = {};
+  } else if (status === 'Parcial') {
     // Meio do caminho (migr. 422): recebeu parte e ainda deve. Âmbar próprio
-    // para não se confundir nem com "em aberto" nem com "quitado". 'Em
-    // correção' (migr. 467) mora aqui pelo mesmo motivo: a proposta está viva,
-    // só voltou para quem a cadastrou — não é recusa.
+    // para não se confundir nem com "em aberto" nem com "quitado".
     colorClass = 'bg-amber-400/15 text-amber-400 font-bold';
     style = {};
   } else if (['Em Cotação','Aguardando Financeiro','Em Entrega','Em Faturamento','Emitida','Em Andamento','Aberto','Pendente'].includes(status)) {
@@ -23,6 +37,10 @@ export const StatusBadge = ({ status }: { status: string }) => {
     style = {};
   } else if (['Cancelado','Negado','Divergente','Atrasado'].includes(status)) {
     colorClass = 'bg-red-500/15 text-red-500';
+    style = {};
+  }
+  if (solido && STATUS_SOLIDO[status]) {
+    colorClass = STATUS_SOLIDO[status];
     style = {};
   }
 
@@ -289,25 +307,48 @@ export const ExportButton = ({ label, onClick, icon: Icon, variante }: {
   );
 };
 
-// Aba com contador — o padrão das abas de fila (Cotações, Requisições).
+// Card de contador do topo das telas (Funcionários, Relatórios, Marketing…).
+// A cor diz a situação (paleta em .contador--*, index.css) e o número vem
+// centralizado. Tom de alerta (amarelo, laranja, vermelho) com contagem zero
+// cai para o neutro: "0 desligados" não é notícia, e o vermelho só acende
+// quando há o que olhar.
+export type TomContador = 'neutro' | 'verde' | 'amarelo' | 'laranja' | 'vermelho' | 'azul' | 'roxo' | 'dourado';
+const TONS_ALERTA = new Set<TomContador>(['amarelo', 'laranja', 'vermelho']);
+
+export const CardContador = ({ label, value, sub, tom = 'neutro' }: {
+  label: string; value: React.ReactNode; sub?: React.ReactNode; tom?: TomContador;
+}) => {
+  const zero = value === 0 || value === '0';
+  const efetivo: TomContador = zero && TONS_ALERTA.has(tom) ? 'neutro' : tom;
+  return (
+    <div className={`contador contador--${efetivo} rounded-2xl px-4 py-5 flex flex-col items-center justify-center text-center gap-1.5`}>
+      <p className="contador-rotulo text-[10px] uppercase tracking-widest font-bold leading-tight">{label}</p>
+      <p className="contador-valor text-2xl sm:text-3xl font-black tabular-nums leading-none">{value}</p>
+      {sub && <p className="text-[11px] text-gray-400 leading-tight">{sub}</p>}
+    </div>
+  );
+};
+
+// Aba com contador — o padrão das abas de fila (Cotações, Requisições,
+// Aprovações, Pedidos).
 //
-// Cada aba tem a cor do que ela SIGNIFICA (na paleta de vidro acima: amarelo
-// pede ação, verde é aprovado, vermelho é negado…), e nenhuma fica apagada —
-// com todas em cinza, a inativa lia como botão desabilitado. A quantidade vai
-// num card ao lado: dentro do botão, em fonte miúda, ninguém via. A ativa é a
-// única que brilha (shimmer) e ganha um traço embaixo; nas outras o brilho
-// fica parado, senão a fileira inteira pisca ao mesmo tempo.
+// Cada aba tem a cor do que ela SIGNIFICA (amarelo pede ação, verde é
+// aprovado, vermelho é negado…), em cor cheia e parada (.btn-solido) — o vidro
+// translúcido com brilho lia apagado e fazia a fileira piscar. A quantidade vai
+// num card ao lado: dentro do botão, em fonte miúda, ninguém via. A ativa ganha
+// um anel e um traço embaixo.
 export const COR_ABA = {
-  amarelo:  { botao: 'btn-shimmer--glass-yellow', numero: 'text-yellow-300' },
-  azul:     { botao: 'btn-shimmer--glass-blue',   numero: 'text-blue-300' },
-  roxo:     { botao: 'btn-shimmer--glass-purple', numero: 'text-purple-300' },
-  verde:    { botao: 'btn-shimmer--glass-green',  numero: 'text-green-400' },
-  cinza:    { botao: 'btn-shimmer--glass-gray',   numero: 'text-gray-300' },
-  vermelho: { botao: 'btn-shimmer--glass-red',    numero: 'text-red-300' },
-  dourado:  { botao: 'neu-button-accent',         numero: 'text-accent' },
-  // `!`: a `.btn-shimmer` do index.css fica fora das camadas do Tailwind e
-  // ganha dos utilitários — sem isto a borda saía transparente.
-  preto:    { botao: '!bg-black !border-accent !text-accent hover:!bg-accent/10', numero: 'text-accent' },
+  amarelo:  { botao: 'btn-solido--amarelo',    numero: 'text-yellow-300' },
+  azul:     { botao: 'btn-solido--azul',       numero: 'text-blue-300' },
+  roxo:     { botao: 'btn-solido--roxo',       numero: 'text-purple-300' },
+  verde:    { botao: 'btn-solido--verde',      numero: 'text-green-400' },
+  cinza:    { botao: 'btn-solido--cinza',      numero: 'text-gray-300' },
+  vermelho: { botao: 'btn-solido--vermelho',   numero: 'text-red-300' },
+  laranja:  { botao: 'btn-solido--laranja',    numero: 'text-orange-400' },
+  navy:     { botao: 'btn-solido--navy',       numero: 'text-blue-300' },
+  verdeEscuro: { botao: 'btn-solido--verde-escuro', numero: 'text-green-400' },
+  dourado:  { botao: 'btn-solido--dourado',    numero: 'text-accent' },
+  preto:    { botao: 'btn-solido--preto-ouro', numero: 'text-accent' },
 } as const;
 export type CorAba = keyof typeof COR_ABA;
 
@@ -316,16 +357,12 @@ export const AbaComContador = ({ label, n, cor, ativa, onClick, icon: Icon, titl
   icon?: any; title?: string; alerta?: boolean;
 }) => (
   <div className="flex items-stretch gap-1.5">
-    {/* O traço fica FORA do botão: a `.btn-shimmer` tem overflow hidden e
-        cortava tudo que passasse da borda. Nas inativas o brilho (o fundo
-        animado e o reflexo do ::before) fica parado. */}
     <div className="relative flex">
       <button type="button" role="tab" aria-selected={ativa} title={title} onClick={onClick}
-        className={`btn-shimmer ${COR_ABA[cor].botao} !py-2.5 !px-4 !rounded-xl !text-[11px] uppercase tracking-widest ${
-          ativa ? '' : '[animation:none] before:!hidden'}`}>
+        className={`btn-solido ${COR_ABA[cor].botao} !py-2.5 !text-[11px] uppercase tracking-widest ${ativa ? 'aba-ativa' : ''}`}>
         {Icon && <Icon size={13} />}
         {label}
-        {alerta && <span className="w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0" />}
+        {alerta && <span className="w-2 h-2 rounded-full bg-red-500 ring-2 ring-white/80 shrink-0" />}
       </button>
       {ativa && <span aria-hidden className="absolute left-3 right-3 -bottom-2 h-0.5 rounded-full bg-accent" />}
     </div>

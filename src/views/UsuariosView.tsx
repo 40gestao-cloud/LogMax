@@ -6,7 +6,7 @@ import { Plus, Users, X, Eye, EyeOff, Shield, User, Trash2, Pencil, FileDown, Fi
 import { uploadFotoPerfil, validarFotoPerfil, PERFIL_FOTO_ACCEPT } from '../lib/perfilFoto';
 import { supabase } from '../lib/supabase';
 import { freshToken } from '../lib/authFetch';
-import { LoadingSpinner, EmptyState, NeuButtonAccent, FilialBadge } from '../components/ui';
+import { LoadingSpinner, EmptyState, NeuButtonAccent, FilialBadge, CardContador, type TomContador } from '../components/ui';
 import { useFetchData } from '../hooks/useSupabaseData';
 import type { UserProfile } from '../hooks/useUserProfile';
 import { FILIAIS_HOLDING } from '../lib/filiais';
@@ -795,14 +795,11 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
 
       <div className="grid grid-cols-3 gap-2 sm:gap-4 shrink-0">
         {[
-          { label: 'Total',        value: filteredUsers.length, icon: Users },
-          { label: 'Gerentes',     value: totalGerentes,        icon: Shield },
-          { label: 'Colaboradores',value: totalColaboradores,    icon: User },
-        ].map(k => (
-          <div key={k.label} className="neu-flat rounded-2xl p-3 sm:p-5 border border-white/5 min-w-0">
-            <p className="text-[9px] sm:text-[10px] text-gray-500 uppercase tracking-tight sm:tracking-widest font-bold mb-1 sm:mb-2 truncate">{k.label}</p>
-            <p className="text-xl sm:text-2xl font-black text-gray-100">{k.value}</p>
-          </div>
+          { tom: 'neutro' as TomContador, label: 'Total',        value: filteredUsers.length, icon: Users },
+          { tom: 'dourado' as TomContador, label: 'Gerentes',     value: totalGerentes,        icon: Shield },
+          { tom: 'azul' as TomContador, label: 'Colaboradores',value: totalColaboradores,    icon: User },
+        ].map((k: any) => (
+          <CardContador key={k.label} label={k.label} value={k.value} sub={k.sub} tom={k.tom} />
         ))}
       </div>
 

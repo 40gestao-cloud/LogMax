@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Search, FileDown, Sheet, TrendingUp, TrendingDown, Landmark } from 'lucide-react';
 import { useFetchData } from '../hooks/useSupabaseData';
-import { LoadingSpinner, EmptyState, ExportButton, StatusBadge } from '../components/ui';
+import { LoadingSpinner, EmptyState, ExportButton, StatusBadge, CardContador, type TomContador } from '../components/ui';
 import { exportToPDF, exportToExcel } from '../lib/viewUtils';
 import { useFilial } from '../contexts/FilialContext';
 
@@ -51,10 +51,10 @@ export const RelatoriosFinanceirosView = ({ showToast: _showToast }: any) => {
   const resultado     = totalReceber - totalPagar;
 
   const kpis = [
-    { label: 'A Receber',      value: `R$ ${totalReceber.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`,  sub: 'contas abertas',      warn: false },
-    { label: 'A Pagar',        value: `R$ ${totalPagar.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`,    sub: 'contas pendentes',    warn: totalPagar > totalReceber },
-    { label: 'Saldo em Bancos',value: `R$ ${saldoBancos.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`,   sub: 'contas ativas',       warn: false },
-    { label: 'Resultado Líq.', value: `R$ ${Math.abs(resultado).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, sub: resultado >= 0 ? 'superávit' : 'déficit', warn: resultado < 0 },
+    { tom: 'verde' as TomContador, label: 'A Receber',      value: `R$ ${totalReceber.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`,  sub: 'contas abertas',      warn: false },
+    { tom: 'vermelho' as TomContador, label: 'A Pagar',        value: `R$ ${totalPagar.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`,    sub: 'contas pendentes',    warn: totalPagar > totalReceber },
+    { tom: 'azul' as TomContador, label: 'Saldo em Bancos',value: `R$ ${saldoBancos.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`,   sub: 'contas ativas',       warn: false },
+    { tom: resultado >= 0 ? 'verde' : 'vermelho' as TomContador, label: 'Resultado Líq.', value: `R$ ${Math.abs(resultado).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, sub: resultado >= 0 ? 'superávit' : 'déficit', warn: resultado < 0 },
   ];
 
   const s = search.toLowerCase();
@@ -113,12 +113,8 @@ export const RelatoriosFinanceirosView = ({ showToast: _showToast }: any) => {
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 shrink-0">
-        {kpis.map((k) => (
-          <div key={k.label} className="neu-flat rounded-2xl p-5 border border-white/5">
-            <p className="text-[10px] text-gray-500 uppercase tracking-tight sm:tracking-widest font-bold mb-1 sm:mb-2">{k.label}</p>
-            <p className={`text-xl font-black leading-tight ${k.warn ? 'text-red-500' : 'text-gray-100'}`}>{k.value}</p>
-            <p className="text-xs text-gray-600 mt-1">{k.sub}</p>
-          </div>
+        {kpis.map((k: any) => (
+          <CardContador key={k.label} label={k.label} value={k.value} sub={k.sub} tom={k.tom} />
         ))}
       </div>
 

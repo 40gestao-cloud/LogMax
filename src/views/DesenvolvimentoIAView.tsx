@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 import { useFetchData, dbInsert, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
 import { supabase } from '../lib/supabase';
-import { LoadingSpinner, EmptyState, NeuButtonAccent } from '../components/ui';
+import { LoadingSpinner, EmptyState, NeuButtonAccent, CardContador, type TomContador } from '../components/ui';
 import type { UserProfile } from '../hooks/useUserProfile';
 import { hasSetor, isConselheiro } from '../lib/rbac';
 import { CRITERIOS, CategoriaCriterio } from '../lib/avaliacaoCriterios';
@@ -270,14 +270,11 @@ export const DesenvolvimentoIAView = ({ showToast, profile }: Props) => {
 
       <div className="grid grid-cols-3 gap-3 sm:gap-4 shrink-0">
         {[
-          { label: 'Agendados',     value: kpis.agendados,   color: 'text-blue-400'   },
-          { label: 'Em Andamento',  value: kpis.emAndamento, color: 'text-yellow-400' },
-          { label: 'Concluídos',    value: kpis.concluidos,  color: 'text-accent'     },
-        ].map(k => (
-          <div key={k.label} className="neu-flat rounded-2xl p-4 sm:p-5 border border-white/5">
-            <p className="text-[10px] text-gray-500 uppercase tracking-tight sm:tracking-widest font-bold mb-1 sm:mb-2">{k.label}</p>
-            <p className={`text-2xl sm:text-3xl font-black ${k.color}`}>{k.value}</p>
-          </div>
+          { tom: 'azul' as TomContador, label: 'Agendados',     value: kpis.agendados,   color: 'text-blue-400'   },
+          { tom: 'amarelo' as TomContador, label: 'Em Andamento',  value: kpis.emAndamento, color: 'text-yellow-400' },
+          { tom: 'verde' as TomContador, label: 'Concluídos',    value: kpis.concluidos,  color: 'text-accent'     },
+        ].map((k: any) => (
+          <CardContador key={k.label} label={k.label} value={k.value} sub={k.sub} tom={k.tom} />
         ))}
       </div>
 

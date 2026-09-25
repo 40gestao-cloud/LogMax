@@ -6,7 +6,7 @@ import { MenuMais, ItemMenu } from '../components/MenuMais';
 import { useFetchData } from '../hooks/useSupabaseData';
 import { supabase } from '../lib/supabase';
 import { setorLabel } from '../lib/setores';
-import { LoadingSpinner, EmptyState, NeuButtonAccent } from '../components/ui';
+import { LoadingSpinner, EmptyState, NeuButtonAccent, CardContador, type TomContador } from '../components/ui';
 import { useConfirm } from '../contexts/ConfirmContext';
 import { GOLD, GOLD_DARK, BLACK } from '../lib/pdfPalette';
 
@@ -294,9 +294,9 @@ export const MetasView = ({ showToast, profile }: any) => {
   }
 
   const kpisMetas = [
-    { label: 'Em Produção',    value: metas.filter((m: any) => m.status === 'Em Produção').length },
-    { label: 'Alcançadas',     value: metas.filter((m: any) => m.status === 'Encerrada' && m.pool_distribuido).length },
-    { label: 'Não alcançadas', value: metas.filter((m: any) => m.status === 'Encerrada' && !m.pool_distribuido).length },
+    { tom: 'azul' as TomContador, label: 'Em Produção',    value: metas.filter((m: any) => m.status === 'Em Produção').length },
+    { tom: 'verde' as TomContador, label: 'Alcançadas',     value: metas.filter((m: any) => m.status === 'Encerrada' && m.pool_distribuido).length },
+    { tom: 'vermelho' as TomContador, label: 'Não alcançadas', value: metas.filter((m: any) => m.status === 'Encerrada' && !m.pool_distribuido).length },
   ];
 
   return (
@@ -313,10 +313,7 @@ export const MetasView = ({ showToast, profile }: any) => {
       {/* KPIs */}
       <div className="grid gap-4 shrink-0 grid-cols-1 sm:grid-cols-3">
         {kpisMetas.map((k: any) => (
-          <div key={k.label} className="neu-flat rounded-2xl p-5 border border-white/5">
-            <p className="text-[10px] text-gray-500 uppercase tracking-tight sm:tracking-widest font-bold mb-1 sm:mb-2">{k.label}</p>
-            <p className="text-2xl font-black text-gray-100">{k.value}</p>
-          </div>
+          <CardContador key={k.label} label={k.label} value={k.value} sub={k.sub} tom={k.tom} />
         ))}
       </div>
 

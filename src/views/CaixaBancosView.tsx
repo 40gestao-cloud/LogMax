@@ -2,7 +2,7 @@ import { useRolarAteFormulario } from '../hooks/useRolarAteFormulario';
 import { MenuMais, ItemMenu } from '../components/MenuMais';
 import React, { useRef, useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Search, Edit2, Trash2, Plus, Save, Upload, X, Lock, Unlock, ShieldAlert, ShieldCheck, PiggyBank, Landmark, Wallet, ArrowLeftRight } from 'lucide-react';
+import { Search, Edit2, Trash2, Plus, Save, Upload, X, Lock, Unlock, ShieldAlert, ShieldCheck, PiggyBank, Landmark, Wallet, ArrowLeftRight, Ban, RotateCcw } from 'lucide-react';
 import { HistoricoOperacoes } from '../components/HistoricoOperacoes';
 import { useFetchData, dbInsert, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
 import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent, StatusBadge, BancoThumb } from '../components/ui';
@@ -257,6 +257,17 @@ export const CaixaBancosView = ({
       showToast(`Erro ao salvar: ${msg}`, 'error', true);
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const alternarStatus = async (item: any) => {
+    const novo = item.status === 'Inativo' ? 'Ativo' : 'Inativo';
+    try {
+      const updated = await dbUpdate(ENDPOINT, item.id, { status: novo });
+      setData((prev: any[]) => prev.map(d => d.id === item.id ? (updated ?? { ...d, status: novo }) : d));
+      showToast(novo === 'Ativo' ? 'Conta reativada.' : 'Conta inativada — sai das listas de pagamento e transferência.', 'success');
+    } catch (err: any) {
+      showToast(`Erro: ${err?.message ?? 'não foi possível mudar o status'}`, 'error', true);
     }
   };
 
@@ -664,15 +675,14 @@ export const CaixaBancosView = ({
                 <th className="pb-4 font-bold px-4">Tipo</th>
                 {matrizMode && <th className="pb-4 font-bold px-4">Filial</th>}
                 <th className="pb-4 font-bold px-4 text-right">Saldo</th>
-                <th className="pb-4 font-bold px-4 text-center">Status</th>
                 <th className="pb-4 font-bold px-4 text-right">Ações</th>
               </tr>
             </thead>
             <tbody>
               {isLoading
-                ? <tr><td colSpan={matrizMode ? 9 : 8}><LoadingSpinner /></td></tr>
+                ? <tr><td colSpan={matrizMode ? 8 : 7}><LoadingSpinner /></td></tr>
                 : filtered.length === 0
-                  ? <tr><td colSpan={matrizMode ? 9 : 8}><EmptyState message="Nenhuma conta bancária cadastrada" /></td></tr>
+                  ? <tr><td colSpan={matrizMode ? 8 : 7}><EmptyState message="Nenhuma conta bancária cadastrada" /></td></tr>
                   : (
                     <AnimatePresence>
                       {filtered.map((item: any) => {
@@ -682,11 +692,17 @@ export const CaixaBancosView = ({
                         const podeEditar = podeGerenciar(profile) || !itemBloqueado;
                         return (
                           <motion.tr key={item.id} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }}
-                            className="border-b border-white/5 hover:bg-white/5 transition-colors group">
+                            className={`border-b border-white/5 hover:bg-white/5 transition-colors group ${item.status === 'Inativo' ? 'opacity-55' : ''}`}>
                             <td className="py-3 px-4">
                               <BancoThumb url={item.imagem_url} size="xs" alt={item.banco ?? item.conta ?? 'Banco'} />
                             </td>
-                            <td className="py-3 px-4 text-sm font-semibold text-gray-200">{item.banco ?? '—'}</td>
+                            <td className="py-3 px-4 text-sm font-semibold text-gray-200">
+                              {item.banco ?? '—'}
+                              {/* Ativo/inativo não tem coluna: só o inativo se anuncia, e a troca mora no "⋯". */}
+                              {item.status === 'Inativo' && (
+                                <span className="ml-2 align-middle px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-widest bg-zinc-600 text-white">Inativa</span>
+                              )}
+                            </td>
                             <td className="py-3 px-4 text-xs font-mono text-gray-400">{item.conta ?? '—'}</td>
                             <td className="py-3 px-4 text-xs font-mono text-gray-400">{item.agencia ?? '—'}</td>
                             <td className="py-3 px-4 text-xs text-gray-400">
@@ -717,7 +733,6 @@ export const CaixaBancosView = ({
                             <td className={`py-3 px-4 text-xs font-mono text-right tabular-nums ${Number(item.saldo) < 0 ? 'text-red-500' : 'text-gray-200'}`}>
                               R$ {Number(item.saldo ?? 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                             </td>
-                            <td className="py-3 px-4 text-center"><StatusBadge status={item.status} /></td>
                             <td className="py-3 px-4 text-right">
                               <div className="flex justify-center items-center gap-1.5">
                                 {podeEditar && (
@@ -726,6 +741,16 @@ export const CaixaBancosView = ({
                                 <MenuMais>
                                   {fechar => (
                                     <>
+                                      <p className="px-3 pt-1.5 pb-1 text-[10px] uppercase tracking-widest font-bold text-gray-500">
+                                        Situação: <span className={item.status === 'Inativo' ? 'text-gray-300' : 'text-green-400'}>{item.status === 'Inativo' ? 'Inativa' : 'Ativa'}</span>
+                                      </p>
+                                      {podeEditar && (
+                                        <ItemMenu onClick={() => { fechar(); alternarStatus(item); }}
+                                          cor={item.status === 'Inativo' ? 'text-green-400 hover:bg-green-500/10' : 'text-gray-300 hover:bg-white/5'}
+                                          icon={item.status === 'Inativo' ? RotateCcw : Ban}>
+                                          {item.status === 'Inativo' ? 'Reativar conta' : 'Inativar conta'}
+                                        </ItemMenu>
+                                      )}
                                       <HistoricoOperacoes variante="menu" onAbrir={fechar} entidade="caixa_bancos" entidadeId={item.id} titulo={`${item.banco ?? 'Conta'} · ${item.conta ?? ''}`} criadoEm={item.created_at} atualizadoEm={item.updated_at} />
                                       {podeEditar && (
                                         <ItemMenu onClick={() => { fechar(); handleDelete(item); }}

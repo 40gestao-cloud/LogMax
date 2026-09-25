@@ -1,7 +1,7 @@
 import { MenuMais, ItemMenu } from '../components/MenuMais';
 import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Search, Edit2, Trash2, Plus, Save } from 'lucide-react';
+import { Search, Edit2, Trash2, Plus, Save, Ban, RotateCcw } from 'lucide-react';
 import { HistoricoOperacoes } from '../components/HistoricoOperacoes';
 import { useFetchData, dbInsert, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
 import { ENDPOINT_TABLE_MAP } from '../lib/supabase';
@@ -45,6 +45,23 @@ export const GenericCRUDView = ({ title, endpoint, fields, defaultStatus = 'Ativ
   const emptyState = () => Object.fromEntries(fields.map(f => [f.key, ''])) as Record<string, string>;
   const [formState, setFormState] = useState<Record<string, string>>(emptyState());
   const [valErrors, setValErrors] = useState<Record<string, string>>({});
+
+  // Status que só diz ativo/inativo não merece coluna: vira etiqueta ao lado
+  // do nome (só quando inativo) e a troca mora no "⋯". Status de fluxo
+  // (Projetos: Concluído, Cancelado) continua coluna.
+  const campoStatus = fields.find(f => f.key === 'status');
+  const statusSimples = !!campoStatus && (campoStatus.options ?? ['Ativo', 'Inativo']).every(o => o === 'Ativo' || o === 'Inativo');
+  const colunas = statusSimples ? fields.filter(f => f.key !== 'status') : fields;
+  const alternarStatus = async (item: any) => {
+    const novo = (item.status ?? 'Ativo') === 'Ativo' ? 'Inativo' : 'Ativo';
+    try {
+      const updated = await dbUpdate(endpoint, item.id, { status: novo });
+      setData((prev: any[]) => prev.map(d => d.id === item.id ? (updated ?? { ...d, status: novo }) : d));
+      showToast(novo === 'Ativo' ? 'Reativado.' : 'Inativado.', 'success');
+    } catch (err: any) {
+      showToast(`Erro: ${err?.message ?? 'não foi possível mudar o status'}`, 'error', true);
+    }
+  };
 
   const filtered = data.filter((item: any) =>
     fields.some(f => String(item[f.key] ?? '').toLowerCase().includes(search.toLowerCase()))
@@ -227,19 +244,20 @@ export const GenericCRUDView = ({ title, endpoint, fields, defaultStatus = 'Ativ
           <table className="tabela w-full text-left border-collapse">
             <thead>
               <tr className="border-b border-white/10 text-[10px] text-gray-500 uppercase tracking-widest">
-                {fields.map(f => <th key={f.key} className="pb-4 font-bold px-4">{f.label}</th>)}
+                {colunas.map(f => <th key={f.key} className="pb-4 font-bold px-4">{f.label}</th>)}
                 {filialScoped && !escopo && <th className="pb-4 font-bold px-4">Filial</th>}
                 <th className="pb-4 font-bold px-4 text-right">Ações</th>
               </tr>
             </thead>
             <tbody>
-              {isLoading ? (<tr><td colSpan={fields.length + (filialScoped && !escopo ? 2 : 1)}><LoadingSpinner /></td></tr>)
-                : filtered.length === 0 ? (<tr><td colSpan={fields.length + (filialScoped && !escopo ? 2 : 1)}><EmptyState /></td></tr>)
+              {isLoading ? (<tr><td colSpan={colunas.length + (filialScoped && !escopo ? 2 : 1)}><LoadingSpinner /></td></tr>)
+                : filtered.length === 0 ? (<tr><td colSpan={colunas.length + (filialScoped && !escopo ? 2 : 1)}><EmptyState /></td></tr>)
                 : (
                   <AnimatePresence>
                     {filtered.map((item: any) => (
-                      <motion.tr key={item.id} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} className="border-b border-white/5 hover:bg-white/5 transition-colors group">
-                        {fields.map((f, idx) => {
+                      <motion.tr key={item.id} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }}
+                        className={`border-b border-white/5 hover:bg-white/5 transition-colors group ${statusSimples && item.status === 'Inativo' ? 'opacity-55' : ''}`}>
+                        {colunas.map((f, idx) => {
                           const raw = item[f.key];
                           // textarea pode ser longo: trunca em 60 chars no resumo e
                           // mostra o conteúdo completo no title (tooltip nativo).
@@ -260,6 +278,9 @@ export const GenericCRUDView = ({ title, endpoint, fields, defaultStatus = 'Ativ
                                     : f.type === 'textarea'
                                       ? renderTextarea()
                                       : String(raw ?? '—')}
+                              {idx === 0 && statusSimples && item.status === 'Inativo' && (
+                                <span className="ml-2 align-middle px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-widest bg-zinc-600 text-white">Inativo</span>
+                              )}
                             </td>
                           );
                         })}
@@ -275,6 +296,18 @@ export const GenericCRUDView = ({ title, endpoint, fields, defaultStatus = 'Ativ
                               <MenuMais>
                                 {fechar => (
                                   <>
+                                    {statusSimples && (
+                                      <p className="px-3 pt-1.5 pb-1 text-[10px] uppercase tracking-widest font-bold text-gray-500">
+                                        Situação: <span className={item.status === 'Inativo' ? 'text-gray-300' : 'text-green-400'}>{item.status ?? 'Ativo'}</span>
+                                      </p>
+                                    )}
+                                    {statusSimples && canWrite && (
+                                      <ItemMenu onClick={() => { fechar(); alternarStatus(item); }}
+                                        cor={item.status === 'Inativo' ? 'text-green-400 hover:bg-green-500/10' : 'text-gray-300 hover:bg-white/5'}
+                                        icon={item.status === 'Inativo' ? RotateCcw : Ban}>
+                                        {item.status === 'Inativo' ? 'Reativar' : 'Inativar'}
+                                      </ItemMenu>
+                                    )}
                                     {entidade && (
                                       <HistoricoOperacoes variante="menu" onAbrir={fechar}
                                         entidade={entidade}

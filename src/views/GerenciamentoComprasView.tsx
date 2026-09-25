@@ -3,7 +3,7 @@ import { motion } from 'motion/react';
 import { ClipboardList, BarChart2, ShoppingCart, Package, DollarSign, AlertTriangle, Clock } from 'lucide-react';
 import { useFetchData } from '../hooks/useSupabaseData';
 import { useFilial } from '../contexts/FilialContext';
-import { LoadingSpinner, UrgenciaBadge } from '../components/ui';
+import { LoadingSpinner, UrgenciaBadge, CardContador } from '../components/ui';
 
 const PipelineCard = ({ icon: Icon, label, total, breakdown, color }: any) => (
   <div className="neu-flat rounded-2xl p-5 border border-white/5 flex flex-col gap-3 flex-1 min-w-[140px]">
@@ -146,21 +146,9 @@ export const GerenciamentoComprasView = () => {
 
       {/* Sumário rápido */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 shrink-0">
-        <div className="neu-flat rounded-2xl p-5 border border-white/5">
-          <p className="text-[10px] text-gray-500 uppercase tracking-tight sm:tracking-widest font-bold mb-1 sm:mb-2">Pedidos em Aberto</p>
-          <p className="text-2xl font-black text-gray-100">{pedPendentes + pedAprovados + pedTransporte}</p>
-          <p className="text-xs text-gray-600 mt-1">aguardando recebimento</p>
-        </div>
-        <div className="neu-flat rounded-2xl p-5 border border-white/5">
-          <p className="text-[10px] text-gray-500 uppercase tracking-tight sm:tracking-widest font-bold mb-1 sm:mb-2">Valor Comprometido</p>
-          <p className="text-xl font-black text-gray-100">R$ {valorPedidosAtivos.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
-          <p className="text-xs text-gray-600 mt-1">em pedidos ativos</p>
-        </div>
-        <div className="neu-flat rounded-2xl p-5 border border-white/5">
-          <p className="text-[10px] text-gray-500 uppercase tracking-tight sm:tracking-widest font-bold mb-1 sm:mb-2">Contas em Atraso</p>
-          <p className={`text-2xl font-black ${pgAtrasados > 0 ? 'text-red-500' : 'text-gray-100'}`}>{pgAtrasados}</p>
-          <p className="text-xs text-gray-600 mt-1">vencimentos em aberto</p>
-        </div>
+        <CardContador label="Pedidos em Aberto" value={pedPendentes + pedAprovados + pedTransporte} sub={<>aguardando recebimento</>} tom="azul" />
+        <CardContador label="Valor Comprometido" value={<>R$ {valorPedidosAtivos.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</>} sub={<>em pedidos ativos</>} tom="dourado" />
+        <CardContador label="Contas em Atraso" value={pgAtrasados} sub="vencimentos em aberto" tom="vermelho" />
       </div>
 
       {/* Pipeline */}

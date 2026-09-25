@@ -58,9 +58,9 @@ export const ItemMenu = ({ onClick, disabled, cor, icon: Icon, children }: {
   </button>
 );
 
-// Cabeçalho de tabela em faixa própria: fundo dourado leve, cantos
-// arredondados e um traço entre as colunas. Vai no <tr> do <thead>.
+// Cabeçalho de tabela: forma (cantos, traço, espaçamento). A cor vem da classe
+// .tabela no index.css — fundo opaco do accent. Vai no <tr> do <thead>.
 export const CABECALHO_TABELA =
-  '[&>th]:bg-accent/[0.08] text-[10px] text-accent/80 uppercase tracking-widest whitespace-nowrap ' +
-  '[&>th]:py-3 [&>th]:px-3 [&>th]:font-bold [&>th+th]:border-l [&>th+th]:border-accent/15 ' +
+  'text-[10px] uppercase tracking-widest whitespace-nowrap ' +
+  '[&>th]:py-3 [&>th]:px-3 [&>th]:font-bold [&>th+th]:border-l ' +
   '[&>th:first-child]:rounded-l-xl [&>th:last-child]:rounded-r-xl';

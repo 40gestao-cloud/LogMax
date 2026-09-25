@@ -6,7 +6,7 @@ import { useFilial } from '../contexts/FilialContext';
 import { motion, AnimatePresence } from 'motion/react';
 import { Plus, X, Trash2, Edit3, Ticket, Copy, CheckCircle2, Search } from 'lucide-react';
 import { useFetchData, dbInsert, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
-import { LoadingSpinner, EmptyState, NeuButtonAccent } from '../components/ui';
+import { LoadingSpinner, EmptyState, NeuButtonAccent, CardContador, type TomContador } from '../components/ui';
 import { formatBRL, parseBRL, handleMoneyKeyDown } from '../lib/viewUtils';
 import { hasSetor } from '../lib/rbac';
 import { useConfirm } from '../contexts/ConfirmContext';
@@ -186,10 +186,10 @@ const CuponsMarketingViewInner = ({ showToast, profile, filial }: { showToast: a
   const usosTotais = cupons.reduce((s: number, c: any) => s + Number(c.usos || 0), 0);
 
   const kpis = [
-    { label: 'Total de Cupons', value: String(cupons.length) },
-    { label: 'Em Vigor',        value: String(ativos) },
-    { label: 'Expirados',       value: String(expirados) },
-    { label: 'Usos Totais',     value: String(usosTotais) },
+    { tom: 'neutro' as TomContador, label: 'Total de Cupons', value: String(cupons.length) },
+    { tom: 'verde' as TomContador, label: 'Em Vigor',        value: String(ativos) },
+    { tom: 'vermelho' as TomContador, label: 'Expirados',       value: String(expirados) },
+    { tom: 'azul' as TomContador, label: 'Usos Totais',     value: String(usosTotais) },
   ];
 
   return (
@@ -202,11 +202,8 @@ const CuponsMarketingViewInner = ({ showToast, profile, filial }: { showToast: a
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 shrink-0">
-        {kpis.map((k) => (
-          <div key={k.label} className="neu-flat rounded-2xl p-5 border border-white/5">
-            <p className="text-[10px] text-gray-500 uppercase tracking-tight sm:tracking-widest font-bold mb-1 sm:mb-2">{k.label}</p>
-            <p className="text-2xl font-black text-gray-100 tabular-nums">{k.value}</p>
-          </div>
+        {kpis.map((k: any) => (
+          <CardContador key={k.label} label={k.label} value={k.value} sub={k.sub} tom={k.tom} />
         ))}
       </div>
 

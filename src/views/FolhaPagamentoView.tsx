@@ -7,7 +7,7 @@ import { Plus, CheckCircle, Clock, DollarSign, X, Edit2, Trash2, Lock, Calculato
 import { HistoricoOperacoes } from '../components/HistoricoOperacoes';
 import { MenuMais, ItemMenu } from '../components/MenuMais';
 import { useFetchData, dbInsert, dbUpdate, dbDelete, dbSetStatus } from '../hooks/useSupabaseData';
-import { LoadingSpinner, EmptyState, NeuButtonAccent } from '../components/ui';
+import { LoadingSpinner, EmptyState, NeuButtonAccent, CardContador, type TomContador } from '../components/ui';
 import { supabase } from '../lib/supabase';
 import { hasSetor } from '../lib/rbac';
 import { formatBRL, parseBRL } from '../lib/viewUtils';
@@ -643,16 +643,13 @@ const FolhaPagamentoViewInner = ({ showToast, profile, filial }: { showToast: an
 
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4 shrink-0">
         {[
-          { label: 'Total Bruto', value: `R$ ${totalBruto.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, warn: false },
-          { label: 'Total Descontos', value: `R$ ${totalDesc.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, warn: false },
-          { label: 'Total Líquido', value: `R$ ${totalLiq.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, warn: false },
-          { label: 'Folhas Pendentes', value: pendentes, warn: pendentes > 0 },
-          { label: 'Func. com folha', value: `${funcsComFolha} / ${funcsAtivos}`, warn: funcsComFolha < funcsAtivos },
-        ].map((k) => (
-          <div key={k.label} className="neu-flat rounded-2xl p-5 border border-white/5">
-            <p className="text-[10px] text-gray-500 uppercase tracking-tight sm:tracking-widest font-bold mb-1 sm:mb-2">{k.label}</p>
-            <p className={`text-xl font-black leading-tight ${k.warn ? 'text-yellow-400' : 'text-gray-100'}`}>{k.value}</p>
-          </div>
+          { tom: 'dourado' as TomContador, label: 'Total Bruto', value: `R$ ${totalBruto.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, warn: false },
+          { tom: 'vermelho' as TomContador, label: 'Total Descontos', value: `R$ ${totalDesc.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, warn: false },
+          { tom: 'verde' as TomContador, label: 'Total Líquido', value: `R$ ${totalLiq.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, warn: false },
+          { tom: 'amarelo' as TomContador, label: 'Folhas Pendentes', value: pendentes, warn: pendentes > 0 },
+          { tom: funcsComFolha < funcsAtivos ? 'laranja' : 'azul' as TomContador, label: 'Func. com folha', value: `${funcsComFolha} / ${funcsAtivos}`, warn: funcsComFolha < funcsAtivos },
+        ].map((k: any) => (
+          <CardContador key={k.label} label={k.label} value={k.value} sub={k.sub} tom={k.tom} />
         ))}
       </div>
 

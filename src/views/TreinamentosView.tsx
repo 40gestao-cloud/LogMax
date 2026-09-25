@@ -7,7 +7,7 @@ import { Plus, BookOpen, X, Edit2, Trash2, Users, Search, Check } from 'lucide-r
 import { useFetchData, dbInsert, dbUpdate, dbDelete, dbSetStatus } from '../hooks/useSupabaseData';
 import { supabase } from '../lib/supabase';
 import { notificarSetor } from '../lib/notificar';
-import { LoadingSpinner, EmptyState, NeuButtonAccent } from '../components/ui';
+import { LoadingSpinner, EmptyState, NeuButtonAccent, CardContador, type TomContador } from '../components/ui';
 import { TreinamentoInscricoesModal } from '../components/TreinamentoInscricoesModal';
 import { useConfirm } from '../contexts/ConfirmContext';
 import { fmtInstrutores } from '../lib/viewUtils';
@@ -322,15 +322,12 @@ const TreinamentosViewInner = ({ showToast, filial }: { showToast: any; filial: 
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 shrink-0">
         {[
-          { label: 'Agendados', value: agendados },
-          { label: 'Em Andamento', value: emAndamento },
-          { label: 'Inscritos (ativos)', value: totalInscritos },
-          { label: 'Concluídos', value: concluidos },
-        ].map((k) => (
-          <div key={k.label} className="neu-flat rounded-2xl p-5 border border-white/5">
-            <p className="text-[10px] text-gray-500 uppercase tracking-tight sm:tracking-widest font-bold mb-1 sm:mb-2">{k.label}</p>
-            <p className="text-2xl font-black text-gray-100">{k.value}</p>
-          </div>
+          { tom: 'azul' as TomContador, label: 'Agendados', value: agendados },
+          { tom: 'amarelo' as TomContador, label: 'Em Andamento', value: emAndamento },
+          { tom: 'roxo' as TomContador, label: 'Inscritos (ativos)', value: totalInscritos },
+          { tom: 'verde' as TomContador, label: 'Concluídos', value: concluidos },
+        ].map((k: any) => (
+          <CardContador key={k.label} label={k.label} value={k.value} sub={k.sub} tom={k.tom} />
         ))}
       </div>
 

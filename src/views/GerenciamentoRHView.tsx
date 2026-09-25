@@ -4,7 +4,7 @@ import { motion } from 'motion/react';
 import { Users, DollarSign, Palmtree, BookOpen, Clock, CalendarCheck } from 'lucide-react';
 import { useFetchData } from '../hooks/useSupabaseData';
 import { useFilial } from '../contexts/FilialContext';
-import { LoadingSpinner } from '../components/ui';
+import { LoadingSpinner, CardContador } from '../components/ui';
 import { fmtInstrutores } from '../lib/viewUtils';
 
 const PipelineCard = ({ icon: Icon, label, total, breakdown, color }: any) => (
@@ -138,26 +138,10 @@ export const GerenciamentoRHView = () => {
 
       {/* KPIs */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 shrink-0">
-        <div className="neu-flat rounded-2xl p-5 border border-white/5">
-          <p className="text-[10px] text-gray-500 uppercase tracking-tight sm:tracking-widest font-bold mb-1 sm:mb-2">Funcionários Ativos</p>
-          <p className="text-2xl font-black text-gray-100">{funAtivos}</p>
-          <p className="text-xs text-gray-600 mt-1">de {funcionarios.length} cadastrados</p>
-        </div>
-        <div className="neu-flat rounded-2xl p-5 border border-white/5">
-          <p className="text-[10px] text-gray-500 uppercase tracking-tight sm:tracking-widest font-bold mb-1 sm:mb-2">Folha do Mês</p>
-          <p className="text-xl font-black text-green-400 leading-tight">R$ {totalLiqMes.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
-          <p className="text-xs text-gray-600 mt-1">líquido processado · {anoMes}</p>
-        </div>
-        <div className="neu-flat rounded-2xl p-5 border border-white/5">
-          <p className="text-[10px] text-gray-500 uppercase tracking-tight sm:tracking-widest font-bold mb-1 sm:mb-2">Férias Pendentes</p>
-          <p className={`text-2xl font-black ${ferSolic > 0 ? 'text-yellow-400' : 'text-gray-100'}`}>{ferSolic}</p>
-          <p className="text-xs text-gray-600 mt-1">aguardando aprovação</p>
-        </div>
-        <div className="neu-flat rounded-2xl p-5 border border-white/5">
-          <p className="text-[10px] text-gray-500 uppercase tracking-tight sm:tracking-widest font-bold mb-1 sm:mb-2">Treinamentos Ativos</p>
-          <p className="text-2xl font-black text-gray-100">{treAndando}</p>
-          <p className="text-xs text-gray-600 mt-1">em andamento</p>
-        </div>
+        <CardContador label="Funcionários Ativos" value={funAtivos} sub={<>de {funcionarios.length} cadastrados</>} tom="verde" />
+        <CardContador label="Folha do Mês" value={<>R$ {totalLiqMes.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</>} sub={<>líquido processado · {anoMes}</>} tom="dourado" />
+        <CardContador label="Férias Pendentes" value={ferSolic} sub="aguardando aprovação" tom="amarelo" />
+        <CardContador label="Treinamentos Ativos" value={treAndando} sub={<>em andamento</>} tom="azul" />
       </div>
 
       {/* Pipeline */}

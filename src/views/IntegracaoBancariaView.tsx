@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Plus, Trash2, CheckCircle, AlertTriangle, Clock, Building2 } from 'lucide-react';
 import { useFetchData, dbInsert, dbDelete, dbSetStatus } from '../hooks/useSupabaseData';
-import { LoadingSpinner, StatusBadge, FormField, NeuButtonAccent, BancoThumb } from '../components/ui';
+import { LoadingSpinner, StatusBadge, FormField, NeuButtonAccent, BancoThumb, CardContador, type TomContador } from '../components/ui';
 import { useFilial } from '../contexts/FilialContext';
 
 const statusIcon = (s: string) => {
@@ -38,10 +38,10 @@ export const IntegracaoBancariaView = ({ showToast }: any) => {
   const comErro = integracoes.filter((i: any) => i.status === 'Erro').length;
 
   const kpis = [
-    { label: 'Contas Ativas', value: contasAtivas.length, sub: 'cadastradas', warn: false },
-    { label: 'Saldo Total', value: `R$ ${saldoTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, sub: 'em todas as contas', warn: false },
-    { label: 'Importações Processadas', value: processadas, sub: 'com sucesso', warn: false },
-    { label: 'Importações com Erro', value: comErro, sub: 'requerem atenção', warn: comErro > 0 },
+    { tom: 'neutro' as TomContador, label: 'Contas Ativas', value: contasAtivas.length, sub: 'cadastradas', warn: false },
+    { tom: 'dourado' as TomContador, label: 'Saldo Total', value: `R$ ${saldoTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, sub: 'em todas as contas', warn: false },
+    { tom: 'verde' as TomContador, label: 'Importações Processadas', value: processadas, sub: 'com sucesso', warn: false },
+    { tom: 'vermelho' as TomContador, label: 'Importações com Erro', value: comErro, sub: 'requerem atenção', warn: comErro > 0 },
   ];
 
   const handleSave = async () => {
@@ -86,12 +86,8 @@ export const IntegracaoBancariaView = ({ showToast }: any) => {
 
       {/* KPIs */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 shrink-0">
-        {kpis.map((k) => (
-          <div key={k.label} className="neu-flat rounded-2xl p-5 border border-white/5">
-            <p className="text-[10px] text-gray-500 uppercase tracking-tight sm:tracking-widest font-bold mb-1 sm:mb-2">{k.label}</p>
-            <p className={`text-xl font-black leading-tight ${k.warn ? 'text-red-500' : 'text-gray-100'}`}>{k.value}</p>
-            <p className="text-xs text-gray-600 mt-1">{k.sub}</p>
-          </div>
+        {kpis.map((k: any) => (
+          <CardContador key={k.label} label={k.label} value={k.value} sub={k.sub} tom={k.tom} />
         ))}
       </div>
 

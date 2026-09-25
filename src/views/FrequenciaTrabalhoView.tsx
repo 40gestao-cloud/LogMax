@@ -11,7 +11,7 @@ import { useJornadaTurma, usePontoCorteTurma } from '../hooks/useJornadaTurma';
 import { useAuth } from '../hooks/useAuth';
 import { supabase } from '../lib/supabase';
 import { todayBR } from '../lib/dates';
-import { LoadingSpinner, EmptyState } from '../components/ui';
+import { LoadingSpinner, EmptyState, CardContador } from '../components/ui';
 import { hasSetor, isConselheiro } from '../lib/rbac';
 
 // 'Justificado' cobre dois caminhos: o afastamento aprovado (linha somente-
@@ -740,26 +740,11 @@ const FrequenciaTrabalhoViewInner = ({ showToast, profile, filial, embedded }: a
       {/* Resumo cards */}
       {filtro === 'dia' && (
         <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 shrink-0">
-          <div className="neu-flat rounded-2xl p-4 border border-emerald-500/10">
-            <div className="text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-1">Presentes</div>
-            <div className="text-2xl font-bold text-emerald-400 tabular-nums">{statsForDate.presentes}</div>
-          </div>
-          <div className="neu-flat rounded-2xl p-4 border border-red-500/10">
-            <div className="text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-1">Faltas</div>
-            <div className="text-2xl font-bold text-red-400 tabular-nums">{statsForDate.faltas}</div>
-          </div>
-          <div className="neu-flat rounded-2xl p-4 border border-yellow-500/10">
-            <div className="text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-1">Atrasos</div>
-            <div className="text-2xl font-bold text-yellow-400 tabular-nums">{statsForDate.atrasos}</div>
-          </div>
-          <div className="neu-flat rounded-2xl p-4 border border-yellow-500/10">
-            <div className="text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-1">Justificados</div>
-            <div className="text-2xl font-bold text-yellow-400 tabular-nums">{statsForDate.justificados}</div>
-          </div>
-          <div className="neu-flat rounded-2xl p-4 border border-white/5">
-            <div className="text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-1">Sem registro</div>
-            <div className="text-2xl font-bold text-gray-400 tabular-nums">{statsForDate.semRegistro}</div>
-          </div>
+          <CardContador label="Presentes" value={statsForDate.presentes} tom="verde" />
+          <CardContador label="Faltas" value={statsForDate.faltas} tom="vermelho" />
+          <CardContador label="Atrasos" value={statsForDate.atrasos} tom="laranja" />
+          <CardContador label="Justificados" value={statsForDate.justificados} tom="amarelo" />
+          <CardContador label="Sem registro" value={statsForDate.semRegistro} tom="roxo" />
         </div>
       )}
 

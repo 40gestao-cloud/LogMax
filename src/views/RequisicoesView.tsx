@@ -77,7 +77,7 @@ const Campo = ({ rotulo, valor }: { rotulo: string; valor: React.ReactNode }) =>
 // outras são de quem está com o documento agora.
 const ABAS: { key: string; label: string; status: string[] | null; cor: CorAba }[] = [
   { key: 'acotar',    label: 'A cotar',       status: ['Aprovado'],    cor: 'amarelo' },
-  { key: 'gerente',   label: 'Com o gerente', status: ['Pendente'],    cor: 'preto' },
+  { key: 'gerente',   label: 'Com o gerente', status: ['Pendente'],    cor: 'laranja' },
   { key: 'correcao',  label: 'Em correção',   status: ['Em correção'], cor: 'azul' },
   { key: 'atendidas', label: 'Atendidas',     status: ['Atendida'],    cor: 'cinza' },
   { key: 'negadas',   label: 'Negadas',       status: ['Negado'],      cor: 'vermelho' },

@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Search, FileDown, Sheet, TrendingUp, Package, Clock, ClipboardCheck } from 'lucide-react';
 import { useFetchData } from '../hooks/useSupabaseData';
 import { useFilial } from '../contexts/FilialContext';
-import { LoadingSpinner, EmptyState, ExportButton, StatusBadge } from '../components/ui';
+import { LoadingSpinner, EmptyState, ExportButton, StatusBadge, CardContador, type TomContador } from '../components/ui';
 import { exportToPDF, exportToExcel } from '../lib/viewUtils';
 
 type TabId = 'movimentacoes' | 'saldos' | 'vencimentos' | 'inventarios';
@@ -118,10 +118,10 @@ export const RelatoriosEstoqueView = ({ showToast: _showToast }: any) => {
   };
 
   const kpis = [
-    { label: 'Total Movimentações', value: totalMov, sub: 'registradas', warn: false },
-    { label: 'Entradas', value: entradas, sub: 'no histórico', warn: false },
-    { label: 'Saídas', value: saidas, sub: 'no histórico', warn: false },
-    { label: 'Vencimentos Críticos', value: vencimentosCriticos, sub: 'próximos ou vencidos', warn: vencimentosCriticos > 0 },
+    { tom: 'neutro' as TomContador, label: 'Total Movimentações', value: totalMov, sub: 'registradas', warn: false },
+    { tom: 'verde' as TomContador, label: 'Entradas', value: entradas, sub: 'no histórico', warn: false },
+    { tom: 'azul' as TomContador, label: 'Saídas', value: saidas, sub: 'no histórico', warn: false },
+    { tom: 'vermelho' as TomContador, label: 'Vencimentos Críticos', value: vencimentosCriticos, sub: 'próximos ou vencidos', warn: vencimentosCriticos > 0 },
   ];
 
   return (
@@ -131,12 +131,8 @@ export const RelatoriosEstoqueView = ({ showToast: _showToast }: any) => {
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 shrink-0">
-        {kpis.map((k) => (
-          <div key={k.label} className="neu-flat rounded-2xl p-5 border border-white/5">
-            <p className="text-[10px] text-gray-500 uppercase tracking-tight sm:tracking-widest font-bold mb-1 sm:mb-2">{k.label}</p>
-            <p className={`text-2xl font-black ${k.warn ? 'text-red-500' : 'text-gray-100'}`}>{k.value}</p>
-            <p className="text-xs text-gray-600 mt-1">{k.sub}</p>
-          </div>
+        {kpis.map((k: any) => (
+          <CardContador key={k.label} label={k.label} value={k.value} sub={k.sub} tom={k.tom} />
         ))}
       </div>
 

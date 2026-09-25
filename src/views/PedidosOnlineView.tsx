@@ -6,7 +6,7 @@ import { useFilial } from '../contexts/FilialContext';
 import { useFetchData, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
 import { ehVendavel } from '../lib/tipoProduto';
 import { supabase } from '../lib/supabase';
-import { LoadingSpinner, EmptyState, NeuButtonAccent } from '../components/ui';
+import { LoadingSpinner, EmptyState, NeuButtonAccent, CardContador, type TomContador } from '../components/ui';
 import { useConfirm } from '../contexts/ConfirmContext';
 import { usePrompt } from '../contexts/PromptContext';
 import { groupCadastrosParaSelect } from '../lib/cadastrosSelect';
@@ -398,11 +398,11 @@ const PedidosOnlineInner = ({ showToast, profile, filial }: { showToast: any; pr
   const semEstoque = publicados.filter((p: any) => Number(p.estoque ?? 0) <= 0).length;
 
   const kpis = [
-    { label: 'Na fila',        value: novos.length,        warn: novos.length > 0 },
-    { label: 'Valor em fila',  value: brl(emFila),         warn: false },
-    { label: 'Confirmados',    value: confirmados.length,  warn: false },
-    { label: 'Na vitrine',     value: publicados.length,   warn: publicados.length === 0 },
-    { label: 'Loja',           value: cfg?.aberta ? 'Aberta' : 'Fechada', warn: !cfg?.aberta },
+    { tom: 'amarelo' as TomContador, label: 'Na fila',        value: novos.length,        warn: novos.length > 0 },
+    { tom: 'dourado' as TomContador, label: 'Valor em fila',  value: brl(emFila),         warn: false },
+    { tom: 'verde' as TomContador, label: 'Confirmados',    value: confirmados.length,  warn: false },
+    { tom: 'azul' as TomContador, label: 'Na vitrine',     value: publicados.length,   warn: publicados.length === 0 },
+    { tom: cfg?.aberta ? 'verde' : 'vermelho' as TomContador, label: 'Loja',           value: cfg?.aberta ? 'Aberta' : 'Fechada', warn: !cfg?.aberta },
   ];
 
   const produtosFiltrados = (produtos ?? [])
@@ -462,11 +462,8 @@ const PedidosOnlineInner = ({ showToast, profile, filial }: { showToast: any; pr
       )}
 
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 shrink-0">
-        {kpis.map(k => (
-          <div key={k.label} className="neu-flat rounded-2xl p-5 border border-white/5">
-            <p className="text-[10px] text-gray-500 uppercase tracking-tight sm:tracking-widest font-bold mb-1 sm:mb-2">{k.label}</p>
-            <p className={`text-2xl font-black ${k.warn ? 'text-yellow-400' : 'text-gray-100'} tabular-nums`}>{k.value}</p>
-          </div>
+        {kpis.map((k: any) => (
+          <CardContador key={k.label} label={k.label} value={k.value} sub={k.sub} tom={k.tom} />
         ))}
       </div>
 

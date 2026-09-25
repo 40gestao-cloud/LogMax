@@ -5,7 +5,7 @@ import { useFilial } from '../contexts/FilialContext';
 import { motion, AnimatePresence } from 'motion/react';
 import { Plus, Check, X as XIcon, Palmtree, Edit2, Trash2 } from 'lucide-react';
 import { useFetchData, dbInsert, dbUpdate, dbDelete, dbSetStatus } from '../hooks/useSupabaseData';
-import { LoadingSpinner, EmptyState, NeuButtonAccent } from '../components/ui';
+import { LoadingSpinner, EmptyState, NeuButtonAccent, CardContador } from '../components/ui';
 import { useConfirm } from '../contexts/ConfirmContext';
 import type { UserProfile } from '../hooks/useUserProfile';
 import { isConselheiro } from '../lib/rbac';
@@ -146,15 +146,12 @@ const FeriasViewInner = ({ showToast, profile, filial }: { showToast: any; profi
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 shrink-0">
         {[
-          { label: 'Solicitadas', value: solicitadas, warn: solicitadas > 0 },
-          { label: 'Aprovadas', value: aprovadas, warn: false },
-          { label: 'Em Andamento', value: emAndamento, warn: false },
-          { label: 'Concluídas', value: concluidas, warn: false },
+          { tom: 'amarelo' as const, label: 'Solicitadas', value: solicitadas, warn: solicitadas > 0 },
+          { tom: 'verde' as const, label: 'Aprovadas', value: aprovadas, warn: false },
+          { tom: 'azul' as const, label: 'Em Andamento', value: emAndamento, warn: false },
+          { tom: 'neutro' as const, label: 'Concluídas', value: concluidas, warn: false },
         ].map((k) => (
-          <div key={k.label} className="neu-flat rounded-2xl p-5 border border-white/5">
-            <p className="text-[10px] text-gray-500 uppercase tracking-tight sm:tracking-widest font-bold mb-1 sm:mb-2">{k.label}</p>
-            <p className={`text-2xl font-black ${k.warn ? 'text-yellow-400' : 'text-gray-100'}`}>{k.value}</p>
-          </div>
+          <CardContador key={k.label} label={k.label} value={k.value} tom={k.tom} />
         ))}
       </div>
 

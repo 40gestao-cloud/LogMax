@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Search, FileDown, Sheet, FileText, ShoppingBag, Receipt } from 'lucide-react';
 import { useFetchData } from '../hooks/useSupabaseData';
 import { useFilial } from '../contexts/FilialContext';
-import { LoadingSpinner, EmptyState, ExportButton, StatusBadge } from '../components/ui';
+import { LoadingSpinner, EmptyState, ExportButton, StatusBadge, CardContador, type TomContador } from '../components/ui';
 import { exportToPDF, exportToExcel } from '../lib/viewUtils';
 
 type TabId = 'orcamentos' | 'pedidos' | 'historico';
@@ -89,10 +89,10 @@ export const RelatoriosVendasView = ({ showToast: _showToast }: any) => {
   };
 
   const kpis = [
-    { label: 'Orçamentos Emitidos', value: totalOrcamentos, sub: 'no total', warn: false },
-    { label: 'Pedidos em Aberto', value: pedidosAbertos, sub: 'em andamento', warn: pedidosAbertos > 0 },
-    { label: 'Vendas Concluídas', value: vendasConcluidas.length, sub: 'no total', warn: false },
-    { label: 'Valor Total Vendido', value: `R$ ${valorTotalVendido.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, sub: 'acumulado', warn: false },
+    { tom: 'neutro' as TomContador, label: 'Orçamentos Emitidos', value: totalOrcamentos, sub: 'no total', warn: false },
+    { tom: 'amarelo' as TomContador, label: 'Pedidos em Aberto', value: pedidosAbertos, sub: 'em andamento', warn: pedidosAbertos > 0 },
+    { tom: 'verde' as TomContador, label: 'Vendas Concluídas', value: vendasConcluidas.length, sub: 'no total', warn: false },
+    { tom: 'dourado' as TomContador, label: 'Valor Total Vendido', value: `R$ ${valorTotalVendido.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, sub: 'acumulado', warn: false },
   ];
 
   return (
@@ -102,12 +102,8 @@ export const RelatoriosVendasView = ({ showToast: _showToast }: any) => {
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 shrink-0">
-        {kpis.map((k) => (
-          <div key={k.label} className="neu-flat rounded-2xl p-5 border border-white/5">
-            <p className="text-[10px] text-gray-500 uppercase tracking-tight sm:tracking-widest font-bold mb-1 sm:mb-2">{k.label}</p>
-            <p className={`text-2xl font-black ${k.warn ? 'text-yellow-400' : 'text-gray-100'}`}>{k.value}</p>
-            <p className="text-xs text-gray-600 mt-1">{k.sub}</p>
-          </div>
+        {kpis.map((k: any) => (
+          <CardContador key={k.label} label={k.label} value={k.value} sub={k.sub} tom={k.tom} />
         ))}
       </div>
 

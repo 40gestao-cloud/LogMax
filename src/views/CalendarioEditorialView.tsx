@@ -4,7 +4,7 @@ import { useFilial } from '../contexts/FilialContext';
 import { motion, AnimatePresence } from 'motion/react';
 import { Plus, X, Trash2, Edit3, Calendar, ChevronRight, ExternalLink, Filter, Sparkles, Loader2, Copy, CheckCircle2 } from 'lucide-react';
 import { useFetchData, dbInsert, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
-import { LoadingSpinner, EmptyState, NeuButtonAccent } from '../components/ui';
+import { LoadingSpinner, EmptyState, NeuButtonAccent, CardContador, type TomContador } from '../components/ui';
 import { formatDataHoraBR } from '../lib/dates';
 import { hasSetor } from '../lib/rbac';
 import { freshToken, lerJsonDaApi } from '../lib/authFetch';
@@ -286,10 +286,10 @@ const CalendarioEditorialViewInner = ({ showToast, profile, filial }: any) => {
   const publicados = posts.filter((p: any) => p.status === 'Publicado').length;
 
   const kpis = [
-    { label: 'Próximos 7 dias', value: proximos7, warn: proximos7 === 0 },
-    { label: 'Rascunhos',       value: rascunhos, warn: false },
-    { label: 'Agendados',       value: agendados, warn: false },
-    { label: 'Publicados',      value: publicados, warn: false },
+    { tom: 'azul' as TomContador, label: 'Próximos 7 dias', value: proximos7, warn: proximos7 === 0 },
+    { tom: 'neutro' as TomContador, label: 'Rascunhos',       value: rascunhos, warn: false },
+    { tom: 'roxo' as TomContador, label: 'Agendados',       value: agendados, warn: false },
+    { tom: 'verde' as TomContador, label: 'Publicados',      value: publicados, warn: false },
   ];
 
   return (
@@ -302,11 +302,8 @@ const CalendarioEditorialViewInner = ({ showToast, profile, filial }: any) => {
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 shrink-0">
-        {kpis.map((k) => (
-          <div key={k.label} className="neu-flat rounded-2xl p-5 border border-white/5">
-            <p className="text-[10px] text-gray-500 uppercase tracking-tight sm:tracking-widest font-bold mb-1 sm:mb-2">{k.label}</p>
-            <p className={`text-2xl font-black ${k.warn ? 'text-yellow-400' : 'text-gray-100'} tabular-nums`}>{k.value}</p>
-          </div>
+        {kpis.map((k: any) => (
+          <CardContador key={k.label} label={k.label} value={k.value} sub={k.sub} tom={k.tom} />
         ))}
       </div>
 

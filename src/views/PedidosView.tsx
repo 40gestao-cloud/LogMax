@@ -1,3 +1,4 @@
+import { CondicaoCompra } from '../components/CondicaoCompra';
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import type { FilialOp } from '../components/FilialSelector';
 import { useFilial } from '../contexts/FilialContext';
@@ -318,7 +319,7 @@ const PedidosViewInner = ({ showToast, profile, filial }: { showToast: any; prof
                               é ela que explica por que o contas a pagar tem uma
                               ou três linhas deste mesmo pedido. */}
                           {item.condicao_pagamento && (
-                            <span className="block text-[10px] text-gray-500">{item.condicao_pagamento}</span>
+                            <CondicaoCompra condicao={item.condicao_pagamento} />
                           )}
                         </td>
                         <td className="py-3 px-3 text-center whitespace-nowrap hidden sm:table-cell">

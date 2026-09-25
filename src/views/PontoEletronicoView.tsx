@@ -6,7 +6,7 @@ import { Clock, Trash2, ClipboardList, ListChecks, FileDown } from 'lucide-react
 import { FrequenciaTrabalhoView } from './FrequenciaTrabalhoView';
 import { FrequenciaRelatorioTab } from './FrequenciaRelatorioTab';
 import { useFetchData, dbDelete } from '../hooks/useSupabaseData';
-import { LoadingSpinner, EmptyState, FilialBadge } from '../components/ui';
+import { LoadingSpinner, EmptyState, FilialBadge, CardContador, type TomContador } from '../components/ui';
 import type { UserProfile } from '../hooks/useUserProfile';
 import { hasSetor, isConselheiro } from '../lib/rbac';
 import { todayBR } from '../lib/dates';
@@ -141,15 +141,12 @@ const PontoEletronicoViewInner = ({ showToast, profile, filial }: { showToast: a
             {[
               // (504) "no mês" no rótulo: o número é do período carregado, e
               // sem dizer isso o card volta a parecer o total de sempre.
-              { label: 'Registros no mês',   value: ponto.length,  valueCls: 'text-gray-100',    borderCls: 'border-white/5' },
-              { label: 'Faltas no mês',      value: faltas,        valueCls: faltas > 0 ? 'text-red-400' : 'text-gray-400',   borderCls: faltas > 0 ? 'border-red-500/25' : 'border-white/5' },
-              { label: 'Horas Extras no mês', value: extras,       valueCls: extras > 0 ? 'text-blue-400' : 'text-gray-400',  borderCls: extras > 0 ? 'border-blue-500/25' : 'border-white/5' },
-              { label: 'Justificados no mês', value: justificados, valueCls: justificados > 0 ? 'text-yellow-400' : 'text-gray-400', borderCls: justificados > 0 ? 'border-yellow-500/25' : 'border-white/5' },
-            ].map((k) => (
-              <div key={k.label} className={`neu-flat rounded-2xl p-5 border ${k.borderCls}`}>
-                <p className="text-[10px] text-gray-500 uppercase tracking-tight sm:tracking-widest font-bold mb-1 sm:mb-2">{k.label}</p>
-                <p className={`text-2xl font-black ${k.valueCls}`}>{k.value}</p>
-              </div>
+              { tom: 'neutro' as TomContador, label: 'Registros no mês',   value: ponto.length,  valueCls: 'text-gray-100',    borderCls: 'border-white/5' },
+              { tom: 'vermelho' as TomContador, label: 'Faltas no mês',      value: faltas,        valueCls: faltas > 0 ? 'text-red-400' : 'text-gray-400',   borderCls: faltas > 0 ? 'border-red-500/25' : 'border-white/5' },
+              { tom: 'azul' as TomContador, label: 'Horas Extras no mês', value: extras,       valueCls: extras > 0 ? 'text-blue-400' : 'text-gray-400',  borderCls: extras > 0 ? 'border-blue-500/25' : 'border-white/5' },
+              { tom: 'amarelo' as TomContador, label: 'Justificados no mês', value: justificados, valueCls: justificados > 0 ? 'text-yellow-400' : 'text-gray-400', borderCls: justificados > 0 ? 'border-yellow-500/25' : 'border-white/5' },
+            ].map((k: any) => (
+              <CardContador key={k.label} label={k.label} value={k.value} sub={k.sub} tom={k.tom} />
             ))}
           </div>
 

@@ -8,7 +8,7 @@ import { HistoricoOperacoes } from '../components/HistoricoOperacoes';
 import { MenuMais, ItemMenu } from '../components/MenuMais';
 import { FuncionarioBeneficiosModal } from '../components/FuncionarioBeneficiosModal';
 import { useFetchData, dbInsert, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
-import { LoadingSpinner, EmptyState, StatusBadge, NeuButtonAccent, ExportButton } from '../components/ui';
+import { LoadingSpinner, EmptyState, StatusBadge, NeuButtonAccent, ExportButton, CardContador, type TomContador } from '../components/ui';
 import { exportToPDF, exportToExcel, formatCPF, formatPhone, formatBRL, parseBRL } from '../lib/viewUtils';
 import { uploadFotoDeFuncionario, validarFotoPerfil, PERFIL_FOTO_ACCEPT } from '../lib/perfilFoto';
 import { roleLabel } from '../lib/rbac';
@@ -99,10 +99,10 @@ const FuncionariosViewInner = ({ showToast, filial }: { showToast: any; filial: 
   const admissoesMes = funcionarios.filter((f: any) => f.data_admissao?.startsWith(anoMes)).length;
 
   const kpis = [
-    { label: 'Funcionários Ativos', value: ativos, warn: false },
-    { label: 'Afastados', value: afastados, warn: afastados > 0 },
-    { label: 'Desligados', value: desligados, warn: false },
-    { label: 'Admissões no Mês', value: admissoesMes, warn: false },
+    { tom: 'verde' as TomContador, label: 'Funcionários Ativos', value: ativos, warn: false },
+    { tom: 'amarelo' as TomContador, label: 'Afastados', value: afastados, warn: afastados > 0 },
+    { tom: 'vermelho' as TomContador, label: 'Desligados', value: desligados, warn: false },
+    { tom: 'azul' as TomContador, label: 'Admissões no Mês', value: admissoesMes, warn: false },
   ];
 
   const filtered = funcionarios
@@ -336,11 +336,8 @@ const FuncionariosViewInner = ({ showToast, filial }: { showToast: any; filial: 
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 shrink-0">
-        {kpis.map((k) => (
-          <div key={k.label} className="neu-flat rounded-2xl p-5 border border-white/5">
-            <p className="text-[10px] text-gray-500 uppercase tracking-tight sm:tracking-widest font-bold mb-1 sm:mb-2">{k.label}</p>
-            <p className={`text-2xl font-black ${k.warn ? 'text-yellow-400' : 'text-gray-100'}`}>{k.value}</p>
-          </div>
+        {kpis.map((k: any) => (
+          <CardContador key={k.label} label={k.label} value={k.value} sub={k.sub} tom={k.tom} />
         ))}
       </div>
 
@@ -612,7 +609,6 @@ const FuncionariosViewInner = ({ showToast, filial }: { showToast: any; filial: 
                 <th className="pb-4 font-bold px-4">Departamento</th>
                 <th className="pb-4 font-bold px-4">Admissão</th>
                 <th className="pb-4 font-bold px-4 text-right">Salário</th>
-                <th className="pb-4 font-bold px-4 text-center">Status</th>
                 <th className="pb-4 font-bold px-4">Ações</th>
               </tr></thead>
               <tbody>
@@ -635,23 +631,35 @@ const FuncionariosViewInner = ({ showToast, filial }: { showToast: any; filial: 
                           </button>
                         </div>
                       </td>
-                      <td className="py-3 px-4 text-sm font-semibold text-gray-200">{f.nome ?? '—'}</td>
+                      <td className="py-3 px-4 text-sm font-semibold text-gray-200">
+                        {f.nome ?? '—'}
+                        {/* Situação só aparece quando foge do normal; a coluna
+                            Status saiu e o detalhe mora no "⋯". */}
+                        {f.status && f.status !== 'Ativo' && (
+                          <span className={`ml-2 align-middle px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-widest text-white ${
+                            f.status === 'Desligado' ? 'bg-red-600' : f.status === 'Afastado' ? 'bg-amber-600' : 'bg-zinc-600'}`}>
+                            {f.status}
+                          </span>
+                        )}
+                      </td>
                       <td className="py-3 px-4 text-xs font-mono text-gray-400">{f.cpf ?? '—'}</td>
                       <td className="py-3 px-4 text-xs text-gray-400">{f.cargo ?? '—'}</td>
                       <td className="py-3 px-4 text-xs text-gray-400">{f.departamento ?? '—'}</td>
                       <td className="py-3 px-4 text-xs font-mono text-gray-400">{f.data_admissao ? f.data_admissao.split('-').reverse().join('/') : '—'}</td>
                       <td className="py-3 px-4 text-xs font-mono text-gray-200 text-right tabular-nums">R$ {formatBRL(Number(f.salario || 0))}</td>
-                      <td className="py-3 px-4 text-center"><StatusBadge status={f.status} /></td>
                       <td className="py-3 px-4">
                         <div className="flex gap-1.5 justify-center items-center">
                           <button onClick={() => setBeneficiosDe({ id: f.id, nome: f.nome ?? '—' })}
-                            title="Benefícios do funcionário" className="action-btn-neutral">
+                            title="Benefícios do funcionário" className="action-btn-success">
                             <Gift size={12} />
                           </button>
                           <button onClick={() => openEdit(f)} title="Editar" className="action-btn-edit"><Pencil size={12} /></button>
                           <MenuMais>
                             {fechar => (
                               <>
+                                <p className="px-3 pt-1.5 pb-1 text-[10px] uppercase tracking-widest font-bold text-gray-500">
+                                  Situação: <span className={f.status === 'Desligado' ? 'text-red-400' : f.status === 'Afastado' ? 'text-amber-400' : 'text-green-400'}>{f.status ?? 'Ativo'}</span>
+                                </p>
                                 <HistoricoOperacoes variante="menu" onAbrir={fechar} entidade="funcionarios" entidadeId={f.id} titulo={f.nome ?? 'Funcionário'} criadoEm={f.created_at} atualizadoEm={f.updated_at} />
                                 <ItemMenu onClick={() => { fechar(); handleDelete(f.id); }}
                                   cor="text-red-400 hover:bg-red-500/10" icon={Trash2}>

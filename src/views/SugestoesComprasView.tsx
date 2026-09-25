@@ -9,7 +9,7 @@ import { normalizarUnidade, embalagemDoProduto, pluralEmbalagem } from '../lib/u
 import { QuantidadeEmbalagem, qtdEmEstoque } from '../components/QuantidadeEmbalagem';
 import { temEstoque } from '../lib/tipoProduto';
 import { supabase } from '../lib/supabase';
-import { LoadingSpinner, EmptyState, ExportButton, NeuButtonAccent } from '../components/ui';
+import { LoadingSpinner, EmptyState, ExportButton, NeuButtonAccent, CardContador, type TomContador } from '../components/ui';
 import { exportToPDF, exportToExcel } from '../lib/viewUtils';
 
 const SugestoesComprasViewInner = ({ showToast, profile, filial }: any) => {
@@ -155,11 +155,11 @@ const SugestoesComprasViewInner = ({ showToast, profile, filial }: any) => {
   ]);
 
   const kpis = [
-    { label: 'Estoque Crítico', value: criticos.length, sub: 'produtos zerados', warn: criticos.length > 0 },
-    { label: 'Estoque Baixo', value: baixos.length, sub: 'menos de 10 unid.', warn: baixos.length > 0 },
-    { label: 'Valor Estimado de Recompra', value: `R$ ${valorTotalEst.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`,
+    { tom: 'vermelho' as TomContador, label: 'Estoque Crítico', value: criticos.length, sub: 'produtos zerados', warn: criticos.length > 0 },
+    { tom: 'amarelo' as TomContador, label: 'Estoque Baixo', value: baixos.length, sub: 'menos de 10 unid.', warn: baixos.length > 0 },
+    { tom: 'dourado' as TomContador, label: 'Valor Estimado de Recompra', value: `R$ ${valorTotalEst.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`,
       sub: semCusto > 0 ? `a preço de custo — ${semCusto} item(ns) sem custo ficaram de fora` : 'a preço de custo', warn: false },
-    { label: 'Produtos Monitorados', value: ativos.length, sub: 'ativos no catálogo', warn: false },
+    { tom: 'neutro' as TomContador, label: 'Produtos Monitorados', value: ativos.length, sub: 'ativos no catálogo', warn: false },
   ];
 
   return (
@@ -169,12 +169,8 @@ const SugestoesComprasViewInner = ({ showToast, profile, filial }: any) => {
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 shrink-0">
-        {kpis.map((k) => (
-          <div key={k.label} className="neu-flat rounded-2xl p-5 border border-white/5">
-            <p className="text-[10px] text-gray-500 uppercase tracking-tight sm:tracking-widest font-bold mb-1 sm:mb-2">{k.label}</p>
-            <p className={`text-2xl font-black ${k.warn ? 'text-red-500' : 'text-gray-100'}`}>{k.value}</p>
-            <p className="text-xs text-gray-600 mt-1">{k.sub}</p>
-          </div>
+        {kpis.map((k: any) => (
+          <CardContador key={k.label} label={k.label} value={k.value} sub={k.sub} tom={k.tom} />
         ))}
       </div>
 

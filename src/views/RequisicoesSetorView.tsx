@@ -463,11 +463,10 @@ const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: 
   const ABAS = [
     // `cor` é o significado da fila (ver AbaComContador em ui.tsx): corrigir
     // pede ação, pendente espera o gerente, aprovada seguiu, atendida já é
-    // pedido (encerrada), negada parou. Pendente é preta com borda dourada —
-    // o dourado do selo "Pendente" da linha; azul se confundia com o "Minhas
-    // planilhas" da mesma barra.
+    // pedido (encerrada), negada parou. Pendente é laranja (pedido do
+    // professor); azul se confundia com o "Minhas planilhas" da mesma barra.
     { key: 'corrigir',  label: 'Para corrigir', status: ['Em correção'], cor: 'amarelo' },
-    { key: 'pendentes', label: 'Pendentes',     status: ['Pendente'],    cor: 'preto' },
+    { key: 'pendentes', label: 'Pendentes',     status: ['Pendente'],    cor: 'laranja' },
     { key: 'aprovadas', label: 'Aprovadas',     status: ['Aprovado'],    cor: 'verde' },
     { key: 'atendidas', label: 'Atendidos',     status: ['Atendida'],    cor: 'cinza' },
     { key: 'negadas',   label: 'Negadas',       status: ['Negado'],      cor: 'vermelho' },

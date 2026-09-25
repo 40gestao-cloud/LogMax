@@ -2842,8 +2842,9 @@ main.main-scrollbar,
 }
 
 /* ── Tabela padrão (.tabela) ───────────────────────────────────────────────
-   Cabeçalho em faixa própria (fundo do accent, cantos arredondados, traço
-   entre colunas, título numa linha só) e linhas separadas no tom do accent.
+   Cabeçalho em faixa própria (accent em cor cheia, título preto e forte,
+   cantos arredondados, traço entre colunas, título numa linha só) e grade
+   opaca no tom do accent entre linhas e colunas.
    Tudo centralizado — título E conteúdo — menos o texto da primeira coluna,
    que é a descrição e costuma ter várias linhas. Fora das camadas do Tailwind
    de propósito: ganha dos utilitários antigos (text-left, border-white/5,
@@ -2851,16 +2852,19 @@ main.main-scrollbar,
 .tabela { border-collapse: separate; border-spacing: 0; }
 .tabela > thead > tr { border: 0; }
 .tabela > thead > tr > th {
-  background: color-mix(in oklab, var(--color-accent) 8%, transparent);
-  color: color-mix(in oklab, var(--color-accent) 80%, transparent);
-  font-size: 10px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase;
+  background: var(--color-accent);
+  color: #000;
+  font-size: 11px; font-weight: 900; letter-spacing: 0.08em; text-transform: uppercase;
   text-align: center; white-space: nowrap; vertical-align: middle;
   padding: 0.75rem 0.75rem;
 }
-.tabela > thead > tr > th + th { border-left: 1px solid color-mix(in oklab, var(--color-accent) 15%, transparent); }
+.tabela > thead > tr > th + th { border-left: 1px solid color-mix(in oklab, var(--color-accent) 60%, #000); }
 .tabela > thead > tr > th:first-child { border-top-left-radius: 0.75rem; border-bottom-left-radius: 0.75rem; }
 .tabela > thead > tr > th:last-child { border-top-right-radius: 0.75rem; border-bottom-right-radius: 0.75rem; }
-.tabela > tbody > tr > td { border-bottom: 1px solid color-mix(in oklab, var(--color-accent) 10%, transparent); vertical-align: middle; }
+.tabela > tbody > tr > td { border-bottom: 1px solid color-mix(in oklab, var(--color-accent) 45%, var(--color-bg-base, #000)); vertical-align: middle; }
+/* Grade: linha vertical entre colunas, no tom da horizontal — continua os
+   traços do cabeçalho até o fim da tabela. */
+.tabela > tbody > tr > td + td { border-left: 1px solid color-mix(in oklab, var(--color-accent) 45%, var(--color-bg-base, #000)); }
 .tabela > tbody > tr { border-color: transparent; }
 .tabela > tbody > tr:hover > td { background: color-mix(in oklab, var(--color-accent) 4%, transparent); }
 .tabela > tbody > tr > td:not(:first-child):not([colspan]) { text-align: center; }
@@ -2869,13 +2873,6 @@ main.main-scrollbar,
 .tabela > tbody > tr > td:not(:first-child):not([colspan]) > .flex.flex-col { align-items: center; }
 .tabela > tfoot > tr > td { border-top: 1px solid color-mix(in oklab, var(--color-accent) 20%, transparent); }
 .tabela > tfoot > tr > td:not(:first-child) { text-align: center; }
-/* Coluna fixa na rolagem lateral: a faixa translúcida deixaria o conteúdo
-   aparecer por baixo — ganha o fundo da página embaixo do tom do accent. */
-.tabela > thead > tr > th.sticky {
-  background:
-    linear-gradient(color-mix(in oklab, var(--color-accent) 8%, transparent), color-mix(in oklab, var(--color-accent) 8%, transparent)),
-    var(--color-bg-base);
-}
 /* Número, data e dinheiro não quebram no meio ("2026-09-14" virava duas
    linhas); o espaço sai das colunas de texto, que podem quebrar. */
 .tabela > tbody > tr > td { padding-left: 0.75rem; padding-right: 0.75rem; }
@@ -2941,3 +2938,48 @@ main.main-scrollbar,
    scrollIntoView (formulário de edição que abre, item que se procura) parava
    com o começo escondido atrás dela. */
 main { scroll-padding-top: 7rem; }
+.btn-solido--cinza { background: #52525b; border-color: #3f3f46; color: #fff; }
+/* Preto com o dourado da marca: a aba "Pendentes/Com o gerente". */
+.btn-solido--preto-ouro { background: #000; border-color: var(--color-accent); color: var(--color-accent); }
+/* Aba ativa: além do traço embaixo, um anel claro — com todas as abas em cor
+   cheia, o brilho que marcava a ativa não existe mais. */
+.btn-solido.aba-ativa { box-shadow: 0 0 0 2px var(--color-bg-base, #000), 0 0 0 4px color-mix(in oklab, var(--color-accent) 70%, transparent); }
+.btn-solido--navy        { background: #1e3a8a; border-color: #172554; color: #fff; }
+.btn-solido--verde-escuro { background: #166534; border-color: #14532d; color: #fff; }
+
+
+/* ── Card de contador (CardContador, ui.tsx) ────────────────────────────────
+   A cor diz a situação: fundo escuro no tom, borda sólida, rótulo na cor e o
+   número branco e centralizado. Antes todos eram o mesmo card preto e o número
+   não dizia se era bom ou ruim. */
+.contador { border-width: 1px; border-style: solid; }
+.contador--neutro   { background: #111113; border-color: #3f3f46; --contador-rotulo: #a1a1aa; }
+.contador--verde    { background: #052e16; border-color: #15803d; --contador-rotulo: #4ade80; }
+.contador--amarelo  { background: #2a1f02; border-color: #a16207; --contador-rotulo: #facc15; }
+.contador--laranja  { background: #2b1204; border-color: #c2410c; --contador-rotulo: #fb923c; }
+.contador--vermelho { background: #2a0707; border-color: #b91c1c; --contador-rotulo: #f87171; }
+.contador--azul     { background: #0a1733; border-color: #1d4ed8; --contador-rotulo: #60a5fa; }
+.contador--roxo     { background: #1c0b33; border-color: #7e22ce; --contador-rotulo: #c084fc; }
+.contador--dourado  { background: #241a03; border-color: #b8860b; --contador-rotulo: var(--color-accent); }
+.contador .contador-rotulo { color: var(--contador-rotulo); }
+.contador .contador-valor  { color: #fafafa; }
+[data-theme="light"] .contador--neutro   { background: #f4f4f5; border-color: #d4d4d8; --contador-rotulo: #52525b; }
+[data-theme="light"] .contador--verde    { background: #dcfce7; border-color: #16a34a; --contador-rotulo: #15803d; }
+[data-theme="light"] .contador--amarelo  { background: #fef9c3; border-color: #ca8a04; --contador-rotulo: #a16207; }
+[data-theme="light"] .contador--laranja  { background: #ffedd5; border-color: #ea580c; --contador-rotulo: #c2410c; }
+[data-theme="light"] .contador--vermelho { background: #fee2e2; border-color: #dc2626; --contador-rotulo: #b91c1c; }
+[data-theme="light"] .contador--azul     { background: #dbeafe; border-color: #2563eb; --contador-rotulo: #1d4ed8; }
+[data-theme="light"] .contador--roxo     { background: #f3e8ff; border-color: #9333ea; --contador-rotulo: #7e22ce; }
+[data-theme="light"] .contador--dourado  { background: #fef3c7; border-color: #b8860b; --contador-rotulo: #92400e; }
+[data-theme="light"] .contador .contador-valor { color: #18181b; }
+
+/* Ação de linha que resolve um "Em correção": laranja sólido, mesma caixa de
+   2rem da família action-btn-* (a cor casa com a etiqueta da situação). */
+.action-btn-laranja {
+  width: 2rem; height: 2rem; border-radius: 0.5rem; flex-shrink: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: #ea580c; border: 1px solid #c2410c; color: #fff; cursor: pointer;
+  transition: filter .12s ease;
+}
+.action-btn-laranja:hover:not(:disabled) { filter: brightness(1.12); }
+.action-btn-laranja:disabled { opacity: 0.5; cursor: not-allowed; }

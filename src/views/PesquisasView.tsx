@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Plus, X, Send, Lock, BarChart3, ChevronRight, Trash2, Eye, FileText } from 'lucide-react';
 import { useFetchData, dbInsert, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
 import { supabase } from '../lib/supabase';
-import { LoadingSpinner, EmptyState, NeuButtonAccent } from '../components/ui';
+import { LoadingSpinner, EmptyState, NeuButtonAccent, CardContador, type TomContador } from '../components/ui';
 import { hasSetor } from '../lib/rbac';
 
 type Status = 'Rascunho' | 'Ativa' | 'Encerrada';
@@ -43,10 +43,10 @@ const PesquisasViewInner = ({ showToast, profile, filial }: any) => {
   const encerradas = pesquisas.filter((p: any) => p.status === 'Encerrada').length;
 
   const kpis = [
-    { label: 'Total',       value: pesquisas.length, warn: false },
-    { label: 'Rascunho',    value: rascunho,         warn: rascunho > 0 },
-    { label: 'Ativas',      value: ativas,           warn: false },
-    { label: 'Encerradas',  value: encerradas,       warn: false },
+    { tom: 'neutro' as TomContador, label: 'Total',       value: pesquisas.length, warn: false },
+    { tom: 'amarelo' as TomContador, label: 'Rascunho',    value: rascunho,         warn: rascunho > 0 },
+    { tom: 'verde' as TomContador, label: 'Ativas',      value: ativas,           warn: false },
+    { tom: 'neutro' as TomContador, label: 'Encerradas',  value: encerradas,       warn: false },
   ];
 
   const toggleArrayValue = (arr: string[], v: string) =>
@@ -126,11 +126,8 @@ const PesquisasViewInner = ({ showToast, profile, filial }: any) => {
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 shrink-0">
-        {kpis.map(k => (
-          <div key={k.label} className="neu-flat rounded-2xl p-5 border border-white/5">
-            <p className="text-[10px] text-gray-500 uppercase tracking-tight sm:tracking-widest font-bold mb-1 sm:mb-2">{k.label}</p>
-            <p className={`text-2xl font-black ${k.warn ? 'text-yellow-400' : 'text-gray-100'}`}>{k.value}</p>
-          </div>
+        {kpis.map((k: any) => (
+          <CardContador key={k.label} label={k.label} value={k.value} sub={k.sub} tom={k.tom} />
         ))}
       </div>
 

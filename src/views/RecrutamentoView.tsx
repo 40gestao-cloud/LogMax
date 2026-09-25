@@ -9,7 +9,7 @@ import {
 import { freshToken } from '../lib/authFetch';
 import { useFetchData } from '../hooks/useSupabaseData';
 import { supabase } from '../lib/supabase';
-import { LoadingSpinner, NeuButtonAccent } from '../components/ui';
+import { LoadingSpinner, NeuButtonAccent, CardContador, type TomContador } from '../components/ui';
 import { hasSetor } from '../lib/rbac';
 import { formatBRL, parseBRL } from '../lib/viewUtils';
 import { todayBR } from '../lib/dates';
@@ -617,10 +617,10 @@ const RecrutamentoInner = ({ showToast, profile, filial }: {
   const nDecididas = vagasAtivas.length - nPendentes;
 
   const kpis = [
-    { label: 'Aguardando Matriz', value: nPendentes },
-    { label: 'Aprovadas',         value: vagasAtivas.filter((v: any) => v.status === 'Aprovada').length },
-    { label: 'Candidatos ativos', value: (candidaturas ?? []).filter((c: any) => !['Contratado', 'Promovido', 'Reprovado'].includes(c.etapa)).length },
-    { label: 'Preenchidas',       value: vagasAtivas.filter((v: any) => v.status === 'Preenchida').length },
+    { tom: 'amarelo' as TomContador, label: 'Aguardando Matriz', value: nPendentes },
+    { tom: 'verde' as TomContador, label: 'Aprovadas',         value: vagasAtivas.filter((v: any) => v.status === 'Aprovada').length },
+    { tom: 'azul' as TomContador, label: 'Candidatos ativos', value: (candidaturas ?? []).filter((c: any) => !['Contratado', 'Promovido', 'Reprovado'].includes(c.etapa)).length },
+    { tom: 'roxo' as TomContador, label: 'Preenchidas',       value: vagasAtivas.filter((v: any) => v.status === 'Preenchida').length },
   ];
 
   // As três listas da Matriz dividem a mesma área em vez de empilhar. A aba
@@ -649,11 +649,8 @@ const RecrutamentoInner = ({ showToast, profile, filial }: {
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 shrink-0">
-        {kpis.map(k => (
-          <div key={k.label} className="neu-flat rounded-2xl p-5 border border-white/5">
-            <p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-2">{k.label}</p>
-            <p className="text-2xl font-black text-gray-100">{k.value}</p>
-          </div>
+        {kpis.map((k: any) => (
+          <CardContador key={k.label} label={k.label} value={k.value} sub={k.sub} tom={k.tom} />
         ))}
       </div>
 
