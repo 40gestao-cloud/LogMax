@@ -1703,8 +1703,8 @@ const ProdutosViewInner = ({ showToast, filial, profile, onNavigate }: { showToa
                 ? (vinculoFalhou
                     ? `Produto criado, mas a requisição ${reqVinculo.numero} não ficou vinculada (${vinculoFalhou}). Em Compras > Cotações, o Gerar Pedido ainda vai pedir o item do catálogo — escolha este produto lá.`
                     : voltarParaCotacoesRef.current && onNavigate
-                      ? `Produto criado e vinculado à requisição ${reqVinculo.numero}. De volta às Cotações — a linha dela já está em "Prontas para pedido".`
-                      : `Produto criado e vinculado à requisição ${reqVinculo.numero}. Em Compras > Cotações ela já aparece em "Prontas para pedido" — o Gerar Pedido não vai mais pedir o item do catálogo.`)
+                      ? `Produto criado e vinculado à requisição ${reqVinculo.numero}. De volta às Cotações — ela já está na aba "Gerar pedidos", pronta para o pedido.`
+                      : `Produto criado e vinculado à requisição ${reqVinculo.numero}. Em Compras > Cotações ela já aparece na aba "Gerar pedidos" — o Gerar Pedido não vai mais pedir o item do catálogo.`)
                 : 'Produto criado com sucesso!',
           vinculoFalhou ? 'error' : 'success', true);
         // Veio do atalho das Cotações: o próximo passo é lá, então a tela leva.

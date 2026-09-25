@@ -634,7 +634,7 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode, onNavigate }: { s
     : [
         { label: 'requisição(ões) aprovada(s) sem cotação', count: semNenhumaCotacao, hint: 'use "Nova cotação" para pedir preço ao fornecedor' },
         { label: 'cotação(ões) devolvida(s) para correção', count: emCorrecao, hint: 'clique em "Corrigir" na linha para ajustar e reenviar' },
-        { label: 'cotação(ões) aprovada(s) sem pedido', count: aprovadasSemPedido, hint: 'estão no painel "Prontas para pedido", logo abaixo' },
+        { label: 'cotação(ões) aprovada(s) sem pedido', count: aprovadasSemPedido, hint: 'estão na aba "Gerar pedidos"' },
       ];
 
   // Requisições aprovadas da filial selecionada, ordenadas por item.
@@ -1200,14 +1200,38 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode, onNavigate }: { s
       .sort((a, b) => ordem[a.estado as EstadoPronta] - ordem[b.estado as EstadoPronta]
         || String(a.cot.req?.item ?? '').localeCompare(String(b.cot.req?.item ?? ''), 'pt-BR'));
   }, [prontasCarregando, todasCotacoes, cotacoesComPedido, requisicoes, fornecedores, produtos, servicos, produtosOrdenados, servicosOrdenados]); // eslint-disable-line react-hooks/exhaustive-deps
-  const prontaPorCotacao = useMemo(
-    () => new Map(prontasParaPedido.map(p => [p.cot.id, p])),
-    [prontasParaPedido]);
+
+  // Duas abas na porta de Compras (24/09). Com o painel em cima e a lista
+  // geral embaixo, a mesma cotação aparecia duas vezes, as duas dizendo
+  // "Cadastrar produto" — para o aluno, lista duplicada. Agora cada coisa tem
+  // um lugar: "Gerar pedidos" é o trabalho (aprovadas sem pedido); "Cotações"
+  // é o acompanhamento de todas as propostas, e lá a aprovada só aponta para
+  // cá. A aba inicial é decidida UMA vez, quando as leituras chegam: trocar
+  // sozinha depois (ao gerar o último pedido, por exemplo) tiraria a tela de
+  // baixo do clique.
+  const mostraAbas = !modoFinanceiro && isCompras;
+  const [abaEscolhida, setAbaEscolhida] = useState<'gerar' | 'cotacoes' | null>(null);
+  useEffect(() => {
+    if (!mostraAbas || abaEscolhida || prontasCarregando) return;
+    setAbaEscolhida(prontasParaPedido.length > 0 ? 'gerar' : 'cotacoes');
+  }, [mostraAbas, abaEscolhida, prontasCarregando, prontasParaPedido.length]);
+  const abaAtiva = mostraAbas ? abaEscolhida : 'cotacoes';
+
+  // A busca do topo vale para as duas abas.
+  const prontasVisiveis = useMemo(() => {
+    const q = debouncedSearch.trim().toLowerCase();
+    if (!q) return prontasParaPedido;
+    return prontasParaPedido.filter(p =>
+      String(p.cot.req?.item ?? '').toLowerCase().includes(q)
+      || String(p.cot.forn?.nome ?? '').toLowerCase().includes(q)
+      || String(p.alvo?.nome ?? '').toLowerCase().includes(q)
+      || numeroCotacao(p.cot).toLowerCase().includes(q));
+  }, [prontasParaPedido, debouncedSearch]);
 
   // Seleção do lote — só linhas ligadas. Recortada a cada render pelo que
   // ainda está na fila: o pedido que o colega gerou sai da seleção sozinho.
   const [selLote, setSelLote] = useState<Set<string>>(new Set());
-  const idsLigados = prontasParaPedido.filter(p => p.estado === 'ligado').map(p => p.cot.id);
+  const idsLigados = prontasVisiveis.filter(p => p.estado === 'ligado').map(p => p.cot.id);
   const selecionadas = idsLigados.filter(id => selLote.has(id));
   const alternarLote = (id: string) => setSelLote(prev => {
     const n = new Set(prev);
@@ -1474,15 +1498,12 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode, onNavigate }: { s
     }
   };
 
-  // Os botões de uma cotação aprovada sem pedido — os mesmos no painel e na
-  // linha da lista geral, para as duas portas não oferecerem coisas diferentes.
-  // `compacto`: na tabela o rótulo só aparece em 2xl, como os vizinhos.
-  const botoesDaPronta = (pronta: typeof prontasParaPedido[number], compacto: boolean) => {
+  // Os botões de uma cotação aprovada sem pedido, na aba "Gerar pedidos".
+  const botoesDaPronta = (pronta: typeof prontasParaPedido[number]) => {
     const { cot, servico, estado, vinculo } = pronta;
     const ocupada = generating === cot.id || gerandoLote;
-    const rotulo = (t: string) => <span className={compacto ? 'hidden 2xl:inline' : ''}>{t}</span>;
-    const base = `neu-button rounded-lg text-xs font-bold flex items-center gap-1 shrink-0 h-8 justify-center transition-colors disabled:opacity-50 ${
-      compacto ? 'w-8 2xl:w-auto 2xl:px-3' : 'px-3'}`;
+    const rotulo = (t: string) => <span>{t}</span>;
+    const base = 'neu-button rounded-lg text-xs font-bold flex items-center gap-1 shrink-0 h-8 px-3 justify-center transition-colors disabled:opacity-50';
     if (estado === 'ligado') {
       return (
         <button type="button" onClick={() => handleGerarPedido(cot, vinculo)} disabled={ocupada}
@@ -1569,16 +1590,48 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode, onNavigate }: { s
 
       <FilaDeTrabalho itens={filaDaTela} />
 
-      {/* Prontas para pedido — a bancada do comprador. Ver o comentário de
+      {/* Abas da porta de Compras — ver o comentário de `abaEscolhida`. Mesmo
+          desenho das fases de Orçamentos. */}
+      {mostraAbas && (
+        <div className="flex gap-2 flex-wrap shrink-0">
+          {([
+            { id: 'gerar' as const, label: 'Gerar pedidos', n: prontasParaPedido.length,
+              dica: 'Cotações aprovadas que ainda não viraram pedido' },
+            { id: 'cotacoes' as const, label: 'Cotações', n: totalCount ?? todasCotacoes.length,
+              dica: 'Todas as propostas: aguardando o Financeiro, devolvidas, aprovadas e o histórico' },
+          ]).map(a => {
+            const ativa = abaAtiva === a.id;
+            return (
+              <button key={a.id} type="button" title={a.dica}
+                onClick={() => setAbaEscolhida(a.id)}
+                className={`py-2 px-3.5 rounded-xl text-[11px] font-bold uppercase tracking-widest border transition-all flex items-center gap-2 ${
+                  ativa ? 'border-accent text-accent' : 'border-white/5 text-gray-500 hover:text-gray-300 hover:border-white/15'
+                } ${!ativa && a.n === 0 ? 'opacity-50' : ''}`}>
+                {a.label}
+                <span className="font-mono tabular-nums text-gray-500">{a.n}</span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      {mostraAbas && abaAtiva === null && <LoadingSpinner />}
+
+      {/* Gerar pedidos — a bancada do comprador. Ver o comentário de
           `prontasParaPedido`. */}
-      {!modoFinanceiro && isCompras && prontasParaPedido.length > 0 && (
+      {abaAtiva === 'gerar' && prontasVisiveis.length === 0 && (
+        <EmptyState message={debouncedSearch.trim()
+          ? 'Nenhuma cotação esperando pedido bate com a busca'
+          : 'Nenhuma cotação aprovada esperando pedido. Quando o Financeiro aprovar uma proposta, ela aparece aqui.'} />
+      )}
+      {abaAtiva === 'gerar' && prontasVisiveis.length > 0 && (
         <div className="neu-flat rounded-3xl p-5 border border-yellow-400/15 shrink-0 flex flex-col gap-3">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div className="min-w-0">
               <h3 className="text-sm font-bold text-gray-100 flex items-center gap-2">
                 <ShoppingBag size={15} className="text-yellow-400" />
-                Prontas para pedido
-                <span className="text-[11px] font-bold text-yellow-400/90">({prontasParaPedido.length})</span>
+                Aprovadas esperando o pedido
+                <span className="text-[11px] font-bold text-yellow-400/90">({prontasVisiveis.length})</span>
               </h3>
               <p className="text-[11px] text-gray-500 mt-1 leading-snug max-w-2xl">
                 Cotações aprovadas pelo Financeiro que ainda não viraram pedido. As{' '}
@@ -1603,7 +1656,7 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode, onNavigate }: { s
           </div>
 
           <div className="flex flex-col divide-y divide-white/5">
-            {prontasParaPedido.map(pronta => {
+            {prontasVisiveis.map(pronta => {
               const { cot, servico, estado, alvo, motivo } = pronta;
               const ocupada = generating === cot.id || gerandoLote;
               return (
@@ -1657,7 +1710,7 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode, onNavigate }: { s
                   </div>
 
                   <div className="flex items-center gap-1.5 justify-end ml-auto">
-                    {botoesDaPronta(pronta, false)}
+                    {botoesDaPronta(pronta)}
                   </div>
                 </div>
               );
@@ -2029,7 +2082,7 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode, onNavigate }: { s
         )}
       </AnimatePresence>
 
-      {isLoading ? <LoadingSpinner /> : enrichedFiltered.length === 0 ? <EmptyState message="Nenhuma cotação encontrada" /> : (
+      {abaAtiva !== 'cotacoes' ? null : isLoading ? <LoadingSpinner /> : enrichedFiltered.length === 0 ? <EmptyState message="Nenhuma cotação encontrada" /> : (
         <div className="neu-flat rounded-3xl p-6 border border-white/5 flex flex-col mb-6">
           <div className="overflow-x-auto main-scrollbar">
             <table className="w-full text-left border-collapse">
@@ -2206,9 +2259,17 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode, onNavigate }: { s
                               <Ban size={12} />
                             </button>
                           )}
-                          {/* Aprovado e ainda sem pedido → os mesmos botões do painel */}
-                          {item.status === 'Aprovado' && !cotacoesComPedido.has(item.id) && isCompras
-                            && prontaPorCotacao.has(item.id) && botoesDaPronta(prontaPorCotacao.get(item.id)!, true)}
+                          {/* Aprovado e ainda sem pedido: o trabalho é na aba
+                              "Gerar pedidos". Repetir os botões aqui era o que
+                              fazia a tela parecer ter duas listas iguais. */}
+                          {item.status === 'Aprovado' && !cotacoesComPedido.has(item.id) && mostraAbas && (
+                            <button type="button"
+                              onClick={() => { setAbaEscolhida('gerar'); setSearch(item.req?.item ?? ''); }}
+                              title="Esta cotação está esperando o pedido — abrir na aba Gerar pedidos"
+                              className="neu-button rounded-lg text-xs font-bold flex items-center gap-1 shrink-0 h-8 w-8 2xl:w-auto 2xl:px-3 justify-center transition-colors text-yellow-400/80 hover:bg-yellow-400/10">
+                              <ShoppingBag size={12} /> <span className="hidden 2xl:inline">Ir para Gerar pedidos</span>
+                            </button>
+                          )}
                           {/* Negado com feedback longo: botão pra ver o motivo completo */}
                           {item.status === 'Negado' && item.feedback && (
                             <button onClick={() => setFeedbackAberto(item.feedback)}
