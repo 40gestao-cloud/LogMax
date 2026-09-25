@@ -710,12 +710,6 @@ const CategoriasProdutoViewInner = ({ showToast, filial }: {
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="text-2xl font-black text-gray-100">Categorias{filial ? ` — ${filial}` : ' — Consolidado'}</h1>
-          <p className="text-sm text-gray-500 mt-1 max-w-2xl">
-            Dois níveis: a <strong className="text-gray-400 font-semibold">categoria</strong> agrupa a linha de produto
-            e define o markup-alvo; a <strong className="text-gray-400 font-semibold">subcategoria</strong> refina dentro dela.
-            Usadas em Produtos, Orçamento e Marketing.
-            {!filial && ' Visão consolidada de todas as unidades — somente leitura em Matriz.'}
-          </p>
         </div>
         <div className="flex items-center gap-4 shrink-0 neu-flat border border-white/5 rounded-xl px-4 py-2.5">
           <div className="text-center">

@@ -186,9 +186,6 @@ const DevolucoesViewInner = ({ showToast, profile, filial }: { showToast: any; p
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col h-full gap-6">
       <div>
         <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Devoluções — {filial}</h2>
-        <p className="text-sm text-gray-400 mt-1">
-          Registre a devolução parcial ou total de uma venda. O estoque é revertido e o financeiro estornado.
-        </p>
       </div>
 
       {/* Busca de venda */}

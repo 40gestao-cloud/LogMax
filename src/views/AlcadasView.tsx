@@ -114,9 +114,6 @@ export const AlcadasView = ({ showToast, profile }: { showToast: any; profile: U
         <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight flex items-center gap-2">
           <ShieldCheck size={26} /> Alçadas de Aprovação
         </h2>
-        <p className="text-sm text-gray-400 mt-1">
-          Define quem aprova cotações por faixa de valor em cada filial.
-        </p>
       </div>
 
       <div className="neu-flat rounded-2xl p-5 border border-white/5 text-xs text-gray-400">

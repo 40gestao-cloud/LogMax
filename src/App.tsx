@@ -27,7 +27,6 @@ import { setViewAtual } from './lib/viewAtual';
 import { DesligamentoAviso } from './components/DesligamentoAviso';
 import { Toast, LoadingSpinner, PageLoadingFallback } from './components/ui';
 import { ErrorBoundary } from './components/ErrorBoundary';
-import { FaixaEtapaFluxo } from './components/FaixaEtapaFluxo';
 import { motion, AnimatePresence } from 'motion/react';
 import { ThemeProvider, useTheme } from './contexts/ThemeContext';
 import { FilialProvider, useFilial } from './contexts/FilialContext';
@@ -1449,7 +1448,7 @@ function LogMaxAppInner() {
       case 'cadastros-produtos':              return <ProdutosView showToast={st} profile={profile} onNavigate={navigate} />;
       case 'cadastros-serviços':              return <ServicosView showToast={st} onNavigate={navigate} />;
       case 'cadastros-lixeira':               return <LixeiraView showToast={st} profile={profile} />;
-      case 'empresa-projetos':                return <GenericCRUDView showToast={st} filialScoped title="Projetos" subtitle="Gerencie os projetos em andamento." endpoint="/api/projetosview"
+      case 'empresa-projetos':                return <GenericCRUDView showToast={st} filialScoped title="Projetos" endpoint="/api/projetosview"
         fields={[{ key: 'codigo', label: 'Código', required: true, placeholder: 'Ex: PROJ-001' }, { key: 'nome', label: 'Nome', required: true, placeholder: 'Ex: Implantação ERP' }, { key: 'responsavel', label: 'Responsável', placeholder: 'Ex: Maria Santos' }, { key: 'data_inicio', label: 'Início', type: 'date' }, { key: 'data_fim', label: 'Fim', type: 'date' }, { key: 'orcamento', label: 'Orçamento (R$)', type: 'currency', placeholder: '0,00' }, { key: 'status', label: 'Status', type: 'select', options: ['Ativo', 'Concluído', 'Cancelado'] }, { key: 'descricao', label: 'Descrição', type: 'textarea', placeholder: 'Objetivos, escopo, observações…' }]} />;
       // Sem filialScoped: centros_custo não tem coluna `filial` — o catálogo é
       // da holding inteira e todo authenticated lê (policy read_authenticated).
@@ -1457,9 +1456,9 @@ function LogMaxAppInner() {
       // `grupo_dre` (migr. 425) é o que o DRE usa para agrupar despesa. Nasce
       // vazio de propósito: o que ninguém classificou aparece como linha
       // "Não classificado" no relatório, e classificar é a aula.
-      case 'financeiro-centrosdecusto':       return <GenericCRUDView showToast={st} title="Centros de Custo" subtitle="Catálogo de centros de custo usado nas requisições, no rateio e no agrupamento de despesas do DRE." endpoint="/api/centroscustoview"
+      case 'financeiro-centrosdecusto':       return <GenericCRUDView showToast={st} title="Centros de Custo" endpoint="/api/centroscustoview"
         fields={[{ key: 'codigo', label: 'Código', required: true, placeholder: 'Ex: CC-001' }, { key: 'nome', label: 'Nome', required: true, placeholder: 'Ex: TI & Infraestrutura' }, { key: 'responsavel', label: 'Responsável', placeholder: 'Ex: Ana Lima' }, { key: 'orcamento', label: 'Orçamento (R$)', type: 'currency', placeholder: '0,00' }, { key: 'grupo_dre', label: 'Grupo no DRE', type: 'select', options: ['Pessoal', 'Comerciais', 'Administrativas', 'Ocupação', 'Outras'] }, { key: 'status', label: 'Status', type: 'select', options: ['Ativo', 'Inativo'] }]} />;
-      case 'empresa-condiçõesdepagamento':    return <GenericCRUDView showToast={st} filialScoped title="Condições de Pagamento" subtitle="Gerencie as condições e prazos de pagamento." endpoint="/api/condicoespagamentoview"
+      case 'empresa-condiçõesdepagamento':    return <GenericCRUDView showToast={st} filialScoped title="Condições de Pagamento" endpoint="/api/condicoespagamentoview"
         fields={[{ key: 'descricao', label: 'Descrição', required: true, placeholder: 'Ex: 30/60/90 dias' }, { key: 'parcelas', label: 'Parcelas', type: 'number', placeholder: '3' }, { key: 'dias', label: 'Dias', placeholder: 'Ex: 30, 60, 90' }, { key: 'status', label: 'Status', type: 'select', options: ['Ativo', 'Inativo'] }]} />;
       // Migr. 568: este cadastro deixou de ser decorativo. Cada campo aqui
       // MUDA o preço da proposta em Vendas → Orçamentos:
@@ -1467,7 +1466,7 @@ function LogMaxAppInner() {
       //   · Juros a.m. + Parcelas sem juros acrescem pela Tabela Price;
       //   · Taxa é CUSTO DA LOJA — sai do líquido, não entra no preço;
       //   · Prazo é o D+n do 1º vencimento e Intervalo o espaço entre parcelas.
-      case 'empresa-formasdepagamento':       return <GenericCRUDView showToast={st} filialScoped title="Formas de Pagamento" subtitle="Cada forma define o preço da proposta: desconto à vista, juros do parcelamento, taxa da maquininha e prazo de recebimento." endpoint="/api/formaspagamentoview"
+      case 'empresa-formasdepagamento':       return <GenericCRUDView showToast={st} filialScoped title="Formas de Pagamento" endpoint="/api/formaspagamentoview"
         fields={[
           { key: 'descricao', label: 'Descrição', required: true, placeholder: 'Ex: Cartão de Crédito' },
           { key: 'desconto_percentual', label: 'Desconto à vista (%)', type: 'number', placeholder: '0' },
@@ -1527,9 +1526,9 @@ function LogMaxAppInner() {
       // 'SuperMax' enquanto FuncionariosView filtrava pela unidade ativa, e o
       // cargo criado na MaxLook nunca reaparecia no select de lá. `permiteMatriz`
       // porque a holding também emprega: CEO e conselheiro têm cargo.
-      case 'rh-departamentos':    return <GenericCRUDView showToast={st} filialScoped permiteMatriz title="Departamentos" subtitle="Estrutura departamental desta unidade." endpoint="/api/departamentosview"
+      case 'rh-departamentos':    return <GenericCRUDView showToast={st} filialScoped permiteMatriz title="Departamentos" endpoint="/api/departamentosview"
         fields={[{ key: 'nome', label: 'Nome', required: true, placeholder: 'Ex: Tecnologia da Informação' }, { key: 'responsavel', label: 'Responsável', placeholder: 'Ex: João Silva' }, { key: 'status', label: 'Status', type: 'select', options: ['Ativo', 'Inativo'] }]} />;
-      case 'rh-cargos':           return <GenericCRUDView showToast={st} filialScoped permiteMatriz title="Cargos" subtitle="Cargos e faixas salariais desta unidade." endpoint="/api/cargosview"
+      case 'rh-cargos':           return <GenericCRUDView showToast={st} filialScoped permiteMatriz title="Cargos" endpoint="/api/cargosview"
         fields={[{ key: 'nome', label: 'Nome', required: true, placeholder: 'Ex: Analista de Sistemas' }, { key: 'nivel', label: 'Nível', type: 'select', options: ['Júnior', 'Pleno', 'Sênior', 'Gerência', 'Diretoria'] }, { key: 'salario_base', label: 'Salário Base (R$)', type: 'currency', placeholder: '0,00' }, { key: 'status', label: 'Status', type: 'select', options: ['Ativo', 'Inativo'] }]} />;
       case 'rh-folhadepagamento': return <FolhaPagamentoView showToast={st} profile={profile} />;
       case 'rh-férias':           return <FeriasView showToast={st} profile={profile} />;
@@ -1537,7 +1536,7 @@ function LogMaxAppInner() {
       case 'rh-afastamentos':     return <AfastamentosView showToast={st} profile={profile} />;
       case 'rh-desligamento':    return <DesligamentosView showToast={st} profile={profile} />;
       case 'rh-recrutamentoeseleção': return <RecrutamentoView showToast={st} profile={profile} />;
-      case 'rh-benefícios':       return <GenericCRUDView showToast={st} title="Benefícios" subtitle="Catálogo de benefícios da unidade. A atribuição por pessoa é feita em Funcionários." endpoint="/api/beneficiosview" filialScoped
+      case 'rh-benefícios':       return <GenericCRUDView showToast={st} title="Benefícios" endpoint="/api/beneficiosview" filialScoped
         fields={[{ key: 'nome', label: 'Nome', required: true, placeholder: 'Ex: Vale Refeição' }, { key: 'tipo', label: 'Tipo', type: 'select', options: ['Vale Refeição', 'Vale Transporte', 'Plano de Saúde', 'Plano Odontológico', 'Auxílio Home Office', 'Outros'] }, { key: 'valor', label: 'Valor (R$)', type: 'currency', placeholder: '0,00' }, { key: 'status', label: 'Status', type: 'select', options: ['Ativo', 'Inativo'] }]} />;
       case 'rh-treinamentos':     return <TreinamentosView showToast={st} />;
       case 'rh-pesquisas':        return <PesquisasView showToast={st} profile={profile} />;
@@ -1818,10 +1817,6 @@ function LogMaxAppInner() {
           desde={blackout.iniciado_em}
           isento={profile?.role === 'admin' || profile?.role === 'ceo' || isConselheiro(profile)}
         />
-        {/* Onde esta tela está na cadeia (Requisição → Cotação → Pedido →
-            Recebimento). Lê a mesma lista do diagrama do Modo Aula. Só aparece
-            em tela que pertence a uma cadeia. */}
-        <FaixaEtapaFluxo activeView={activeView} onNavigate={navigate} />
         <div className="flex-1 min-h-0">
           <ErrorBoundary key={activeView}>
             <Suspense fallback={<PageLoadingFallback />}>

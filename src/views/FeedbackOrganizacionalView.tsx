@@ -338,11 +338,6 @@ export const FeedbackOrganizacionalView = ({ showToast, profile }: { showToast: 
           <MessageSquare size={24} />
           Feedback Organizacional
         </h2>
-        <p className="text-sm text-gray-400 mt-1">
-          Canal anônimo. Escolha categoria e quem deve receber. {isDiretoria
-            ? 'Como diretoria, você vê todos os feedbacks enviados (de qualquer destinatário).'
-            : 'Você lê apenas os feedbacks endereçados ao seu papel.'}
-        </p>
       </div>
 
       <FormularioEnvio showToast={showToast} />

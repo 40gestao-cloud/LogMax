@@ -1330,10 +1330,6 @@ const AvaliacoesViewInner = ({ showToast, profile, filial }: { showToast: any; p
           <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">
             Avaliações de Desempenho{filial ? ` — ${filial}` : ' — Matriz'}
           </h2>
-          <p className="text-sm text-gray-400 mt-1">
-            {isAdminOuCEO && isMatriz && 'Gerencie ciclos, avalie CEO/conselheiros, gerentes, colaboradores e filiais, acompanhe o consolidado.'}
-            {!(isAdminOuCEO && isMatriz) && 'Acompanhe as avaliações que você recebeu e o desempenho da sua filial na competição.'}
-          </p>
         </div>
       </div>
 

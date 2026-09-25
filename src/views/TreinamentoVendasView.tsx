@@ -20,9 +20,6 @@ export function TreinamentoVendasView() {
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col h-full gap-6">
       <div>
         <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Treinamento</h2>
-        <p className="text-sm text-gray-400 mt-1">
-          Treine a frente de caixa no MaxPOS antes de operar o PDV da sua unidade.
-        </p>
       </div>
 
       <div className="neu-flat rounded-3xl p-5 sm:p-7 flex flex-col items-center justify-center text-center border border-accent/20 max-w-sm w-full mx-auto">

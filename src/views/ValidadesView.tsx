@@ -218,10 +218,6 @@ const ValidadesViewInner = ({ showToast, filial }: { showToast: any; filial: Fil
       <div className="flex flex-wrap justify-between items-start gap-3 shrink-0">
         <div>
           <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Validades — {filial}</h2>
-          <p className="text-sm text-gray-400 mt-1">
-            Lotes ordenados pelo que vence primeiro (FEFO). O que vence antes sai antes — por venda,
-            promoção ou perda.
-          </p>
         </div>
         <div className="flex gap-3 items-center w-full sm:w-auto">
           <div className="relative flex-1 sm:flex-none">

@@ -118,9 +118,6 @@ export function MatrizAvaliacoesView({ profile, showToast }: { profile: UserProf
       <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col gap-6 pb-8">
         <div>
           <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Central de Avaliação — Matriz</h2>
-          <p className="text-sm text-gray-400 mt-1">
-            Escolha a competição para ver as tarefas, as notas do conselho e quem participou.
-          </p>
         </div>
 
         {competicoes.length === 0 ? (

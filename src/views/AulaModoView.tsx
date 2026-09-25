@@ -315,10 +315,6 @@ export const AulaModoView: React.FC<Props> = ({ showToast, profile }) => {
         </div>
         <div className="flex-1">
           <h1 className="text-2xl font-bold text-gray-100">Modo Aula</h1>
-          <p className="text-sm text-gray-500 mt-1 max-w-2xl">
-            Habilite apenas os módulos que a turma vai trabalhar hoje. O restante fica oculto pra
-            todos os usuários selecionados (admin fica sempre com acesso total pra destravar).
-          </p>
         </div>
       </div>
 

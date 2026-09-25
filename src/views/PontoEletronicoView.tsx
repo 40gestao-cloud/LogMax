@@ -115,11 +115,6 @@ const PontoEletronicoViewInner = ({ showToast, profile, filial }: { showToast: a
         <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">
           Registro de Ponto{filial ? ` — ${filial}` : ''}
         </h2>
-        <p className="text-sm text-gray-400 mt-1">
-          {modoMatriz
-            ? 'Todas as unidades. Escolha uma no seletor do topo para trabalhar dentro dela.'
-            : 'Registro e acompanhamento de ponto dos funcionários.'}
-        </p>
       </div>
 
       {/* Tab switcher */}

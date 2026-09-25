@@ -218,10 +218,6 @@ export const ClienteEspecialView = ({ showToast, profile }: { showToast: any; pr
             <UserCircle2 size={22} className="text-accent" />
             <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Cliente Especial</h2>
           </div>
-          <p className="text-sm text-gray-400">
-            Acesso restrito (admin/CEO). Aja como o cliente para aprovar ou reprovar propostas em
-            <span className="text-cyan-400 font-bold"> Enviado ao Cliente</span>.
-          </p>
         </div>
 
         {/* A FILA PASSA A TER TAMANHO.

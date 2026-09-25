@@ -80,19 +80,6 @@ const RequisicoesEstoqueViewInner = ({ showToast, profile, filial }: { showToast
       <div className="flex flex-wrap justify-between items-start gap-3 shrink-0">
         <div>
           <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Requisições de Material — {filial}</h2>
-          {/* Esta tela NÃO libera — só confere e corrige. A baixa acontece em
-              Estoque → Liberar Requisições. O texto antigo prometia "confere e
-              libera" e mandava o almoxarife embora achando que tinha atendido
-              o pedido. */}
-          <p className="text-sm text-gray-400 mt-1">
-            Material que as áreas pediram do almoxarifado. Quem pede abre em Requisições &rarr; Do Setor; aqui o
-            Estoque confere e corrige a quantidade, e a baixa é em Liberar Requisições. Não confunda com a
-            requisição de <strong className="text-gray-300">compra</strong>: aquela é
-            <strong className="text-gray-300"> outro documento</strong>, para o que a empresa não tem e precisa
-            comprar — esta sai da prateleira e não passa por Compras. Esta é a tela do almoxarife, para
-            conferir e corrigir; quem decide (liberar/negar) usa Estoque &rarr; Liberar Requisições, ou a
-            aba Material em Requisições &rarr; Aprovações.
-          </p>
         </div>
         <div className="flex gap-3 items-center w-full sm:w-auto">
           <div className="relative flex-1 sm:flex-none"><Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" /><input type="text" placeholder="Buscar..." className="neu-input py-2.5 pl-10 pr-4 rounded-xl text-sm w-full sm:w-52" value={search} onChange={e => setSearch(e.target.value)} /></div>

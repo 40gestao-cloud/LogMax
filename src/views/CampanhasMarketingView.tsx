@@ -403,9 +403,6 @@ const CampanhasMarketingViewInner = ({ showToast, profile, filial }: { showToast
         <div className="shrink-0 flex flex-wrap items-start justify-between gap-3">
           <div>
             <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Campanhas — {filial}</h2>
-            <p className="text-sm text-gray-400 mt-1">
-              Planeje campanhas com orçamento e período, acompanhe ROI cruzando vendas no período e cupons usados.
-            </p>
           </div>
         </div>
 

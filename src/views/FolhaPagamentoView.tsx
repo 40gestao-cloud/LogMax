@@ -637,7 +637,6 @@ const FolhaPagamentoViewInner = ({ showToast, profile, filial }: { showToast: an
       <div className="flex flex-wrap justify-between items-start gap-3 shrink-0">
         <div>
           <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Folha de Pagamento — {filial}</h2>
-          <p className="text-sm text-gray-400 mt-1">Gerencie a folha mensal dos funcionários.</p>
         </div>
       </div>
 

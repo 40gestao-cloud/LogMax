@@ -157,7 +157,6 @@ export const PDVView = ({ showToast, profile, filialAtiva }: any) => {
       className="flex-1 flex flex-col items-center justify-center gap-8 py-12 px-4">
       <div className="text-center">
         <h2 className="text-2xl sm:text-3xl font-black text-accent tracking-tight">Ponto de Venda</h2>
-        <p className="text-sm text-gray-400 mt-2">Selecione o PDV que deseja operar.</p>
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 w-full max-w-2xl">
         {FILIAIS_PDV.map(f => {

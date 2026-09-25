@@ -324,11 +324,6 @@ Ela volta para 'Pendente' e sai da fila de Compras — o gerente decide de novo 
       <div className="flex flex-wrap justify-between items-start gap-3 shrink-0">
         <div>
           <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Requisições — {filial}</h2>
-          <p className="text-sm text-gray-400 mt-1">
-            Fila da filial. Quem pede é a área que precisa, em Requisições &rarr; Do Setor; aqui Compras confere,
-            corrige e leva para cotação — é o <strong className="text-gray-300">mesmo documento</strong>, visto pelo
-            papel de quem executa a compra. Clique na linha para abrir a ficha completa: o item sem corte, a ficha do produto, a quantidade, quem pediu, o prazo e em que etapa está.
-          </p>
         </div>
         <div className="flex gap-3 items-center w-full sm:w-auto">
           <div className="relative flex-1 sm:flex-none">

@@ -652,9 +652,6 @@ const FrequenciaTrabalhoViewInner = ({ showToast, profile, filial, embedded }: a
           {!embedded && (
             <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Frequência de Trabalho</h2>
           )}
-          <p className={`text-sm text-gray-400 ${embedded ? '' : 'mt-1'}`}>
-            Lançamento manual do <strong className="text-gray-300">ponto eletrônico</strong> — mesma base do totem, então falta lançada aqui desconta na folha. Período: {periodoLabel}
-          </p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
           {/* Filtro de filial — só no modo Matriz */}

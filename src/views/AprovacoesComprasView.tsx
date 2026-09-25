@@ -464,12 +464,6 @@ const AprovacoesComprasViewInner = ({ showToast, profile, filial }: { showToast:
       <div className="flex flex-wrap justify-between items-start gap-3 shrink-0">
         <div>
           <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Aprovações — {filial}</h2>
-          <p className="text-sm text-gray-400 mt-1">
-            Tudo o que espera a sua decisão, num sítio só. Em <span className="text-gray-300 font-semibold">Compras a aprovar</span>,
-            aprovar não compra nada — libera Compras para cotar fornecedores. Em{' '}
-            <span className="text-gray-300 font-semibold">Material a liberar</span>, liberar entrega o que já
-            está na prateleira e baixa o saldo na hora.
-          </p>
         </div>
       </div>
 

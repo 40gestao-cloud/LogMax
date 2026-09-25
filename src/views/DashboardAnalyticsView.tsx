@@ -251,7 +251,6 @@ export const DashboardAnalyticsView = ({ profile }: { profile?: UserProfile | nu
       <div className="flex flex-wrap justify-between items-start gap-3 shrink-0">
         <div>
           <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Dashboard</h2>
-          <p className="text-sm text-gray-400 mt-1">Visão geral da sua operação.</p>
         </div>
         <div className="flex items-center gap-3 flex-wrap">
           <select

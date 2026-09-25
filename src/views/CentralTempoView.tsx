@@ -791,10 +791,6 @@ export const CentralTempoView = () => {
       className="flex flex-col h-full gap-6 overflow-y-auto main-scrollbar pb-6">
       <div className="shrink-0">
         <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Central de Tempo</h2>
-        <p className="text-sm text-gray-400 mt-1">
-          Quatro ferramentas operacionais num só lugar: relógio do Acre,
-          alarmes, cronômetro e timer. Toque para abrir.
-        </p>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">

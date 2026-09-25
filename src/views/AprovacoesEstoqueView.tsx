@@ -297,7 +297,7 @@ export const AprovacoesEstoqueBloco = ({ showToast, profile, filial, mostrar = '
         : mostrar === 'fila' ? 'flex flex-col gap-4' : 'flex flex-col gap-4 shrink-0'}>
       {mostrar === 'ambos' && (
         <div className="flex flex-wrap justify-between items-start gap-3 shrink-0">
-          <div><h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Liberar Requisições — {filial}</h2><p className="text-sm text-gray-400 mt-1">Material pedido pelas áreas — o que já existe na prateleira, e por isso não passa por Compras. Liberar dá baixa no estoque; quem pediu não libera a própria (migr. 284). Esta é a fila do almoxarife; a fila do gerente para os dois documentos, compra e material, fica em Requisições → Aprovações.</p></div>
+          <div><h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Liberar Requisições — {filial}</h2></div>
         </div>
       )}
       {veFila && orfas > 0 && (

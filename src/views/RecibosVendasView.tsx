@@ -151,8 +151,7 @@ export const RecibosVendasView = ({ showToast, profile }: { showToast: any; prof
         <div>
           <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Recibos de Vendas</h2>
           <p className="text-sm text-gray-400 mt-1">
-            Baixe recibos individuais em PDF ou exporte a listagem em Excel —
-            Total: <span className="text-accent font-bold">{totalPeriodo.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
+            Total:<span className="text-accent font-bold">{totalPeriodo.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
           </p>
         </div>
         <div className="flex gap-3 items-center flex-wrap w-full sm:w-auto">

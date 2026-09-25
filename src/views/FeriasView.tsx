@@ -139,7 +139,6 @@ const FeriasViewInner = ({ showToast, profile, filial }: { showToast: any; profi
       <div className="flex flex-wrap justify-between items-start gap-3 shrink-0">
         <div>
           <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Férias — {filial}</h2>
-          <p className="text-sm text-gray-400 mt-1">Gerencie solicitações e períodos de férias dos funcionários.</p>
         </div>
       </div>
 

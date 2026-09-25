@@ -301,10 +301,6 @@ export const AulaAtividadeView: React.FC<Props> = ({ profile, showToast }) => {
         </div>
         <div className="flex-1">
           <h1 className="text-2xl font-bold text-gray-100">Atividade da aula</h1>
-          <p className="text-sm text-gray-500 mt-1 max-w-2xl">
-            O roteiro que a Matriz publicou para a sua turma. Cada tarefa diz em que papel
-            ela é feita — as suas são as do papel que você ocupa hoje.
-          </p>
         </div>
       </div>
 

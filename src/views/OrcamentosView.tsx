@@ -580,11 +580,6 @@ const OrcamentosViewInner = ({
           <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">
             {modoFinanceiro ? `Aprovações de Orçamento — ${filial}` : `Orçamentos & Propostas — ${filial}`}
           </h2>
-          <p className="text-sm text-gray-400 mt-1">
-            {modoFinanceiro
-              ? 'Aprove ou reprove propostas comerciais enviadas pela equipe de Vendas.'
-              : 'Crie propostas com validade, descontos e acompanhe a aprovação até virar pedido.'}
-          </p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
           {!modoFinanceiro && podeCriarVenda && (

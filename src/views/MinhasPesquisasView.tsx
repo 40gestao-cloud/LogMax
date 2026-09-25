@@ -62,7 +62,6 @@ export const MinhasPesquisasView = ({ showToast, profile }: any) => {
       className="flex flex-col h-full gap-6 overflow-y-auto main-scrollbar pb-6">
       <div className="shrink-0">
         <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Minhas Pesquisas</h2>
-        <p className="text-sm text-gray-400 mt-1">Pesquisas ativas onde sua opinião é esperada.</p>
       </div>
 
       {elegives.length === 0 ? (

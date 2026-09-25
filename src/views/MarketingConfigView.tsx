@@ -79,9 +79,6 @@ export const MarketingConfigView = ({ showToast }: any) => {
         <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight flex items-center gap-2">
           <Settings size={24} /> Configurações de Marketing
         </h2>
-        <p className="text-sm text-gray-400 mt-1">
-          Dois limites da turma. Valem para todas as unidades.
-        </p>
       </div>
 
       <div className="neu-flat rounded-2xl p-5 border border-white/5 flex flex-col gap-2">

@@ -660,10 +660,6 @@ const RecebimentosViewInner = ({ showToast, filial }: { showToast: any; filial: 
       <div className="flex flex-wrap justify-between items-start gap-3 shrink-0">
         <div>
           <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Recebimentos — {filial}</h2>
-          <p className="text-sm text-gray-400 mt-1">
-            Registre o que chegou e confirme a entrada. É a confirmação que move o estoque
-            e libera o pagamento do fornecedor.
-          </p>
         </div>
         <div className="flex gap-3 items-center w-full sm:w-auto">
           <div className="relative flex-1 sm:flex-none"><Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" /><input type="text" placeholder="Buscar..." className="neu-input py-2.5 pl-10 pr-4 rounded-xl text-sm w-full sm:w-52" value={search} onChange={e => setSearch(e.target.value)} /></div>

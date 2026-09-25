@@ -551,7 +551,6 @@ export const AprovacoesPromocaoFinanceiroView = ({ showToast }: any) => {
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col gap-6">
       <div>
         <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Aprovações — Marketing</h2>
-        <p className="text-sm text-gray-400 mt-1">Analise e aprove promoções individuais e itens de campanhas enviados pelo Marketing.</p>
       </div>
 
       {/* Tabs */}

@@ -862,9 +862,6 @@ export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToa
           <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight flex items-center gap-2">
             <Trophy size={24} /> Competição entre Filiais
           </h2>
-          <p className="text-sm text-gray-400 mt-1">
-            Média das notas do conselho por filial nas Tarefas da Matriz. Ranking direto pela média.
-          </p>
         </div>
         <div className="flex items-center gap-2">
           {((podeGerenciar

@@ -196,9 +196,6 @@ const CuponsMarketingViewInner = ({ showToast, profile, filial }: { showToast: a
       <div className="shrink-0 flex flex-wrap items-start justify-between gap-3">
         <div>
           <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Cupons — {filial}</h2>
-          <p className="text-sm text-gray-400 mt-1">
-            Códigos promocionais aplicáveis no PDV. Use cupom percentual ou valor fixo, com limite de usos e validade.
-          </p>
         </div>
       </div>
 

@@ -215,9 +215,6 @@ const NotasRecebidasViewInner = ({ showToast, filial }: any) => {
       <div className="flex flex-wrap justify-between items-start gap-3 shrink-0">
         <div>
           <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Notas Recebidas</h2>
-          <p className="text-sm text-gray-400 mt-1">
-            Registre notas de fornecedores e a aplicação do <span className="text-accent">Capital Inicial</span> em produtos, equipamentos, mobiliário, aluguel e serviços.
-          </p>
         </div>
         <div className="flex gap-3 items-center w-full sm:w-auto">
           <div className="relative flex-1 sm:flex-none">

@@ -266,9 +266,6 @@ export const PainelBIView = ({ showToast, profile }: any) => {
       className="flex flex-col h-full gap-6 overflow-y-auto main-scrollbar pb-6">
       <div className="shrink-0">
         <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Painel de BI</h2>
-        <p className="text-sm text-gray-400 mt-1">
-          Consolidação de Vendas, Financeiro, RH, Estoque e Marketing — análise executiva gerada por IA com base em dados reais do período.
-        </p>
       </div>
 
       {/* Filtros de período e foco */}

@@ -315,7 +315,6 @@ const TreinamentosViewInner = ({ showToast, filial }: { showToast: any; filial: 
       <div className="shrink-0 flex items-start justify-between gap-3">
         <div>
           <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Treinamentos — {filial}</h2>
-          <p className="text-sm text-gray-400 mt-1">Gerencie treinamentos internos e externos.</p>
         </div>
       </div>
 

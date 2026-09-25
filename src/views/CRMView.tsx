@@ -96,7 +96,6 @@ const CRMViewInner = ({ type, showToast, filial }: {
   const { errors, validate, clearError, setErrors } = useFormValidation(form);
 
   const title = isClientes ? `Clientes — ${filial}` : `Fornecedores — ${filial}`;
-  const desc  = isClientes ? 'Visualize e gerencie a carteira de clientes ativos.' : 'Controle seus parceiros comerciais e rede de suprimentos.';
 
   // Pesquisa agora é server-side.
   const filtered = data;
@@ -263,7 +262,6 @@ const CRMViewInner = ({ type, showToast, filial }: {
       <div className="flex flex-wrap justify-between items-start gap-3 shrink-0">
         <div>
           <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">{title}</h2>
-          <p className="text-sm text-gray-400 mt-1">{desc}</p>
         </div>
         <div className="flex flex-wrap gap-3 items-center w-full sm:w-auto">
           <BotaoModeloPlanilha entidade={isClientes ? 'clientes' : 'fornecedores'} filial={filial} showToast={showToast} />

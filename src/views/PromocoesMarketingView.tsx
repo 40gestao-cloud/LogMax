@@ -628,7 +628,6 @@ const PromocoesMarketingViewInner = ({ showToast, profile, filial }: { showToast
       <div className="shrink-0 flex flex-wrap items-start justify-between gap-3">
         <div>
           <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Promoções — {filial}</h2>
-          <p className="text-sm text-gray-400 mt-1">Proponha preços promocionais e acompanhe a cadeia: o Financeiro dá o parecer de margem, o gerente da filial libera.</p>
         </div>
         {/* Sessão de apresentação: abre a primeira arte da unidade e caminha
             pelas outras com as setas. É o botão que o aluno usa para mostrar à

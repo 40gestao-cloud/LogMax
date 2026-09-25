@@ -476,9 +476,6 @@ export const BriefingDiarioView = ({ showToast, profile }: any) => {
       className="flex flex-col h-full gap-6 overflow-y-auto main-scrollbar pb-6">
       <div className="shrink-0">
         <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Briefing Diário</h2>
-        <p className="text-sm text-gray-400 mt-1">
-          IA analisa o estado real do ERP e propõe tarefas operacionais por setor. Você revisa, edita e aprova — o que aprovar vai pro submenu <strong className="text-gray-300">Tarefas</strong> de cada módulo.
-        </p>
       </div>
 
       {/* Filtros + ação */}

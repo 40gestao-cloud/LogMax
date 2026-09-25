@@ -213,9 +213,6 @@ export function RateioAdministrativoView({
     >
       <div>
         <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Rateio Administrativo</h2>
-        <p className="text-sm text-gray-400 mt-1">
-          Distribui o custo da holding entre as unidades que o consomem.
-        </p>
       </div>
 
       {/* O "por quê" da tela. Sem isso ela vira um botão que cria dívida sem

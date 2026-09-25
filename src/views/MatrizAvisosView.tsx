@@ -107,10 +107,6 @@ export function MatrizAvisosView({ profile, showToast }: { profile: UserProfile;
             <Megaphone size={16} className="text-amber-300" />
             <h2 className="text-lg sm:text-xl font-bold text-accent tracking-tight">Avisos da Matriz</h2>
           </div>
-          <p className="text-xs text-gray-400 mt-1">
-            Recado com prazo para gerentes e colaboradores. Aparece como botão flutuante em qualquer
-            tela até a pessoa confirmar leitura.
-          </p>
         </div>
         <button
           onClick={() => setModalOpen(true)}

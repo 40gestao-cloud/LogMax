@@ -426,10 +426,6 @@ const PedidosOnlineInner = ({ showToast, profile, filial }: { showToast: any; pr
       <div className="flex flex-wrap justify-between items-start gap-3 shrink-0">
         <div>
           <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Pedidos Online — {filial}</h2>
-          <p className="text-sm text-gray-400 mt-1">
-            Pedidos vindos da loja pública. Eles <strong className="text-gray-300">não são vendas</strong> ainda —
-            viram venda quando alguém daqui confirma, e aí seguem o caminho normal do PDV.
-          </p>
         </div>
         <div className="flex gap-2">
           {podeAbrirFechar && (

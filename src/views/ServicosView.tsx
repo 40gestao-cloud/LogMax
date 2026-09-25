@@ -324,15 +324,6 @@ export const ServicosView = ({ showToast, onNavigate }: { showToast: any; onNavi
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <h2 className="text-lg sm:text-xl font-black text-accent tracking-tight">Serviços — {filial}</h2>
-          <p className="text-xs text-gray-500 mt-0.5">
-            {filial === 'MaxLook' && 'Ajustes, customizações e cuidados de peças.'}
-            {filial === 'TechMax' && 'Assistência técnica: reparos, trocas e diagnósticos.'}
-            {filial === 'SuperMax' && 'Serviços do supermercado.'}
-            <span className="block mt-0.5 text-gray-600">
-              A lista tem as duas naturezas: o que a unidade presta ao cliente e o que ela
-              contrata de terceiro. Só o contratado aparece na cotação e no pedido de compra.
-            </span>
-          </p>
         </div>
         <div className="flex flex-wrap gap-2 items-center">
           <BotaoModeloPlanilha entidade="servicos" filial={filial} showToast={showToast} />

@@ -142,7 +142,6 @@ export const GerenciamentoComprasView = () => {
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col h-full gap-6 overflow-y-auto main-scrollbar pb-6">
       <div className="shrink-0">
         <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Gerenciamento de Compras</h2>
-        <p className="text-sm text-gray-400 mt-1">Visão geral do pipeline de compras — do pedido ao pagamento.</p>
       </div>
 
       {/* Sumário rápido */}

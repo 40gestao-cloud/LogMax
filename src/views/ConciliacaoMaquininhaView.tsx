@@ -195,10 +195,6 @@ const ConciliacaoMaquininhaViewInner = ({
         <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">
           Conciliação da Maquininha — {filial}
         </h2>
-        <p className="text-sm text-gray-400 mt-1">
-          A adquirente deposita a venda menos a taxa. Aqui você casa o extrato com os títulos:
-          a receita entra pelo bruto e a taxa vira despesa.
-        </p>
       </div>
 
       {podeConciliar && (

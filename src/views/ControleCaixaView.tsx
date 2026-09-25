@@ -673,11 +673,6 @@ export const ControleCaixaView = ({ showToast, profile }: { showToast: any; prof
       {/* Título */}
       <div className="shrink-0">
         <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Controle de Caixa</h2>
-        <p className="text-sm text-gray-400 mt-1">
-          {cross && !filialAtivaOperacional
-            ? 'Abertura e fechamento por unidade. O PDV de cada empresa só opera com o respectivo caixa aberto.'
-            : `Abertura e fechamento do caixa da unidade ${filiaisVisiveis[0] ?? profile?.filial ?? '—'}.`}
-        </p>
       </div>
 
       {/* Saúde financeira por filial — 3 mini-cards (Capital / Gastos / Saldo

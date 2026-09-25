@@ -71,9 +71,6 @@ export const ConfigJurosView = ({ showToast }: any) => {
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col gap-6 max-w-3xl">
       <div>
         <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Juros & Multa</h2>
-        <p className="text-sm text-gray-400 mt-1">
-          Política aplicada a Contas a Receber e Contas a Pagar vencidas. Vale também para parcelas de Cartão de Crédito.
-        </p>
       </div>
 
       <div className="neu-flat rounded-2xl p-6 border border-white/5 flex flex-col gap-4">

@@ -129,10 +129,6 @@ const DREViewInner = ({ showToast, filial }: { showToast: any; filial: FilialOp 
       <div className="flex flex-wrap justify-between items-start gap-3 shrink-0">
         <div>
           <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">DRE — {filial}</h2>
-          <p className="text-sm text-gray-400 mt-1">
-            Resultado por competência: a venda entra na data da venda, a despesa no vencimento.
-            Dinheiro no bolso é o Controle de Caixa — a diferença entre os dois é o ponto.
-          </p>
         </div>
         <div className="flex gap-2 items-center">
           {dre && (

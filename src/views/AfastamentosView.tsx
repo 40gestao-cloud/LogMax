@@ -286,9 +286,6 @@ const AfastamentosViewInner = ({ showToast, profile, filial }: { showToast: any;
       <div className="flex flex-wrap justify-between items-start gap-3 shrink-0">
         <div>
           <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Afastamentos — {filial}</h2>
-          <p className="text-sm text-gray-400 mt-1">
-            Registre atestados, licenças e faltas justificadas. O ponto eletrônico recebe o status <strong className="text-gray-300">Justificado</strong> nos dias do período — mas o desconto na folha só é perdoado depois que <strong className="text-gray-300">admin ou CEO</strong> aprovar.
-          </p>
         </div>
       </div>
 

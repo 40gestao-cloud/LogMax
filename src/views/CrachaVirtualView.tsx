@@ -261,10 +261,6 @@ export const CrachaVirtualView = ({ showToast, profile }: { showToast: any; prof
         <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight flex items-center gap-2">
           <IdCard size={26} /> Crachá Virtual
         </h2>
-        <p className="text-sm text-gray-400 mt-1">
-          Leia o crachá do aluno para registrar a presença de hoje. O lançamento manual
-          em Registro de Ponto continua valendo para correções.
-        </p>
       </div>
 
       {/* Só o botão. A explicação que morava aqui dizia o que a própria tela de

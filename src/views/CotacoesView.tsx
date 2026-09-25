@@ -1462,11 +1462,6 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode, onNavigate }: { s
           <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">
             {modoFinanceiro ? 'Aprovações de Cotação' : 'Cotações'} — {filial}
           </h2>
-          <p className="text-sm text-gray-400 mt-1">
-            {modoFinanceiro
-              ? 'Cotações que o setor de Compras enviou e aguardam a sua decisão.'
-              : 'Colete propostas de fornecedores; após aprovação do Financeiro, gere o pedido.'}
-          </p>
         </div>
 
         <div className="flex items-center gap-2 flex-wrap">

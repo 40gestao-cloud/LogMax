@@ -128,7 +128,6 @@ export const RelatoriosEstoqueView = ({ showToast: _showToast }: any) => {
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col h-full gap-6">
       <div className="shrink-0">
         <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Relatórios de Estoque</h2>
-        <p className="text-sm text-gray-400 mt-1">Visão consolidada de movimentações, saldos, vencimentos e inventários.</p>
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 shrink-0">

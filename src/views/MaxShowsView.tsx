@@ -213,7 +213,6 @@ export const MaxShowsView = ({ showToast, profile }: any) => {
           <h1 className="text-xl sm:text-2xl font-black text-gray-100 flex items-center gap-2">
             <Presentation size={22} className="text-accent shrink-0" /> Max Show
           </h1>
-          <p className="text-xs text-gray-500 mt-1">Monte o slide em PowerPoint/Canva/Slides, exporte como PDF, importe aqui e apresente em tela cheia.</p>
         </div>
         {tab === 'ativos' && (
           <div className="flex gap-2 self-start sm:self-auto">

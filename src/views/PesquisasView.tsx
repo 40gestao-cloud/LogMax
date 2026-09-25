@@ -122,7 +122,6 @@ const PesquisasViewInner = ({ showToast, profile, filial }: any) => {
       <div className="shrink-0 flex items-start justify-between gap-3">
         <div>
           <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Pesquisas — {filial}</h2>
-          <p className="text-sm text-gray-400 mt-1">Crie pesquisas de clima, satisfação ou feedback e acompanhe os resultados.</p>
         </div>
       </div>
 

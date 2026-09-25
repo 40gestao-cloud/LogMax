@@ -182,10 +182,6 @@ const PedidosViewInner = ({ showToast, profile, filial }: { showToast: any; prof
       <div className="flex flex-wrap justify-between items-start gap-3 shrink-0">
         <div>
           <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Pedidos de Compra — {filial}</h2>
-          <p className="text-sm text-gray-400 mt-1">
-            Pedidos gerados a partir de cotações aprovadas. Marcar "em entrega" é o que avisa
-            o Estoque de que há carga a receber.
-          </p>
         </div>
       </div>
 

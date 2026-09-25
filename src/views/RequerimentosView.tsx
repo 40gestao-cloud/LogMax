@@ -335,9 +335,6 @@ export function RequerimentosView({
       <div className="flex items-center justify-between shrink-0">
         <div>
           <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Requerimentos</h2>
-          <p className="text-sm text-gray-400 mt-1">
-            {isGerente ? 'Requerimentos da filial' : 'Seus requerimentos enviados à Matriz'}
-          </p>
         </div>
         <button
           onClick={() => setModalAberto(true)}

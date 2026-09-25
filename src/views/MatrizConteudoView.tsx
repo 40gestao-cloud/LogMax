@@ -156,9 +156,6 @@ export const MatrizConteudoView: React.FC<Props> = ({ profile, showToast }) => {
         <h2 className="text-3xl font-bold text-accent tracking-tight flex items-center gap-2">
           <Dices size={26} /> Conteúdo — Sorteio de Catálogo
         </h2>
-        <p className="text-sm text-gray-400 mt-1">
-          Sorteia produtos reais do catálogo semente para o aluno cadastrar em Cadastros &gt; Produtos.
-        </p>
       </div>
 
       <div className="neu-flat rounded-2xl p-5 flex flex-col gap-4">

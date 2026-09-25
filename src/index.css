@@ -1653,7 +1653,42 @@ main.main-scrollbar,
 @media (prefers-reduced-motion: reduce) {
   .action-btn-edit::before,
   .action-btn-delete::before,
-  .action-btn-neutral::before { animation: none; }
+  .action-btn-neutral::before,
+  .action-btn-gold::before { animation: none; }
+}
+
+/* ── Action button dourado — o dourado vivo do app, com reflexo ──
+   Para a ação de linha que deve saltar aos olhos (ex.: ver a etiqueta do
+   produto). Mesmo tamanho e mesmo reflexo dos demais .action-btn-*; a cor é
+   a do .btn-shimmer--gold, que no fundo preto não lê apagada. */
+.action-btn-gold {
+  position: relative;
+  overflow: hidden;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 0.5rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  background: linear-gradient(100deg, #B8860B 0%, #F0B429 35%, #f0d878 50%, #F0B429 65%, #B8860B 100%);
+  background-size: 200% auto;
+  border: 1px solid #F0B429;
+  color: #000;
+  transition: filter 0.15s, opacity 0.15s;
+  cursor: pointer;
+}
+.action-btn-gold:hover { filter: brightness(1.1); }
+.action-btn-gold:disabled { opacity: 0.5; cursor: not-allowed; }
+.action-btn-gold::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  width: 50%;
+  background: linear-gradient(to right, transparent 0%, rgba(255, 255, 255, 0.35) 50%, transparent 100%);
+  transform: translateX(-150%) skewX(-18deg);
+  animation: action-bar-shimmer 5s ease-in-out infinite;
+  pointer-events: none;
 }
 
 [data-theme="light"] .action-btn-neutral {

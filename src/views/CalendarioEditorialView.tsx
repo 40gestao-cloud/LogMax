@@ -296,9 +296,6 @@ const CalendarioEditorialViewInner = ({ showToast, profile, filial }: any) => {
       <div className="shrink-0 flex items-start justify-between gap-3">
         <div>
           <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Calendário Editorial — {filial}</h2>
-          <p className="text-sm text-gray-400 mt-1">
-            Agenda de posts por canal × data × responsável × status. Planeje a semana antes de produzir as artes.
-          </p>
         </div>
       </div>
 

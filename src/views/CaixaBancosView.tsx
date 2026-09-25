@@ -443,11 +443,6 @@ export const CaixaBancosView = ({
       <div className="flex flex-wrap justify-between items-start gap-4 shrink-0">
         <div>
           <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Caixa / Bancos</h2>
-          <p className="text-sm text-gray-400 mt-1">
-            {matrizMode
-              ? 'Contas da holding e das três unidades. O que você criar aqui nasce na unidade escolhida no formulário.'
-              : `Contas de ${filialAtiva}.`}
-          </p>
         </div>
         <div className="flex gap-3 items-center w-full sm:w-auto">
           <div className="relative flex-1 sm:flex-none">

@@ -163,7 +163,6 @@ export function MetricasRedesSociaisView({ showToast, profile }: { showToast: an
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Redes Sociais</h2>
-          <p className="text-sm text-gray-400 mt-1">Registros de desempenho por plataforma{filialAtiva ? ` — ${filialAtiva}` : ' — todas as filiais'}.</p>
         </div>
         {podeRegistrar && (
           <button onClick={() => setShowForm(v => !v)} className="neu-button flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold text-accent">

@@ -642,11 +642,6 @@ const RecrutamentoInner = ({ showToast, profile, filial }: {
           <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">
             Recrutamento & Seleção{emMatriz ? '' : ` — ${filial}`}
           </h2>
-          <p className="text-sm text-gray-400 mt-1">
-            {emMatriz
-              ? 'Decida o headcount das 3 unidades e conduza a promoção inter-filiais, que só a Matriz pode fazer.'
-              : 'Peça headcount, acompanhe a aprovação da Matriz e conduza o funil até contratar.'}
-          </p>
         </div>
         {podeOperar && (
           <NeuButtonAccent onClick={() => setShowForm(true)}><Plus size={16} />Abrir vaga</NeuButtonAccent>

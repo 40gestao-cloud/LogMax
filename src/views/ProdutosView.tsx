@@ -10,7 +10,7 @@ import { useColarImagemGlobal } from '../components/ColarImagem';
 import { BotaoModeloPlanilha } from '../components/BotaoModeloPlanilha';
 import { ImportarProdutosModal } from '../components/ImportarProdutosModal';
 import { useFetchData, dbInsert, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
-import { LoadingSpinner, EmptyState, FormField, ExportButton, NeuButtonAccent, StatusBadge, FilialBadge, Pagination, ProdutoThumb } from '../components/ui';
+import { LoadingSpinner, EmptyState, FormField, ExportButton, NeuButtonAccent, Pagination, ProdutoThumb } from '../components/ui';
 import { SelectBusca, type SelectBuscaGrupo } from '../components/SelectBusca';
 import type { UserProfile } from '../hooks/useUserProfile';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
@@ -1877,7 +1877,6 @@ const ProdutosViewInner = ({ showToast, filial, profile, onNavigate }: { showToa
       <div className="flex flex-wrap justify-between items-start gap-3 shrink-0">
         <div>
           <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Produtos — {filial}</h2>
-          <p className="text-sm text-gray-400 mt-1">Gerencie o portfólio de itens do estoque e suas informações.</p>
         </div>
         <div className="flex flex-wrap gap-3 items-center w-full sm:w-auto">
           <BotaoModeloPlanilha entidade="produtos" filial={filial} showToast={showToast} />
@@ -2196,13 +2195,11 @@ const ProdutosViewInner = ({ showToast, filial, profile, onNavigate }: { showToa
                       conteúdo e a sobra vai para onde ela é útil. */}
                   <th className="pb-4 font-bold px-4 w-full">Nome</th>
                   <th className="pb-4 font-bold px-4 hidden lg:table-cell">Categoria</th>
-                  <th className="pb-4 font-bold px-4 text-center hidden md:table-cell">Filial</th>
                   <th className="pb-4 font-bold px-4 text-right hidden md:table-cell">P. Custo</th>
                   <th className="pb-4 font-bold px-4 text-right">P. Venda</th>
                   <th className="pb-4 font-bold px-4 text-right hidden md:table-cell"
                       title="Markup: quanto foi acrescentado ao custo. A margem sobre a venda aparece ao passar o mouse no valor.">Markup</th>
                   <th className="pb-4 font-bold px-4 text-center">Estoque</th>
-                  <th className="pb-4 font-bold px-4 text-center hidden sm:table-cell">Status</th>
                   <th className="pb-4 font-bold px-4 text-right">Ações</th>
                 </tr>
               </thead>
@@ -2257,6 +2254,16 @@ const ProdutosViewInner = ({ showToast, filial, profile, onNavigate }: { showToa
                                 têm estoque e ambos se repõem. Sem o selo, "Papel
                                 A4" e "Arroz 5kg" são indistinguíveis na grade, e
                                 a diferença é justamente não ir para o caixa. */}
+                            {/* Sem a coluna Status (24/09 — quase tudo é Ativo e
+                                a coluna só ocupava espaço), o inativo é o único
+                                que precisa se anunciar. Filial também saiu: a
+                                tela já é de uma unidade só. */}
+                            {item.status === 'Inativo' && (
+                              <span className="text-[9px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded bg-gray-800/60 text-gray-400 border border-gray-600/40"
+                                title="Produto inativo — não aparece no PDV nem nas listas de escolha">
+                                Inativo
+                              </span>
+                            )}
                             {normalizarTipo(item.tipo) === 'consumo' && (
                               <span className="text-[9px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded bg-sky-900/40 text-sky-400 border border-sky-600/30"
                                 title="Material de uso e consumo — não vai para o PDV. Sai por Estoque > Requisições de Material.">
@@ -2325,7 +2332,6 @@ const ProdutosViewInner = ({ showToast, filial, profile, onNavigate }: { showToa
                                 className="inline-block align-middle max-w-[150px] truncate whitespace-nowrap text-[10px] uppercase neu-pressed px-2 py-0.5 rounded text-gray-400 tracking-widest font-bold">{item.categoria}</span>
                             : <span className="text-gray-700">—</span>}
                         </td>
-                        <td className="py-4 px-4 text-center hidden md:table-cell"><FilialBadge filial={item.filial} /></td>
                         {/* `whitespace-nowrap` nos valores: sem ele o espaço de
                             "R$ 8,00" era ponto de quebra e a coluna saía com o
                             símbolo numa linha e o número na outra. */}
@@ -2371,7 +2377,6 @@ const ProdutosViewInner = ({ showToast, filial, profile, onNavigate }: { showToa
                             )}
                           </div>
                         </td>
-                        <td className="py-4 px-4 text-center hidden sm:table-cell"><StatusBadge status={item.status} /></td>
                         <td className="py-4 px-4 text-right whitespace-nowrap">
                           {/* Sempre visíveis. Antes eram `opacity-0` até o
                               hover: no telemóvel, que não tem hover, as ações
@@ -2386,7 +2391,7 @@ const ProdutosViewInner = ({ showToast, filial, profile, onNavigate }: { showToa
                             {normalizeEan13(item.ean).valid && (
                               <button onClick={() => setEtiquetaPreview(item)} data-vivo
                                 title="Ver etiqueta EAN-13"
-                                className="btn-shimmer btn-shimmer--gold !p-0 w-8 h-8 justify-center">
+                                className="action-btn-gold">
                                 <Barcode size={13} />
                               </button>
                             )}

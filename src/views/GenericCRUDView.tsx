@@ -9,8 +9,8 @@ import { GField, formatBRL, parseBRL, handleMoneyKeyDown } from '../lib/viewUtil
 import { useConfirm } from '../contexts/ConfirmContext';
 import { useFilial } from '../contexts/FilialContext';
 
-export const GenericCRUDView = ({ title, subtitle, endpoint, fields, defaultStatus = 'Ativo', showToast, filialScoped = false, permiteMatriz = false }: {
-  title: string; subtitle: string; endpoint: string; fields: GField[]; defaultStatus?: string; showToast: any;
+export const GenericCRUDView = ({ title, endpoint, fields, defaultStatus = 'Ativo', showToast, filialScoped = false, permiteMatriz = false }: {
+  title: string; endpoint: string; fields: GField[]; defaultStatus?: string; showToast: any;
   /** Cada filial só vê/edita os próprios registros; Matriz vê o consolidado (só leitura). */
   filialScoped?: boolean;
   /**
@@ -144,10 +144,12 @@ export const GenericCRUDView = ({ title, subtitle, endpoint, fields, defaultStat
       <div className="flex flex-wrap justify-between items-start gap-4 shrink-0">
         <div>
           <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">{title}{filialScoped ? (escopo ? ` — ${escopo}` : ' — Consolidado') : ''}</h2>
-          <p className="text-sm text-gray-400 mt-1">
-            {subtitle}
-            {filialScoped && !escopo && ' Visão consolidada de todas as unidades — somente leitura em Matriz.'}
-          </p>
+          {/* A descrição da tela saiu em 24/09 — guardada em
+              docs/guardado/descricoes-das-telas.md. O aviso fica: é estado,
+              não explicação. */}
+          {filialScoped && !escopo && (
+            <p className="text-sm text-gray-400 mt-1">Visão consolidada de todas as unidades — somente leitura em Matriz.</p>
+          )}
         </div>
         <div className="flex gap-3 items-center w-full sm:w-auto flex-wrap">
           <div className="relative flex-1 sm:flex-none">

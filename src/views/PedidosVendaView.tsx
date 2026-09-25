@@ -181,15 +181,6 @@ const PedidosVendaViewInner = ({ showToast, profile, filial, mode }: { showToast
     : mode === 'financeiro' ? 'Pedidos a Receber'
     : 'Pedidos de Venda';
 
-  // O subtítulo descreve o MÓDULO; quem descreve a fila aberta é a dica da aba,
-  // logo abaixo dela. Antes o subtítulo falava da primeira aba e continuava lá
-  // depois de trocar de aba, contradizendo a lista na tela.
-  const subtituloModo =
-    mode === 'estoque'
-      ? 'O que o almoxarifado separa a partir de proposta aprovada pelo cliente. Separar baixa o estoque.'
-    : mode === 'financeiro'
-      ? 'O recebimento dos pedidos de venda. O pedido só se dá por pago quando a última parcela é quitada.'
-      : 'Pedidos gerados a partir de propostas aprovadas pelo cliente. Logística separa, Financeiro recebe.';
 
   // Status final 'Concluído' é atribuído pela ação que completar o par
   // (separar quando já pago, ou pagar quando já separado). Antes disso o
@@ -291,7 +282,6 @@ const PedidosVendaViewInner = ({ showToast, profile, filial, mode }: { showToast
       <div className="flex flex-wrap justify-between items-start gap-3 shrink-0">
         <div>
           <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">{tituloModo} — {filial}</h2>
-          <p className="text-sm text-gray-400 mt-1">{subtituloModo}</p>
         </div>
       </div>
 

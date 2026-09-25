@@ -830,14 +830,6 @@ const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: 
       <div className="flex flex-wrap justify-between items-start gap-3 shrink-0">
         <div>
           <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Requisições — {filial}</h2>
-          <p className="text-sm text-gray-400 mt-1">
-            O que o seu setor pediu. Material que já existe sai do Estoque; o que falta vai para Compras cotar,
-            e o gerente decide. <strong className="text-gray-300">Repor</strong> item do catálogo e{' '}
-            <strong className="text-gray-300">comprar</strong> algo fora dele são pedidos diferentes: o primeiro se
-            explica pelo saldo, o segundo precisa de justificativa. A requisição que você abre aqui é o mesmo
-            documento que Compras trabalha em Compras &rarr; Requisições de compra — clique na linha para ver em que
-            etapa ela está.
-          </p>
         </div>
         <div className="flex flex-wrap gap-2 items-center">
           <BotaoModeloPlanilha entidade="requisicoes" filial={filial} showToast={showToast} />

@@ -162,12 +162,6 @@ export function RelogioMaquinasView({ profile, showToast }: {
             <AlarmClock size={20} className="text-red-400" />
             Relógio das Máquinas
           </h2>
-          <p className="text-xs text-gray-400 mt-1 max-w-2xl leading-relaxed">
-            Desvio entre o relógio de cada estação e o do servidor, medido no boot do app.
-            Estação muito <strong>adiantada</strong> recebe token de sessão que já nasce vencido:
-            ela renova em laço, estoura o limite do servidor e derruba a sessão de quem está
-            na mesma rede — inclusive de quem está com a hora certa.
-          </p>
           <p className="text-[11px] text-gray-500 mt-1 max-w-2xl leading-relaxed">
             Cada linha é um <strong>navegador</strong>, não um computador: abrir o sistema em dois
             navegadores da mesma máquina cria duas linhas. Use a lixeira para tirar da lista o que

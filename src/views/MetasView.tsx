@@ -306,7 +306,6 @@ export const MetasView = ({ showToast, profile }: any) => {
       <div className="shrink-0 flex items-start justify-between gap-4 flex-wrap">
         <div>
           <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Metas</h2>
-          <p className="text-sm text-gray-400 mt-1">Metas estratégicas da organização.</p>
         </div>
       </div>
 

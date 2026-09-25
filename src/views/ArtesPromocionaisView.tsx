@@ -57,10 +57,6 @@ const ArtesPromocionaisViewInner = ({ filial }: { filial: string }) => {
       <div className="shrink-0 flex items-start justify-between gap-3">
         <div>
         <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Artes Promocionais — {filial}</h2>
-        <p className="text-sm text-gray-400 mt-1">
-          Artes publicadas pelo Marketing para as promoções aprovadas. Clique numa arte
-          para vê-la em tela grande.
-        </p>
         </div>
       </div>
 

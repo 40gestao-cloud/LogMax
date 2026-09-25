@@ -535,11 +535,6 @@ export const FiliaisView = ({ showToast }: any) => {
           <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">
             Gestão de Filiais {filialAtiva === null ? '— Matriz (consolidado)' : `— ${nichoAtivo}`}
           </h2>
-          <p className="text-sm text-gray-400 mt-1">
-            {filialAtiva === null
-              ? 'Consolidado das 4 unidades. Troque para uma filial no topbar para ver apenas ela.'
-              : <>Você está vendo apenas as unidades de <span className="text-accent font-bold">{nichoAtivo}</span>. Troque de unidade no topbar para ver outras.</>}
-          </p>
         </div>
         <div className="flex flex-wrap gap-3 items-center w-full sm:w-auto">
           {data.length > 0 && (

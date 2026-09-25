@@ -265,9 +265,6 @@ export const DesenvolvimentoIAView = ({ showToast, profile }: Props) => {
         </div>
         <div>
           <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Desenvolvimento com IA</h2>
-          <p className="text-sm text-gray-400 mt-0.5">
-            Treinamentos práticos com ferramentas de tecnologia e Inteligência Artificial.
-          </p>
         </div>
       </div>
 

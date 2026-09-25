@@ -354,9 +354,6 @@ const DesligamentosViewInner = ({ showToast, profile, filial }: {
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col gap-5">
       <div>
         <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Desligamento</h2>
-        <p className="text-xs text-gray-500 mt-1">
-          Encerra o vínculo, calcula as verbas rescisórias e retira o acesso de escrita à plataforma.
-        </p>
       </div>
 
       {/* ── Formulário ─────────────────────────────────────────────────── */}

@@ -166,11 +166,6 @@ export function MandatosView({
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold text-gray-100">Mandatos</h1>
-        <p className="text-sm text-gray-400 mt-1">
-          Nomear é um ato com data e motivo — e com hora marcada para prestar contas
-          do posto. Vencido o prazo, o Conselho reconduz, substitui ou encerra; o
-          mandato não cai sozinho.
-        </p>
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">

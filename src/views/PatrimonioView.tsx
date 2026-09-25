@@ -112,9 +112,6 @@ const PatrimonioViewInner = ({ filial, showToast }: { filial: FilialOp; showToas
       <div className="flex flex-wrap justify-between items-start gap-3 shrink-0">
         <div>
           <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Controle de Patrimônio — {filial}</h2>
-          <p className="text-sm text-gray-400 mt-1">
-            Bens classificados como patrimônio no cadastro de produtos (Compras). Cadastro novo é feito em <span className="font-bold text-gray-300">Empresa → Produtos</span> marcando o tipo.
-          </p>
         </div>
         <div className="flex flex-wrap gap-3 items-center w-full sm:w-auto">
           {data.length > 0 && (
