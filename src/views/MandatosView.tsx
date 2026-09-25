@@ -368,7 +368,7 @@ export function MandatosView({
             <EmptyState message="Nenhum mandato encerrado ainda." />
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full text-sm">
+              <table className="tabela w-full text-sm">
                 <thead>
                   <tr className="text-xs uppercase tracking-wider text-gray-500 text-left">
                     <th className="py-2 pr-3">Pessoa</th>

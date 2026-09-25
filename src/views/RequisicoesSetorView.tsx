@@ -1,3 +1,4 @@
+import { MenuMais, ItemMenu } from '../components/MenuMais';
 import React, { useMemo, useState } from 'react';
 import type { FilialOp } from '../components/FilialSelector';
 import { useFilial } from '../contexts/FilialContext';
@@ -826,7 +827,10 @@ const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: 
   };
 
   return (
-    <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col h-full gap-6 overflow-y-auto main-scrollbar pb-6">
+    // A tela rola inteira, no <main> do app. Com `h-full` e rolagem própria, a
+    // tabela (overflow-x-auto) encolhia para caber e rolava espremida abaixo
+    // do cabeçalho — o mesmo defeito corrigido em Aprovações.
+    <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col gap-6 pb-6">
       <div className="flex flex-wrap justify-between items-start gap-3 shrink-0">
         <div>
           <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Requisições — {filial}</h2>
@@ -1465,7 +1469,7 @@ const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: 
               o resto entra a partir de sm/md/lg. Item 1.1/1.2 do plano de
               mobile (docs/plano-mobile-requisicoes.md) - em 375px a tabela
               le sem rolagem horizontal, e a acao fica ao alcance. */}
-          <table className="w-full">
+          <table className="tabela w-full">
             <thead>
               <tr className="border-b border-white/5">
                 <th className="py-3 px-4 text-[10px] font-bold text-gray-500 uppercase tracking-widest text-left">Item</th>
@@ -1581,13 +1585,19 @@ const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: 
                           <RotateCcw size={11} /> Corrigir
                         </button>
                       )}
-                      <HistoricoOperacoes
-                        entidade={r.tipo === 'estoque' ? 'requisicoes_estoque' : 'requisicoes'}
-                        entidadeId={r.id}
-                        titulo={r.numero ? `${r.numero} · ${r.item}` : r.item}
-                        criadoEm={r.criadoEm}
-                        atualizadoEm={r.atualizadoEm}
-                      />
+                      <span className="inline-flex align-middle" onClick={e => e.stopPropagation()}>
+                        <MenuMais>
+                          {fechar => (
+                            <HistoricoOperacoes variante="menu" onAbrir={fechar}
+                              entidade={r.tipo === 'estoque' ? 'requisicoes_estoque' : 'requisicoes'}
+                              entidadeId={r.id}
+                              titulo={r.numero ? `${r.numero} · ${r.item}` : r.item}
+                              criadoEm={r.criadoEm}
+                              atualizadoEm={r.atualizadoEm}
+                            />
+                          )}
+                        </MenuMais>
+                      </span>
                     </td>
                   </tr>
                   {detalhe === r.id && (

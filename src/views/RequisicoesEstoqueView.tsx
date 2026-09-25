@@ -1,3 +1,5 @@
+import { useRolarAteFormulario } from '../hooks/useRolarAteFormulario';
+import { MenuMais, ItemMenu } from '../components/MenuMais';
 import React, { useState } from 'react';
 import type { FilialOp } from '../components/FilialSelector';
 import { useFilial } from '../contexts/FilialContext';
@@ -75,6 +77,8 @@ const RequisicoesEstoqueViewInner = ({ showToast, profile, filial }: { showToast
 
   const isFormOpen = !!editItem;
 
+  const formEdicaoRef = useRolarAteFormulario(isFormOpen, editItem?.id);
+
   return (
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col h-full gap-8">
       <div className="flex flex-wrap justify-between items-start gap-3 shrink-0">
@@ -88,7 +92,7 @@ const RequisicoesEstoqueViewInner = ({ showToast, profile, filial }: { showToast
       </div>
       <AnimatePresence>
         {isFormOpen && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+          <motion.div ref={formEdicaoRef} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
             <div className="neu-flat rounded-2xl p-6 border border-white/5 flex flex-col gap-4">
               <h3 className="text-sm font-bold text-gray-200">Editar Requisição</h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -123,7 +127,7 @@ const RequisicoesEstoqueViewInner = ({ showToast, profile, filial }: { showToast
       </AnimatePresence>
       <div className="neu-flat rounded-3xl p-6 border border-white/5 flex flex-col mb-6">
         <div className="overflow-x-auto main-scrollbar">
-          <table className="w-full text-left border-collapse">
+          <table className="tabela w-full text-left border-collapse">
             <thead><tr className="border-b border-white/10 text-[10px] text-gray-500 uppercase tracking-widest"><th className="pb-4 font-bold px-4">Produto</th><th className="pb-4 font-bold px-4 text-right">Qtd</th><th className="pb-4 font-bold px-4">Destino</th><th className="pb-4 font-bold px-4">Solicitante</th><th className="pb-4 font-bold px-4 text-center">Status</th><th className="pb-4 font-bold px-4 text-right">Ações</th></tr></thead>
             <tbody>
               {isLoading ? (<tr><td colSpan={6}><LoadingSpinner /></td></tr>) : filtered.length === 0 ? (<tr><td colSpan={6}><EmptyState message={solicitante !== null
@@ -138,24 +142,30 @@ const RequisicoesEstoqueViewInner = ({ showToast, profile, filial }: { showToast
                       <td className="py-3 px-4 text-xs text-gray-400">{item.solicitante}</td>
                       <td className="py-3 px-4 text-center"><StatusBadge status={item.status} /></td>
                       <td className="py-3 px-4 text-right">
-                        <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                          <HistoricoOperacoes entidade="requisicoes_estoque" entidadeId={item.id} titulo={item.prod?.nome ?? 'Requisição de estoque'} criadoEm={item.created_at} atualizadoEm={item.updated_at} />
+                        <div className="flex justify-center items-center gap-1.5">
                           {item.status === 'Pendente' && (
                             <button onClick={() => openEdit(item)} title="Editar" className="action-btn-edit"><Edit2 size={12} /></button>
                           )}
-                          {profile?.role === 'admin' && (
-                            <ExcluirAdmin endpoint="/api/requisicoesestoqueview" id={item.id}
-                              rotulo={`pedido de material de ${item.solicitante ?? 'origem desconhecida'}`}
-                              showToast={showToast}
-                              alternativa="negue a requisição: ela sai da fila e o solicitante vê o motivo."
-                              onExcluido={() => window.location.reload()} />
-                          )}
-                          {item.status === 'Negado' && (
-                            <button onClick={() => handleReabrir(item)} title="Reabrir — volta para a fila do Estoque"
-                              className="action-btn-warning">
-                              <RotateCcw size={12} />
-                            </button>
-                          )}
+                            <MenuMais>
+                              {fechar => (
+                                <>
+                                  <HistoricoOperacoes variante="menu" onAbrir={fechar} entidade="requisicoes_estoque" entidadeId={item.id} titulo={item.prod?.nome ?? 'Requisição de estoque'} criadoEm={item.created_at} atualizadoEm={item.updated_at} />
+                                  {item.status === 'Negado' && (
+                                    <ItemMenu onClick={() => { fechar(); handleReabrir(item); }}
+                                      cor="text-amber-400 hover:bg-amber-500/10" icon={RotateCcw}>
+                                      Reabrir para o Estoque
+                                    </ItemMenu>
+                                  )}
+                                  {profile?.role === 'admin' && (
+                                    <ExcluirAdmin variante="menu" endpoint="/api/requisicoesestoqueview" id={item.id}
+                                      rotulo={`pedido de material de ${item.solicitante ?? 'origem desconhecida'}`}
+                                      showToast={showToast}
+                                      alternativa="negue a requisição: ela sai da fila e o solicitante vê o motivo."
+                                      onExcluido={() => window.location.reload()} />
+                                  )}
+                                </>
+                              )}
+                            </MenuMais>
                         </div>
                       </td>
                     </motion.tr>

@@ -10,6 +10,7 @@
 // que há em lote e o saldo do produto, para a diferença ficar à vista em vez de
 // fingida.
 
+import { MenuMais, ItemMenu } from '../components/MenuMais';
 import React, { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Search, Plus, Save, X, CalendarClock, TriangleAlert, PackageMinus, Check } from 'lucide-react';
@@ -313,7 +314,7 @@ const ValidadesViewInner = ({ showToast, filial }: { showToast: any; filial: Fil
 
       <div className="neu-flat rounded-3xl p-6 border border-white/5 flex flex-col mb-6">
         <div className="overflow-x-auto main-scrollbar">
-          <table className="w-full text-left border-collapse">
+          <table className="tabela w-full text-left border-collapse">
             <thead>
               <tr className="border-b border-white/10 text-[10px] text-gray-500 uppercase tracking-widest">
                 <th className="pb-4 font-bold px-4">Produto</th>
@@ -379,8 +380,7 @@ const ValidadesViewInner = ({ showToast, filial }: { showToast: any; filial: Fil
                           )}
                         </td>
                         <td className="py-3 px-4 text-right">
-                          <div className="flex justify-end items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                            <HistoricoOperacoes entidade="vencimentos_estoque" entidadeId={l.id} titulo={`Lote ${l.lote ?? '—'}`} criadoEm={l.created_at} atualizadoEm={l.updated_at} />
+                          <div className="flex justify-center items-center gap-1.5">
                             {l.status === 'OK' && (
                               <>
                                 <button onClick={() => encerrarConsumido(l)} disabled={acaoId === l.id}
@@ -395,6 +395,13 @@ const ValidadesViewInner = ({ showToast, filial }: { showToast: any; filial: Fil
                                 </button>
                               </>
                             )}
+                            <MenuMais>
+                              {fechar => (
+                                <>
+                                  <HistoricoOperacoes variante="menu" onAbrir={fechar} entidade="vencimentos_estoque" entidadeId={l.id} titulo={`Lote ${l.lote ?? '—'}`} criadoEm={l.created_at} atualizadoEm={l.updated_at} />
+                                </>
+                              )}
+                            </MenuMais>
                           </div>
                         </td>
                       </motion.tr>

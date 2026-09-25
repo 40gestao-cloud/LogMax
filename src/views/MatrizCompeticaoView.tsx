@@ -958,7 +958,7 @@ export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToa
                     <button
                       onClick={baixarPdfResultado}
                       disabled={baixandoPdf}
-                      className="btn-shimmer btn-shimmer--glass-black"
+                      className="btn-solido btn-solido--vermelho"
                       title="Baixar resultado por filial em PDF"
                     >
                       {baixandoPdf ? <Loader2 size={12} className="animate-spin" /> : <FileDown size={12} />}
@@ -1075,7 +1075,7 @@ export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToa
                   <Star size={13} className="text-accent" /> Notas do conselho por filial
                 </h3>
                 <div className="overflow-x-auto">
-                  <table className="w-full text-xs">
+                  <table className="tabela w-full text-xs">
                     <thead className="text-[10px] uppercase tracking-widest text-gray-500">
                       <tr>
                         <th className="text-left pb-3 font-bold">Filial</th>
@@ -1201,7 +1201,7 @@ export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToa
                   <EmptyState message="Nenhum eleitor cadastrado na Matriz." />
                 ) : (
                   <div className="overflow-x-auto">
-                    <table className="w-full text-xs">
+                    <table className="tabela w-full text-xs">
                       <thead className="text-[10px] uppercase tracking-widest text-gray-500">
                         <tr>
                           <th className="text-left pb-3 font-bold">Avaliador</th>
@@ -1896,7 +1896,7 @@ export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToa
                           <button
                             onClick={() => gerarPdfDeEncerrada(c, 'download')}
                             disabled={pdfHistoricoId === c.id}
-                            className="btn-shimmer btn-shimmer--glass-black"
+                            className="btn-solido btn-solido--vermelho"
                             title="Baixar o resultado desta competição em PDF"
                           >
                             {pdfHistoricoId === c.id ? <Loader2 size={12} className="animate-spin" /> : <FileDown size={12} />}

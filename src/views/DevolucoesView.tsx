@@ -1,3 +1,4 @@
+import { MenuMais, ItemMenu } from '../components/MenuMais';
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Search, RotateCcw, Save, X, AlertTriangle, Loader2 } from 'lucide-react';
@@ -229,7 +230,7 @@ const DevolucoesViewInner = ({ showToast, profile, filial }: { showToast: any; p
             <EmptyState message="Sem itens nesta venda" />
           ) : (
             <div className="overflow-x-auto main-scrollbar">
-              <table className="w-full text-left border-collapse">
+              <table className="tabela w-full text-left border-collapse">
                 <thead>
                   <tr className="border-b border-white/10 text-[10px] text-gray-500 uppercase tracking-widest">
                     <th className="pb-3 font-bold px-3">Produto</th>
@@ -322,7 +323,7 @@ const DevolucoesViewInner = ({ showToast, profile, filial }: { showToast: any; p
         </div>
         {carregandoHistorico ? <LoadingSpinner /> : historico.length === 0 ? <EmptyState message="Nenhuma devolução registrada." /> : (
           <div className="overflow-x-auto main-scrollbar">
-            <table className="w-full text-left border-collapse">
+            <table className="tabela w-full text-left border-collapse">
               <thead>
                 <tr className="border-b border-white/10 text-[10px] text-gray-500 uppercase tracking-widest">
                   <th className="pb-2 font-bold px-3">Data</th>
@@ -349,10 +350,16 @@ const DevolucoesViewInner = ({ showToast, profile, filial }: { showToast: any; p
                       <span className="line-clamp-1" title={d.motivo}>{d.motivo}</span>
                     </td>
                     <td className="py-2 px-3 text-center"><StatusBadge status={d.status} /></td>
-                    <td className="py-2 px-3 text-right">
-                      <HistoricoOperacoes entidade="devolucoes" entidadeId={d.id}
-                        titulo={`Devolução ${String(d.id).slice(-6).toUpperCase()}`}
-                        criadoEm={d.created_at} atualizadoEm={d.updated_at} />
+                    <td className="py-2 px-3">
+                      <div className="flex justify-center">
+                        <MenuMais>
+                          {fechar => (
+                            <HistoricoOperacoes variante="menu" onAbrir={fechar} entidade="devolucoes" entidadeId={d.id}
+                              titulo={`Devolução ${String(d.id).slice(-6).toUpperCase()}`}
+                              criadoEm={d.created_at} atualizadoEm={d.updated_at} />
+                          )}
+                        </MenuMais>
+                      </div>
                     </td>
                   </tr>
                 ))}

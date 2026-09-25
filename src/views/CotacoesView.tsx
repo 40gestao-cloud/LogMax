@@ -20,6 +20,7 @@ import { podeVerModulo } from '../lib/sectorAccess';
 import type { UserProfile } from '../hooks/useUserProfile';
 import { useConfirm } from '../contexts/ConfirmContext';
 import { ExcluirAdmin } from '../components/ExcluirAdmin';
+import { MenuMais, ItemMenu, CABECALHO_TABELA } from '../components/MenuMais';
 import { useFornecedorDesempenho, SeloDesempenho } from '../components/FornecedorDesempenho';
 import { useReservaTrabalho } from '../hooks/useReservaTrabalho';
 import type { FilialOp } from '../components/FilialSelector';
@@ -1450,7 +1451,7 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode, onNavigate }: { s
   };
 
   return (
-    <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col h-full gap-8">
+    <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col gap-8">
       {/* Uma vez só, na raiz: o formulário de nova proposta e o modal de
           correção apontam os dois para este `list` (migr. 526). Dentro do
           formulário, ele sumia junto com ele e o modal ficava sem sugestão. */}
@@ -1977,136 +1978,134 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode, onNavigate }: { s
       </AnimatePresence>
 
       {abaAtiva !== 'cotacoes' ? null : isLoading ? <LoadingSpinner /> : enrichedFiltered.length === 0 ? <EmptyState message="Nenhuma cotação encontrada" /> : (
-        <div className="neu-flat rounded-3xl p-6 border border-white/5 flex flex-col mb-6">
+        <div className="neu-flat rounded-3xl p-4 sm:p-6 border border-white/5 flex flex-col mb-6">
           <div className="overflow-x-auto main-scrollbar">
-            <table className="w-full text-left border-collapse">
+            {/* Sete colunas. Prazo de entrega e validade dividem uma célula
+                (as duas são datas da proposta); o feedback do Financeiro saiu
+                da coluna própria, quase sempre vazia, e virou o balão nas ações. */}
+            <table className="tabela w-full text-left border-collapse">
               <thead>
-                <tr className="border-b border-white/10 text-[10px] text-gray-500 uppercase tracking-widest">
-                  <th className="pb-4 font-bold px-4">Requisição</th>
-                  <th className="pb-4 font-bold px-4 text-center">Qtd</th>
-                  <th className="pb-4 font-bold px-4">Fornecedor</th>
-                  <th className="pb-4 font-bold px-4 text-right">Valor Total</th>
-                  <th className="pb-4 font-bold px-4">Prazo Entrega</th>
-                  <th className="pb-4 font-bold px-4">Validade</th>
-                  <th className="pb-4 font-bold px-4 text-center">Status</th>
-                  <th className="pb-4 font-bold px-4">Feedback</th>
-                  <th className="pb-4 font-bold px-4 text-right">Ações</th>
+                <tr className={CABECALHO_TABELA}>
+                  <th className="text-center">Item</th>
+                  <th className="text-center w-56">Fornecedor</th>
+                  <th className="text-center w-28">Qtd</th>
+                  <th className="text-center w-32">Valor</th>
+                  <th className="text-center w-36">Prazos</th>
+                  <th className="text-center w-36">Situação</th>
+                  <th className="text-center w-32">Ações</th>
                 </tr>
               </thead>
               <tbody>
                 <AnimatePresence>
-                  {enrichedFiltered.map((item: any) => (
-                    <motion.tr key={item.id} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} className="border-b border-white/5 hover:bg-white/5 transition-colors group">
-                      <td className="py-3 px-4 text-sm font-semibold text-gray-200 min-w-[13rem]">
+                  {enrichedFiltered.map((item: any) => {
+                    const vivo = STATUS_VIVOS.has(item.status);
+                    const vencida = vivo && propostaVencida(item.validade);
+                    const atrasa = !!(item.prazo_entrega && item.req?.data_necessidade && item.prazo_entrega > item.req.data_necessidade);
+                    const nPropostas = item.requisicao_id ? (propostasPorRequisicao.get(item.requisicao_id) ?? []).length : 0;
+                    // Compras cancela enquanto a proposta está viva e sem decisão —
+                    // inclui a devolvida, senão a que nasceu errada ficaria presa.
+                    const podeCancelar = ['Aguardando Financeiro', 'Em correção'].includes(item.status) && isCompras;
+                    const temMenu = podeCancelar || profile.role === 'admin' || (podeReabrirDoc && ['Negado', 'Cancelado'].includes(item.status));
+                    return (
+                    <motion.tr key={item.id} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }}
+                      className="border-b border-accent/10 hover:bg-accent/[0.04] transition-colors align-middle">
+                      <td className="py-3 px-3 min-w-[14rem]">
                         {/* A cotação tem número próprio e cita a requisição de
                             onde nasceu: as duas pontas da conversa entre Compras
                             e Financeiro numa linha só. */}
-                        <span className="block font-credencial text-[10px] text-accent/70 tracking-wider">
-                          {numeroCotacao(item)}
+                        <span className="flex flex-wrap items-center gap-x-2 gap-y-0.5 font-credencial text-[10px] tracking-wider whitespace-nowrap">
+                          <span className="text-accent/70">{numeroCotacao(item)}</span>
+                          {item.req && <span className="text-gray-600">← {numeroRequisicao(item.req)}</span>}
                         </span>
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span>{item.req?.item ?? '—'}</span>
+                        <span className="block text-sm font-semibold text-gray-100 leading-snug mt-1 line-clamp-2 break-words" title={item.req?.item ?? ''}>
+                          {item.req?.item ?? '—'}
                           {/* Migr. 526: sem isto, duas propostas de marcas
                               diferentes apareciam como o mesmo item. */}
-                          {item.marca && (
-                            <span className="px-1.5 py-0.5 rounded-md text-[10px] font-bold bg-white/5 text-gray-300 border border-white/10">
-                              {item.marca}
-                            </span>
-                          )}
-                          {item.req && (
-                            <span className="block font-credencial text-[10px] text-gray-600 tracking-wider">
-                              {numeroRequisicao(item.req)}
-                            </span>
-                          )}
-                          {item.requisicao_id && (propostasPorRequisicao.get(item.requisicao_id) ?? []).length > 1 && (
-                            <button
-                              onClick={() => setComparando(item.requisicao_id)}
-                              title="Comparar propostas concorrentes"
-                              className="neu-button px-2 py-0.5 rounded-full text-[10px] font-bold text-cyan-300 hover:bg-cyan-400/10 border border-cyan-400/20 flex items-center gap-1"
-                            >
-                              <GitCompare size={10} />
-                              {(propostasPorRequisicao.get(item.requisicao_id) ?? []).length} propostas
-                            </button>
-                          )}
-                        </div>
+                          {item.marca && <span className="text-xs text-gray-500 font-normal"> · {item.marca}</span>}
+                        </span>
+                        {nPropostas > 1 && (
+                          <button
+                            onClick={() => setComparando(item.requisicao_id)}
+                            title="Comparar propostas concorrentes"
+                            className="mt-1.5 neu-button px-2 py-0.5 rounded-full text-[10px] font-bold text-cyan-300 hover:bg-cyan-400/10 border border-cyan-400/20 inline-flex items-center gap-1"
+                          >
+                            <GitCompare size={10} /> {nPropostas} propostas
+                          </button>
+                        )}
                       </td>
-                      <td className="py-3 px-4 text-xs font-mono text-gray-300 text-center tabular-nums">
-                        {item.req ? rotuloQtdReq(item.req).replace(/^Qtd: /, '') : '—'}
-                      </td>
-                      <td className="py-3 px-4 text-xs text-gray-400 min-w-[9rem]">
-                        <div className="flex flex-col gap-0.5">
-                          <span>{item.forn?.nome ?? '—'}</span>
-                          {desempenhoDisponivel && item.fornecedor_id && (
+                      <td className="py-3 px-3 text-center">
+                        <span className="block text-xs text-gray-300 line-clamp-2 max-w-[13rem] mx-auto" title={item.forn?.nome ?? ''}>
+                          {item.forn?.nome ?? '—'}
+                        </span>
+                        {desempenhoDisponivel && item.fornecedor_id && (
+                          <span className="flex justify-center mt-0.5">
                             <SeloDesempenho d={desempenho[item.fornecedor_id]} compacto />
-                          )}
-                          {item.observacao && (
-                            <span className="text-[10px] text-gray-500 line-clamp-2" title={item.observacao}>
-                              {item.observacao}
-                            </span>
-                          )}
-                        </div>
+                          </span>
+                        )}
+                        {item.observacao && (
+                          <span className="block text-[10px] text-gray-500 truncate max-w-[13rem] mx-auto" title={item.observacao}>
+                            {item.observacao}
+                          </span>
+                        )}
                       </td>
-                      <td className="py-3 px-4 text-xs font-mono text-gray-200 text-right whitespace-nowrap">
-                        <div className="flex flex-col items-end gap-0.5">
-                          <span>R$ {formatBRL(Number(item.valor_total ?? 0))}</span>
-                          {/* Preço sem prazo é meia informação: o Financeiro
-                              decide com os dois na mesma célula. */}
-                          {item.condicao_pagamento && (
-                            <span className="text-[10px] text-gray-500 font-sans">{item.condicao_pagamento}</span>
-                          )}
-                          {item.status === 'Aguardando Financeiro' && (() => {
-                            const a = alcadaLabel(item);
-                            return (
-                              <span className={`inline-flex items-center gap-1 px-1.5 py-0 rounded-full text-[9px] font-bold uppercase tracking-widest border ${a.color}`}
-                                title={alcadaLimite !== null ? `Alçada: limite Financeiro R$ ${formatBRL(alcadaLimite)}` : 'Alçada não configurada'}>
-                                {a.label}
+                      <td className="py-3 px-3 text-center whitespace-nowrap">
+                        {item.req ? (
+                          <>
+                            <span className="text-sm font-semibold text-gray-200 tabular-nums">{qtdBR(item.req.qtd)}</span>
+                            <span className="text-[10px] text-gray-500 ml-1 uppercase">{normalizarUnidade(item.req.unidade)}</span>
+                            {Number(item.req.qtd_embalagens ?? 0) > 0 && item.req.embalagem_nome && (
+                              <span className="block text-[10px] text-gray-500 leading-tight">
+                                {qtdBR(item.req.qtd_embalagens)} {pluralEmbalagem(item.req.embalagem_nome, Number(item.req.qtd_embalagens)).toLowerCase()}
                               </span>
-                            );
-                          })()}
-                        </div>
+                            )}
+                          </>
+                        ) : <span className="text-xs text-gray-600">—</span>}
                       </td>
-                      {/* Prazo em vermelho quando passa da data em que a
+                      <td className="py-3 px-3 text-center whitespace-nowrap">
+                        <span className="block text-sm font-semibold text-gray-100 tabular-nums">R$ {formatBRL(Number(item.valor_total ?? 0))}</span>
+                        {/* Preço sem prazo é meia informação: o Financeiro
+                            decide com os dois na mesma célula. */}
+                        {item.condicao_pagamento && (
+                          <span className="block text-[10px] text-gray-500">{item.condicao_pagamento}</span>
+                        )}
+                      </td>
+                      {/* Entrega em vermelho quando passa da data em que a
                           requisição precisa do item: é o que separa a proposta
-                          barata da proposta útil. */}
-                      <td className="py-3 px-4 text-xs text-gray-400">
-                        {item.prazo_entrega ? (
-                          <span className={item.req?.data_necessidade && item.prazo_entrega > item.req.data_necessidade
-                            ? 'text-red-400' : ''}
-                            title={item.req?.data_necessidade
-                              ? `Necessário até ${dataBR(item.req.data_necessidade)}` : undefined}>
-                            {dataBR(item.prazo_entrega)}
+                          barata da proposta útil. Validade vencida em vermelho
+                          porque o Financeiro não aprova depois dela (migr. 583). */}
+                      <td className="py-3 px-3 text-center whitespace-nowrap text-[11px] leading-relaxed">
+                        <span className="block"
+                          title={item.req?.data_necessidade ? `Necessário até ${dataBR(item.req.data_necessidade)}` : undefined}>
+                          <span className="text-gray-500">Entrega </span>
+                          <span className={`font-mono ${atrasa ? 'text-red-400 font-bold' : 'text-gray-300'}`}>
+                            {item.prazo_entrega ? dataBR(item.prazo_entrega).slice(0, 5) : '—'}
                           </span>
-                        ) : '—'}
-                      </td>
-                      <td className="py-3 px-4 text-xs font-mono whitespace-nowrap">
-                        {item.validade ? (
-                          <span className={propostaVencida(item.validade) && STATUS_VIVOS.has(item.status)
-                            ? 'text-red-400 font-bold' : 'text-gray-500'}
-                            title={propostaVencida(item.validade) && STATUS_VIVOS.has(item.status)
-                              ? 'Preço vencido: o Financeiro não aprova. Devolva para Compras revalidar.' : undefined}>
-                            {dataBR(item.validade)}
-                            {propostaVencida(item.validade) && STATUS_VIVOS.has(item.status) && ' · vencida'}
+                        </span>
+                        <span className="block"
+                          title={vencida ? 'Preço vencido: o Financeiro não aprova. Devolva para Compras revalidar.' : undefined}>
+                          <span className="text-gray-500">{vencida ? 'Venceu ' : 'Vale até '}</span>
+                          <span className={`font-mono ${vencida ? 'text-red-400 font-bold' : 'text-gray-300'}`}>
+                            {item.validade ? dataBR(item.validade).slice(0, 5) : '—'}
                           </span>
-                        ) : <span className="text-gray-500">—</span>}
+                        </span>
                       </td>
-                      <td className="py-3 px-4 text-center whitespace-nowrap"><StatusBadge status={item.status} /></td>
-                      <td className="py-3 px-4 text-xs max-w-xs">
-                        {item.feedback
-                          ? <span className="text-gray-400 italic line-clamp-2" title={item.feedback}>“{item.feedback}”</span>
-                          : <span className="text-gray-700">—</span>}
+                      <td className="py-3 px-3 text-center whitespace-nowrap">
+                        <StatusBadge status={item.status} />
+                        {item.status === 'Aguardando Financeiro' && (() => {
+                          const a = alcadaLabel(item);
+                          return (
+                            <span className={`block w-fit mx-auto mt-1 px-1.5 rounded-full text-[9px] font-bold uppercase tracking-widest border ${a.color}`}
+                              title={alcadaLimite !== null ? `Alçada: limite Financeiro R$ ${formatBRL(alcadaLimite)}` : 'Alçada não configurada'}>
+                              {a.label}
+                            </span>
+                          );
+                        })()}
                       </td>
-                      <td className="py-3 px-4 text-right">
-                        {/* Os botões rotulados desta célula empurravam as oito
-                            colunas da esquerda e quebravam o nome do item em
-                            duas linhas: três rótulos ("Aprovar", "Reprovar",
-                            "Devolver") somam mais largura do que a coluna de
-                            ações merece. Abaixo de 2xl eles viram só o ícone,
-                            com o mesmo `title` — o texto volta quando há tela
-                            para ele. `opacity-0` também saiu: em tablet, sem
-                            hover, os botões nunca apareciam. */}
-                        <div className="flex justify-end items-center gap-1.5 flex-nowrap whitespace-nowrap opacity-60 group-hover:opacity-100 transition-opacity">
-                          <HistoricoOperacoes entidade="cotacoes" entidadeId={item.id} titulo={`${numeroCotacao(item)} · ${item.req?.item ?? 'Cotação'}`} criadoEm={item.created_at} atualizadoEm={item.updated_at} />
-                          {/* Aguardando Financeiro: gerente do Financeiro decide */}
+                      <td className="py-3 px-3">
+                        {/* Abaixo de 2xl os botões de decisão viram só o ícone,
+                            com o mesmo `title` — três rótulos somam mais largura
+                            do que a coluna merece. */}
+                        <div className="flex justify-center items-center gap-1.5 flex-nowrap whitespace-nowrap">
                           {item.status === 'Aguardando Financeiro' && podeDecidirCotacao(item) && (
                             <>
                               <button onClick={() => { setDecisao({ cot: item, tipo: 'aprovar' }); setFeedbackInput(''); }}
@@ -2129,7 +2128,6 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode, onNavigate }: { s
                               </button>
                             </>
                           )}
-                          {/* Devolvida: quem cadastrou corrige e reenvia */}
                           {item.status === 'Em correção' && podeCorrigir(item) && (
                             <button onClick={() => abrirCorrecao(item)}
                               title="Corrigir e reenviar ao Financeiro"
@@ -2137,59 +2135,60 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode, onNavigate }: { s
                               <Pencil size={12} /> <span className="hidden 2xl:inline">Corrigir</span>
                             </button>
                           )}
-                          {item.status === 'Em correção' && item.feedback && (
+                          {/* O que o Financeiro escreveu — era uma coluna
+                              inteira, quase sempre vazia. */}
+                          {item.feedback && (
                             <button onClick={() => setFeedbackAberto(item.feedback)}
-                              title="Ver o que pediram para corrigir"
-                              className="w-8 h-8 neu-button rounded-lg flex items-center justify-center text-gray-400 hover:text-amber-400">
+                              title={`Feedback do Financeiro: “${item.feedback}”`}
+                              className={`w-8 h-8 neu-button rounded-lg flex items-center justify-center ${
+                                item.status === 'Em correção' ? 'text-amber-400' : 'text-gray-400 hover:text-cyan-400'}`}>
                               <MessageSquare size={12} />
                             </button>
                           )}
                           {/* Compras: cancelar enquanto a proposta está viva e
                               sem decisão — inclui a devolvida, senão a que
                               nasceu errada ficaria presa em correção. */}
-                          {['Aguardando Financeiro', 'Em correção'].includes(item.status) && isCompras && (
-                            <button onClick={() => handleCancelar(item.id)} title="Cancelar envio"
-                              className="action-btn-warning">
-                              <Ban size={12} />
-                            </button>
-                          )}
                           {/* Aprovado e ainda sem pedido: o trabalho é na aba
-                              "Gerar pedidos". Repetir os botões aqui era o que
-                              fazia a tela parecer ter duas listas iguais. */}
+                              "Gerar pedidos". */}
                           {item.status === 'Aprovado' && !cotacoesComPedido.has(item.id) && mostraAbas && (
                             <button type="button"
                               onClick={() => { setAbaEscolhida('gerar'); setSearch(item.req?.item ?? ''); }}
                               title="Esta cotação está esperando o pedido — abrir na aba Gerar pedidos"
                               className="neu-button rounded-lg text-xs font-bold flex items-center gap-1 shrink-0 h-8 w-8 2xl:w-auto 2xl:px-3 justify-center transition-colors text-yellow-400/80 hover:bg-yellow-400/10">
-                              <ShoppingBag size={12} /> <span className="hidden 2xl:inline">Ir para Gerar pedidos</span>
+                              <ShoppingBag size={12} /> <span className="hidden 2xl:inline">Gerar pedido</span>
                             </button>
                           )}
-                          {/* Negado com feedback longo: botão pra ver o motivo completo */}
-                          {item.status === 'Negado' && item.feedback && (
-                            <button onClick={() => setFeedbackAberto(item.feedback)}
-                              title="Ver feedback completo"
-                              className="w-8 h-8 neu-button rounded-lg flex items-center justify-center text-gray-400 hover:text-cyan-400">
-                              <MessageSquare size={12} />
-                            </button>
-                          )}
-                          {profile.role === 'admin' && (
-                            <ExcluirAdmin endpoint="/api/cotacoesview" id={item.id}
-                              rotulo={numeroCotacao(item)} showToast={showToast}
-                              alternativa="cancele a cotação — ela sai da fila e o preço do fornecedor fica registrado."
-                              onExcluido={() => reload()} />
-                          )}
-                          {/* Reabrir — só a direção, e só no que já saiu da fila */}
-                          {podeReabrirDoc && ['Negado', 'Cancelado'].includes(item.status) && (
-                            <button onClick={() => handleReabrirCot(item)} disabled={reabrindoCot === item.id}
-                              title="Reabrir — volta para a fila do Financeiro"
-                              className="action-btn-warning">
-                              <RotateCcw size={12} />
-                            </button>
-                          )}
+                            <MenuMais>
+                              {fechar => (
+                                <>
+                                  <HistoricoOperacoes variante="menu" onAbrir={fechar} entidade="cotacoes" entidadeId={item.id} titulo={`${numeroCotacao(item)} · ${item.req?.item ?? 'Cotação'}`} criadoEm={item.created_at} atualizadoEm={item.updated_at} />
+                                  {podeCancelar && (
+                                    <ItemMenu onClick={() => { fechar(); handleCancelar(item.id); }}
+                                      cor="text-amber-400 hover:bg-amber-500/10" icon={Ban}>
+                                      Cancelar envio
+                                    </ItemMenu>
+                                  )}
+                                  {/* Reabrir — só a direção, e só no que já saiu da fila */}
+                                  {podeReabrirDoc && ['Negado', 'Cancelado'].includes(item.status) && (
+                                    <ItemMenu onClick={() => { fechar(); handleReabrirCot(item); }} disabled={reabrindoCot === item.id}
+                                      cor="text-amber-400 hover:bg-amber-500/10" icon={RotateCcw}>
+                                      Reabrir para o Financeiro
+                                    </ItemMenu>
+                                  )}
+                                  {profile.role === 'admin' && (
+                                    <ExcluirAdmin variante="menu" endpoint="/api/cotacoesview" id={item.id}
+                                      rotulo={numeroCotacao(item)} showToast={showToast}
+                                      alternativa="cancele a cotação — ela sai da fila e o preço do fornecedor fica registrado."
+                                      onExcluido={() => reload()} />
+                                  )}
+                                </>
+                              )}
+                            </MenuMais>
                         </div>
                       </td>
                     </motion.tr>
-                  ))}
+                    );
+                  })}
                 </AnimatePresence>
               </tbody>
             </table>
@@ -2246,9 +2245,9 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode, onNavigate }: { s
               {/* Modal tem altura travada em 85vh: aqui o scroll interno é o
                   certo, diferente da lista da página. */}
               <div className="overflow-auto main-scrollbar flex-1">
-                <table className="w-full text-left border-collapse">
+                <table className="tabela w-full text-left border-collapse">
                   <thead>
-                    <tr className="border-b border-white/10 text-[10px] text-gray-500 uppercase tracking-widest">
+                    <tr className={CABECALHO_TABELA}>
                       <th className="pb-3 font-bold px-3">Fornecedor</th>
                       {/* Migr. 526: comparar preço sem ver a marca é comparar
                           coisas diferentes como se fossem a mesma. */}
@@ -2268,7 +2267,7 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode, onNavigate }: { s
                       const isMenor = isVivo && menorPrecoDoModal !== null && Number(c.valor_total ?? 0) === menorPrecoDoModal;
                       return (
                         <tr key={c.id}
-                          className={`border-b border-white/5 ${isMenor ? 'bg-emerald-400/5' : ''} ${!isVivo ? 'opacity-50' : ''}`}>
+                          className={`border-b border-accent/10 ${isMenor ? 'bg-emerald-400/5' : ''} ${!isVivo ? 'opacity-50' : ''}`}>
                           <td className="py-2.5 px-3 text-xs text-gray-200">
                             <div className="flex items-center gap-1.5">
                               {isMenor && <span title="Menor preço"><Award size={12} className="text-emerald-400 shrink-0" /></span>}

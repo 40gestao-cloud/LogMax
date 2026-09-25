@@ -386,11 +386,11 @@ export const PainelBIView = ({ showToast, profile }: any) => {
         <div className="flex items-center justify-between gap-3 shrink-0 flex-wrap">
           <div className="flex items-center gap-2">
             <button onClick={() => handleExport('pdf')}
-              className="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-widest border border-white/10 hover:border-accent/40 rounded-lg px-3 py-2 text-gray-300 hover:text-accent transition-colors">
+              className="btn-solido btn-solido--vermelho">
               <FileDown size={12} />PDF
             </button>
             <button onClick={() => handleExport('excel')}
-              className="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-widest border border-white/10 hover:border-accent/40 rounded-lg px-3 py-2 text-gray-300 hover:text-accent transition-colors">
+              className="btn-solido btn-solido--verde">
               <Sheet size={12} />Excel
             </button>
             <button onClick={() => handleExport('word')}

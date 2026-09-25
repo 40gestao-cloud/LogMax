@@ -263,15 +263,14 @@ export const FormField = ({ label, error, children }: { label: string; error?: s
   </div>
 );
 
-// Cor pela FUNÇÃO, na paleta de vidro do app (index.css, "Botões de ação do
-// Placar"): PDF é vidro preto (o "Baixar PDF" de lá), Excel é vidro verde,
-// etiqueta é o dourado. Com todos no mesmo cinza, a barra de ferramentas era
+// Cor pela FUNÇÃO, em cor sólida (.btn-solido, index.css): PDF é vermelho,
+// Excel é verde, etiqueta é o dourado. Com todos no mesmo cinza, a barra de ferramentas era
 // uma fileira de botões iguais e ninguém achava o que queria. Sem `variante`,
 // PDF e Excel se reconhecem pelo rótulo — é assim nas telas que já usam.
 const VARIANTE_EXPORT = {
-  pdf: 'btn-shimmer--glass-black',
-  excel: 'btn-shimmer--glass-green',
-  etiqueta: 'btn-shimmer--gold',
+  pdf: 'btn-solido--vermelho',
+  excel: 'btn-solido--verde',
+  etiqueta: 'btn-solido--dourado',
 } as const;
 export const ExportButton = ({ label, onClick, icon: Icon, variante }: {
   label: string; onClick: () => void; icon: any; variante?: keyof typeof VARIANTE_EXPORT;
@@ -281,7 +280,7 @@ export const ExportButton = ({ label, onClick, icon: Icon, variante }: {
     <button
       onClick={onClick}
       className={v
-        ? `btn-shimmer ${VARIANTE_EXPORT[v]} !py-2 !px-4 !rounded-xl !text-xs`
+        ? `btn-solido ${VARIANTE_EXPORT[v]}`
         : 'neu-button py-2 px-4 rounded-xl text-xs font-bold text-gray-400 hover:text-accent transition-colors flex items-center gap-1.5'}
     >
       <Icon size={13} />

@@ -158,7 +158,7 @@ export const RelatoriosComprasView = ({ showToast: _showToast }: any) => {
       <div className="neu-flat rounded-3xl p-6 border border-white/5 flex flex-col mb-6">
         <div className="overflow-x-auto main-scrollbar">
           {isLoading ? <LoadingSpinner /> : activeData.length === 0 ? <EmptyState /> : (
-            <table className="w-full text-left border-collapse">
+            <table className="tabela w-full text-left border-collapse">
               {activeTab === 'requisicoes' && (
                 <>
                   <thead><tr className="border-b border-white/10 text-[10px] text-gray-500 uppercase tracking-widest">

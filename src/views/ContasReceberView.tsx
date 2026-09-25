@@ -1,3 +1,5 @@
+import { useRolarAteFormulario } from '../hooks/useRolarAteFormulario';
+import { MenuMais, ItemMenu } from '../components/MenuMais';
 import React, { useState, useEffect } from 'react';
 import type { FilialSelectorValue } from '../components/FilialSelector';
 import { useFilial } from '../contexts/FilialContext';
@@ -352,6 +354,8 @@ const ContasReceberViewInner = ({ showToast, filial }: { showToast: any; filial:
 
   const isFormOpen = showForm || !!editItem;
 
+  const formEdicaoRef = useRolarAteFormulario(isFormOpen, editItem?.id);
+
   return (
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col h-full gap-8">
       <div className="flex flex-wrap justify-between items-start gap-4 shrink-0">
@@ -375,15 +379,15 @@ const ContasReceberViewInner = ({ showToast, filial }: { showToast: any; filial:
             <input type="text" placeholder="Buscar por descrição ou status..." className="neu-input py-2.5 pl-10 pr-4 rounded-xl text-sm w-full sm:w-52"
               value={search} onChange={e => setSearch(e.target.value)} />
           </div>
-          <button onClick={handleExportPDF} disabled={isExporting} title="Exportar PDF — todas as contas" className="neu-button py-2.5 px-3 rounded-xl text-sm flex items-center gap-1.5 text-gray-300 disabled:opacity-50"><FileDown size={15} /> {isExporting ? '…' : 'PDF'}</button>
-          <button onClick={handleExportExcel} disabled={isExporting} title="Exportar Excel — todas as contas" className="neu-button py-2.5 px-3 rounded-xl text-sm flex items-center gap-1.5 text-gray-300 disabled:opacity-50"><Sheet size={15} /> {isExporting ? '…' : 'Excel'}</button>
+          <button onClick={handleExportPDF} disabled={isExporting} title="Exportar PDF — todas as contas" className="btn-solido btn-solido--vermelho"><FileDown size={15} /> {isExporting ? '…' : 'PDF'}</button>
+          <button onClick={handleExportExcel} disabled={isExporting} title="Exportar Excel — todas as contas" className="btn-solido btn-solido--verde"><Sheet size={15} /> {isExporting ? '…' : 'Excel'}</button>
           <NeuButtonAccent onClick={() => { closeForm(); setShowForm(v => !v); }}><Plus size={16} /> Nova</NeuButtonAccent>
         </div>
       </div>
 
       <AnimatePresence>
         {isFormOpen && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="shrink-0">
+          <motion.div ref={formEdicaoRef} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="shrink-0">
             <div className="neu-flat rounded-2xl p-6 border border-white/5 flex flex-col gap-4">
               <h3 className="text-sm font-bold text-gray-200">{editItem ? 'Editar Conta' : 'Nova Conta a Receber'}</h3>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -424,7 +428,7 @@ const ContasReceberViewInner = ({ showToast, filial }: { showToast: any; filial:
       {isLoading ? <LoadingSpinner /> : (error || filtered.length === 0) ? <EmptyState error={error} message="Nenhuma conta a receber" /> : (
         <div className="neu-flat rounded-3xl p-6 border border-white/5 flex flex-col mb-6">
           <div className="overflow-x-auto main-scrollbar">
-            <table className="w-full text-left border-collapse">
+            <table className="tabela w-full text-left border-collapse">
               <thead>
                 <tr className="border-b border-white/10 text-[10px] text-gray-500 uppercase tracking-widest">
                   <th className="pb-4 font-bold px-4">Descrição</th>
@@ -472,8 +476,7 @@ const ContasReceberViewInner = ({ showToast, filial }: { showToast: any; filial:
                         </td>
                         <td className="py-3 px-4 text-center"><StatusBadge status={item.status} /></td>
                         <td className="py-3 px-4 text-right">
-                          <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                            <HistoricoOperacoes entidade="contas_receber" entidadeId={item.id} titulo={item.descricao} criadoEm={item.created_at} atualizadoEm={item.updated_at} />
+                          <div className="flex justify-center items-center gap-1.5">
                             {/* Título de cartão não recebe por aqui: quem paga é
                                 a adquirente, e ela desconta a taxa. O banco
                                 recusa a baixa (migr. 571) — o botão sai da frente
@@ -490,7 +493,17 @@ const ContasReceberViewInner = ({ showToast, filial }: { showToast: any; filial:
                               </button>
                             ))}
                             <button onClick={() => openEdit(item)} title="Editar" className="action-btn-edit"><Edit2 size={12} /></button>
-                            <button onClick={() => handleDelete(item.id)} title="Excluir" className="action-btn-delete"><Trash2 size={12} /></button>
+                            <MenuMais>
+                              {fechar => (
+                                <>
+                                  <HistoricoOperacoes variante="menu" onAbrir={fechar} entidade="contas_receber" entidadeId={item.id} titulo={item.descricao} criadoEm={item.created_at} atualizadoEm={item.updated_at} />
+                                  <ItemMenu onClick={() => { fechar(); handleDelete(item.id); }}
+                                    cor="text-red-400 hover:bg-red-500/10" icon={Trash2}>
+                                    Excluir
+                                  </ItemMenu>
+                                </>
+                              )}
+                            </MenuMais>
                           </div>
                         </td>
                       </motion.tr>

@@ -1,3 +1,4 @@
+import { useRolarAteFormulario } from '../hooks/useRolarAteFormulario';
 import React, { useState } from 'react';
 import type { FilialOp } from '../components/FilialSelector';
 import { useFilial } from '../contexts/FilialContext';
@@ -28,6 +29,7 @@ const FeriasViewInner = ({ showToast, profile, filial }: { showToast: any; profi
   const [form, setForm] = useState<any>(EMPTY);
   const [saving, setSaving] = useState(false);
 
+  const formEdicaoRef = useRolarAteFormulario(showForm, editId);
   if (loadingF || loadingFn) return <div className="flex-1 flex items-center justify-center"><LoadingSpinner /></div>;
 
   const enriched = ferias.map((f: any) => ({
@@ -162,7 +164,7 @@ const FeriasViewInner = ({ showToast, profile, filial }: { showToast: any; profi
 
       <AnimatePresence>
         {showForm && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+          <motion.div ref={formEdicaoRef} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
             className="neu-flat rounded-3xl p-6 border border-white/5 shrink-0">
             <h3 className="text-sm font-bold text-gray-300 mb-5">{editId ? 'Editar Férias' : 'Nova Solicitação de Férias'}</h3>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -220,14 +222,14 @@ const FeriasViewInner = ({ showToast, profile, filial }: { showToast: any; profi
       <div className="neu-flat rounded-3xl p-6 border border-white/5 shrink-0">
         {enriched.length === 0 ? <EmptyState message="Nenhuma férias registrada." /> : (
           <div className="overflow-x-auto main-scrollbar">
-            <table className="w-full text-left border-collapse">
+            <table className="tabela w-full text-left border-collapse">
               <thead><tr className="border-b border-white/10 text-[10px] text-gray-500 uppercase tracking-widest">
                 <th className="pb-4 font-bold px-4">Funcionário</th>
                 <th className="pb-4 font-bold px-4">Início</th>
                 <th className="pb-4 font-bold px-4">Fim</th>
                 <th className="pb-4 font-bold px-4 text-center">Dias</th>
                 <th className="pb-4 font-bold px-4 text-center">Status</th>
-                <th className="pb-4 font-bold px-4" />
+                <th className="pb-4 font-bold px-4">Ações</th>
               </tr></thead>
               <tbody>
                 <AnimatePresence>

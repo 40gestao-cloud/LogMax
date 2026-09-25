@@ -774,7 +774,7 @@ const FrequenciaTrabalhoViewInner = ({ showToast, profile, filial, embedded }: a
             {diasCobrados.length} dia(s) útil(eis) até hoje no período · esperado = funcionários ativos × dias úteis
           </p>
           <div className="overflow-x-auto main-scrollbar">
-            <table className="w-full text-left border-collapse min-w-[560px]">
+            <table className="tabela w-full text-left border-collapse min-w-[560px]">
               <thead>
                 <tr className="border-b border-white/10 text-[10px] text-gray-500 uppercase tracking-widest">
                   <th className="pb-3 font-bold px-3">Unidade</th>
@@ -869,7 +869,7 @@ const FrequenciaTrabalhoViewInner = ({ showToast, profile, filial, embedded }: a
             <EmptyState message="Nenhum funcionário ativo encontrado." />
           ) : (
             <div className="overflow-x-auto main-scrollbar">
-              <table className="w-full text-left border-collapse min-w-[700px]">
+              <table className="tabela w-full text-left border-collapse min-w-[700px]">
                 <thead>
                   <tr className="border-b border-white/10 text-[10px] text-gray-500 uppercase tracking-widest">
                     <th className="pb-3 font-bold px-3">Funcionário</th>
@@ -1050,7 +1050,7 @@ const FrequenciaTrabalhoViewInner = ({ showToast, profile, filial, embedded }: a
             <EmptyState message="Nenhum funcionário ativo encontrado." />
           ) : (
             <div className="overflow-x-auto main-scrollbar">
-              <table className="w-full text-left border-collapse">
+              <table className="tabela w-full text-left border-collapse">
                 <thead>
                   <tr className="border-b border-white/10 text-[10px] text-gray-500 uppercase tracking-widest">
                     <th className="pb-3 font-bold px-3 sticky left-0 bg-[var(--color-bg-base)] z-10 min-w-[160px]">Funcionário</th>
@@ -1108,7 +1108,7 @@ const FrequenciaTrabalhoViewInner = ({ showToast, profile, filial, embedded }: a
             </span>
           </div>
           <div className="overflow-x-auto main-scrollbar">
-            <table className="w-full text-left border-collapse min-w-[600px]">
+            <table className="tabela w-full text-left border-collapse min-w-[600px]">
               <thead>
                 <tr className="border-b border-white/10 text-[10px] text-gray-500 uppercase tracking-widest">
                   <th className="pb-3 font-bold px-3">Funcionário</th>

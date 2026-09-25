@@ -5,6 +5,7 @@ import { useFilial } from '../contexts/FilialContext';
 import { motion, AnimatePresence } from 'motion/react';
 import { Plus, CheckCircle, Clock, DollarSign, X, Edit2, Trash2, Lock, Calculator, Wallet, ArrowDownLeft, ArrowUpRight, RefreshCw, FileText } from 'lucide-react';
 import { HistoricoOperacoes } from '../components/HistoricoOperacoes';
+import { MenuMais, ItemMenu } from '../components/MenuMais';
 import { useFetchData, dbInsert, dbUpdate, dbDelete, dbSetStatus } from '../hooks/useSupabaseData';
 import { LoadingSpinner, EmptyState, NeuButtonAccent } from '../components/ui';
 import { supabase } from '../lib/supabase';
@@ -741,7 +742,7 @@ const FolhaPagamentoViewInner = ({ showToast, profile, filial }: { showToast: an
       <div className="neu-flat rounded-3xl p-6 border border-white/5 shrink-0">
         {enriched.length === 0 ? <EmptyState message={`Nenhuma folha para ${mesFiltro}.`} /> : (
           <div className="overflow-x-auto main-scrollbar">
-            <table className="w-full text-left border-collapse">
+            <table className="tabela w-full text-left border-collapse">
               <thead><tr className="border-b border-white/10 text-[10px] text-gray-500 uppercase tracking-widest">
                 <th className="pb-4 font-bold px-4">Funcionário</th>
                 <th className="pb-4 font-bold px-4">Mês Ref.</th>
@@ -786,51 +787,46 @@ const FolhaPagamentoViewInner = ({ showToast, profile, filial }: { showToast: an
                         </button>
                       </td>
                       <td className="py-3 px-4 text-right">
-                        <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                          <HistoricoOperacoes entidade="folha_pagamento" entidadeId={f.id} titulo={`Folha ${f.competencia ?? ''}`} criadoEm={f.created_at} atualizadoEm={f.updated_at} />
-                          <button
-                            onClick={() => abrirHolerite(f)}
-                            disabled={holeriteLoading === f.id}
-                            title="Ver holerite (rubricas)"
-                            className="action-btn-edit disabled:opacity-50"
-                          >
+                        {/* Holerite e editar à vista; recálculo, crédito,
+                            carteira, histórico e excluir no "⋯", com nome. */}
+                        <div className="flex justify-center items-center gap-1.5">
+                          <button onClick={() => abrirHolerite(f)} disabled={holeriteLoading === f.id}
+                            title="Ver holerite (rubricas)" className="action-btn-neutral disabled:opacity-50">
                             <FileText size={12} />
                           </button>
-                          {f.status === 'Pendente' && !ehFechada(f) && (
-                            <button
-                              onClick={() => handleRecalcular(f)}
-                              disabled={recalcLoading === f.id}
-                              title="Recalcular do Ponto"
-                              className="action-btn-purple disabled:opacity-50"
-                            >
-                              <Calculator size={12} />
-                            </button>
-                          )}
-                          {(f.status === 'Paga' || f.status === 'Processada') && podeDestravarCredito && !ehFechada(f) && (
-                            <button
-                              onClick={() => handleRecreditar(f)}
-                              disabled={recreditandoId === f.id}
-                              title="Creditar MaxBank / tentar de novo (seguro repetir — idempotente)"
-                              className="action-btn-edit disabled:opacity-50"
-                            >
-                              <RefreshCw size={12} />
-                            </button>
-                          )}
-                          <button
-                            onClick={() => abrirCarteira(f)}
-                            disabled={carteiraLoading}
-                            title="Ver carteira MaxBank do colaborador"
-                            className="action-btn-success disabled:opacity-50"
-                          >
-                            <Wallet size={12} />
-                          </button>
-                          {/* Excluir fica mesmo na folha fechada: é a válvula
-                              do professor quando o lançamento antigo ocupa a
-                              vaga do mês da turma nova (migr. 514). */}
                           {!ehFechada(f) && (
                             <button onClick={() => openEdit(f)} title="Editar" className="action-btn-edit"><Edit2 size={12} /></button>
                           )}
-                          <button onClick={() => handleDelete(f)} title="Excluir" className="action-btn-delete"><Trash2 size={12} /></button>
+                          <MenuMais>
+                            {fechar => (
+                              <>
+                                <HistoricoOperacoes variante="menu" onAbrir={fechar} entidade="folha_pagamento" entidadeId={f.id} titulo={`Folha ${f.competencia ?? ''}`} criadoEm={f.created_at} atualizadoEm={f.updated_at} />
+                                {f.status === 'Pendente' && !ehFechada(f) && (
+                                  <ItemMenu onClick={() => { fechar(); handleRecalcular(f); }} disabled={recalcLoading === f.id}
+                                    cor="text-purple-300 hover:bg-purple-500/10" icon={Calculator}>
+                                    Recalcular do Ponto
+                                  </ItemMenu>
+                                )}
+                                {(f.status === 'Paga' || f.status === 'Processada') && podeDestravarCredito && !ehFechada(f) && (
+                                  <ItemMenu onClick={() => { fechar(); handleRecreditar(f); }} disabled={recreditandoId === f.id}
+                                    cor="text-sky-300 hover:bg-sky-500/10" icon={RefreshCw}>
+                                    Creditar no MaxBank de novo
+                                  </ItemMenu>
+                                )}
+                                <ItemMenu onClick={() => { fechar(); abrirCarteira(f); }} disabled={carteiraLoading}
+                                  cor="text-emerald-400 hover:bg-emerald-500/10" icon={Wallet}>
+                                  Ver carteira MaxBank
+                                </ItemMenu>
+                                {/* Excluir fica mesmo na folha fechada: é a válvula
+                                    do professor quando o lançamento antigo ocupa a
+                                    vaga do mês da turma nova (migr. 514). */}
+                                <ItemMenu onClick={() => { fechar(); handleDelete(f); }}
+                                  cor="text-red-400 hover:bg-red-500/10" icon={Trash2}>
+                                  Excluir
+                                </ItemMenu>
+                              </>
+                            )}
+                          </MenuMais>
                         </div>
                       </td>
                     </motion.tr>
@@ -959,7 +955,7 @@ const FolhaPagamentoViewInner = ({ showToast, profile, filial }: { showToast: an
                 <EmptyState message="Sem rubricas. Recalcule a folha do ponto para gerá-las." />
               ) : (
                 <>
-                  <table className="w-full text-left border-collapse">
+                  <table className="tabela col-guia w-full text-left border-collapse">
                     <thead>
                       <tr className="border-b border-white/10 text-[9px] text-gray-500 uppercase tracking-widest">
                         <th className="pb-2 font-bold pr-2">Cód.</th>

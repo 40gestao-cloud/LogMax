@@ -350,7 +350,7 @@ export function AvaliacaoFilialPanel({ profile, showToast, cicloId }: {
           </div>
 
           <div className="overflow-x-auto main-scrollbar">
-            <table className="w-full text-left border-collapse">
+            <table className="tabela col-guia w-full text-left border-collapse">
               <thead>
                 <tr className="border-b border-white/10 text-[10px] text-gray-500 uppercase tracking-widest">
                   <th className="pb-3 font-bold px-2 w-6"></th>

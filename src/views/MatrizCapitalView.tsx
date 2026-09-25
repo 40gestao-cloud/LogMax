@@ -2187,7 +2187,7 @@ function TabPrestacaoContas({
 
       {/* Matriz Filial × Categoria */}
       <div className="neu-flat rounded-3xl p-6 border border-white/5 overflow-x-auto main-scrollbar">
-        <table className="w-full text-left border-collapse min-w-[720px]">
+        <table className="tabela w-full text-left border-collapse min-w-[720px]">
           <thead>
             <tr className="border-b border-white/10 text-[10px] text-gray-500 uppercase tracking-widest">
               <th className="pb-4 pt-1 pl-2 font-bold">Filial</th>
@@ -2257,7 +2257,7 @@ function TabPrestacaoContas({
           Últimas notas aplicadas ao Capital
         </h3>
         <div className="overflow-x-auto main-scrollbar">
-          <table className="w-full text-left border-collapse">
+          <table className="tabela w-full text-left border-collapse">
             <thead>
               <tr className="border-b border-white/10 text-[10px] text-gray-500 uppercase tracking-widest">
                 <th className="pb-3 pl-2 font-bold">Data</th>
@@ -2401,7 +2401,7 @@ function TabFaturamento({ notas }: { notas: NotaEmitidaMatriz[] }) {
 
       {/* Matriz Filial × Tipo */}
       <div className="neu-flat rounded-3xl p-6 border border-white/5 overflow-x-auto main-scrollbar">
-        <table className="w-full text-left border-collapse min-w-[600px]">
+        <table className="tabela w-full text-left border-collapse min-w-[600px]">
           <thead>
             <tr className="border-b border-white/10 text-[10px] text-gray-500 uppercase tracking-widest">
               <th className="pb-4 pt-1 pl-2 font-bold">Filial</th>
@@ -2459,7 +2459,7 @@ function TabFaturamento({ notas }: { notas: NotaEmitidaMatriz[] }) {
           <BarChart3 size={14} className="text-accent" /> Últimas notas emitidas no período
         </h3>
         <div className="overflow-x-auto main-scrollbar">
-          <table className="w-full text-left border-collapse">
+          <table className="tabela w-full text-left border-collapse">
             <thead>
               <tr className="border-b border-white/10 text-[10px] text-gray-500 uppercase tracking-widest">
                 <th className="pb-3 pl-2 font-bold">Data</th>

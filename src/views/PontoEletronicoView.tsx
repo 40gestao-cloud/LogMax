@@ -176,7 +176,7 @@ const PontoEletronicoViewInner = ({ showToast, profile, filial }: { showToast: a
           <div className="neu-flat rounded-3xl p-6 border border-white/5 shrink-0">
             {enriched.length === 0 ? <EmptyState message={filtroData ? `Nenhum registro para ${filtroData}.` : `Nenhum registro de ponto em ${mesEfetivo}.`} /> : (
               <div className="overflow-x-auto main-scrollbar">
-                <table className="w-full text-left border-collapse">
+                <table className="tabela w-full text-left border-collapse">
                   <thead><tr className="border-b border-white/10 text-[10px] text-gray-500 uppercase tracking-widest">
                     <th className="pb-4 font-bold px-4">Funcionário</th>
                     {/* Sem esta coluna, na Matriz a lista junta as três unidades

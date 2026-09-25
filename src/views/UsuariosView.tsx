@@ -1,3 +1,4 @@
+import { MenuMais, ItemMenu } from '../components/MenuMais';
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { todayBR } from '../lib/dates';
 import { motion, AnimatePresence } from 'motion/react';
@@ -833,7 +834,7 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
         <div className="flex flex-wrap gap-2">
           {isAdmin && (
             <button onClick={handleExportPdf} disabled={exportingPdf || usuariosParaExport.length === 0}
-              className="neu-button px-3 py-2.5 rounded-xl text-xs font-bold uppercase tracking-widest text-gray-300 hover:text-accent flex items-center gap-2 disabled:opacity-40"
+              className="btn-solido btn-solido--vermelho"
               title="Baixar lista em PDF">
               <FileDown size={14} />{exportingPdf ? 'Gerando...' : 'PDF'}
             </button>
@@ -847,7 +848,7 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
           )}
           {isAdmin && (
             <button onClick={handleExportExcel} disabled={exportingExcel || usuariosParaExport.length === 0}
-              className="neu-button px-3 py-2.5 rounded-xl text-xs font-bold uppercase tracking-widest text-gray-300 hover:text-accent flex items-center gap-2 disabled:opacity-40"
+              className="btn-solido btn-solido--verde"
               title="Baixar lista em Excel">
               <FileSpreadsheet size={14} />{exportingExcel ? 'Gerando...' : 'Excel'}
             </button>
@@ -1018,7 +1019,7 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
             : `Nenhum usuário com os filtros aplicados.`
         } /> : (
           <div className="overflow-x-auto main-scrollbar">
-            <table className="w-full text-left border-collapse">
+            <table className="tabela col-guia w-full text-left border-collapse">
               <thead>
                 <tr className="border-b border-white/10 text-[10px] text-gray-500 uppercase tracking-widest">
                   <th className="pb-4 font-bold px-2 w-10"></th>
@@ -1030,7 +1031,7 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
                   <th className="pb-4 font-bold px-4 text-center">Filial</th>
                   <th className="pb-4 font-bold px-4 min-w-[10rem]">Vínculo RH</th>
                   <th className="pb-4 font-bold px-4 text-center">Criado em</th>
-                  <th className="pb-4 px-4"></th>
+                  <th className="pb-4 px-4">Ações</th>
                 </tr>
               </thead>
               <tbody>
@@ -1153,7 +1154,7 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
                             </button>
                           </div>
                         ) : (
-                          <div className="flex items-center justify-end gap-1.5">
+                          <div className="flex items-center justify-center gap-1.5">
                             {canEdit(u) && (
                               <button onClick={() => openEdit(u)}
                                 title="Editar"
@@ -1161,22 +1162,31 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
                                 <Pencil size={13} />
                               </button>
                             )}
-                            {/* Só admin: a resposta traz a senha em texto, então
-                                quem reseta entra na conta do alvo. CEO,
-                                conselheiro e gerente são alunos. */}
-                            {isAdmin && (u.role !== 'admin' || u.id === callerProfile.id) && (
-                              <button onClick={() => setConfirmReset(u.id)}
-                                title="Redefinir senha (gera uma nova e mostra na coluna Senha)"
-                                className="action-btn-edit">
-                                <KeyRound size={13} />
-                              </button>
-                            )}
-                            {isAdmin && u.id !== callerProfile.id && u.role !== 'admin' && (
-                              <button onClick={() => setConfirmDelete(u.id)}
-                                title="Excluir"
-                                className="action-btn-delete">
-                                <Trash2 size={13} />
-                              </button>
+                            {isAdmin && (
+                              (u.role !== 'admin' || u.id === callerProfile.id)
+                              || (u.id !== callerProfile.id && u.role !== 'admin')
+                            ) && (
+                              <MenuMais>
+                                {fechar => (
+                                  <>
+                                    {/* Só admin: a resposta traz a senha em texto, então
+                                        quem reseta entra na conta do alvo. CEO,
+                                        conselheiro e gerente são alunos. */}
+                                    {(u.role !== 'admin' || u.id === callerProfile.id) && (
+                                      <ItemMenu onClick={() => { fechar(); setConfirmReset(u.id); }}
+                                        cor="text-gray-200 hover:bg-white/5" icon={KeyRound}>
+                                        Redefinir senha
+                                      </ItemMenu>
+                                    )}
+                                    {u.id !== callerProfile.id && u.role !== 'admin' && (
+                                      <ItemMenu onClick={() => { fechar(); setConfirmDelete(u.id); }}
+                                        cor="text-red-400 hover:bg-red-500/10" icon={Trash2}>
+                                        Excluir
+                                      </ItemMenu>
+                                    )}
+                                  </>
+                                )}
+                              </MenuMais>
                             )}
                           </div>
                         )}
@@ -1435,7 +1445,7 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
                     </p>
                   ) : (
                     <div className="max-h-52 overflow-y-auto main-scrollbar">
-                      <table className="w-full text-xs">
+                      <table className="tabela w-full text-xs">
                         <tbody>
                           {Object.entries(ensaio.por_tabela ?? {})
                             .sort((a: any, b: any) => Number(b[1]) - Number(a[1]))

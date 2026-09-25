@@ -243,7 +243,7 @@ export const AulaPainelControle: React.FC<Props> = ({ showToast, recarregarEm })
             // dentro do próprio card: sem isto ela empurra a página inteira
             // para o lado e a sidebar sai de vista.
             <div className="overflow-x-auto -mx-1 px-1">
-              <table className="w-full border-separate border-spacing-0 text-left">
+              <table className="tabela w-full border-separate border-spacing-0 text-left">
                 <thead>
                   <tr>
                     <th className="sticky left-0 z-10 bg-base text-[10px] font-black uppercase tracking-widest text-gray-500 pb-2 pr-3 align-bottom">

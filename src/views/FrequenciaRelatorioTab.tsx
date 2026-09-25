@@ -273,7 +273,7 @@ export const FrequenciaRelatorioTab = ({
           </span>
         </label>
         <button type="button" onClick={baixar} disabled={gerando}
-          className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-bold uppercase tracking-widest bg-accent/15 border border-accent/30 text-accent hover:bg-accent/25 transition disabled:opacity-50">
+          className="btn-solido btn-solido--vermelho">
           {gerando ? <Loader2 size={14} className="animate-spin" /> : <FileDown size={14} />}
           {gerando ? 'Gerando...' : 'Baixar PDF'}
         </button>

@@ -401,7 +401,7 @@ const AfastamentosViewInner = ({ showToast, profile, filial }: { showToast: any;
       <div className="neu-flat rounded-3xl p-6 border border-white/5 shrink-0">
         {afastamentos.length === 0 ? <EmptyState message="Nenhum afastamento registrado." /> : (
           <div className="overflow-x-auto main-scrollbar">
-            <table className="w-full text-left border-collapse min-w-[1200px]">
+            <table className="tabela w-full text-left border-collapse min-w-[1200px]">
               <thead>
                 <tr className="border-b border-white/10 text-[10px] text-gray-500 uppercase tracking-widest">
                   <th className="pb-4 font-bold px-4">Colaborador</th>
@@ -499,7 +499,7 @@ const AfastamentosViewInner = ({ showToast, profile, filial }: { showToast: any;
                           )}
                         </td>
                         <td className="py-3 px-4 text-right">
-                          <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <div className="flex justify-center items-center gap-1.5">
                             {canCRUD && (
                               <button onClick={() => handleDelete(a)} title="Inativar" className="action-btn-delete">
                                 <Trash2 size={12} />

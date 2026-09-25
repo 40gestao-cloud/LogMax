@@ -2840,3 +2840,104 @@ main.main-scrollbar,
 @media (prefers-reduced-motion: reduce) {
   .alarme-botao { animation: none !important; background-position: 50% center !important; }
 }
+
+/* ── Tabela padrão (.tabela) ───────────────────────────────────────────────
+   Cabeçalho em faixa própria (fundo do accent, cantos arredondados, traço
+   entre colunas, título numa linha só) e linhas separadas no tom do accent.
+   Tudo centralizado — título E conteúdo — menos o texto da primeira coluna,
+   que é a descrição e costuma ter várias linhas. Fora das camadas do Tailwind
+   de propósito: ganha dos utilitários antigos (text-left, border-white/5,
+   justify-end) que cada tabela ainda carrega. */
+.tabela { border-collapse: separate; border-spacing: 0; }
+.tabela > thead > tr { border: 0; }
+.tabela > thead > tr > th {
+  background: color-mix(in oklab, var(--color-accent) 8%, transparent);
+  color: color-mix(in oklab, var(--color-accent) 80%, transparent);
+  font-size: 10px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase;
+  text-align: center; white-space: nowrap; vertical-align: middle;
+  padding: 0.75rem 0.75rem;
+}
+.tabela > thead > tr > th + th { border-left: 1px solid color-mix(in oklab, var(--color-accent) 15%, transparent); }
+.tabela > thead > tr > th:first-child { border-top-left-radius: 0.75rem; border-bottom-left-radius: 0.75rem; }
+.tabela > thead > tr > th:last-child { border-top-right-radius: 0.75rem; border-bottom-right-radius: 0.75rem; }
+.tabela > tbody > tr > td { border-bottom: 1px solid color-mix(in oklab, var(--color-accent) 10%, transparent); vertical-align: middle; }
+.tabela > tbody > tr { border-color: transparent; }
+.tabela > tbody > tr:hover > td { background: color-mix(in oklab, var(--color-accent) 4%, transparent); }
+.tabela > tbody > tr > td:not(:first-child):not([colspan]) { text-align: center; }
+/* Células que alinham por flex (ações, selos): centraliza também. */
+.tabela > tbody > tr > td:not(:first-child):not([colspan]) > .flex:not(.flex-col) { justify-content: center; }
+.tabela > tbody > tr > td:not(:first-child):not([colspan]) > .flex.flex-col { align-items: center; }
+.tabela > tfoot > tr > td { border-top: 1px solid color-mix(in oklab, var(--color-accent) 20%, transparent); }
+.tabela > tfoot > tr > td:not(:first-child) { text-align: center; }
+/* Coluna fixa na rolagem lateral: a faixa translúcida deixaria o conteúdo
+   aparecer por baixo — ganha o fundo da página embaixo do tom do accent. */
+.tabela > thead > tr > th.sticky {
+  background:
+    linear-gradient(color-mix(in oklab, var(--color-accent) 8%, transparent), color-mix(in oklab, var(--color-accent) 8%, transparent)),
+    var(--color-bg-base);
+}
+/* Número, data e dinheiro não quebram no meio ("2026-09-14" virava duas
+   linhas); o espaço sai das colunas de texto, que podem quebrar. */
+.tabela > tbody > tr > td { padding-left: 0.75rem; padding-right: 0.75rem; }
+.tabela > tbody > tr > td.font-mono,
+.tabela > tbody > tr > td.tabular-nums,
+.tabela > tbody > tr > td.whitespace-nowrap,
+.tabela > tbody > tr > td > .font-mono,
+.tabela > tbody > tr > td > .tabular-nums { white-space: nowrap; }
+/* Tabela cuja 1ª coluna é avatar, seleção ou código (.col-guia): o texto
+   principal é a 2ª coluna, e é ela que fica à esquerda. */
+.tabela.col-guia > tbody > tr > td:nth-child(2):not([colspan]) { text-align: left; }
+.tabela.col-guia > tbody > tr > td:nth-child(2):not([colspan]) > .flex:not(.flex-col) { justify-content: flex-start; }
+.tabela.col-guia > tbody > tr > td:nth-child(2):not([colspan]) > .flex.flex-col { align-items: flex-start; }
+.tabela.col-guia > tbody > tr > td:first-child:not([colspan]) { text-align: center; }
+/* Botão "⋯" (MenuMais): mesmo formato dos action-btn, no tom do accent
+   translúcido — com fundo, para ser lido como botão, sem gritar como o dourado
+   sólido numa lista de 50 linhas. Aceso enquanto o menu está aberto. */
+.action-btn-mais {
+  width: 2rem; height: 2rem; border-radius: 0.5rem; flex-shrink: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: color-mix(in oklab, var(--color-accent) 12%, transparent);
+  border: 1px solid color-mix(in oklab, var(--color-accent) 35%, transparent);
+  color: var(--color-accent);
+  transition: background 0.15s, border-color 0.15s;
+}
+.action-btn-mais:hover,
+.action-btn-mais[aria-expanded="true"] {
+  background: color-mix(in oklab, var(--color-accent) 24%, transparent);
+  border-color: color-mix(in oklab, var(--color-accent) 60%, transparent);
+}
+/* Célula de texto principal fora da 1ª/2ª coluna (ex.: nome do produto
+   depois de seleção, foto e código): marcada com .col-texto, fica à esquerda. */
+.tabela > tbody > tr > td.col-texto { text-align: left !important; }
+.tabela > tbody > tr > td.col-texto > .flex:not(.flex-col) { justify-content: flex-start !important; }
+.tabela > tbody > tr > td.col-texto > .flex.flex-col { align-items: flex-start !important; }
+
+/* ── Botão sólido da barra do topo (.btn-solido) ─────────────────────────────
+   Modelo de planilha, Minhas planilhas, Importar, Etiquetas, PDF, Excel: cor
+   cheia e parada. O vidro com brilho (btn-shimmer--glass-*) continua nas abas
+   com contador, onde o brilho marca a aba ativa — na barra de ferramentas ele
+   só competia com o conteúdo, e o translúcido lia apagado. */
+.btn-solido {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 0.5rem 1rem; border-radius: 0.75rem;
+  font-size: 0.75rem; font-weight: 800; letter-spacing: 0.03em; white-space: nowrap;
+  border: 1px solid transparent; cursor: pointer;
+  transition: filter .12s ease, transform .12s ease;
+}
+.btn-solido:hover:not(:disabled)  { filter: brightness(1.12); }
+.btn-solido:active:not(:disabled) { transform: translateY(1px); }
+.btn-solido:disabled { opacity: 0.55; cursor: not-allowed; }
+.btn-solido--roxo    { background: #7c3aed; border-color: #6d28d9; color: #fff; }
+.btn-solido--azul    { background: #2563eb; border-color: #1d4ed8; color: #fff; }
+.btn-solido--amarelo { background: #eab308; border-color: #ca8a04; color: #0a0a0a; }
+.btn-solido--verde   { background: #16a34a; border-color: #15803d; color: #fff; }
+.btn-solido--preto   { background: #1f1f1f; border-color: #3f3f46; color: #f4f4f5; }
+.btn-solido--dourado { background: var(--color-accent); border-color: var(--color-accent-hover); color: var(--color-accent-text, #000); }
+[data-theme="light"] .btn-solido--preto { background: #18181b; border-color: #18181b; color: #fff; }
+.btn-solido--laranja  { background: #ea580c; border-color: #c2410c; color: #fff; }
+.btn-solido--vermelho { background: #dc2626; border-color: #b91c1c; color: #fff; }
+
+/* A barra do topo fica por cima do conteúdo que rola no <main>: todo
+   scrollIntoView (formulário de edição que abre, item que se procura) parava
+   com o começo escondido atrás dela. */
+main { scroll-padding-top: 7rem; }

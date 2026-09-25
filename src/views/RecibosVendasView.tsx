@@ -195,7 +195,7 @@ export const RecibosVendasView = ({ showToast, profile }: { showToast: any; prof
             </div>
 
             {/* Desktop: table */}
-            <table className="hidden sm:table w-full text-left border-collapse">
+            <table className="tabela hidden sm:table w-full text-left border-collapse">
               <thead><tr className="border-b border-white/10 text-[10px] text-gray-500 uppercase tracking-widest">
                 <th className="pb-4 font-bold px-4">Data</th>
                 <th className="pb-4 font-bold px-4">Recibo</th>
@@ -222,7 +222,7 @@ export const RecibosVendasView = ({ showToast, profile }: { showToast: any; prof
                     <td className="py-3 px-4 text-center"><StatusBadge status={v.status} /></td>
                     <td className="py-3 px-4 text-right">
                       <button onClick={() => baixarRecibo(v)}
-                        className="ml-auto neu-button py-1.5 px-3 rounded-lg text-xs font-bold text-accent flex items-center gap-1.5 border border-transparent hover:border-accent/20">
+                        className="btn-solido btn-solido--vermelho !py-1 !px-2.5 !rounded-lg">
                         <FileDown size={12} /> PDF
                       </button>
                     </td>

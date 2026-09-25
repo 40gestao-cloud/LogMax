@@ -1,3 +1,5 @@
+import { useRolarAteFormulario } from '../hooks/useRolarAteFormulario';
+import { MenuMais, ItemMenu } from '../components/MenuMais';
 import React, { useMemo, useState } from 'react';
 import type { FilialOp } from '../components/FilialSelector';
 import { useFilial } from '../contexts/FilialContext';
@@ -377,6 +379,7 @@ const CampanhasMarketingViewInner = ({ showToast, profile, filial }: { showToast
     } catch (err: any) { showToast(`Erro: ${err?.message}`, 'error'); }
   };
 
+  const formEdicaoRef = useRolarAteFormulario(showForm, editing?.id);
   if (isLoading) return <div className="flex-1 flex items-center justify-center"><LoadingSpinner /></div>;
 
   const ativas         = campanhas.filter((c: any) => c.status === 'Ativa').length;
@@ -435,7 +438,7 @@ const CampanhasMarketingViewInner = ({ showToast, profile, filial }: { showToast
 
         <AnimatePresence>
           {showForm && (
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            <motion.div ref={formEdicaoRef} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
               className="neu-flat rounded-3xl p-6 border border-white/5 shrink-0">
               <div className="flex items-center justify-between mb-5">
                 <h3 className="text-sm font-bold text-gray-300">{editing ? 'Editar Campanha' : 'Nova Campanha'}</h3>
@@ -500,7 +503,7 @@ const CampanhasMarketingViewInner = ({ showToast, profile, filial }: { showToast
         <div className="neu-flat rounded-3xl p-6 border border-white/5 shrink-0">
           {campanhas.length === 0 ? <EmptyState message="Nenhuma campanha criada ainda" /> : (
             <div className="overflow-x-auto main-scrollbar">
-              <table className="w-full text-left border-collapse min-w-[1100px]">
+              <table className="tabela w-full text-left border-collapse min-w-[1100px]">
                 <thead>
                   <tr className="border-b border-white/10 text-[10px] text-gray-500 uppercase tracking-widest">
                     <th className="pb-4 font-bold px-4">Nome</th>
@@ -560,17 +563,26 @@ const CampanhasMarketingViewInner = ({ showToast, profile, filial }: { showToast
                             </span>
                           </td>
                           <td className="py-3 px-4 text-right">
-                            <div className="flex justify-end gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity items-center">
-                              <button onClick={() => setModalCamp(c)} title="Produtos da campanha"
-                                className="action-btn-neutral">
-                                <Package size={12} />
-                              </button>
+                            <div className="flex justify-center items-center gap-1.5">
                               {canCRUD && (
-                                <>
-                                  <button onClick={() => openEdit(c)} title="Editar" className="action-btn-edit"><Edit3 size={12} /></button>
-                                  <button onClick={() => handleDelete(c)} title="Inativar" className="action-btn-delete"><Trash2 size={12} /></button>
-                                </>
+                                <button onClick={() => openEdit(c)} title="Editar" className="action-btn-edit"><Edit3 size={12} /></button>
                               )}
+                              <MenuMais>
+                                {fechar => (
+                                  <>
+                                    <ItemMenu onClick={() => { fechar(); setModalCamp(c); }}
+                                      cor="text-gray-200 hover:bg-white/5" icon={Package}>
+                                      Produtos da campanha
+                                    </ItemMenu>
+                                    {canCRUD && (
+                                      <ItemMenu onClick={() => { fechar(); handleDelete(c); }}
+                                        cor="text-red-400 hover:bg-red-500/10" icon={Trash2}>
+                                        Inativar
+                                      </ItemMenu>
+                                    )}
+                                  </>
+                                )}
+                              </MenuMais>
                             </div>
                           </td>
                         </motion.tr>

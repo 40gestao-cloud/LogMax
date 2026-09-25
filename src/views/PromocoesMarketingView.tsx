@@ -779,7 +779,7 @@ const PromocoesMarketingViewInner = ({ showToast, profile, filial }: { showToast
                 cima de outra coluna de ações. Cabia em nenhuma tela e não dizia
                 o que era importante. Agora a grade mostra só o que se lê de
                 relance; o resto vive na gaveta da linha. */}
-            <table className="w-full text-left border-collapse min-w-[720px]">
+            <table className="tabela col-guia w-full text-left border-collapse min-w-[720px]">
               <thead>
                 <tr className="border-b border-white/10 text-[10px] text-gray-500 uppercase tracking-widest [&>th]:whitespace-nowrap">
                   <th className="pb-4 font-bold px-4 w-8"></th>

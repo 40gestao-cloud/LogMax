@@ -1,3 +1,4 @@
+import { useRolarAteFormulario } from '../hooks/useRolarAteFormulario';
 import React, { useEffect, useMemo, useState } from 'react';
 import type { FilialOp } from '../components/FilialSelector';
 import { useFilial } from '../contexts/FilialContext';
@@ -119,6 +120,7 @@ const TreinamentosViewInner = ({ showToast, filial }: { showToast: any; filial: 
       .then(({ data }) => setFuncionarios((data ?? []).filter(f => (f.status ?? 'Ativo') === 'Ativo')));
   }, []);
 
+  const formEdicaoRef = useRolarAteFormulario(showForm, editId);
   if (isLoading) return <div className="flex-1 flex items-center justify-center"><LoadingSpinner /></div>;
 
   const agendados = treinamentos.filter((t: any) => t.status === 'Agendado').length;
@@ -343,7 +345,7 @@ const TreinamentosViewInner = ({ showToast, filial }: { showToast: any; filial: 
 
       <AnimatePresence>
         {showForm && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+          <motion.div ref={formEdicaoRef} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
             className="neu-flat rounded-3xl p-6 border border-white/5 shrink-0">
             <div className="flex items-center justify-between mb-5">
               <h3 className="text-sm font-bold text-gray-300">{editId ? 'Editar Treinamento' : 'Novo Treinamento'}</h3>
@@ -437,7 +439,7 @@ const TreinamentosViewInner = ({ showToast, filial }: { showToast: any; filial: 
       <div className="neu-flat rounded-3xl p-6 border border-white/5 shrink-0">
         {filtered.length === 0 ? <EmptyState /> : (
           <div className="overflow-x-auto main-scrollbar">
-            <table className="w-full text-left border-collapse">
+            <table className="tabela w-full text-left border-collapse">
               <thead><tr className="border-b border-white/10 text-[10px] text-gray-500 uppercase tracking-widest">
                 <th className="pb-4 font-bold px-4">Treinamento</th>
                 <th className="pb-4 font-bold px-4">Instrutor(es)</th>
@@ -476,7 +478,7 @@ const TreinamentosViewInner = ({ showToast, filial }: { showToast: any; filial: 
                             className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-accent border border-accent/30 rounded-lg px-2 py-1 hover:bg-accent/10 transition-colors">
                             <Users size={10} />Inscrições
                           </button>
-                          <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <div className="flex justify-center items-center gap-1.5">
                             <button onClick={() => openEdit(t)} title="Editar" className="action-btn-edit"><Edit2 size={12} /></button>
                             <button onClick={() => handleDelete(t.id)} title="Excluir" className="action-btn-delete"><Trash2 size={12} /></button>
                           </div>

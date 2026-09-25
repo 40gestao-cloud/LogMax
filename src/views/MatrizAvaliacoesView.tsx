@@ -213,7 +213,7 @@ export function MatrizAvaliacoesView({ profile, showToast }: { profile: UserProf
             <button
               onClick={baixarPDF}
               disabled={exportando !== null}
-              className="flex items-center gap-1.5 text-[11px] font-bold px-3 py-1.5 rounded-lg neu-button text-accent hover:ring-1 hover:ring-accent/40 transition-all disabled:opacity-50"
+              className="btn-solido btn-solido--vermelho"
               title="Baixar consolidado em PDF"
             >
               {exportando === 'pdf' ? <Loader2 size={12} className="animate-spin" /> : <FileDown size={12} />}
@@ -231,7 +231,7 @@ export function MatrizAvaliacoesView({ profile, showToast }: { profile: UserProf
             <button
               onClick={baixarExcel}
               disabled={exportando !== null}
-              className="flex items-center gap-1.5 text-[11px] font-bold px-3 py-1.5 rounded-lg neu-button text-accent hover:ring-1 hover:ring-accent/40 transition-all disabled:opacity-50"
+              className="btn-solido btn-solido--verde"
               title="Baixar consolidado em Excel"
             >
               {exportando === 'excel' ? <Loader2 size={12} className="animate-spin" /> : <FileSpreadsheet size={12} />}
@@ -675,7 +675,7 @@ function VisaoCicloPorParticipante({ competicao, ehAdmin }: { competicao: Compet
                   <span className="text-[10px] text-gray-500 font-mono">{lista.length} pessoa{lista.length === 1 ? '' : 's'}</span>
                 </div>
                 <div className="overflow-x-auto">
-                  <table className="w-full text-xs">
+                  <table className="tabela col-guia w-full text-xs">
                     <thead className="text-[10px] uppercase tracking-widest text-gray-500">
                       <tr className="border-b border-white/10">
                         <th className="text-left pb-2 font-bold px-2 w-6"></th>

@@ -149,7 +149,7 @@ export const ImportarProdutosModal = ({ filial, contexto, showToast, onFechar, o
             </div>
 
             <div className="overflow-y-auto main-scrollbar flex-1 -mx-1 px-1">
-              <table className="w-full text-left border-collapse">
+              <table className="tabela col-guia w-full text-left border-collapse">
                 <thead className="sticky top-0 bg-base">
                   <tr className="border-b border-white/10 text-[10px] text-gray-500 uppercase tracking-widest">
                     <th className="pb-2 font-bold px-2 w-14">Linha</th>

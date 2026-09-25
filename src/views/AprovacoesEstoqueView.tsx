@@ -1,3 +1,4 @@
+import { MenuMais, ItemMenu } from '../components/MenuMais';
 import React, { useEffect, useState, useRef } from 'react';
 import type { FilialOp } from '../components/FilialSelector';
 import { useFilial } from '../contexts/FilialContext';
@@ -353,9 +354,15 @@ export const AprovacoesEstoqueBloco = ({ showToast, profile, filial, mostrar = '
                   </p>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
-                  <HistoricoOperacoes entidade="requisicoes_estoque" entidadeId={ap.req.id}
-                    titulo={`${numeroRequisicao(ap.req)} · ${ap.prod?.nome ?? 'material'}`}
-                    criadoEm={ap.req.created_at} atualizadoEm={(ap.req as any).updated_at} />
+                  <MenuMais>
+                    {fechar => (
+                      <>
+                        <HistoricoOperacoes variante="menu" onAbrir={fechar} entidade="requisicoes_estoque" entidadeId={ap.req.id}
+                                        titulo={`${numeroRequisicao(ap.req)} · ${ap.prod?.nome ?? 'material'}`}
+                                        criadoEm={ap.req.created_at} atualizadoEm={(ap.req as any).updated_at} />
+                      </>
+                    )}
+                  </MenuMais>
                 </div>
               </div>
               {ap.req.created_at && (

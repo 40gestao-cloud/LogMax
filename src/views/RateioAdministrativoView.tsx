@@ -334,7 +334,7 @@ export function RateioAdministrativoView({
                 </div>
               )}
               <div className="p-5 overflow-x-auto main-scrollbar">
-                <table className="w-full text-left border-collapse">
+                <table className="tabela w-full text-left border-collapse">
                   <thead>
                     <tr className="border-b border-white/10 text-[10px] text-gray-500 uppercase tracking-widest">
                       <th className="pb-3 font-bold pr-4">Unidade</th>

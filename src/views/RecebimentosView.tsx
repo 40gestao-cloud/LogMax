@@ -1,3 +1,4 @@
+import { MenuMais, ItemMenu } from '../components/MenuMais';
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { todayBR } from '../lib/dates';
 import type { FilialOp } from '../components/FilialSelector';
@@ -767,7 +768,7 @@ const RecebimentosViewInner = ({ showToast, filial }: { showToast: any; filial: 
 
       <div className="neu-flat rounded-3xl p-6 border border-white/5 flex flex-col mb-6">
         <div className="overflow-x-auto main-scrollbar">
-          <table className="w-full text-left border-collapse">
+          <table className="tabela w-full text-left border-collapse">
             <thead><tr className="border-b border-white/10 text-[10px] text-gray-500 uppercase tracking-widest"><th className="pb-4 font-bold px-4">Data</th><th className="pb-4 font-bold px-4">Pedido</th><th className="pb-4 font-bold px-4 text-right">Qtd</th><th className="pb-4 font-bold px-4">Observação</th><th className="pb-4 font-bold px-4 text-center">Status</th><th className="pb-4 font-bold px-4 text-right">Ações</th></tr></thead>
             <tbody>
               {isLoading ? (<tr><td colSpan={6}><LoadingSpinner /></td></tr>) : enriched.length === 0 ? (<tr><td colSpan={6}><EmptyState /></td></tr>) : (
@@ -799,8 +800,7 @@ const RecebimentosViewInner = ({ showToast, filial }: { showToast: any; filial: 
                         <td className="py-3 px-4 text-xs text-gray-400">{item.observacao || '—'}</td>
                         <td className="py-3 px-4 text-center"><StatusBadge status={item.status} /></td>
                         <td className="py-3 px-4 text-right">
-                          <div className="flex justify-end items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                            <HistoricoOperacoes entidade="recebimentos" entidadeId={item.id} titulo={`Recebimento ${String(item.id).slice(-6).toUpperCase()}`} criadoEm={item.created_at} atualizadoEm={item.updated_at} />
+                          <div className="flex justify-center items-center gap-1.5">
                             {devolucaoDisponivel
                               && (item.status === 'Concluído' || item.status === 'Parcial')
                               && (parseQtd(item.qtd_recebida) - (devolvido[item.id] ?? 0)) > 0 && (
@@ -869,7 +869,17 @@ const RecebimentosViewInner = ({ showToast, filial }: { showToast: any; filial: 
                                 <CheckCircle2 size={11} /> Confirmar <ChevronDown size={10} className={`transition-transform ${confirmando === item.id ? 'rotate-180' : ''}`} />
                               </button>
                             )}
-                            <button onClick={() => handleDelete(item.id, item.status)} title="Excluir" className="action-btn-delete"><Trash2 size={12} /></button>
+                            <MenuMais>
+                              {fechar => (
+                                <>
+                                  <HistoricoOperacoes variante="menu" onAbrir={fechar} entidade="recebimentos" entidadeId={item.id} titulo={`Recebimento ${String(item.id).slice(-6).toUpperCase()}`} criadoEm={item.created_at} atualizadoEm={item.updated_at} />
+                                  <ItemMenu onClick={() => { fechar(); handleDelete(item.id, item.status); }}
+                                    cor="text-red-400 hover:bg-red-500/10" icon={Trash2}>
+                                    Excluir
+                                  </ItemMenu>
+                                </>
+                              )}
+                            </MenuMais>
                           </div>
                         </td>
                       </motion.tr>

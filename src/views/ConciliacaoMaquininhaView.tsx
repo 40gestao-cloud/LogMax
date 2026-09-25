@@ -1,3 +1,4 @@
+import { MenuMais, ItemMenu } from '../components/MenuMais';
 import React, { useState, useMemo, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { CreditCard, Check, X, Loader2, Wand2, Undo2, Eye, Landmark } from 'lucide-react';
@@ -249,7 +250,7 @@ const ConciliacaoMaquininhaViewInner = ({
               <p className="text-xs text-gray-600 py-3 text-center">Nenhum título em aberto nesta unidade.</p>
             ) : (
               <div className="neu-pressed rounded-xl max-h-72 overflow-y-auto main-scrollbar">
-                <table className="w-full text-xs">
+                <table className="tabela col-guia w-full text-xs">
                   <thead className="sticky top-0" style={{ background: 'var(--color-bg-base)' }}>
                     <tr className="text-left text-gray-500 border-b border-white/5">
                       <th className="py-2 px-3 font-bold w-10"></th>
@@ -329,7 +330,7 @@ const ConciliacaoMaquininhaViewInner = ({
       ) : (
         <div className="neu-flat rounded-3xl p-6 border border-white/5 flex flex-col mb-6">
           <div className="overflow-x-auto main-scrollbar">
-            <table className="w-full text-left border-collapse">
+            <table className="tabela w-full text-left border-collapse">
               <thead>
                 <tr className="border-b border-white/10 text-[10px] text-gray-500 uppercase tracking-widest">
                   <th className="pb-4 font-bold px-4">Repasse</th>
@@ -360,10 +361,7 @@ const ConciliacaoMaquininhaViewInner = ({
                       <td className="py-3 px-4 text-xs font-mono text-accent font-bold text-right tabular-nums">R$ {formatBRL(Number(l.valor_liquido ?? 0))}</td>
                       <td className="py-3 px-4 text-center"><StatusBadge status={l.status} /></td>
                       <td className="py-3 px-4 text-right">
-                        <div className="flex justify-end items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                          <HistoricoOperacoes entidade="conciliacoes_maquininha" entidadeId={l.id}
-                            titulo={`${l.forma_pagamento} · ${l.data_repasse}`}
-                            criadoEm={l.created_at} atualizadoEm={l.updated_at} />
+                        <div className="flex justify-center items-center gap-1.5">
                           <button onClick={() => abrirDetalhe(l)} title="Ver títulos do repasse"
                             className="action-btn-neutral"><Eye size={12} /></button>
                           {podeConciliar && l.status === 'Conciliado' && (
@@ -374,6 +372,13 @@ const ConciliacaoMaquininhaViewInner = ({
                               Cancelar
                             </button>
                           )}
+                          <MenuMais>
+                            {fechar => (
+                              <HistoricoOperacoes variante="menu" onAbrir={fechar} entidade="conciliacoes_maquininha" entidadeId={l.id}
+                                titulo={`${l.forma_pagamento} · ${l.data_repasse}`}
+                                criadoEm={l.created_at} atualizadoEm={l.updated_at} />
+                            )}
+                          </MenuMais>
                         </div>
                       </td>
                     </motion.tr>
@@ -435,7 +440,7 @@ const ConciliacaoMaquininhaViewInner = ({
                   <p className="text-xs text-gray-600 py-2">Sem títulos.</p>
                 ) : (
                   <div className="neu-pressed rounded-xl overflow-x-auto">
-                    <table className="w-full text-xs">
+                    <table className="tabela w-full text-xs">
                       <tbody>
                         {itens.map((it: any) => (
                           <tr key={it.id} className="border-b border-white/5 last:border-b-0">

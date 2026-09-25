@@ -311,7 +311,7 @@ export function MetricasRedesSociaisView({ showToast, profile }: { showToast: an
                 </div>
                 {/* Linhas */}
                 <div className="overflow-x-auto">
-                  <table className="w-full text-xs">
+                  <table className="tabela w-full text-xs">
                     <thead>
                       <tr className="border-b border-white/5">
                         <th className="text-left px-5 py-2.5 text-gray-500 font-bold uppercase tracking-wider text-[10px]">Data</th>

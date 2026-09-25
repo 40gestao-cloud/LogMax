@@ -644,7 +644,7 @@ const PedidosOnlineInner = ({ showToast, profile, filial }: { showToast: any; pr
 
                     {exp && (
                       <div className="px-4 pb-4 pl-12">
-                        <table className="w-full text-left text-xs">
+                        <table className="tabela w-full text-left text-xs">
                           <thead>
                             <tr className="text-[10px] text-gray-500 uppercase tracking-widest border-b border-white/5">
                               <th className="pb-2 font-bold">Produto</th>

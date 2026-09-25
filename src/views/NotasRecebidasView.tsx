@@ -1,3 +1,5 @@
+import { useRolarAteFormulario } from '../hooks/useRolarAteFormulario';
+import { MenuMais, ItemMenu } from '../components/MenuMais';
 import React, { useEffect, useRef, useState } from 'react';
 import { useFilial } from '../contexts/FilialContext';
 import { motion, AnimatePresence } from 'motion/react';
@@ -210,6 +212,8 @@ const NotasRecebidasViewInner = ({ showToast, filial }: any) => {
 
   const isFormOpen = showForm || !!editItem;
 
+  const formEdicaoRef = useRolarAteFormulario(isFormOpen, editItem?.id);
+
   return (
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col h-full gap-8">
       <div className="flex flex-wrap justify-between items-start gap-3 shrink-0">
@@ -227,7 +231,7 @@ const NotasRecebidasViewInner = ({ showToast, filial }: any) => {
 
       <AnimatePresence>
         {isFormOpen && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+          <motion.div ref={formEdicaoRef} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
             <div className="neu-flat rounded-2xl p-6 border border-white/5 flex flex-col gap-4">
               <h3 className="text-sm font-bold text-gray-200">{editItem ? 'Editar NF' : 'Nova NF'}</h3>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -387,7 +391,7 @@ const NotasRecebidasViewInner = ({ showToast, filial }: any) => {
 
       <div className="neu-flat rounded-3xl p-6 border border-white/5 flex flex-col mb-6">
         <div className="overflow-x-auto main-scrollbar">
-          <table className="w-full text-left border-collapse">
+          <table className="tabela w-full text-left border-collapse">
             <thead>
               <tr className="border-b border-white/10 text-[10px] text-gray-500 uppercase tracking-widest">
                 <th className="pb-4 font-bold px-4">Número NF</th>
@@ -415,7 +419,7 @@ const NotasRecebidasViewInner = ({ showToast, filial }: any) => {
                           </span>
                         ) : <span className="text-[10px] text-gray-500">—</span>}
                       </td>
-                      <td className="py-3 px-4 text-xs text-gray-400">
+                      <td className="col-texto py-3 px-4 text-xs text-gray-400">
                         <div className="font-semibold text-gray-300">{item.forn?.nome ?? '—'}</div>
                         {item.descricao && <div className="text-[10px] text-gray-500 mt-0.5 line-clamp-2">{item.descricao}</div>}
                       </td>
@@ -439,10 +443,19 @@ const NotasRecebidasViewInner = ({ showToast, filial }: any) => {
                       </td>
                       <td className="py-3 px-4 text-center"><StatusBadge status={item.status} /></td>
                       <td className="py-3 px-4 text-right">
-                        <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                          <HistoricoOperacoes entidade="notas_recebidas" entidadeId={item.id} titulo={`Nota ${item.numero ?? String(item.id).slice(-6).toUpperCase()}`} criadoEm={item.created_at} atualizadoEm={item.updated_at} />
+                        <div className="flex justify-center items-center gap-1.5">
                           <button onClick={() => openEdit(item)} className="action-btn-edit"><Edit2 size={12} /></button>
-                          <button onClick={() => handleDelete(item.id)} className="action-btn-delete"><Trash2 size={12} /></button>
+                          <MenuMais>
+                            {fechar => (
+                              <>
+                                <HistoricoOperacoes variante="menu" onAbrir={fechar} entidade="notas_recebidas" entidadeId={item.id} titulo={`Nota ${item.numero ?? String(item.id).slice(-6).toUpperCase()}`} criadoEm={item.created_at} atualizadoEm={item.updated_at} />
+                                <ItemMenu onClick={() => { fechar(); handleDelete(item.id); }}
+                                  cor="text-red-400 hover:bg-red-500/10" icon={Trash2}>
+                                  Excluir
+                                </ItemMenu>
+                              </>
+                            )}
+                          </MenuMais>
                         </div>
                       </td>
                     </motion.tr>

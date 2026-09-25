@@ -5,6 +5,7 @@ import { useFilial } from '../contexts/FilialContext';
 import { motion, AnimatePresence } from 'motion/react';
 import { Plus, Pencil, Trash2, Search, FileDown, Sheet, X, Camera, Gift, Link2, AlertTriangle, ExternalLink } from 'lucide-react';
 import { HistoricoOperacoes } from '../components/HistoricoOperacoes';
+import { MenuMais, ItemMenu } from '../components/MenuMais';
 import { FuncionarioBeneficiosModal } from '../components/FuncionarioBeneficiosModal';
 import { useFetchData, dbInsert, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
 import { LoadingSpinner, EmptyState, StatusBadge, NeuButtonAccent, ExportButton } from '../components/ui';
@@ -602,7 +603,7 @@ const FuncionariosViewInner = ({ showToast, filial }: { showToast: any; filial: 
       <div className="neu-flat rounded-3xl p-6 border border-white/5 shrink-0">
         {filtered.length === 0 ? <EmptyState /> : (
           <div className="overflow-x-auto main-scrollbar">
-            <table className="w-full text-left border-collapse">
+            <table className="tabela col-guia w-full text-left border-collapse">
               <thead><tr className="border-b border-white/10 text-[10px] text-gray-500 uppercase tracking-widest">
                 <th className="pb-4 font-bold px-2 w-10"></th>
                 <th className="pb-4 font-bold px-4">Nome</th>
@@ -612,7 +613,7 @@ const FuncionariosViewInner = ({ showToast, filial }: { showToast: any; filial: 
                 <th className="pb-4 font-bold px-4">Admissão</th>
                 <th className="pb-4 font-bold px-4 text-right">Salário</th>
                 <th className="pb-4 font-bold px-4 text-center">Status</th>
-                <th className="pb-4 font-bold px-4" />
+                <th className="pb-4 font-bold px-4">Ações</th>
               </tr></thead>
               <tbody>
                 <AnimatePresence>
@@ -638,19 +639,27 @@ const FuncionariosViewInner = ({ showToast, filial }: { showToast: any; filial: 
                       <td className="py-3 px-4 text-xs font-mono text-gray-400">{f.cpf ?? '—'}</td>
                       <td className="py-3 px-4 text-xs text-gray-400">{f.cargo ?? '—'}</td>
                       <td className="py-3 px-4 text-xs text-gray-400">{f.departamento ?? '—'}</td>
-                      <td className="py-3 px-4 text-xs text-gray-400">{f.data_admissao ?? '—'}</td>
+                      <td className="py-3 px-4 text-xs font-mono text-gray-400">{f.data_admissao ? f.data_admissao.split('-').reverse().join('/') : '—'}</td>
                       <td className="py-3 px-4 text-xs font-mono text-gray-200 text-right tabular-nums">R$ {formatBRL(Number(f.salario || 0))}</td>
                       <td className="py-3 px-4 text-center"><StatusBadge status={f.status} /></td>
                       <td className="py-3 px-4">
-                        <div className="flex gap-1.5 justify-end">
-                          <HistoricoOperacoes entidade="funcionarios" entidadeId={f.id} titulo={f.nome ?? 'Funcionário'} criadoEm={f.created_at} atualizadoEm={f.updated_at} />
+                        <div className="flex gap-1.5 justify-center items-center">
                           <button onClick={() => setBeneficiosDe({ id: f.id, nome: f.nome ?? '—' })}
-                            title="Benefícios do funcionário"
-                            className="action-btn-blue">
+                            title="Benefícios do funcionário" className="action-btn-neutral">
                             <Gift size={12} />
                           </button>
-                          <button onClick={() => openEdit(f)} className="action-btn-edit"><Pencil size={12} /></button>
-                          <button onClick={() => handleDelete(f.id)} className="action-btn-delete"><Trash2 size={12} /></button>
+                          <button onClick={() => openEdit(f)} title="Editar" className="action-btn-edit"><Pencil size={12} /></button>
+                          <MenuMais>
+                            {fechar => (
+                              <>
+                                <HistoricoOperacoes variante="menu" onAbrir={fechar} entidade="funcionarios" entidadeId={f.id} titulo={f.nome ?? 'Funcionário'} criadoEm={f.created_at} atualizadoEm={f.updated_at} />
+                                <ItemMenu onClick={() => { fechar(); handleDelete(f.id); }}
+                                  cor="text-red-400 hover:bg-red-500/10" icon={Trash2}>
+                                  Excluir
+                                </ItemMenu>
+                              </>
+                            )}
+                          </MenuMais>
                         </div>
                       </td>
                     </motion.tr>

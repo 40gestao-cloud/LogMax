@@ -235,13 +235,13 @@ export const MatrizConteudoView: React.FC<Props> = ({ profile, showToast }) => {
                 <span className="text-amber-400"> · lista ajustada à mão (a semente reproduz o sorteio original)</span>
               )}
             </span>
-            <NeuButtonAccent onClick={baixarPdf} isLoading={gerandoPdf}>
-              <Download size={16} className="mr-1.5 inline" /> Baixar PDF
-            </NeuButtonAccent>
+            <button onClick={baixarPdf} disabled={gerandoPdf} className="btn-solido btn-solido--vermelho">
+              <Download size={14} /> {gerandoPdf ? 'Gerando...' : 'Baixar PDF'}
+            </button>
           </div>
 
           <div className="overflow-auto flex-1 min-h-0 rounded-xl neu-pressed">
-            <table className="w-full text-sm">
+            <table className="tabela w-full text-sm">
               <thead className="sticky top-0 bg-black/40">
                 <tr className="text-left text-gray-400">
                   <th className="p-2">Produto</th>
@@ -250,7 +250,7 @@ export const MatrizConteudoView: React.FC<Props> = ({ profile, showToast }) => {
                   <th className="p-2">Conteúdo</th>
                   <th className="p-2">Unid.</th>
                   <th className="p-2">Nicho</th>
-                  <th className="p-2"></th>
+                  <th className="p-2">Ações</th>
                 </tr>
               </thead>
               <tbody>

@@ -1,3 +1,4 @@
+import { useRolarAteFormulario } from '../hooks/useRolarAteFormulario';
 import React, { useMemo, useState } from 'react';
 import { useFilial } from '../contexts/FilialContext';
 import { motion, AnimatePresence } from 'motion/react';
@@ -266,6 +267,7 @@ const CalendarioEditorialViewInner = ({ showToast, profile, filial }: any) => {
     }
   };
 
+  const formEdicaoRef = useRolarAteFormulario(showForm, editing?.id);
   if (isLoading) return <div className="flex-1 flex items-center justify-center"><LoadingSpinner /></div>;
 
   const postsFiltrados = posts
@@ -331,7 +333,7 @@ const CalendarioEditorialViewInner = ({ showToast, profile, filial }: any) => {
 
       <AnimatePresence>
         {showForm && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+          <motion.div ref={formEdicaoRef} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
             className="neu-flat rounded-3xl p-6 border border-white/5 shrink-0">
             <div className="flex items-center justify-between mb-5">
               <h3 className="text-sm font-bold text-gray-300">{editing ? 'Editar Post' : 'Novo Post no Calendário'}</h3>

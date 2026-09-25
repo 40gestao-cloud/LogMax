@@ -1,3 +1,5 @@
+import { useRolarAteFormulario } from '../hooks/useRolarAteFormulario';
+import { MenuMais, ItemMenu } from '../components/MenuMais';
 import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Plus, Save, Trash2, Check, X, Send, MessageSquare, Loader2, ShoppingBag, Clock, FileText, FileDown, Sheet, Eye, AlertTriangle } from 'lucide-react';
@@ -573,6 +575,8 @@ const OrcamentosViewInner = ({
     return ativos.includes(orc.status) && new Date() > limite;
   };
 
+  const formEdicaoRef = useRolarAteFormulario((showForm || editItem) && !modoFinanceiro, editItem?.id);
+
   return (
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col h-full gap-6">
       <div className="flex flex-wrap justify-between items-start gap-3 shrink-0">
@@ -659,7 +663,7 @@ const OrcamentosViewInner = ({
       {/* Form de criação/edição */}
       <AnimatePresence>
         {(showForm || editItem) && !modoFinanceiro && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="shrink-0">
+          <motion.div ref={formEdicaoRef} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="shrink-0">
             <div className="neu-flat rounded-2xl p-6 border border-white/5 flex flex-col gap-4">
               <h3 className="text-sm font-bold text-gray-200">{editItem ? 'Editar Proposta' : 'Nova Proposta'}</h3>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -936,7 +940,7 @@ const OrcamentosViewInner = ({
       ) : (
         <div className="neu-flat rounded-3xl p-6 border border-white/5 flex flex-col mb-6">
           <div className="overflow-x-auto main-scrollbar">
-            <table className="w-full text-left border-collapse">
+            <table className="tabela w-full text-left border-collapse">
               <thead>
                 <tr className="border-b border-white/10 text-[10px] text-gray-500 uppercase tracking-widest">
                   <th className="pb-4 font-bold px-4">Cliente</th>
@@ -990,8 +994,7 @@ const OrcamentosViewInner = ({
                           ) : <span className="text-gray-700">—</span>}
                         </td>
                         <td className="py-3 px-4 text-right">
-                          <div className="flex justify-end items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                            <HistoricoOperacoes entidade="orcamentos" entidadeId={o.id} titulo={`${numeroOrcamento(o)} · ${o.cliente?.nome ?? 'Orçamento'}`} criadoEm={o.created_at} atualizadoEm={o.updated_at} />
+                          <div className="flex justify-center items-center gap-1.5 whitespace-nowrap">
                             <button onClick={() => setDetalhes(o)} title="Ver detalhes da proposta"
                               className="action-btn-neutral">
                               <Eye size={12} />
@@ -1028,27 +1031,29 @@ const OrcamentosViewInner = ({
                                 <FileText size={12} />
                               </button>
                             )}
-                            {/* Cancelar cobre todo orçamento que ainda não virou
-                                pedido. Antes só aparecia em Rascunho e
-                                Aguardando Financeiro, e para o resto sobrava o
-                                botão de inativar — que não é a mesma coisa:
-                                cancelar é decisão registrada, inativar sumia
-                                com o documento. Convertido não se cancela por
-                                aqui; cancela-se o pedido de venda (migr. 551),
-                                e ele solta o orçamento de volta. */}
-                            {o.status !== 'Convertido em Pedido' && o.status !== 'Cancelado'
-                              && (isVendas || isAdminOuCeo) && (
-                              <button onClick={() => handleCancelar(o.id)} title="Cancelar"
-                                className="action-btn-warning">
-                                <X size={12} />
-                              </button>
-                            )}
                             {o.feedback_financeiro && (
                               <button onClick={() => setFeedbackAberto(o.feedback_financeiro)} title="Ver feedback"
                                 className="w-8 h-8 neu-button rounded-lg flex items-center justify-center text-gray-400 hover:text-cyan-400">
                                 <MessageSquare size={12} />
                               </button>
                             )}
+                            {/* Cancelar cobre todo orçamento que ainda não virou
+                                pedido — decisão registrada, diferente de inativar.
+                                Convertido não se cancela por aqui; cancela-se o
+                                pedido de venda (migr. 551), e ele solta o orçamento. */}
+                            <MenuMais>
+                              {fechar => (
+                                <>
+                                  <HistoricoOperacoes variante="menu" onAbrir={fechar} entidade="orcamentos" entidadeId={o.id} titulo={`${numeroOrcamento(o)} · ${o.cliente?.nome ?? 'Orçamento'}`} criadoEm={o.created_at} atualizadoEm={o.updated_at} />
+                                  {o.status !== 'Convertido em Pedido' && o.status !== 'Cancelado' && (isVendas || isAdminOuCeo) && (
+                                    <ItemMenu onClick={() => { fechar(); handleCancelar(o.id); }}
+                                      cor="text-amber-400 hover:bg-amber-500/10" icon={X}>
+                                      Cancelar orçamento
+                                    </ItemMenu>
+                                  )}
+                                </>
+                              )}
+                            </MenuMais>
                           </div>
                         </td>
                       </motion.tr>
@@ -1170,7 +1175,7 @@ const OrcamentosViewInner = ({
                 <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Itens</span>
                 {Array.isArray(detalhes.itens) && detalhes.itens.length > 0 ? (
                   <div className="neu-pressed rounded-xl overflow-x-auto">
-                    <table className="w-full text-xs">
+                    <table className="tabela w-full text-xs">
                       <thead>
                         <tr className="text-left text-gray-500 border-b border-white/5">
                           <th className="py-2 px-3 font-bold">Produto</th>

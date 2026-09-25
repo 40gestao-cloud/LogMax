@@ -15,7 +15,8 @@ import { Trash2 } from 'lucide-react';
 import { dbDelete } from '../hooks/useSupabaseData';
 import { useConfirm } from '../contexts/ConfirmContext';
 
-export function ExcluirAdmin({ endpoint, id, rotulo, alternativa, showToast, onExcluido }: {
+export function ExcluirAdmin({ endpoint, id, rotulo, alternativa, showToast, onExcluido, variante = 'icone' }: {
+  variante?: 'icone' | 'menu';
   endpoint: string;
   id: string;
   rotulo: string;
@@ -47,6 +48,12 @@ export function ExcluirAdmin({ endpoint, id, rotulo, alternativa, showToast, onE
     }
   };
 
+  if (variante === 'menu') return (
+    <button onClick={excluir} disabled={indo}
+      className="w-full text-left px-3 py-2 rounded-lg text-xs font-semibold text-red-400 hover:bg-red-500/10 flex items-center gap-2 disabled:opacity-50">
+      <Trash2 size={13} /> Excluir (admin)
+    </button>
+  );
   return (
     <button onClick={excluir} disabled={indo} title="Excluir (admin)"
       className="action-btn-delete">

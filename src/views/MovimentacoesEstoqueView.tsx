@@ -1,3 +1,4 @@
+import { MenuMais, ItemMenu } from '../components/MenuMais';
 import React, { useState, useEffect, useMemo } from 'react';
 import type { FilialOp } from '../components/FilialSelector';
 import { useFilial } from '../contexts/FilialContext';
@@ -198,7 +199,7 @@ const MovimentacoesEstoqueViewInner = ({ showToast, filial, profile }: { showToa
 
       <div className="neu-flat rounded-3xl p-6 border border-white/5 flex flex-col mb-6">
         <div className="overflow-x-auto main-scrollbar">
-          <table className="w-full text-left border-collapse min-w-[540px]">
+          <table className="tabela col-guia w-full text-left border-collapse min-w-[540px]">
             <thead>
               <tr className="border-b border-white/10 text-[10px] text-gray-500 uppercase tracking-widest">
                 <th className="pb-4 font-bold px-4">Data</th>
@@ -230,8 +231,7 @@ const MovimentacoesEstoqueViewInner = ({ showToast, filial, profile }: { showToa
                         <td className="py-3 px-4 text-xs text-gray-400">{item.origem || '—'}</td>
                         <td className="py-3 px-4 text-xs text-gray-400">{item.destino || '—'}</td>
                         <td className="py-3 px-4 text-right">
-                          <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                            <HistoricoOperacoes entidade="movimentacoes_estoque" entidadeId={item.id} titulo={`${item.tipo ?? 'Movimentação'} · ${item.data ?? ''}`} criadoEm={item.created_at} atualizadoEm={item.updated_at} />
+                          <div className="flex justify-center items-center gap-1.5">
                             {/* Devolver é diferente de excluir: as duas desfazem
                                 o saldo, mas esta AVISA quem errou e deixa a
                                 correção com ele. Só a direção vê (migr. 502). */}
@@ -244,7 +244,17 @@ const MovimentacoesEstoqueViewInner = ({ showToast, filial, profile }: { showToa
                                 <CornerUpLeft size={11} /> Devolver
                               </button>
                             )}
-                            <button onClick={() => handleDelete(item.id)} title="Excluir" className="action-btn-delete"><Trash2 size={12} /></button>
+                            <MenuMais>
+                              {fechar => (
+                                <>
+                                  <HistoricoOperacoes variante="menu" onAbrir={fechar} entidade="movimentacoes_estoque" entidadeId={item.id} titulo={`${item.tipo ?? 'Movimentação'} · ${item.data ?? ''}`} criadoEm={item.created_at} atualizadoEm={item.updated_at} />
+                                  <ItemMenu onClick={() => { fechar(); handleDelete(item.id); }}
+                                    cor="text-red-400 hover:bg-red-500/10" icon={Trash2}>
+                                    Excluir
+                                  </ItemMenu>
+                                </>
+                              )}
+                            </MenuMais>
                           </div>
                         </td>
                       </motion.tr>

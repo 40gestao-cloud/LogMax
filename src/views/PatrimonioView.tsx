@@ -146,7 +146,7 @@ const PatrimonioViewInner = ({ filial, showToast }: { filial: FilialOp; showToas
       {isLoading ? <LoadingSpinner /> : (error || data.length === 0) ? <EmptyState error={error} message="Nenhum item de patrimônio cadastrado." /> : (
         <div className="neu-flat rounded-3xl p-6 border border-white/5 flex flex-col mb-6">
           <div className="overflow-x-auto main-scrollbar">
-            <table className="w-full text-left border-collapse md:min-w-[900px]">
+            <table className="tabela w-full text-left border-collapse md:min-w-[900px]">
               <thead>
                 <tr className="border-b border-white/10 text-[10px] text-gray-500 uppercase tracking-widest">
                   <th className="pb-4 font-bold px-4 w-14">Foto</th>
@@ -176,7 +176,7 @@ const PatrimonioViewInner = ({ filial, showToast }: { filial: FilialOp; showToas
                       </td>
                       <td className="py-3 px-4 text-xs font-mono text-accent font-bold">{p.patrimonio_numero ?? '—'}</td>
                       <td className="py-3 px-4 text-xs font-mono text-gray-400 hidden sm:table-cell">{p.codigo}</td>
-                      <td className="py-3 px-4 text-sm font-semibold text-gray-200">{p.nome}</td>
+                      <td className="col-texto py-3 px-4 text-sm font-semibold text-gray-200">{p.nome}</td>
                       <td className="py-3 px-4 text-xs text-gray-300 hidden md:table-cell">
                         {p.patrimonio_responsavel
                           ? <span className="flex items-center gap-1.5"><UserIcon size={11} className="text-gray-500" />{p.patrimonio_responsavel}</span>

@@ -139,7 +139,7 @@ export const RelatoriosRHView = ({ showToast: _st }: any) => {
             <motion.div key="fun" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
               {filteredFun.length === 0 ? <EmptyState /> : (
                 <div className="overflow-x-auto main-scrollbar">
-                  <table className="w-full text-left border-collapse">
+                  <table className="tabela w-full text-left border-collapse">
                     <thead><tr className="border-b border-white/10 text-[10px] text-gray-500 uppercase tracking-widest">
                       {['Nome', 'CPF', 'Cargo', 'Departamento', 'Admissão', 'Salário', 'Status'].map(h => <th key={h} className="pb-4 font-bold px-4">{h}</th>)}
                     </tr></thead>
@@ -166,7 +166,7 @@ export const RelatoriosRHView = ({ showToast: _st }: any) => {
             <motion.div key="fol" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
               {filteredFol.length === 0 ? <EmptyState /> : (
                 <div className="overflow-x-auto main-scrollbar">
-                  <table className="w-full text-left border-collapse">
+                  <table className="tabela w-full text-left border-collapse">
                     <thead><tr className="border-b border-white/10 text-[10px] text-gray-500 uppercase tracking-widest">
                       {['Funcionário', 'Mês Ref.', 'Bruto', 'Descontos', 'Líquido', 'Status'].map(h => <th key={h} className="pb-4 font-bold px-4">{h}</th>)}
                     </tr></thead>
@@ -201,7 +201,7 @@ export const RelatoriosRHView = ({ showToast: _st }: any) => {
             <motion.div key="fer" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
               {filteredFer.length === 0 ? <EmptyState /> : (
                 <div className="overflow-x-auto main-scrollbar">
-                  <table className="w-full text-left border-collapse">
+                  <table className="tabela w-full text-left border-collapse">
                     <thead><tr className="border-b border-white/10 text-[10px] text-gray-500 uppercase tracking-widest">
                       {['Funcionário', 'Início', 'Fim', 'Dias', 'Status'].map(h => <th key={h} className="pb-4 font-bold px-4">{h}</th>)}
                     </tr></thead>
@@ -226,7 +226,7 @@ export const RelatoriosRHView = ({ showToast: _st }: any) => {
             <motion.div key="tre" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
               {filteredTre.length === 0 ? <EmptyState /> : (
                 <div className="overflow-x-auto main-scrollbar">
-                  <table className="w-full text-left border-collapse">
+                  <table className="tabela w-full text-left border-collapse">
                     <thead><tr className="border-b border-white/10 text-[10px] text-gray-500 uppercase tracking-widest">
                       {['Treinamento', 'Instrutores', 'Início', 'Fim', 'Inscritos', 'Status'].map(h => <th key={h} className="pb-4 font-bold px-4">{h}</th>)}
                     </tr></thead>

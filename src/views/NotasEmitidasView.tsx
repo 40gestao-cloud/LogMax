@@ -1,3 +1,4 @@
+import { MenuMais, ItemMenu } from '../components/MenuMais';
 import React, { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Search, Plus, Save, FileDown, Receipt, ShoppingBag, Wrench } from 'lucide-react';
@@ -266,7 +267,7 @@ const NotasEmitidasViewInner = ({ showToast, filial, profile }: {
 
       <div className="neu-flat rounded-3xl p-6 border border-white/5 flex flex-col mb-6">
         <div className="overflow-x-auto main-scrollbar">
-          <table className="w-full text-left border-collapse">
+          <table className="tabela w-full text-left border-collapse">
             <thead>
               <tr className="border-b border-white/10 text-[10px] text-gray-500 uppercase tracking-widest">
                 <th className="pb-4 font-bold px-4">Nº / Série</th>
@@ -299,7 +300,7 @@ const NotasEmitidasViewInner = ({ showToast, filial, profile }: {
                             <Icon size={11} /> {n.tipo}
                           </span>
                         </td>
-                        <td className="py-3 px-4 text-xs text-gray-400 max-w-md">
+                        <td className="col-texto py-3 px-4 text-xs text-gray-400 max-w-md">
                           <div className="font-semibold text-gray-200">{n.cliente_nome ?? 'Consumidor final'}</div>
                           <div className="text-[10px] text-gray-500 mt-0.5 line-clamp-2">{n.descricao}</div>
                         </td>
@@ -311,15 +312,19 @@ const NotasEmitidasViewInner = ({ showToast, filial, profile }: {
                           R$ {formatBRL(Number(n.valor_total ?? 0))}
                         </td>
                         <td className="py-3 px-4 text-right">
-                          <span className="inline-flex items-center gap-1.5 align-middle mr-1.5">
-                            <HistoricoOperacoes entidade="notas_emitidas" entidadeId={n.id}
-                              titulo={`Nota ${n.numero ?? String(n.id).slice(-6).toUpperCase()}`}
-                              criadoEm={n.created_at} atualizadoEm={n.updated_at} />
-                          </span>
+                          <div className="flex justify-center items-center gap-1.5">
                           <button onClick={() => baixarPDF(n)}
-                            className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-lg bg-accent/10 text-accent hover:bg-accent/20 transition-colors">
+                            className="btn-solido btn-solido--vermelho !py-1 !px-2.5 !rounded-lg">
                             <FileDown size={11} /> PDF
                           </button>
+                          <MenuMais>
+                            {fechar => (
+                              <HistoricoOperacoes variante="menu" onAbrir={fechar} entidade="notas_emitidas" entidadeId={n.id}
+                                titulo={`Nota ${n.numero ?? String(n.id).slice(-6).toUpperCase()}`}
+                                criadoEm={n.created_at} atualizadoEm={n.updated_at} />
+                            )}
+                          </MenuMais>
+                          </div>
                         </td>
                       </motion.tr>
                     );

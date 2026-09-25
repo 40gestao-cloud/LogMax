@@ -228,7 +228,7 @@ export const PendenciasView: React.FC<Props> = ({ showToast, profile }) => {
               type="button"
               onClick={baixarPdf}
               disabled={gerandoPdf}
-              className="neu-button rounded-xl px-4 py-2.5 text-[11px] font-black uppercase tracking-widest text-gray-200 flex items-center gap-2 disabled:opacity-50"
+              className="btn-solido btn-solido--vermelho"
             >
               <FileDown size={13} />
               {gerandoPdf ? 'Gerando…' : 'Baixar PDF'}

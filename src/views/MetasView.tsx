@@ -1,7 +1,8 @@
 import { isConselheiro } from '../lib/rbac';
 import React, { useEffect, useState, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Plus, Check, X as XIcon, Target, FileDown, Play, Pause, RefreshCw } from 'lucide-react';
+import { Plus, Check, X as XIcon, Target, FileDown, Play, Pause, RefreshCw, Pencil, Trash2 } from 'lucide-react';
+import { MenuMais, ItemMenu } from '../components/MenuMais';
 import { useFetchData } from '../hooks/useSupabaseData';
 import { supabase } from '../lib/supabase';
 import { setorLabel } from '../lib/setores';
@@ -413,14 +414,14 @@ export const MetasView = ({ showToast, profile }: any) => {
           <EmptyState message={podeCriarMeta ? 'Nenhuma meta estratégica criada. Comece pela primeira.' : 'Nenhuma meta ativa pro seu setor.'} />
         ) : (
           <div className="overflow-x-auto main-scrollbar">
-            <table className="w-full text-left border-collapse min-w-[820px]">
+            <table className="tabela w-full text-left border-collapse min-w-[820px]">
               <thead><tr className="border-b border-white/10 text-[10px] text-gray-500 uppercase tracking-widest">
                 <th className="pb-4 font-bold px-4">Descrição</th>
                 <th className="pb-4 font-bold px-4">Setor</th>
                 <th className="pb-4 font-bold px-4 text-center">Nota</th>
                 <th className="pb-4 font-bold px-4 text-center">Período</th>
                 <th className="pb-4 font-bold px-4 text-center">Status</th>
-                <th className="pb-4 font-bold px-4" />
+                <th className="pb-4 font-bold px-4">Ações</th>
               </tr></thead>
               <tbody>
                 <AnimatePresence>
@@ -449,71 +450,60 @@ export const MetasView = ({ showToast, profile }: any) => {
                         }
                       </td>
                       <td className="py-3 px-4">
-                        <div className="flex gap-1.5 justify-end items-center">
-                          {(isAdmin || isGerente) && (
-                            <button onClick={(e) => { e.stopPropagation(); gerarPdfMeta(m); }}
-                              className="action-btn-pdf"
-                              title="Baixar PDF">
-                              <FileDown size={13} />
+                        {/* Editar à vista; o resto da vida da meta (publicar,
+                            concluir, pausar, reabrir, apagar, PDF) vai no "⋯",
+                            cada ação com o nome dela — eram até 8 ícones coloridos. */}
+                        <div className="flex gap-1.5 justify-center items-center" onClick={e => e.stopPropagation()}>
+                          {isAdmin && (m.status === 'Rascunho' || m.status === 'Em Produção') && (
+                            <button onClick={() => abrirEdicaoMeta(m)} disabled={busyId === m.id}
+                              className="action-btn-edit" title="Editar meta">
+                              <Pencil size={12} />
                             </button>
                           )}
-                          {isAdmin && (
-                            <>
-                              {(m.status === 'Rascunho' || m.status === 'Pausada') && (
-                                <button onClick={(e) => { e.stopPropagation(); handlePublicarMeta(m.id); }}
-                                  disabled={busyId === m.id}
-                                  className="action-btn-success"
-                                  title={m.status === 'Rascunho' ? 'Publicar (enviar para gerentes)' : 'Retomar'}>
-                                  <Play size={13} />
-                                </button>
-                              )}
-                              {m.status === 'Em Produção' && (
+                          {(isAdmin || isGerente) && (
+                            <MenuMais>
+                              {fechar => (
                                 <>
-                                  <button onClick={(e) => { e.stopPropagation(); handleConcluirMeta(m.id); }}
-                                    disabled={busyId === m.id}
-                                    className="action-btn-success"
-                                    title="Marcar como Alcançada">
-                                    <Check size={13} />
-                                  </button>
-                                  <button onClick={(e) => { e.stopPropagation(); handleNaoAlcancadaMeta(m.id); }}
-                                    disabled={busyId === m.id}
-                                    className="action-btn-delete"
-                                    title="Marcar como Não alcançada">
-                                    <XIcon size={13} />
-                                  </button>
-                                  <button onClick={(e) => { e.stopPropagation(); handlePausarMeta(m.id); }}
-                                    disabled={busyId === m.id}
-                                    className="action-btn-purple"
-                                    title="Pausar">
-                                    <Pause size={13} />
-                                  </button>
+                                  <ItemMenu onClick={() => { fechar(); gerarPdfMeta(m); }} cor="text-gray-200 hover:bg-white/5" icon={FileDown}>
+                                    Baixar PDF
+                                  </ItemMenu>
+                                  {isAdmin && (m.status === 'Rascunho' || m.status === 'Pausada') && (
+                                    <ItemMenu onClick={() => { fechar(); handlePublicarMeta(m.id); }} disabled={busyId === m.id}
+                                      cor="text-emerald-400 hover:bg-emerald-500/10" icon={Play}>
+                                      {m.status === 'Rascunho' ? 'Publicar para os gerentes' : 'Retomar'}
+                                    </ItemMenu>
+                                  )}
+                                  {isAdmin && m.status === 'Em Produção' && (
+                                    <>
+                                      <ItemMenu onClick={() => { fechar(); handleConcluirMeta(m.id); }} disabled={busyId === m.id}
+                                        cor="text-emerald-400 hover:bg-emerald-500/10" icon={Check}>
+                                        Marcar como alcançada
+                                      </ItemMenu>
+                                      <ItemMenu onClick={() => { fechar(); handleNaoAlcancadaMeta(m.id); }} disabled={busyId === m.id}
+                                        cor="text-red-400 hover:bg-red-500/10" icon={XIcon}>
+                                        Marcar como não alcançada
+                                      </ItemMenu>
+                                      <ItemMenu onClick={() => { fechar(); handlePausarMeta(m.id); }} disabled={busyId === m.id}
+                                        cor="text-purple-300 hover:bg-purple-500/10" icon={Pause}>
+                                        Pausar
+                                      </ItemMenu>
+                                    </>
+                                  )}
+                                  {isAdmin && m.status === 'Encerrada' && (
+                                    <ItemMenu onClick={() => { fechar(); handleReabrirMeta(m.id); }} disabled={busyId === m.id}
+                                      cor="text-amber-400 hover:bg-amber-500/10" icon={RefreshCw}>
+                                      Reabrir meta
+                                    </ItemMenu>
+                                  )}
+                                  {isAdmin && m.status !== 'Encerrada' && (
+                                    <ItemMenu onClick={() => { fechar(); handleApagarMeta(m.id); }} disabled={busyId === m.id}
+                                      cor="text-red-400 hover:bg-red-500/10" icon={Trash2}>
+                                      Apagar meta
+                                    </ItemMenu>
+                                  )}
                                 </>
                               )}
-                              {(m.status === 'Rascunho' || m.status === 'Em Produção') && (
-                                <button onClick={(e) => { e.stopPropagation(); abrirEdicaoMeta(m); }}
-                                  disabled={busyId === m.id}
-                                  className="action-btn-blue"
-                                  title="Editar meta">
-                                  <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>
-                                </button>
-                              )}
-                              {m.status === 'Encerrada' && (
-                                <button onClick={(e) => { e.stopPropagation(); handleReabrirMeta(m.id); }}
-                                  disabled={busyId === m.id}
-                                  className="action-btn-neutral"
-                                  title="Reabrir meta">
-                                  <RefreshCw size={13} />
-                                </button>
-                              )}
-                              {m.status !== 'Encerrada' && (
-                                <button onClick={(e) => { e.stopPropagation(); handleApagarMeta(m.id); }}
-                                  disabled={busyId === m.id}
-                                  className="action-btn-delete"
-                                  title="Apagar meta">
-                                  <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
-                                </button>
-                              )}
-                            </>
+                            </MenuMais>
                           )}
                         </div>
                       </td>
@@ -573,7 +563,7 @@ export const MetasView = ({ showToast, profile }: any) => {
               <div className="flex justify-between items-center">
                 {(isAdmin || isGerente) && (
                   <button onClick={() => gerarPdfMeta(detailMeta)}
-                    className="action-btn-pdf-lg">
+                    className="btn-solido btn-solido--vermelho">
                     <FileDown size={13} />PDF
                   </button>
                 )}

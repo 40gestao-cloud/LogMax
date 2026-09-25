@@ -1,3 +1,4 @@
+import { useRolarAteFormulario } from '../hooks/useRolarAteFormulario';
 import React, { useMemo, useState } from 'react';
 import { todayBR } from '../lib/dates';
 import type { FilialOp } from '../components/FilialSelector';
@@ -176,6 +177,7 @@ const CuponsMarketingViewInner = ({ showToast, profile, filial }: { showToast: a
     }
   };
 
+  const formEdicaoRef = useRolarAteFormulario(showForm, editing?.id);
   if (isLoading) return <div className="flex-1 flex items-center justify-center"><LoadingSpinner /></div>;
 
   const today = todayBR();
@@ -228,7 +230,7 @@ const CuponsMarketingViewInner = ({ showToast, profile, filial }: { showToast: a
 
       <AnimatePresence>
         {showForm && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+          <motion.div ref={formEdicaoRef} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
             className="neu-flat rounded-3xl p-6 border border-white/5 shrink-0">
             <div className="flex items-center justify-between mb-5">
               <h3 className="text-sm font-bold text-gray-300">{editing ? 'Editar Cupom' : 'Novo Cupom'}</h3>
@@ -344,7 +346,7 @@ const CuponsMarketingViewInner = ({ showToast, profile, filial }: { showToast: a
       <div className="neu-flat rounded-3xl p-6 border border-white/5 shrink-0">
         {cupons.length === 0 ? <EmptyState message="Nenhum cupom criado ainda" /> : (
           <div className="overflow-x-auto main-scrollbar">
-            <table className="w-full text-left border-collapse min-w-[1100px]">
+            <table className="tabela w-full text-left border-collapse min-w-[1100px]">
               <thead>
                 <tr className="border-b border-white/10 text-[10px] text-gray-500 uppercase tracking-widest">
                   <th className="pb-4 font-bold px-4">Código</th>
@@ -403,7 +405,7 @@ const CuponsMarketingViewInner = ({ showToast, profile, filial }: { showToast: a
                           {c.campanha_id ? (campanhasAtivasMap[c.campanha_id] ?? '—') : '—'}
                         </td>
                         <td className="py-3 px-4 text-right">
-                          <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <div className="flex justify-center items-center gap-1.5">
                             {canCRUD && (
                               <>
                                 <button onClick={() => openEdit(c)} title="Editar" className="action-btn-edit">

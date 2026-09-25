@@ -1,3 +1,4 @@
+import { MenuMais, ItemMenu } from '../components/MenuMais';
 import React, { useState, useEffect, useMemo } from 'react';
 import { todayBR } from '../lib/dates';
 import type { FilialOp } from '../components/FilialSelector';
@@ -176,7 +177,7 @@ const ExpedicaoViewInner = ({ showToast, filial }: { showToast: any; filial: Fil
 
       <div className="neu-flat rounded-3xl p-6 border border-white/5 flex flex-col mb-6">
         <div className="overflow-x-auto main-scrollbar">
-          <table className="w-full text-left border-collapse">
+          <table className="tabela w-full text-left border-collapse">
             <thead><tr className="border-b border-white/10 text-[10px] text-gray-500 uppercase tracking-widest"><th className="pb-4 font-bold px-4">Produto</th><th className="pb-4 font-bold px-4 text-right">Qtd</th><th className="pb-4 font-bold px-4">Data</th><th className="pb-4 font-bold px-4 text-center">Status</th><th className="pb-4 font-bold px-4 text-right">Ações</th></tr></thead>
             <tbody>
               {isLoading ? (<tr><td colSpan={5}><LoadingSpinner /></td></tr>) : filtered.length === 0 ? (<tr><td colSpan={5}><EmptyState /></td></tr>) : (
@@ -188,8 +189,7 @@ const ExpedicaoViewInner = ({ showToast, filial }: { showToast: any; filial: Fil
                       <td className="py-3 px-4 text-xs font-mono text-gray-400">{item.data_expedicao || '—'}</td>
                       <td className="py-3 px-4 text-center"><StatusBadge status={item.status} /></td>
                       <td className="py-3 px-4 text-right">
-                        <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                          <HistoricoOperacoes entidade="expedicao" entidadeId={item.id} titulo={`Expedição ${String(item.id).slice(-6).toUpperCase()}`} criadoEm={item.created_at} atualizadoEm={item.updated_at} />
+                        <div className="flex justify-center items-center gap-1.5">
                           {item.status === 'Pendente' && (
                             <button
                               onClick={() => handleExpedir(item)}
@@ -200,7 +200,17 @@ const ExpedicaoViewInner = ({ showToast, filial }: { showToast: any; filial: Fil
                               Expedir
                             </button>
                           )}
-                          <button onClick={() => handleDelete(item.id)} title="Excluir" className="action-btn-delete"><Trash2 size={12} /></button>
+                          <MenuMais>
+                            {fechar => (
+                              <>
+                                <HistoricoOperacoes variante="menu" onAbrir={fechar} entidade="expedicao" entidadeId={item.id} titulo={`Expedição ${String(item.id).slice(-6).toUpperCase()}`} criadoEm={item.created_at} atualizadoEm={item.updated_at} />
+                                <ItemMenu onClick={() => { fechar(); handleDelete(item.id); }}
+                                  cor="text-red-400 hover:bg-red-500/10" icon={Trash2}>
+                                  Excluir
+                                </ItemMenu>
+                              </>
+                            )}
+                          </MenuMais>
                         </div>
                       </td>
                     </motion.tr>

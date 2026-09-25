@@ -1,3 +1,4 @@
+import { MenuMais, ItemMenu } from '../components/MenuMais';
 import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Search, Edit2, Trash2, Plus, Save } from 'lucide-react';
@@ -223,7 +224,7 @@ export const GenericCRUDView = ({ title, endpoint, fields, defaultStatus = 'Ativ
 
       <div className="neu-flat rounded-3xl p-6 border border-white/5 flex flex-col mb-6">
         <div className="overflow-x-auto main-scrollbar">
-          <table className="w-full text-left border-collapse">
+          <table className="tabela w-full text-left border-collapse">
             <thead>
               <tr className="border-b border-white/10 text-[10px] text-gray-500 uppercase tracking-widest">
                 {fields.map(f => <th key={f.key} className="pb-4 font-bold px-4">{f.label}</th>)}
@@ -266,21 +267,32 @@ export const GenericCRUDView = ({ title, endpoint, fields, defaultStatus = 'Ativ
                           <td className="py-4 px-4"><FilialBadge filial={item.filial} /></td>
                         )}
                         <td className="py-4 px-4 text-right">
-                          <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                            {entidade && (
-                              <HistoricoOperacoes
-                                entidade={entidade}
-                                entidadeId={item.id}
-                                titulo={fields[0] ? String(item[fields[0].key] ?? title) : title}
-                                criadoEm={item.created_at}
-                                atualizadoEm={item.updated_at}
-                              />
-                            )}
+                          <div className="flex justify-center items-center gap-1.5">
                             {canWrite && (
-                              <>
-                                <button onClick={() => openEdit(item)} className="action-btn-edit"><Edit2 size={12} /></button>
-                                <button onClick={() => handleDelete(item.id)} className="action-btn-delete"><Trash2 size={12} /></button>
-                              </>
+                              <button onClick={() => openEdit(item)} title="Editar" className="action-btn-edit"><Edit2 size={12} /></button>
+                            )}
+                            {(entidade || canWrite) && (
+                              <MenuMais>
+                                {fechar => (
+                                  <>
+                                    {entidade && (
+                                      <HistoricoOperacoes variante="menu" onAbrir={fechar}
+                                        entidade={entidade}
+                                        entidadeId={item.id}
+                                        titulo={fields[0] ? String(item[fields[0].key] ?? title) : title}
+                                        criadoEm={item.created_at}
+                                        atualizadoEm={item.updated_at}
+                                      />
+                                    )}
+                                    {canWrite && (
+                                      <ItemMenu onClick={() => { fechar(); handleDelete(item.id); }}
+                                        cor="text-red-400 hover:bg-red-500/10" icon={Trash2}>
+                                        Excluir
+                                      </ItemMenu>
+                                    )}
+                                  </>
+                                )}
+                              </MenuMais>
                             )}
                           </div>
                         </td>

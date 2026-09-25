@@ -51,7 +51,11 @@ const COR_EVENTO: Record<string, string> = {
   Inativado: 'text-red-400 border-red-500/30',
 };
 
-export function HistoricoOperacoes({ entidade, entidadeId, titulo, criadoEm, atualizadoEm }: {
+export function HistoricoOperacoes({ entidade, entidadeId, titulo, criadoEm, atualizadoEm, variante = 'icone', onAbrir }: {
+  /** 'menu': item com rótulo, para morar dentro do MenuMais "⋯". */
+  variante?: 'icone' | 'menu';
+  /** Chamado ao abrir — o MenuMais passa o `fechar` dele. */
+  onAbrir?: () => void;
   entidade: string;
   entidadeId: string;
   titulo?: string;
@@ -100,14 +104,23 @@ export function HistoricoOperacoes({ entidade, entidadeId, titulo, criadoEm, atu
           vizinhos na linha. Enquanto este botão dividia espaço com o ícone de
           autoria ele era menor de propósito; sozinho, o tamanho fora de padrão
           só parecia defeito. */}
-      <button
-        onClick={e => { e.stopPropagation(); setOpen(true); }}
-        title="Histórico deste documento"
-        aria-label="Ver histórico deste documento"
-        className="action-btn-neutral"
-      >
-        <History size={12} />
-      </button>
+      {variante === 'menu' ? (
+        <button
+          onClick={e => { e.stopPropagation(); onAbrir?.(); setOpen(true); }}
+          className="w-full text-left px-3 py-2 rounded-lg text-xs font-semibold flex items-center gap-2 text-gray-300 hover:bg-white/5"
+        >
+          <History size={13} /> Histórico do documento
+        </button>
+      ) : (
+        <button
+          onClick={e => { e.stopPropagation(); setOpen(true); }}
+          title="Histórico deste documento"
+          aria-label="Ver histórico deste documento"
+          className="action-btn-neutral"
+        >
+          <History size={12} />
+        </button>
+      )}
 
       {open && createPortal(
         <AnimatePresence>

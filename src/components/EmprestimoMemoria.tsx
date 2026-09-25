@@ -271,7 +271,7 @@ export default function EmprestimoMemoria({ emprestimo, onClose }: EmprestimoMem
               </p>
             ) : (
               <div className="overflow-x-auto max-h-[40vh] overflow-y-auto main-scrollbar -mx-1 px-1">
-                <table className="w-full text-[11px] tabular-nums">
+                <table className="tabela w-full text-[11px] tabular-nums">
                   <thead className="sticky top-0 bg-[#0e0e0e]">
                     <tr className="text-gray-500 text-left">
                       <th className="py-1.5 pr-2 font-bold">#</th>

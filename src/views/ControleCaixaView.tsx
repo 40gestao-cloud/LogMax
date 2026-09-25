@@ -1,3 +1,4 @@
+import { MenuMais, ItemMenu } from '../components/MenuMais';
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { LockOpen, Lock, Clock, DollarSign, User, ChevronDown, Trash2, RotateCcw, ArrowDownToLine, ArrowUpFromLine, X, Calculator, Landmark, TrendingDown, Wallet, Info } from 'lucide-react';
@@ -761,7 +762,7 @@ export const ControleCaixaView = ({ showToast, profile }: { showToast: any; prof
           <p className="text-sm text-gray-600 text-center py-6">Nenhuma sessão registrada.</p>
         ) : (
           <div className="overflow-x-auto main-scrollbar">
-            <table className="w-full text-left border-collapse min-w-[920px]">
+            <table className="tabela w-full text-left border-collapse min-w-[920px]">
               <thead>
                 <tr className="border-b border-white/10 text-[10px] text-gray-500 uppercase tracking-widest">
                   <th className="pb-3 font-bold px-4">Data</th>
@@ -805,12 +806,21 @@ export const ControleCaixaView = ({ showToast, profile }: { showToast: any; prof
                         ) : <span className="text-gray-600 text-[10px]">—</span>}
                       </td>
                       <td className="py-3 px-4 text-right">
-                        <div className="flex justify-end gap-2">
-                          <HistoricoOperacoes entidade="controle_caixa" entidadeId={h.id} titulo={`Caixa ${h.data ?? ''} · ${h.filial ?? ''}`} criadoEm={h.created_at} atualizadoEm={h.updated_at} />
+                        <div className="flex justify-center items-center gap-1.5">
                           {podeReabrir && (
                             <button onClick={() => setReabrirAlvo(h)} title="Reabrir caixa" className="action-btn-warning"><RotateCcw size={12} /></button>
                           )}
-                          <button onClick={() => handleDeleteSessao(h.id)} title="Inativar sessão" className="action-btn-delete"><Trash2 size={12} /></button>
+                          <MenuMais>
+                            {fechar => (
+                              <>
+                                <HistoricoOperacoes variante="menu" onAbrir={fechar} entidade="controle_caixa" entidadeId={h.id} titulo={`Caixa ${h.data ?? ''} · ${h.filial ?? ''}`} criadoEm={h.created_at} atualizadoEm={h.updated_at} />
+                                <ItemMenu onClick={() => { fechar(); handleDeleteSessao(h.id); }}
+                                  cor="text-red-400 hover:bg-red-500/10" icon={Trash2}>
+                                  Inativar sessão
+                                </ItemMenu>
+                              </>
+                            )}
+                          </MenuMais>
                         </div>
                       </td>
                     </tr>

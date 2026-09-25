@@ -106,7 +106,7 @@ export const EtiquetaPreviewModal = ({ item, onBaixar, onClose }: {
 
         <div className="flex flex-col-reverse sm:flex-row gap-2 sm:justify-end">
           <button type="button" onClick={onClose}
-            className="neu-button py-2.5 px-5 rounded-xl text-sm text-gray-400">
+            className="btn-solido btn-solido--vermelho">
             Fechar
           </button>
           {norm.valid && (

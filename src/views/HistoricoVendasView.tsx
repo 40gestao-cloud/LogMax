@@ -1,3 +1,4 @@
+import { MenuMais, ItemMenu } from '../components/MenuMais';
 import React, { useState, useEffect, useMemo } from 'react';
 import { todayBR } from '../lib/dates';
 import type { FilialOp } from '../components/FilialSelector';
@@ -205,11 +206,11 @@ const HistoricoVendasViewInner = ({ showToast, filial }: { showToast: any; filia
           </div>
           {/* Export */}
           <button onClick={() => exportToPDF('Histórico de Vendas', exportCols, exportRows(), 'logmax-vendas')}
-            className="neu-button py-2 px-3 rounded-xl flex items-center gap-1.5 text-xs text-gray-400 hover:text-white transition-colors">
+            className="btn-solido btn-solido--vermelho">
             <FileDown size={13} /> PDF
           </button>
           <button onClick={() => exportToExcel('Vendas', exportCols, exportRows(), 'logmax-vendas')}
-            className="neu-button py-2 px-3 rounded-xl flex items-center gap-1.5 text-xs text-gray-400 hover:text-white transition-colors">
+            className="btn-solido btn-solido--verde">
             <Sheet size={13} /> Excel
           </button>
         </div>
@@ -290,17 +291,23 @@ const HistoricoVendasViewInner = ({ showToast, filial }: { showToast: any; filia
                               {Number(v.desconto) > 0 && <span>Desconto: <span className="text-red-500 font-mono">-{Number(v.desconto).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span></span>}
                             </div>
                             <div className="flex items-center gap-2">
-                              <HistoricoOperacoes entidade="vendas" entidadeId={v.id} titulo={`Venda ${String(v.id).slice(-6).toUpperCase()}`} criadoEm={v.created_at} atualizadoEm={v.updated_at} />
                               {v.status !== 'Cancelada' && (
                                 <button onClick={() => handleCancelar(v)} disabled={!!isCanceling}
                                   className="neu-button py-1.5 px-4 rounded-xl text-xs font-bold text-red-500 hover:border-red-500/20 border border-transparent transition-all flex items-center gap-1.5 disabled:opacity-50">
                                   <X size={11} /> Cancelar venda
                                 </button>
                               )}
-                              <button onClick={() => handleExcluir(v)} title="Inativar venda" disabled={!!isCanceling}
-                                className="neu-button py-1.5 px-3 rounded-xl text-xs font-bold text-gray-400 hover:text-red-500 transition-colors flex items-center gap-1.5 disabled:opacity-50">
-                                <Trash2 size={11} /> Excluir
-                              </button>
+                              <MenuMais>
+                                {fechar => (
+                                  <>
+                                    <HistoricoOperacoes variante="menu" onAbrir={fechar} entidade="vendas" entidadeId={v.id} titulo={`Venda ${String(v.id).slice(-6).toUpperCase()}`} criadoEm={v.created_at} atualizadoEm={v.updated_at} />
+                                    <ItemMenu onClick={() => { fechar(); handleExcluir(v); }} disabled={!!isCanceling}
+                                      cor="text-red-400 hover:bg-red-500/10" icon={Trash2}>
+                                      Excluir (inativar venda)
+                                    </ItemMenu>
+                                  </>
+                                )}
+                              </MenuMais>
                             </div>
                           </div>
                         </div>

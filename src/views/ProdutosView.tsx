@@ -6,6 +6,7 @@ import { MatrizConsolidado } from '../components/MatrizConsolidado';
 import { motion, AnimatePresence } from 'motion/react';
 import { Search, Edit2, Trash2, Plus, Save, FileDown, Sheet, AlertTriangle, Barcode, Grid3x3, Upload } from 'lucide-react';
 import { HistoricoOperacoes } from '../components/HistoricoOperacoes';
+import { MenuMais, ItemMenu } from '../components/MenuMais';
 import { useColarImagemGlobal } from '../components/ColarImagem';
 import { BotaoModeloPlanilha } from '../components/BotaoModeloPlanilha';
 import { ImportarProdutosModal } from '../components/ImportarProdutosModal';
@@ -1884,8 +1885,8 @@ const ProdutosViewInner = ({ showToast, filial, profile, onNavigate }: { showToa
             type="button"
             onClick={() => setImportando(true)}
             title="Ler um arquivo preenchido e cadastrar em lote"
-            // Grava no catálogo: vidro amarelo, o de ação que pede atenção.
-            className="btn-shimmer btn-shimmer--glass-yellow !py-2 !px-4 !rounded-xl !text-xs"
+            // Grava no catálogo: laranja sólido, o de ação que pede atenção.
+            className="btn-solido btn-solido--laranja"
           >
             <Upload size={14} /> Importar planilha
           </button>
@@ -2157,7 +2158,7 @@ const ProdutosViewInner = ({ showToast, filial, profile, onNavigate }: { showToa
       {isLoading ? <LoadingSpinner /> : (error || filtered.length === 0) ? <EmptyState error={error} /> : (
         <div className="neu-flat rounded-3xl p-6 border border-white/5 flex flex-col mb-6">
           <div className="overflow-x-auto main-scrollbar">
-            <table className="w-full text-left border-collapse md:min-w-[900px]">
+            <table className="tabela w-full text-left border-collapse md:min-w-[900px]">
               <thead>
                 {/* `whitespace-nowrap` em todo o cabeçalho: "P. Custo" e
                     "P. Venda" quebravam em duas linhas e empurravam a altura
@@ -2234,7 +2235,7 @@ const ProdutosViewInner = ({ showToast, filial, profile, onNavigate }: { showToa
                         {/* Nome é a única coluna que PODE quebrar — é texto de
                             verdade. Ganha piso de largura para não ser espremida
                             a três linhas pelas colunas numéricas ao lado. */}
-                        <td className="py-4 px-4 min-w-[200px]">
+                        <td className="col-texto py-4 px-4 min-w-[200px]">
                           <span className="sm:hidden text-[10px] font-mono text-gray-500 block">{item.codigo}</span>
                           {/* `flex-wrap`: com nome comprido os selos ficavam
                               espremidos na mesma linha, cada um com meia letra. */}
@@ -2386,27 +2387,36 @@ const ProdutosViewInner = ({ showToast, filial, profile, onNavigate }: { showToa
                               sob o cursor, que é o realce sem ser esconderijo.
                               A etiqueta (`data-vivo`) fica fora do esmaecimento:
                               dourado a 70% sobre o preto lia apagado. */}
-                          <div className="flex flex-nowrap justify-end gap-2 [&>*]:transition-opacity [&>*:not([data-vivo])]:opacity-70 group-hover:[&>*]:opacity-100">
-                            <HistoricoOperacoes entidade="produtos" entidadeId={item.id} titulo={item.nome} criadoEm={item.created_at} atualizadoEm={item.updated_at} />
+                          {/* Etiqueta e editar à vista; grade, histórico e
+                              excluir no "⋯", cada um com o nome. */}
+                          <div className="flex flex-nowrap justify-center items-center gap-1.5">
                             {normalizeEan13(item.ean).valid && (
-                              <button onClick={() => setEtiquetaPreview(item)} data-vivo
-                                title="Ver etiqueta EAN-13"
+                              <button onClick={() => setEtiquetaPreview(item)} title="Ver etiqueta EAN-13"
                                 className="action-btn-gold">
                                 <Barcode size={13} />
                               </button>
                             )}
-                            {/* Grade de variantes (migr. 445). Só onde tamanho e
-                                cor existem na ficha — abrir grade de saco de
-                                arroz não quer dizer nada. */}
-                            {temGrade && ehVendavel(item.tipo) && (
-                              <button onClick={() => abrirGrade(item)}
-                                title="Abrir grade de tamanhos e cores"
-                                className="action-btn-neutral">
-                                <Grid3x3 size={12} />
-                              </button>
-                            )}
-                            <button onClick={() => openEdit(item)} className="action-btn-edit"><Edit2 size={12} /></button>
-                            <button onClick={() => handleDelete(item.id)} className="action-btn-delete"><Trash2 size={12} /></button>
+                            <button onClick={() => openEdit(item)} title="Editar" className="action-btn-edit"><Edit2 size={12} /></button>
+                            <MenuMais>
+                              {fechar => (
+                                <>
+                                  {/* Grade de variantes (migr. 445). Só onde tamanho e
+                                      cor existem na ficha — abrir grade de saco de
+                                      arroz não quer dizer nada. */}
+                                  {temGrade && ehVendavel(item.tipo) && (
+                                    <ItemMenu onClick={() => { fechar(); abrirGrade(item); }}
+                                      cor="text-gray-200 hover:bg-white/5" icon={Grid3x3}>
+                                      Grade de tamanhos e cores
+                                    </ItemMenu>
+                                  )}
+                                  <HistoricoOperacoes variante="menu" onAbrir={fechar} entidade="produtos" entidadeId={item.id} titulo={item.nome} criadoEm={item.created_at} atualizadoEm={item.updated_at} />
+                                  <ItemMenu onClick={() => { fechar(); handleDelete(item.id); }}
+                                    cor="text-red-400 hover:bg-red-500/10" icon={Trash2}>
+                                    Excluir
+                                  </ItemMenu>
+                                </>
+                              )}
+                            </MenuMais>
                           </div>
                         </td>
                       </motion.tr>

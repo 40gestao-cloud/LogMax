@@ -1,3 +1,5 @@
+import { useRolarAteFormulario } from '../hooks/useRolarAteFormulario';
+import { MenuMais, ItemMenu } from '../components/MenuMais';
 import React, { useMemo, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Search, Edit2, Trash2, MapPin, Building2, Plus, Save, FileDown, Sheet, Phone, User, ImagePlus, X as XIcon, Loader2, Ruler, Clock, Calendar, Car, Users2, Wallet, Package } from 'lucide-react';
@@ -528,6 +530,8 @@ export const FiliaisView = ({ showToast }: any) => {
 
   const isFormOpen = showForm || !!editItem;
 
+  const formEdicaoRef = useRolarAteFormulario(isFormOpen, editItem?.id);
+
   return (
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col h-full gap-8">
       <div className="flex flex-wrap justify-between items-start gap-3 shrink-0">
@@ -558,7 +562,7 @@ export const FiliaisView = ({ showToast }: any) => {
 
       <AnimatePresence>
         {isFormOpen && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+          <motion.div ref={formEdicaoRef} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
             <div className="neu-flat rounded-2xl p-6 border border-white/5 flex flex-col gap-5">
               <h3 className="text-sm font-bold text-gray-200">{editItem ? 'Editar Filial' : 'Nova Filial'}</h3>
 
@@ -994,14 +998,23 @@ export const FiliaisView = ({ showToast }: any) => {
                 })()}
               </div>
 
-              <div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity mt-auto">
-                <HistoricoOperacoes entidade="filiais" entidadeId={item.id} titulo={item.nome} criadoEm={item.created_at} atualizadoEm={item.updated_at} />
+              <div className="flex justify-end items-center gap-1.5 mt-auto">
                 {canEditRow(item) && (
-                  <button onClick={() => openEdit(item)} className="action-btn-edit"><Edit2 size={12} /></button>
+                  <button onClick={() => openEdit(item)} title="Editar" className="action-btn-edit"><Edit2 size={12} /></button>
                 )}
-                {canDeleteRow(item) && (
-                  <button onClick={() => handleDelete(item.id, item.imagem_url)} className="action-btn-delete"><Trash2 size={12} /></button>
-                )}
+                <MenuMais>
+                  {fechar => (
+                    <>
+                      <HistoricoOperacoes variante="menu" onAbrir={fechar} entidade="filiais" entidadeId={item.id} titulo={item.nome} criadoEm={item.created_at} atualizadoEm={item.updated_at} />
+                      {canDeleteRow(item) && (
+                        <ItemMenu onClick={() => { fechar(); handleDelete(item.id, item.imagem_url); }}
+                          cor="text-red-400 hover:bg-red-500/10" icon={Trash2}>
+                          Excluir
+                        </ItemMenu>
+                      )}
+                    </>
+                  )}
+                </MenuMais>
               </div>
             </motion.div>
           ))}

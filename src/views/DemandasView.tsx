@@ -399,7 +399,7 @@ function DemandasConselhoList({ profile, filial, showToast }: {
             <button
               onClick={baixarPDF}
               disabled={exportando || tarefas.length === 0}
-              className="shrink-0 flex items-center gap-1.5 text-[11px] font-bold px-3 py-1.5 rounded-lg neu-button text-accent hover:ring-1 hover:ring-accent/40 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              className="btn-solido btn-solido--vermelho"
               title="Baixar as demandas em PDF, com a descrição de cada tarefa"
             >
               {exportando ? <Loader2 size={12} className="animate-spin" /> : <FileDown size={12} />}

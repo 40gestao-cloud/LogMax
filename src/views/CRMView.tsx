@@ -1,3 +1,5 @@
+import { useRolarAteFormulario } from '../hooks/useRolarAteFormulario';
+import { MenuMais, ItemMenu } from '../components/MenuMais';
 import React, { useState, useEffect } from 'react';
 import type { FilialOp } from '../components/FilialSelector';
 import { useFilial } from '../contexts/FilialContext';
@@ -256,6 +258,8 @@ const CRMViewInner = ({ type, showToast, filial }: {
 
   const isFormOpen = showForm || !!editItem;
 
+  const formEdicaoRef = useRolarAteFormulario(isFormOpen, editItem?.id);
+
   return (
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col h-full gap-8">
       {/* Header */}
@@ -284,7 +288,7 @@ const CRMViewInner = ({ type, showToast, filial }: {
       {/* Formulário */}
       <AnimatePresence>
         {isFormOpen && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+          <motion.div ref={formEdicaoRef} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
             <div className="neu-flat rounded-2xl p-6 border border-white/5 flex flex-col gap-5">
               <div className="flex items-start justify-between gap-4">
                 <h3 className="text-sm font-bold text-gray-200">
@@ -505,10 +509,19 @@ const CRMViewInner = ({ type, showToast, filial }: {
                   </div>
                   {/* No toque não existe hover: as ações ficavam invisíveis e
                       inalcançáveis no celular. Escondidas só a partir de md. */}
-                  <div className="flex gap-1 shrink-0 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
-                    <HistoricoOperacoes entidade={type} entidadeId={item.id} titulo={item.nome} criadoEm={item.created_at} atualizadoEm={item.updated_at} />
+                  <div className="flex items-center gap-1.5 shrink-0">
                     <button onClick={() => openEdit(item)} className="action-btn-edit"><Edit2 size={12} /></button>
-                    <button onClick={() => handleDelete(item)} className="action-btn-delete"><Trash2 size={12} /></button>
+                    <MenuMais>
+                      {fechar => (
+                        <>
+                          <HistoricoOperacoes variante="menu" onAbrir={fechar} entidade={type} entidadeId={item.id} titulo={item.nome} criadoEm={item.created_at} atualizadoEm={item.updated_at} />
+                          <ItemMenu onClick={() => { fechar(); handleDelete(item); }}
+                            cor="text-red-400 hover:bg-red-500/10" icon={Trash2}>
+                            Excluir
+                          </ItemMenu>
+                        </>
+                      )}
+                    </MenuMais>
                   </div>
                 </div>
 

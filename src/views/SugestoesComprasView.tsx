@@ -303,7 +303,7 @@ const SugestoesComprasViewInner = ({ showToast, profile, filial }: any) => {
               </div>
 
               {/* Desktop: tabela */}
-              <table className="hidden sm:table w-full text-left border-collapse">
+              <table className="tabela col-guia hidden sm:table w-full text-left border-collapse">
                 <thead><tr className="border-b border-white/10 text-[10px] text-gray-500 uppercase tracking-widest">
                   <th className="pb-4 font-bold px-4">Código</th>
                   <th className="pb-4 font-bold px-4">Produto</th>
@@ -340,7 +340,7 @@ const SugestoesComprasViewInner = ({ showToast, profile, filial }: any) => {
                           </td>
                           <td className="py-3 px-4 text-right">
                             <button onClick={() => openSolicitar(p)}
-                              className="flex items-center gap-1.5 ml-auto opacity-0 group-hover:opacity-100 transition-opacity neu-button px-3 py-1.5 rounded-lg text-xs text-accent font-semibold hover:border-accent/20 border border-transparent">
+                              className="flex items-center gap-1.5 mx-auto neu-button px-3 py-1.5 rounded-lg text-xs text-accent font-semibold hover:border-accent/20 border border-transparent">
                               <ShoppingCart size={12} /> Solicitar
                             </button>
                           </td>

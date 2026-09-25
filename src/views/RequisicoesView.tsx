@@ -1,15 +1,16 @@
+import { useRolarAteFormulario } from '../hooks/useRolarAteFormulario';
 import React, { useState, useEffect, useMemo } from 'react';
 import type { FilialOp } from '../components/FilialSelector';
 import { useFilial } from '../contexts/FilialContext';
 import { motion, AnimatePresence } from 'motion/react';
-import { Search, Edit2, Plus, Save, ChevronRight, RotateCcw } from 'lucide-react';
+import { Search, Edit2, Save, ChevronRight, RotateCcw } from 'lucide-react';
 import { FluxoCompra } from '../components/FluxoCompra';
 import { etapaDaRequisicao } from '../lib/fluxoCompra';
 import { numeroRequisicao } from '../lib/documentos';
 import { HistoricoOperacoes } from '../components/HistoricoOperacoes';
 import { useFetchData } from '../hooks/useSupabaseData';
 import { supabase } from '../lib/supabase';
-import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent, StatusBadge, UrgenciaBadge, Pagination, SelecioneUnidade } from '../components/ui';
+import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent, StatusBadge, UrgenciaBadge, Pagination, SelecioneUnidade, AbaComContador, type CorAba } from '../components/ui';
 import { useFormValidation, formatQtd, parseQtd, handleQtdKeyDown, qtdBR } from '../lib/viewUtils';
 import { UNIDADES_FRACIONARIAS, normalizarUnidade, pluralEmbalagem } from '../lib/unidades';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
@@ -17,8 +18,9 @@ import { useConfirm } from '../contexts/ConfirmContext';
 import { ExcluirAdmin } from '../components/ExcluirAdmin';
 import { usePrompt } from '../contexts/PromptContext';
 import { isConselheiro } from '../lib/rbac';
-import { formatDataHoraBR } from '../lib/dates';
+import { formatDataHoraBR, diasDesde, dataSimplesBR } from '../lib/dates';
 import { FiltroSolicitante } from '../components/FiltroSolicitante';
+import { MenuMais, ItemMenu, CABECALHO_TABELA } from '../components/MenuMais';
 
 // Sentinel pra opção "Outro (digitar)" — usado quando o item solicitado
 // não existe no catálogo (compra eventual, serviço, item novo).
@@ -71,7 +73,42 @@ const Campo = ({ rotulo, valor }: { rotulo: string; valor: React.ReactNode }) =>
   </div>
 );
 
-const RequisicoesViewInner = ({ showToast, profile, filial }: { showToast: any; profile: any; filial: FilialOp }) => {
+// `cor` diz o que a fila significa PARA COMPRAS: amarelo é trabalho seu; as
+// outras são de quem está com o documento agora.
+const ABAS: { key: string; label: string; status: string[] | null; cor: CorAba }[] = [
+  { key: 'acotar',    label: 'A cotar',       status: ['Aprovado'],    cor: 'amarelo' },
+  { key: 'gerente',   label: 'Com o gerente', status: ['Pendente'],    cor: 'preto' },
+  { key: 'correcao',  label: 'Em correção',   status: ['Em correção'], cor: 'azul' },
+  { key: 'atendidas', label: 'Atendidas',     status: ['Atendida'],    cor: 'cinza' },
+  { key: 'negadas',   label: 'Negadas',       status: ['Negado'],      cor: 'vermelho' },
+  { key: 'todas',     label: 'Todas',         status: null,            cor: 'roxo' },
+];
+type AbaKey = string;
+
+const ABERTOS = new Set(['Pendente', 'Aprovado', 'Em correção']);
+
+// Prazo em dd/mm e o quanto falta. O relativo só aparece enquanto a
+// requisição está viva — em atendida ou negada, "atrasada" não diz nada.
+const Prazo = ({ data, status }: { data: string | null; status: string }) => {
+  if (!data) return <span className="text-xs text-gray-600">—</span>;
+  const n = diasDesde(data);
+  let rel: string | null = null;
+  let cor = 'text-gray-500';
+  if (ABERTOS.has(status) && n !== null) {
+    if (n > 0)       { rel = `atrasada ${n} dia${n === 1 ? '' : 's'}`; cor = 'text-red-400 font-bold'; }
+    else if (n === 0) { rel = 'vence hoje'; cor = 'text-amber-400 font-bold'; }
+    else if (n >= -3) { rel = `em ${-n} dia${n === -1 ? '' : 's'}`; cor = 'text-amber-400/90'; }
+    else              { rel = `em ${-n} dias`; }
+  }
+  return (
+    <span className="whitespace-nowrap">
+      <span className="block text-xs font-mono text-gray-300">{dataSimplesBR(data).slice(0, 5)}</span>
+      {rel && <span className={`block text-[10px] ${cor}`}>{rel}</span>}
+    </span>
+  );
+};
+
+const RequisicoesViewInner =({ showToast, profile, filial }: { showToast: any; profile: any; filial: FilialOp }) => {
   const [page, setPage] = useState(0);
   const confirm = useConfirm();
   const prompt = usePrompt();
@@ -95,10 +132,19 @@ const RequisicoesViewInner = ({ showToast, profile, filial }: { showToast: any; 
   // quantas aquela pessoa pediu nesta unidade.
   const [solicitante, setSolicitante] = useState<string | null>(null);
   useEffect(() => { setPage(0); }, [solicitante]);
-  const filtroBusca = useMemo(
-    () => (solicitante === null ? { filial } : { filial, solicitante }),
-    [filial, solicitante],
-  );
+
+  // A fila de Compras é "A cotar"; o resto é acompanhamento. O status vira
+  // filtro da consulta (não recorte da página), para o total e a paginação
+  // continuarem dizendo a verdade.
+  const [aba, setAba] = useState<AbaKey>('acotar');
+  useEffect(() => { setPage(0); }, [aba]);
+  const statusDaAba = ABAS.find(a => a.key === aba)!.status;
+  const filtroBusca = useMemo(() => {
+    const f: Record<string, any> = { filial };
+    if (solicitante !== null) f.solicitante = solicitante;
+    if (statusDaAba) f.status = statusDaAba;
+    return f;
+  }, [filial, solicitante, statusDaAba]);
 
   const { data, setData, isLoading, totalCount, reload } = useFetchData<any>(
     '/api/requisicoesview', filtroBusca, true,
@@ -109,26 +155,33 @@ const RequisicoesViewInner = ({ showToast, profile, filial }: { showToast: any; 
   // O catálogo de nomes não pode sair da página aberta — ela traz 20 linhas e
   // esconderia justamente quem pediu pouco. Uma consulta de uma coluna só,
   // sobre a mesma fila, dá a lista e a contagem de cada um.
-  const [nomes, setNomes] = useState<string[]>([]);
+  // A mesma consulta dá o contador de cada aba.
+  const [fila, setFila] = useState<{ solicitante: string; status: string }[]>([]);
   useEffect(() => {
     if (!supabase) return;
     let cancelado = false;
     (async () => {
-      let q = supabase!.from('requisicoes').select('solicitante').eq('filial', filial);
+      let q = supabase!.from('requisicoes').select('solicitante, status').eq('filial', filial);
       if (!verExcluidas) q = q.eq('ativo', true);
       const { data: rows } = await q;
       if (cancelado) return;
-      setNomes(((rows ?? []) as any[])
-        .map(r => String(r.solicitante ?? '').trim())
-        // Linha sem nome não vira opção: o filtro é um `eq` no servidor e não
-        // teria como casar NULL e '' no mesmo valor. Ela continua visível em
-        // "Todos os solicitantes".
-        .filter(Boolean));
+      setFila(((rows ?? []) as any[]).map(r => ({
+        solicitante: String(r.solicitante ?? '').trim(),
+        status: String(r.status ?? ''),
+      })));
     })();
     return () => { cancelado = true; };
-    // Sem `data` na lista: a requisição nasce em outra tela e a correção não
-    // troca quem pediu, então a lista de nomes não muda a cada página virada.
-  }, [filial, verExcluidas]);
+    // `data` entra para o contador acompanhar reabrir/corrigir/excluir.
+  }, [filial, verExcluidas, data]);
+  const naAba = (a: typeof ABAS[number], r: { status: string }) => !a.status || a.status.includes(r.status);
+  // Linha sem nome não vira opção: o filtro é um `eq` no servidor e não teria
+  // como casar NULL e '' no mesmo valor. Ela continua em "Todos".
+  const nomes = useMemo(
+    () => fila.filter(r => naAba(ABAS.find(a => a.key === aba)!, r)).map(r => r.solicitante).filter(Boolean),
+    [fila, aba],
+  );
+  const contagem = (a: typeof ABAS[number]) =>
+    fila.filter(r => naAba(a, r) && (solicitante === null || r.solicitante === solicitante)).length;
   const { data: produtos } = useFetchData<any>('/api/produtosview', { filial });
   const produtosOrdenados = useMemo(
     () => [...produtos]
@@ -319,13 +372,15 @@ Ela volta para 'Pendente' e sai da fila de Compras — o gerente decide de novo 
 
   const isFormOpen = !!editItem;
 
+  const formEdicaoRef = useRolarAteFormulario(isFormOpen, editItem?.id);
+
   return (
-    <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col h-full gap-8">
+    <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col gap-6">
       <div className="flex flex-wrap justify-between items-start gap-3 shrink-0">
         <div>
           <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Requisições — {filial}</h2>
         </div>
-        <div className="flex gap-3 items-center w-full sm:w-auto">
+        <div className="flex flex-wrap gap-3 items-center w-full sm:w-auto">
           <div className="relative flex-1 sm:flex-none">
             <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
             <input type="text" placeholder="Buscar requisição..." className="neu-input py-2.5 pl-10 pr-4 rounded-xl text-sm w-full sm:w-52"
@@ -349,7 +404,7 @@ Ela volta para 'Pendente' e sai da fila de Compras — o gerente decide de novo 
 
       <AnimatePresence>
         {isFormOpen && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="shrink-0">
+          <motion.div ref={formEdicaoRef} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="shrink-0">
             <div className="neu-flat rounded-2xl p-6 border border-white/5 flex flex-col gap-4">
               <h3 className="text-sm font-bold text-gray-200">
                 {editItem?.status === 'Aprovado' ? 'Corrigir requisição aprovada' : 'Corrigir requisição'}
@@ -467,113 +522,107 @@ Ela volta para 'Pendente' e sai da fila de Compras — o gerente decide de novo 
         )}
       </AnimatePresence>
 
+      <div className="flex gap-3 flex-wrap" role="tablist">
+        {ABAS.map(a => (
+          <AbaComContador key={a.key} label={a.label} cor={a.cor} n={contagem(a)}
+            ativa={a.key === aba} onClick={() => { setAba(a.key); setAberto(null); }} />
+        ))}
+      </div>
+
       {isLoading ? <LoadingSpinner /> : data.length === 0 ? (
         <EmptyState message={solicitante !== null
-          ? `Nenhuma requisição de ${solicitante} nesta unidade${debouncedSearch ? ' com esta busca' : ''}.`
-          : 'Nenhuma requisição encontrada'} />
+          ? `Nenhuma requisição de ${solicitante} nesta aba${debouncedSearch ? ' com esta busca' : ''}.`
+          : aba === 'acotar'
+          ? 'Nada aprovado esperando cotação — quando o gerente aprovar uma requisição, ela aparece aqui.'
+          : 'Nenhuma requisição nesta situação.'} />
       ) : (
-        <div className="neu-flat rounded-3xl p-6 border border-white/5 flex flex-col mb-6">
+        <div className="neu-flat rounded-3xl p-4 sm:p-6 border border-white/5 flex flex-col mb-6">
           <div className="overflow-x-auto main-scrollbar">
-            <table className="w-full text-left border-collapse">
+            {/* Seis colunas: o item leva a sobra da largura. Centro de custo,
+                data de abertura e a régua do fluxo moram na ficha que abre ao
+                clicar — na linha, só o que decide o que fazer primeiro. */}
+            <table className="tabela w-full text-left border-collapse">
               <thead>
-                <tr className="border-b border-white/10 text-[10px] text-gray-500 uppercase tracking-widest">
-                  <th className="pb-4 font-bold px-4">Item</th>
-                  <th className="pb-4 font-bold px-4 text-center">Qtd</th>
-                  <th className="pb-4 font-bold px-4 text-center">Urgência</th>
-                  <th className="pb-4 font-bold px-4 hidden lg:table-cell">Centro de Custo</th>
-                  <th className="pb-4 font-bold px-4 hidden md:table-cell">Solicitante</th>
-                  <th className="pb-4 font-bold px-4 hidden lg:table-cell">Necessário até</th>
-                  <th className="pb-4 font-bold px-4 hidden sm:table-cell">Data</th>
-                  <th className="pb-4 font-bold px-4 text-center">Status</th>
-                  <th className="pb-4 font-bold px-4 text-right">Ações</th>
+                <tr className={CABECALHO_TABELA}>
+                  <th className="font-bold px-3 text-center">Item</th>
+                  <th className="font-bold px-3 text-center hidden md:table-cell w-36">Quem pediu</th>
+                  <th className="font-bold px-3 text-center sm:w-28">Qtd</th>
+                  <th className="font-bold px-3 text-center hidden sm:table-cell w-32">Prazo</th>
+                  <th className="font-bold px-3 text-center hidden sm:table-cell sm:w-32">Situação</th>
+                  <th className="font-bold px-3 text-center sm:w-28">Ações</th>
                 </tr>
               </thead>
               <tbody>
                 <AnimatePresence>
-                  {data.map((item: any) => (
+                  {data.map((item: any) => {
+                    const direcaoTemAcao = (podeReabrir && item.ativo !== false && ['Aprovado', 'Negado'].includes(item.status))
+                      || (isAdmin && item.ativo !== false);
+                    const urg = item.urgencia ?? 'Normal';
+                    return (
                     <React.Fragment key={item.id}>
                     <motion.tr initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }}
                       onClick={() => setAberto(a => a === item.id ? null : item.id)}
-                      className="border-b border-white/5 hover:bg-white/5 transition-colors group cursor-pointer">
-                      <td className="py-3 px-4 text-sm font-semibold text-gray-200 max-w-[9rem] sm:max-w-[200px]">
-                        <span className="block font-credencial text-[10px] text-gray-500 tracking-wider">{numeroRequisicao(item)}</span>
-                        <span className="flex items-center gap-1.5">
-                          <ChevronRight size={13}
-                            className={`text-gray-500 shrink-0 transition-transform ${aberto === item.id ? 'rotate-90' : ''}`} />
-                          <span className="block truncate" title={item.item}>
+                      className={`border-b border-accent/10 hover:bg-accent/[0.04] transition-colors cursor-pointer align-middle ${aberto === item.id ? 'bg-accent/[0.05]' : ''}`}>
+                      <td className="py-3 px-3 sm:min-w-[14rem]">
+                        <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                          <span className="font-credencial text-[10px] text-gray-500 tracking-wider whitespace-nowrap">{numeroRequisicao(item)}</span>
+                          {/* Urgência só aparece quando muda a ordem do dia —
+                              "Normal" em toda linha era ruído. */}
+                          {urg !== 'Normal' && <UrgenciaBadge urgencia={urg} />}
+                        </span>
+                        <span className="flex items-start gap-1.5 mt-1">
+                          <ChevronRight size={14}
+                            className={`text-gray-500 shrink-0 mt-0.5 transition-transform ${aberto === item.id ? 'rotate-90' : ''}`} />
+                          <span className="text-sm font-semibold text-gray-100 leading-snug line-clamp-2 break-words" title={item.item}>
                             {item.item}
                             {/* A marca é metade do que identifica o produto:
                                 sem ela a lista mostra dois pedidos diferentes
                                 com a mesma cara. */}
-                            {item.marca && (
-                              <span className="text-[10px] text-gray-500 font-normal ml-1.5">· {item.marca}</span>
-                            )}
+                            {item.marca && <span className="text-xs text-gray-500 font-normal"> · {item.marca}</span>}
                           </span>
                         </span>
-                        <span className="md:hidden block text-[10px] text-gray-500 mt-0.5 truncate">{item.solicitante}</span>
+                        <span className="md:hidden block text-[11px] text-gray-500 mt-0.5 ml-5 truncate">
+                          {item.solicitante}{item.setor_solicitante ? ` · ${item.setor_solicitante}` : ''}
+                        </span>
+                        <span className="sm:hidden block mt-1.5 ml-5"><StatusBadge status={item.status} /></span>
+                      </td>
+                      <td className="py-3 px-3 text-center hidden md:table-cell">
+                        <span className="block text-xs text-gray-300 truncate max-w-[8rem] mx-auto">{item.solicitante || '—'}</span>
+                        {item.setor_solicitante && (
+                          <span className="block text-[10px] text-gray-500 uppercase tracking-widest truncate max-w-[8rem] mx-auto">{item.setor_solicitante}</span>
+                        )}
                       </td>
                       {/* Migr. 589: quem pediu em fardo pediu em fardo. A
                           quantidade de estoque continua sendo a de cima — é
                           ela que a cotação e o pedido usam. */}
-                      <td className="py-3 px-4 text-xs text-gray-400 text-center font-mono">
-                        {qtdBR(item.qtd)}
+                      <td className="py-3 px-3 text-center whitespace-nowrap">
+                        <span className="text-sm font-semibold text-gray-200 tabular-nums">{qtdBR(item.qtd)}</span>
+                        <span className="text-[10px] text-gray-500 ml-1 uppercase">{normalizarUnidade(item.unidade)}</span>
                         {item.embalagem_nome && item.qtd_embalagens != null && (
-                          <span className="block text-[10px] text-accent/80 leading-tight">
-                            {qtdBR(item.qtd_embalagens)} {pluralEmbalagem(item.embalagem_nome, Number(item.qtd_embalagens))}
+                          <span className="block text-[10px] text-gray-500 leading-tight">
+                            {qtdBR(item.qtd_embalagens)} {pluralEmbalagem(item.embalagem_nome, Number(item.qtd_embalagens)).toLowerCase()}
                           </span>
                         )}
                       </td>
-                      <td className="py-3 px-4 text-center"><UrgenciaBadge urgencia={item.urgencia ?? 'Normal'} /></td>
-                      <td className="py-3 px-4 text-xs text-gray-400 hidden lg:table-cell">{item.centro_custo || '—'}</td>
-                      <td className="py-3 px-4 text-xs text-gray-400 hidden md:table-cell">
-                        {item.solicitante}
-                        {item.setor_solicitante && (
-                          <span className="block text-[10px] text-gray-600 uppercase tracking-widest">{item.setor_solicitante}</span>
-                        )}
+                      <td className="py-3 px-3 text-center hidden sm:table-cell" title={item.justificativa ?? ''}>
+                        <Prazo data={item.data_necessidade} status={item.status} />
                       </td>
-                      <td className="py-3 px-4 text-xs font-mono text-gray-500 hidden lg:table-cell" title={item.justificativa ?? ''}>
-                        {item.data_necessidade ?? '—'}
-                      </td>
-                      <td className="py-3 px-4 text-xs text-gray-500 font-mono hidden sm:table-cell">{item.data}</td>
-                      <td className="py-3 px-4 text-center">
+                      <td className="py-3 px-3 text-center whitespace-nowrap hidden sm:table-cell">
                         <StatusBadge status={item.status} />
                         {item.ativo === false && (
                           <span className="block mt-1 text-[9px] font-black uppercase tracking-widest text-red-400">
                             excluída
                           </span>
                         )}
-                        {/* O status nomeia um ponto; a régua mostra a linha —
-                            e é a linha que responde "falta o quê?". */}
-                        <span className="block mt-1">
-                          <FluxoCompra etapa={etapaDaRequisicao(item.status)} compact />
-                        </span>
                       </td>
-                      <td className="py-3 px-4 text-right">
-                        {/* Era `opacity-0 group-hover:opacity-100`: em tablet, onde
-                            não existe hover, os botões não apareciam nunca — a tela
-                            prometia correção e não mostrava sequer o botão. */}
-                        <div className="flex justify-end gap-2 opacity-60 group-hover:opacity-100 transition-opacity"
-                          onClick={e => e.stopPropagation()}>
-                          <HistoricoOperacoes entidade="requisicoes" entidadeId={item.id} titulo={`${numeroRequisicao(item)} · ${item.item}`} criadoEm={item.created_at} atualizadoEm={item.updated_at} />
-                          {['Pendente', 'Aprovado'].includes(item.status) && (
+                      <td className="py-3 px-3">
+                        <div className="flex justify-center items-center gap-1.5" onClick={e => e.stopPropagation()}>
+                          {['Pendente', 'Aprovado'].includes(item.status) && item.ativo !== false && (
                             <button onClick={() => openEdit(item)}
                               title={item.status === 'Aprovado'
                                 ? 'Corrigir — mudar item ou quantidade devolve para aprovação'
                                 : 'Corrigir'}
                               className="action-btn-edit"><Edit2 size={12} /></button>
-                          )}
-                          {podeReabrir && ['Aprovado', 'Negado'].includes(item.status) && item.ativo !== false && (
-                            <button onClick={() => handleReabrir(item)} disabled={reabrindo === item.id}
-                              title="Reabrir para correção — volta para Pendente e para a fila do gerente"
-                              className="action-btn-warning">
-                              <RotateCcw size={12} />
-                            </button>
-                          )}
-                          {isAdmin && item.ativo !== false && (
-                            <ExcluirAdmin endpoint="/api/requisicoesview" id={item.id}
-                              rotulo={numeroRequisicao(item)} showToast={showToast}
-                              alternativa="use o botão de reabrir ao lado: ela volta para Pendente e o aluno corrige."
-                              onExcluido={() => reload()} />
                           )}
                           {podeReabrir && item.ativo === false && (
                             <button onClick={() => handleReabrir(item)} disabled={reabrindo === item.id}
@@ -582,12 +631,31 @@ Ela volta para 'Pendente' e sai da fila de Compras — o gerente decide de novo 
                               <RotateCcw size={11} />Restaurar
                             </button>
                           )}
+                            <MenuMais>
+                              {fechar => (
+                                <>
+                                  <HistoricoOperacoes variante="menu" onAbrir={fechar} entidade="requisicoes" entidadeId={item.id} titulo={`${numeroRequisicao(item)} · ${item.item}`} criadoEm={item.created_at} atualizadoEm={item.updated_at} />
+                                  {podeReabrir && ['Aprovado', 'Negado'].includes(item.status) && (
+                                    <ItemMenu onClick={() => { fechar(); handleReabrir(item); }} disabled={reabrindo === item.id}
+                                      cor="text-amber-400 hover:bg-amber-500/10" icon={RotateCcw}>
+                                      Reabrir para correção
+                                    </ItemMenu>
+                                  )}
+                                  {isAdmin && (
+                                    <ExcluirAdmin variante="menu" endpoint="/api/requisicoesview" id={item.id}
+                                      rotulo={numeroRequisicao(item)} showToast={showToast}
+                                      alternativa="use Reabrir para correção: ela volta para Pendente e o aluno corrige."
+                                      onExcluido={() => reload()} />
+                                  )}
+                                </>
+                              )}
+                            </MenuMais>
                         </div>
                       </td>
                     </motion.tr>
                     {aberto === item.id && (
-                      <tr className="border-b border-white/5 bg-white/[0.02]">
-                        <td colSpan={9} className="py-4 px-4">
+                      <tr className="border-b border-accent/10 bg-accent/[0.03]">
+                        <td colSpan={6} className="py-4 px-4">
                           {(() => {
                             // A linha da tabela trunca o nome do item — precisa
                             // truncar, senão nove colunas não cabem. Aqui é o
@@ -715,7 +783,8 @@ Ela volta para 'Pendente' e sai da fila de Compras — o gerente decide de novo 
                       </tr>
                     )}
                   </React.Fragment>
-                  ))}
+                    );
+                  })}
                 </AnimatePresence>
               </tbody>
             </table>

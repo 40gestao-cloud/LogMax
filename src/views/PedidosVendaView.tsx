@@ -1,3 +1,4 @@
+import { MenuMais, ItemMenu } from '../components/MenuMais';
 import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Package, DollarSign, CheckCircle2, Loader2, Trash2, ExternalLink, ListChecks } from 'lucide-react';
@@ -320,7 +321,7 @@ const PedidosVendaViewInner = ({ showToast, profile, filial, mode }: { showToast
       ) : (
         <div className="neu-flat rounded-3xl p-6 border border-white/5 flex flex-col mb-6">
           <div className="overflow-x-auto main-scrollbar">
-            <table className="w-full text-left border-collapse">
+            <table className="tabela w-full text-left border-collapse">
               <thead>
                 <tr className="border-b border-white/10 text-[10px] text-gray-500 uppercase tracking-widest">
                   <th className="pb-4 font-bold px-4">Pedido</th>
@@ -389,8 +390,7 @@ const PedidosVendaViewInner = ({ showToast, profile, filial, mode }: { showToast
                         </td>
                         <td className="py-3 px-4 text-center"><StatusBadge status={p.status} /></td>
                         <td className="py-3 px-4 text-right">
-                          <div className="flex justify-end items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                            <HistoricoOperacoes entidade="pedidos_venda" entidadeId={p.id} titulo={`${numeroPedidoVenda(p)} · ${p.cliente?.nome ?? 'Pedido de venda'}`} criadoEm={p.created_at} atualizadoEm={p.updated_at} />
+                          <div className="flex justify-center items-center gap-1.5">
                             {podeSeparar && (
                               <button onClick={() => marcarSeparado(p)} disabled={processando === p.id}
                                 className="neu-button py-1.5 px-3 rounded-lg text-xs font-bold text-cyan-400 hover:bg-cyan-400/10 flex items-center gap-1 disabled:opacity-50">
@@ -420,6 +420,13 @@ const PedidosVendaViewInner = ({ showToast, profile, filial, mode }: { showToast
                                 <Trash2 size={12} />
                               </button>
                             )}
+                            <MenuMais>
+                              {fechar => (
+                                <>
+                                  <HistoricoOperacoes variante="menu" onAbrir={fechar} entidade="pedidos_venda" entidadeId={p.id} titulo={`${numeroPedidoVenda(p)} · ${p.cliente?.nome ?? 'Pedido de venda'}`} criadoEm={p.created_at} atualizadoEm={p.updated_at} />
+                                </>
+                              )}
+                            </MenuMais>
                           </div>
                         </td>
                       </motion.tr>
@@ -436,7 +443,7 @@ const PedidosVendaViewInner = ({ showToast, profile, filial, mode }: { showToast
                           {mode === 'estoque' ? 'O que separar' : 'Itens do pedido'}
                         </p>
                         {Array.isArray(p.itens) && p.itens.length > 0 ? (
-                          <table className="w-full text-left border-collapse">
+                          <table className="tabela w-full text-left border-collapse">
                             <thead>
                               <tr className="text-[9px] text-gray-600 uppercase tracking-widest">
                                 <th className="pb-2 font-bold">Produto</th>

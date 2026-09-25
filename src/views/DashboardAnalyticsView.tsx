@@ -595,7 +595,7 @@ function KpiDetailPanel({
 
           {/* Desktop (md+): tabela original */}
           <div className="hidden md:block overflow-x-auto max-h-[420px] overflow-y-auto main-scrollbar -mx-2 px-2">
-            <table className="w-full min-w-[600px]">
+            <table className="tabela w-full min-w-[600px]">
               <thead className="text-[10px] uppercase tracking-widest text-gray-500 sticky top-0 bg-[var(--color-bg-base)]">
                 <tr className="border-b border-white/5">
                   <th className="text-left py-2 px-2 font-bold">Descrição</th>

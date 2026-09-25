@@ -174,7 +174,7 @@ export const IntegracaoBancariaView = ({ showToast }: any) => {
             <p className="text-xs text-gray-600 text-center py-8">Nenhuma importação registrada.</p>
           ) : (
             <div className="overflow-x-auto main-scrollbar">
-              <table className="w-full text-left border-collapse">
+              <table className="tabela w-full text-left border-collapse">
                 <thead>
                   <tr className="border-b border-white/10 text-[10px] text-gray-500 uppercase tracking-widest">
                     <th className="pb-4 pt-5 font-bold px-5">Banco</th>
@@ -182,7 +182,7 @@ export const IntegracaoBancariaView = ({ showToast }: any) => {
                     <th className="pb-4 pt-5 font-bold px-5">Data</th>
                     <th className="pb-4 pt-5 font-bold px-5 text-right">Registros</th>
                     <th className="pb-4 pt-5 font-bold px-5 text-center">Status</th>
-                    <th className="pb-4 pt-5 font-bold px-5" />
+                    <th className="pb-4 pt-5 font-bold px-5">Ações</th>
                   </tr>
                 </thead>
                 <tbody>

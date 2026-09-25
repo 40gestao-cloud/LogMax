@@ -1396,7 +1396,7 @@ const AvaliacoesViewInner = ({ showToast, profile, filial }: { showToast: any; p
             <EmptyState message="Nenhum ciclo criado. Abra o primeiro para começar." />
           ) : (
             <div className="overflow-x-auto main-scrollbar">
-              <table className="w-full text-left border-collapse">
+              <table className="tabela w-full text-left border-collapse">
                 <thead>
                   <tr className="border-b border-white/10 text-[10px] text-gray-500 uppercase tracking-widest">
                     <th className="pb-3 font-bold px-4">Nome</th>
@@ -1405,7 +1405,7 @@ const AvaliacoesViewInner = ({ showToast, profile, filial }: { showToast: any; p
                     <th className="pb-3 font-bold px-4">Fim</th>
                     <th className="pb-3 font-bold px-4 text-center">Status</th>
                     <th className="pb-3 font-bold px-4 text-center">Anônimo</th>
-                    <th className="pb-3 px-4"></th>
+                    <th className="pb-3 px-4">Ações</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1507,13 +1507,13 @@ const AvaliacoesViewInner = ({ showToast, profile, filial }: { showToast: any; p
                   <option key={c.id} value={c.id}>{c.nome} · {c.filial} {c.status === 'Aberto' ? '· Aberto' : '· Fechado'}</option>
                 ))}
               </select>
-              <NeuButtonAccent
+              <button
                 onClick={() => handleExportarCicloPDF('download')}
-                isLoading={exportandoPDF}
-                disabled={!consolidado || consolidado.totalAvaliacoes === 0}
+                disabled={exportandoPDF || !consolidado || consolidado.totalAvaliacoes === 0}
+                className="btn-solido btn-solido--vermelho"
               >
-                <FileDown size={14} /> PDF
-              </NeuButtonAccent>
+                <FileDown size={14} /> {exportandoPDF ? 'Gerando...' : 'PDF'}
+              </button>
               <NeuButtonAccent
                 onClick={() => handleExportarCicloPDF('maxshow')}
                 isLoading={exportandoPDF}
@@ -1575,7 +1575,7 @@ const AvaliacoesViewInner = ({ showToast, profile, filial }: { showToast: any; p
                       </div>
                     ) : (
                     <div className="overflow-x-auto main-scrollbar">
-                      <table className="w-full text-left border-collapse">
+                      <table className="tabela w-full text-left border-collapse">
                         <thead>
                           <tr className="border-b border-white/10 text-[10px] text-gray-500 uppercase tracking-widest">
                             <th className="pb-3 font-bold px-2 w-6"></th>

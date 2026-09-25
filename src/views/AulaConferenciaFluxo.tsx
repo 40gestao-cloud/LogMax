@@ -571,7 +571,7 @@ export const AulaConferenciaFluxo: React.FC<Props> = ({ showToast }) => {
           </p>
         ) : (
           <div className="overflow-x-auto -mx-1">
-            <table className="w-full text-[11px] min-w-[52rem]">
+            <table className="tabela w-full text-[11px] min-w-[52rem]">
               <thead>
                 <tr className="text-left text-[10px] text-gray-500 uppercase tracking-widest">
                   <th className="px-2 py-1.5 font-bold">Requisição</th>

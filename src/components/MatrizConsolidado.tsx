@@ -66,7 +66,7 @@ export function MatrizConsolidado({
       ) : (
         <div className="neu-flat border border-white/5 rounded-xl overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="tabela w-full text-sm">
               <thead className="bg-white/[0.02] border-b border-white/5">
                 <tr>
                   <th className="text-left px-4 py-3 text-[10px] font-bold uppercase tracking-widest text-gray-500">Filial</th>

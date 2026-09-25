@@ -1,3 +1,4 @@
+import { MenuMais, ItemMenu } from '../components/MenuMais';
 import React, { useMemo, useState, useEffect } from 'react';
 import { todayBR } from '../lib/dates';
 import type { FilialOp } from '../components/FilialSelector';
@@ -542,7 +543,7 @@ const DesligamentosViewInner = ({ showToast, profile, filial }: {
           <EmptyState message="Nenhum colaborador desligado nesta unidade." />
         ) : (
           <div className="overflow-x-auto main-scrollbar">
-            <table className="w-full text-left border-collapse min-w-[820px]">
+            <table className="tabela w-full text-left border-collapse min-w-[820px]">
               <thead>
                 <tr className="border-b border-white/10 text-[10px] text-gray-500 uppercase tracking-widest">
                   <th className="pb-3 font-bold px-3">Colaborador</th>
@@ -581,21 +582,32 @@ const DesligamentosViewInner = ({ showToast, profile, filial }: {
                         ) : <span className="text-gray-700 text-xs">—</span>}
                       </td>
                       <td className="py-3 px-3 text-right">
-                        <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                          {r && (
-                            <button onClick={() => setDetalhe({ nome: d.nome_funcionario, r })} title="Ver demonstrativo" className="action-btn-edit">
-                              <FileText size={12} />
-                            </button>
-                          )}
-                          {r?.status === 'Pendente' && podeProcessar && (
-                            <button onClick={() => handleProcessar(d)} disabled={busy} title="Processar (gera Conta a Pagar)" className="action-btn-purple disabled:opacity-50">
-                              {busy ? <Loader2 size={12} className="animate-spin" /> : <DollarSign size={12} />}
-                            </button>
-                          )}
-                          {podeDecidir && (
-                            <button onClick={() => handleReadmitir(d)} disabled={busy} title="Readmitir" className="action-btn-success disabled:opacity-50">
-                              <RotateCcw size={12} />
-                            </button>
+                        <div className="flex justify-center items-center gap-1.5">
+                          {(r || podeDecidir) && (
+                            <MenuMais>
+                              {fechar => (
+                                <>
+                                  {r && (
+                                    <ItemMenu onClick={() => { fechar(); setDetalhe({ nome: d.nome_funcionario, r }); }}
+                                      cor="text-gray-200 hover:bg-white/5" icon={FileText}>
+                                      Ver demonstrativo
+                                    </ItemMenu>
+                                  )}
+                                  {r?.status === 'Pendente' && podeProcessar && (
+                                    <ItemMenu onClick={() => { fechar(); handleProcessar(d); }} disabled={busy}
+                                      cor="text-purple-300 hover:bg-purple-500/10" icon={DollarSign}>
+                                      Processar (gera conta a pagar)
+                                    </ItemMenu>
+                                  )}
+                                  {podeDecidir && (
+                                    <ItemMenu onClick={() => { fechar(); handleReadmitir(d); }} disabled={busy}
+                                      cor="text-emerald-400 hover:bg-emerald-500/10" icon={RotateCcw}>
+                                      Readmitir
+                                    </ItemMenu>
+                                  )}
+                                </>
+                              )}
+                            </MenuMais>
                           )}
                         </div>
                       </td>
