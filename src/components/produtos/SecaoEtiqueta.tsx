@@ -55,9 +55,6 @@ export function SecaoEtiqueta({
                   </span>
                 </div>
               )}
-              <p className="text-[11px] text-gray-500">
-                Imprima em adesivo 80×50 mm. O código é escaneável por qualquer leitor de código de barras compatível com EAN-13.
-              </p>
               <div className="flex justify-start">
                 <NeuButtonAccent
                   onClick={() => downloadLabelFor({ ean: extras.ean, nome: form.nome, codigo: form.codigo, preco: parseBRL(form.preco) })}

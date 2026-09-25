@@ -2,7 +2,7 @@ import type React from 'react';
 import { AlertTriangle, ImagePlus, Loader2, X as XIcon } from 'lucide-react';
 import { ColarImagem } from '../ColarImagem';
 import { ProdutoThumb } from '../ui';
-import { PRODUTO_IMAGEM_ACCEPT, PRODUTO_IMAGEM_MAX_SLOTS, PRODUTO_IMAGEM_OUTPUT_MAX_LABEL, PRODUTO_IMAGEM_RES_IDEAL } from '../../lib/produtoImagem';
+import { PRODUTO_IMAGEM_ACCEPT, PRODUTO_IMAGEM_MAX_SLOTS, PRODUTO_IMAGEM_RES_IDEAL } from '../../lib/produtoImagem';
 import { type FormProduto } from './produtoFormComum';
 
 // Imagens do produto: capa obrigatória e até duas extras, com colar (Ctrl+V).
@@ -83,14 +83,8 @@ export function SecaoImagens({
             <span>{extrasErrors.imagens}</span>
           </p>
         )}
-        <p className="text-[11px] text-gray-500 leading-snug mt-2">
-          Aceita <span className="font-bold text-gray-300">JPG, PNG ou WEBP</span> — cada foto é comprimida
-          automaticamente para WebP até <span className="font-bold text-gray-300">{PRODUTO_IMAGEM_OUTPUT_MAX_LABEL}</span>,
-          então pode enviar direto da câmera. Use imagens de pelo menos{' '}
-          <span className="font-bold text-gray-300">{PRODUTO_IMAGEM_RES_IDEAL} px</span> no menor lado: miniatura
-          baixada da web fica borrada, porque o sistema reduz mas nunca amplia. Também dá para colar: no Google, abra
-          a imagem, botão direito → <span className="font-bold text-gray-300">Copiar imagem</span> e Ctrl+V aqui
-          (vai para o primeiro slot vazio). A capa é a que aparece no PDV, Catálogo e vitrine — e por isso é obrigatória; as duas extras são opcionais.
+        <p className="text-[11px] text-gray-500 mt-2">
+          JPG, PNG ou WEBP · mínimo {PRODUTO_IMAGEM_RES_IDEAL} px · Ctrl+V cola a imagem copiada
         </p>
       </div>
     </>

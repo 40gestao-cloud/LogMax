@@ -2986,3 +2986,15 @@ main { scroll-padding-top: 7rem; }
 }
 .action-btn-laranja:hover:not(:disabled) { filter: brightness(1.12); }
 .action-btn-laranja:disabled { opacity: 0.5; cursor: not-allowed; }
+.action-btn-verde,
+.action-btn-vermelho {
+  width: 2rem; height: 2rem; border-radius: 0.5rem; flex-shrink: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+  color: #fff; cursor: pointer; transition: filter .12s ease;
+}
+.action-btn-verde    { background: #16a34a; border: 1px solid #15803d; }
+.action-btn-vermelho { background: #dc2626; border: 1px solid #b91c1c; }
+.action-btn-verde:hover:not(:disabled),
+.action-btn-vermelho:hover:not(:disabled) { filter: brightness(1.12); }
+.action-btn-verde:disabled,
+.action-btn-vermelho:disabled { opacity: 0.5; cursor: not-allowed; }

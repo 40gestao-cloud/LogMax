@@ -2137,29 +2137,26 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode, onNavigate }: { s
                         })()}
                       </td>
                       <td className="py-3 px-3">
-                        {/* Abaixo de 2xl os botões de decisão viram só o ícone,
-                            com o mesmo `title` — três rótulos somam mais largura
-                            do que a coluna merece. */}
                         <div className="flex justify-center items-center gap-1.5 flex-nowrap whitespace-nowrap">
                           {item.status === 'Aguardando Financeiro' && podeDecidirCotacao(item) && (
                             <>
                               <button onClick={() => { setDecisao({ cot: item, tipo: 'aprovar' }); setFeedbackInput(''); }}
-                                title="Aprovar a proposta"
-                                className="neu-button rounded-lg text-xs font-bold flex items-center gap-1 shrink-0 h-8 w-8 2xl:w-auto 2xl:px-3 justify-center transition-colors text-emerald-400 hover:bg-emerald-400/10">
-                                <Check size={12} /> <span className="hidden 2xl:inline">Aprovar</span>
+                                title="Aprovar a proposta" aria-label="Aprovar a proposta"
+                                className="action-btn-verde">
+                                <Check size={14} />
                               </button>
                               <button onClick={() => { setDecisao({ cot: item, tipo: 'reprovar' }); setFeedbackInput(''); }}
-                                title="Reprovar a proposta"
-                                className="neu-button rounded-lg text-xs font-bold flex items-center gap-1 shrink-0 h-8 w-8 2xl:w-auto 2xl:px-3 justify-center transition-colors text-red-400 hover:bg-red-400/10">
-                                <X size={12} /> <span className="hidden 2xl:inline">Reprovar</span>
+                                title="Reprovar a proposta" aria-label="Reprovar a proposta"
+                                className="action-btn-vermelho">
+                                <X size={14} />
                               </button>
                               {/* Erro de digitação não é recusa do fornecedor:
                                   devolve para quem cadastrou em vez de matar a
                                   proposta (migr. 467). */}
                               <button onClick={() => { setDecisao({ cot: item, tipo: 'devolver' }); setFeedbackInput(''); }}
-                                title="Devolver para Compras corrigir — a proposta continua viva"
-                                className="neu-button rounded-lg text-xs font-bold flex items-center gap-1 shrink-0 h-8 w-8 2xl:w-auto 2xl:px-3 justify-center transition-colors text-amber-400 hover:bg-amber-400/10">
-                                <CornerUpLeft size={12} /> <span className="hidden 2xl:inline">Devolver</span>
+                                title="Devolver para Compras corrigir — a proposta continua viva" aria-label="Devolver para correção"
+                                className="action-btn-laranja">
+                                <CornerUpLeft size={14} />
                               </button>
                             </>
                           )}

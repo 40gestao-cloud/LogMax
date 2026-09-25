@@ -41,11 +41,12 @@ type Props = {
   error?: string;
   id?: string;
   disabled?: boolean;
+  abrirAoMontar?: boolean;
 };
 
 export const SelectBusca = ({
   value, onChange, grupos, placeholder = 'Selecione...', vazioTexto = 'Nada encontrado.',
-  error, id, disabled,
+  error, id, disabled, abrirAoMontar,
 }: Props) => {
   const [aberto, setAberto] = useState(false);
   const [busca, setBusca] = useState('');
@@ -90,6 +91,8 @@ export const SelectBusca = ({
     // no clique que o disparou.
     requestAnimationFrame(() => inputRef.current?.focus());
   };
+
+  useEffect(() => { if (abrirAoMontar) abrir(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const escolher = (opcao: SelectBuscaOpcao) => {
     if (opcao.disabled) return;

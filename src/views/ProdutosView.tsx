@@ -39,7 +39,7 @@ import {
 } from '../lib/unidades';
 import { ATRIBUTOS_PRODUTO, rotuloVariante, atributosPadrao } from '../lib/atributosProduto';
 import { calcMarkup, calcMargem, precoPorMarkup, fmtPct, vendaAbaixoDoCusto } from '../lib/precificacao';
-import { TIPOS_PRODUTO, TIPO_LABEL, TIPO_AJUDA, normalizarTipo, ehVendavel, temEstoque } from '../lib/tipoProduto';
+import { TIPOS_PRODUTO, TIPO_LABEL, normalizarTipo, ehVendavel, temEstoque } from '../lib/tipoProduto';
 import { supabase } from '../lib/supabase';
 import { acompanharReservas, RESERVA_COLUNAS, type ReservaLinha } from '../lib/reservasTrabalho';
 import { useReservaTrabalho } from '../hooks/useReservaTrabalho';
@@ -426,6 +426,8 @@ const ProdutosViewInner = ({ showToast, filial, profile, onNavigate }: { showToa
   // select precisa voltar para o vazio quando o formulário fecha — senão o
   // próximo cadastro abre com a escolha do anterior.
   const [itemCompradoSel, setItemCompradoSel] = useState('');
+  // Escolha feita nos dois botões antes de haver item: o nome só aparece depois.
+  const [modoOrigem, setModoOrigem] = useState<'' | 'com' | 'sem'>('');
   // O formulário foi aberto pelo "Cadastrar produto" das Cotações: salvo e
   // amarrado, a tela devolve o comprador para lá, onde o pedido já está pronto.
   const voltarParaCotacoesRef = useRef(false);
@@ -595,17 +597,6 @@ const ProdutosViewInner = ({ showToast, filial, profile, onNavigate }: { showToa
   // A requisição esperando o pedido (migr. 494) NÃO conta como compra recebida:
   // ali a mercadoria não chegou, não há custo apurado e não há saldo a lançar. O
   // que existe é o vínculo a gravar depois do INSERT.
-  // Migr. 526: a marca que a origem escolhida traz — da requisição esperando
-  // pedido ou do pedido já recebido, nos dois casos vinda da cotação aprovada.
-  const marcaDaCompra = useMemo(() => {
-    if (!itemCompradoSel || itemCompradoSel === SEM_COMPRA) return '';
-    if (itemCompradoSel.startsWith(REQ_PREFIX)) {
-      const id = itemCompradoSel.slice(REQ_PREFIX.length);
-      return itensAguardandoPedido.find(i => i.id === id)?.marca ?? '';
-    }
-    return itensComprados.find(i => i.descricao === itemCompradoSel)?.marca ?? '';
-  }, [itemCompradoSel, itensAguardandoPedido, itensComprados]);
-
   const veioDeCompra = !!itemCompradoSel
     && itemCompradoSel !== SEM_COMPRA
     && !itemCompradoSel.startsWith(REQ_PREFIX);
@@ -667,9 +658,10 @@ const ProdutosViewInner = ({ showToast, filial, profile, onNavigate }: { showToa
   // requisição esperando, nenhum item já chegado, e a unidade não está mais em
   // implantação. Aqui a tela não empurra para um select vazio — mostra o
   // caminho certo (abrir a requisição) e trava o Salvar.
+  const reqsProntas = useMemo(() => itensAguardandoPedido.filter(i => i.cotada), [itensAguardandoPedido]);
   const origemSemOpcoes = origemExigida
     && itensComprados.length === 0
-    && itensAguardandoPedido.length === 0
+    && reqsProntas.length === 0
     && !emImplantacao;
 
   // Grupos do SelectBusca de origem. A prioridade que a ordenação antiga
@@ -677,23 +669,10 @@ const ProdutosViewInner = ({ showToast, filial, profile, onNavigate }: { showToa
   // posição numa lista de dezenas — e o fornecedor entra como `hint`: é ele
   // que faz achar "Sardinha" buscando por "Gomes da Costa".
   const gruposOrigem = useMemo((): SelectBuscaGrupo[] => {
-    const cotadas    = itensAguardandoPedido.filter(i => i.cotada);
-    const semCotacao = itensAguardandoPedido.filter(i => !i.cotada);
+    const cotadas = reqsProntas;
     const rotuloReq = (i: typeof itensAguardandoPedido[number]) =>
       `${i.descricao}${i.qtd > 0 ? ` · ${qtdBR(i.qtd)} ${normalizarUnidade(i.unidade)}` : ''} · ${i.numero}`;
     const grupos: SelectBuscaGrupo[] = [];
-    // Só existe NA janela de implantação: a unidade ainda não tem nenhum
-    // recebimento Concluído ou Parcial. Fora dela, "cadastro por conta
-    // própria" reabriria o beco que a régua do item F existe para fechar.
-    // Só onde a origem é EXIGIDA: para consumo e patrimônio o campo é opcional,
-    // e "não escolhi nada" já diz o mesmo que "saldo de implantação" — a opção
-    // ali seria um segundo jeito de dizer a mesma coisa.
-    if (emImplantacao && (origemExigida || itemCompradoSel === SEM_COMPRA)) {
-      grupos.push({
-        label: 'Implantação',
-        opcoes: [{ value: SEM_COMPRA, label: 'Saldo de implantação (a unidade está começando agora)' }],
-      });
-    }
     // NOVO (migr. 537): opção já tomada por outro aluno vem travada, com o
     // nome do dono — o mesmo cadeado que a Cotação usa para requisição+
     // fornecedor, aqui por origem de compra.
@@ -703,17 +682,8 @@ const ProdutosViewInner = ({ showToast, filial, profile, onNavigate }: { showToa
     };
     if (cotadas.length > 0) {
       grupos.push({
-        label: `Cotação aprovada — travando o Gerar Pedido (${cotadas.length})`,
+        label: `Cotação aprovada pelo Financeiro (${cotadas.length})`,
         opcoes: cotadas.map(i => ({
-          value: `${REQ_PREFIX}${i.id}`, label: rotuloTravado(rotuloReq(i), `${REQ_PREFIX}${i.id}`),
-          hint: i.fornecedor, disabled: origemTravadaPorOutro(`${REQ_PREFIX}${i.id}`),
-        })),
-      });
-    }
-    if (semCotacao.length > 0) {
-      grupos.push({
-        label: `Aguardando cotação (${semCotacao.length})`,
-        opcoes: semCotacao.map(i => ({
           value: `${REQ_PREFIX}${i.id}`, label: rotuloTravado(rotuloReq(i), `${REQ_PREFIX}${i.id}`),
           hint: i.fornecedor, disabled: origemTravadaPorOutro(`${REQ_PREFIX}${i.id}`),
         })),
@@ -731,7 +701,7 @@ const ProdutosViewInner = ({ showToast, filial, profile, onNavigate }: { showToa
       });
     }
     return grupos;
-  }, [itensAguardandoPedido, itensComprados, emImplantacao, origemExigida, itemCompradoSel, reservasOrigem, profile?.id]);
+  }, [reqsProntas, itensComprados, reservasOrigem, profile?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Escolha no SelectBusca de origem. Mesma lógica de antes (era o onChange
   // inline do <select>): requisição traz nome/unidade/fornecedor sem custo (a
@@ -1095,6 +1065,7 @@ const ProdutosViewInner = ({ showToast, filial, profile, onNavigate }: { showToa
     setImagensAviso(Array(PRODUTO_IMAGEM_MAX_SLOTS).fill(null));
     setErrors({});
     setItemCompradoSel('');
+    setModoOrigem('');
     custoAutoRef.current = '';
     setNomeDestravado(false);
     // Trocar de produto com o painel de correção aberto aplicaria o número
@@ -1115,6 +1086,7 @@ const ProdutosViewInner = ({ showToast, filial, profile, onNavigate }: { showToa
     setShowForm(false);
     setEditItem(null);
     setItemCompradoSel('');
+    setModoOrigem('');
     voltarParaCotacoesRef.current = false;
     custoAutoRef.current = '';
     setNomeDestravado(false);
@@ -1958,19 +1930,6 @@ const ProdutosViewInner = ({ showToast, filial, profile, onNavigate }: { showToa
                 </div>
               )}
 
-              {/* A leitura circular já apareceu em sala: "para confirmar o
-                  recebimento preciso do produto, e o produto depende do
-                  recebimento". Não é círculo, é fila — mas só dentro do painel
-                  de saldo isso não bastava. Aqui em cima, sempre visível, com o
-                  passo atual marcado. */}
-              {(origemExigida || reqVinculo) && (
-                <div className="neu-pressed rounded-xl px-4 py-2.5 border border-white/5 text-[10px] text-gray-500 leading-relaxed">
-                  Requisição → Aprovação → Cotação → Aprovação da cotação →{' '}
-                  <span className="text-accent font-bold">Cadastro (você está aqui)</span> →
-                  Gerar Pedido → Em Entrega → Recebimento → Confirmar
-                </div>
-              )}
-
               {/* Tipo = DESTINO do item (migr. 440). É a primeira pergunta do
                   cadastro, não a última: ela decide o que o resto do formulário
                   ainda faz sentido perguntar. Antes eram dois valores e material
@@ -1978,7 +1937,7 @@ const ProdutosViewInner = ({ showToast, filial, profile, onNavigate }: { showToa
                   mercadoria e ia para o caixa. */}
               <div>
                 <p className="text-[10px] text-gray-600 uppercase tracking-widest font-bold mb-3">Classificação</p>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                   <FormField label="Tipo *">
                     <select className="neu-input py-2 px-3 rounded-xl text-sm"
                       value={extras.tipo}
@@ -1989,6 +1948,11 @@ const ProdutosViewInner = ({ showToast, filial, profile, onNavigate }: { showToa
                         // (migr. 515). Deixá-la pendurada faria o Salvar chamar
                         // `vincular_produto_requisicao` só para receber a recusa
                         // e avisar, depois de gravar, que o vínculo não saiu.
+                        // "Sem requisição" muda de sentido com o tipo (implantação x opcional).
+                        if (!temEstoque(t) || itemCompradoSel === SEM_COMPRA || modoOrigem === 'sem') {
+                          setModoOrigem('');
+                          if (itemCompradoSel === SEM_COMPRA) setItemCompradoSel('');
+                        }
                         if (!temEstoque(t) && itemCompradoSel) {
                           setItemCompradoSel('');
                           setNomeDestravado(false);
@@ -1999,20 +1963,14 @@ const ProdutosViewInner = ({ showToast, filial, profile, onNavigate }: { showToa
                         <option key={t} value={t}>{TIPO_LABEL[t]}</option>
                       ))}
                     </select>
-                    <p className="text-[10px] text-gray-500 mt-1 leading-snug">
-                      {/* Patrimônio é criado SÓ aqui — Financeiro > Patrimônio é
-                          só leitura —, mas a listagem filtra `tipo neq
-                          patrimonio` no servidor. Dizer antes do clique, não
-                          depois do sumiço. */}
-                      {extras.tipo === 'patrimonio' && (
-                        <span className="text-amber-400/90 font-bold">Não aparece nesta lista. </span>
-                      )}
-                      {TIPO_AJUDA[extras.tipo]}
-                    </p>
+                    {/* A listagem filtra `tipo neq patrimonio` no servidor. */}
+                    {extras.tipo === 'patrimonio' && (
+                      <p className="text-[10px] text-amber-400/90 font-bold mt-1">Não aparece nesta lista.</p>
+                    )}
                   </FormField>
                 </div>
                 {extras.tipo === 'patrimonio' && (
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mt-4 p-4 rounded-2xl neu-pressed border border-accent/20">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mt-4 p-4 rounded-2xl neu-pressed border border-accent/20">
                     <FormField label="Nº de Patrimônio (tag)">
                       <input className="neu-input py-2 px-3 rounded-xl text-sm font-mono"
                         value={extras.patrimonio_numero}
@@ -2050,7 +2008,6 @@ const ProdutosViewInner = ({ showToast, filial, profile, onNavigate }: { showToa
                 atrLivre={atrLivre}
                 categoriasDaFilial={categoriasDaFilial}
                 codigoReservado={codigoReservado}
-                editItem={editItem}
                 escolherOrigem={escolherOrigem}
                 exProd={exProd}
                 extras={extras}
@@ -2060,10 +2017,12 @@ const ProdutosViewInner = ({ showToast, filial, profile, onNavigate }: { showToa
                 fornecedoresOrdenados={fornecedoresOrdenados}
                 gruposOrigem={gruposOrigem}
                 itemCompradoSel={itemCompradoSel}
-                itensAguardandoPedido={itensAguardandoPedido}
                 itensComprados={itensComprados}
+                reqsProntas={reqsProntas}
+                emImplantacao={emImplantacao}
+                modoOrigem={modoOrigem}
+                setModoOrigem={setModoOrigem}
                 liberarCodigo={liberarCodigo}
-                marcaDaCompra={marcaDaCompra}
                 mostraPesoConteudo={mostraPesoConteudo}
                 nomeDestravado={nomeDestravado}
                 origemExigida={origemExigida}
@@ -2133,7 +2092,7 @@ const ProdutosViewInner = ({ showToast, filial, profile, onNavigate }: { showToa
                 mostraPesoConteudo={mostraPesoConteudo}
                 mostraSaldoAbertura={mostraSaldoAbertura}
                 motivoSaldo={motivoSaldo}
-                origemSemOpcoes={origemSemOpcoes}
+                origemEscolhida={!!itemCompradoSel && itemCompradoSel !== SEM_COMPRA}
                 saldoAtual={saldoAtual}
                 saldoCorrigido={saldoCorrigido}
                 salvandoSaldo={salvandoSaldo}

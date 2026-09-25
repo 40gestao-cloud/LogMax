@@ -3,7 +3,7 @@ import React, { useMemo, useState } from 'react';
 import type { FilialOp } from '../components/FilialSelector';
 import { useFilial } from '../contexts/FilialContext';
 import { motion, AnimatePresence } from 'motion/react';
-import { Plus, Send, Trash2, ClipboardList, ChevronRight, MessageSquareText, Search, Check, RotateCcw } from 'lucide-react';
+import { Plus, Send, Trash2, ClipboardList, ChevronRight, Search, Check, RotateCcw } from 'lucide-react';
 import { useFetchData } from '../hooks/useSupabaseData';
 import { FiltroSolicitante, chaveSolicitante } from '../components/FiltroSolicitante';
 import { useTravaAtualizacao } from '../hooks/useTravaAtualizacao';
@@ -20,10 +20,10 @@ import {
   embalagemDoProduto, rotuloEmbalagem, pluralEmbalagem, rotuloUnidade, EMBALAGENS_COMPRA,
 } from '../lib/unidades';
 import { formatQtd, parseQtd, handleQtdKeyDown, qtdBR } from '../lib/viewUtils';
-import { temEstoque } from '../lib/tipoProduto';
+import { temEstoque, ehVendavel } from '../lib/tipoProduto';
 import { ehContratado } from '../lib/naturezaServico';
 import type { UserProfile } from '../hooks/useUserProfile';
-import { isConselheiro } from '../lib/rbac';
+import { isConselheiro, hasAnySetor } from '../lib/rbac';
 import { useConfirm } from '../contexts/ConfirmContext';
 import { semelhancaDeItem } from '../lib/similaridadeItem';
 
@@ -97,6 +97,7 @@ let seqLinha = 0;
 // `embalagem`/`fator` vazios = pedido na unidade solta, que é o caso comum.
 // Na eventual não há catálogo de onde tirar o fator (migr. 591): quem pede
 // declara, e a declaração é o documento que Compras vai cotar.
+const EMB_PREFIX = 'emb:';
 const linhaVazia = () => ({
   uid: ++seqLinha, item: '', marca: '', qtd: '1', unidade: 'UN', justificativa: '',
   embalagem: '', fator: '',
@@ -120,7 +121,7 @@ const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: 
 
   const confirm = useConfirm();
 
-  const [tipo, setTipo] = useState<TipoReq>('reposicao');
+  const [tipo, setTipo] = useState<TipoReq>('eventual');
   const [estoqueForm, setEstoqueForm] = useState({ produto_id: '', qtd: '1', destino: '', centro_custo_id: '' });
   // Reposição: catálogo com multi-seleção. `Map<produto_id, qtd>` porque a
   // ordem não importa e a pergunta que a tela faz o tempo todo é "este já está
@@ -161,12 +162,16 @@ const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: 
   // saldo zero é justamente o que mais se repõe. `abaixoMin` é o ponto de
   // pedido, e ordena a lista: quem furou o mínimo aparece primeiro, porque é
   // essa a pergunta que a reposição responde.
+  // Repor mercadoria de revenda é papel de quem cuida do estoque da loja; os
+  // demais setores repõem o que usam (uso e consumo).
+  const podeReporMercadoria = hasAnySetor(profile, 'estoque', 'compras', 'logistica')
+    || profile?.role === 'gerente';
   const catalogoRepo = useMemo(() => {
     const termo = buscaCat.trim().toLowerCase();
     return [...produtos]
-      // Patrimônio não se repõe (migr. 440). Consumo sim — é a reposição de
-      // resma e material de limpeza, que antes não tinha como ser cadastrada.
-      .filter((p: any) => (p.status ?? 'Ativo') !== 'Inativo' && temEstoque(p.tipo))
+      // Patrimônio não se repõe (migr. 440).
+      .filter((p: any) => (p.status ?? 'Ativo') !== 'Inativo' && temEstoque(p.tipo)
+        && (podeReporMercadoria || !ehVendavel(p.tipo)))
       .map((p: any) => {
         const saldo = Number(p.estoque ?? 0);
         const minimo = Number(p.estoque_minimo ?? 0);
@@ -179,7 +184,7 @@ const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: 
       .sort((a: any, b: any) =>
         Number(b.abaixoMin) - Number(a.abaixoMin)
         || String(a.nome ?? '').localeCompare(String(b.nome ?? ''), 'pt-BR'));
-  }, [produtos, buscaCat, soAbaixoMin]);
+  }, [produtos, buscaCat, soAbaixoMin, podeReporMercadoria]);
 
   // Compra eventual de item que JÁ está no catálogo (24/09). Em Compras, a
   // requisição de texto livre só vira pedido depois de ligada a um produto, e
@@ -214,7 +219,16 @@ const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: 
   };
   const moverParaReposicao = (i: number, produto: any) => {
     const row = itens[i];
-    setRepo(m => new Map(m).set(produto.id, row?.qtd && row.qtd !== '0' ? row.qtd : '1'));
+    const n = parseQtd(row?.qtd ?? '') || 1;
+    const fatorLinha = row?.embalagem ? parseQtd(row.fator) : 0;
+    const embProd = embalagemDoProduto(produto);
+    // A linha pedia em embalagem: mesma embalagem do cadastro segue em fardo;
+    // senão converte para a unidade (20 fardos de 30 = 600, não 20).
+    const mesmaEmb = !!embProd && fatorLinha > 1
+      && embProd.nome === row.embalagem && embProd.fator === fatorLinha;
+    const qtdRepo = mesmaEmb || fatorLinha <= 1 ? n : n * fatorLinha;
+    setRepo(m => new Map(m).set(produto.id, formatQtd(String(qtdRepo).replace('.', ','), !mesmaEmb && ehFracionaria(produto.unidade))));
+    setModoRepo(produto.id, mesmaEmb);
     setItens(rows => rows.length <= 1 ? [linhaVazia()] : rows.filter((_, idx) => idx !== i));
     setTipo('reposicao');
     setErros({});
@@ -228,7 +242,11 @@ const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: 
   // O nicho entra por aqui e só por aqui: mercearia compra por peso e volume,
   // loja de roupa e de eletrônico não. O formulário em si é o mesmo nas três —
   // requisição de compra é documento corporativo único.
-  const unidadesReq = useMemo(() => unidadesDeRequisicao(filial), [filial]);
+  const unidadesReqTodas = useMemo(() => unidadesDeRequisicao(filial), [filial]);
+  // Caixa e pacote são embalagem, não unidade de medida: na linha nova eles só
+  // existem no grupo "Embalagem fechada", com o "com N" ao lado.
+  const unidadesReq = useMemo(() => unidadesReqTodas.filter(u => u !== 'CX' && u !== 'PCT'), [unidadesReqTodas]);
+  const unidadesBaseReq = useMemo(() => unidadesReq.filter(u => u !== 'SV'), [unidadesReq]);
 
   // Quantidade fracionária atravessa a cadeia de compra desde a migr. 439. Cada
   // linha decide sozinha: a unidade da linha (compra eventual) ou a do produto
@@ -246,9 +264,11 @@ const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: 
   const qtdAbaixoMin = useMemo(
     () => produtos.filter((p: any) => {
       const min = Number(p.estoque_minimo ?? 0);
-      return (p.status ?? 'Ativo') !== 'Inativo' && min > 0 && Number(p.estoque ?? 0) <= min;
+      return (p.status ?? 'Ativo') !== 'Inativo' && temEstoque(p.tipo)
+        && (podeReporMercadoria || !ehVendavel(p.tipo))
+        && min > 0 && Number(p.estoque ?? 0) <= min;
     }).length,
-    [produtos],
+    [produtos, podeReporMercadoria],
   );
 
   // Só se pede do almoxarifado o que o almoxarifado tem.
@@ -339,6 +359,8 @@ const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: 
   // Reposição tem produto do catálogo: ali a marca é do cadastro, e a RPC
   // ignora o que a tela mandar (migr. 582). Só a eventual digita marca.
   const corrEhEventual = corrigindo?.tipo === 'eventual';
+  // Reposição É o produto do catálogo: nome e unidade vêm dele, não se corrigem.
+  const corrEhReposicao = corrigindo?.tipo === 'reposicao';
   // Material não tem item, unidade, urgência, centro de custo nem prazo — só
   // quantidade e destino (`requisicoes_estoque` não guarda os outros campos,
   // e corrigir o produto trocaria o documento por outro). Formulário próprio
@@ -431,7 +453,7 @@ const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: 
         // marca" é decisão, e a RPC distingue isso de "não mexi" (NULL).
         p_marca:            corrEhEventual ? corrForm.marca.trim() : null,
         p_qtd:              qtd,
-        p_unidade:          corrForm.unidade || null,
+        p_unidade:          corrEhReposicao ? null : (corrForm.unidade || null),
         p_justificativa:    corrForm.justificativa || null,
         p_urgencia:         corrForm.urgencia || null,
         p_centro_custo:     corrForm.centro_custo || null,
@@ -510,26 +532,32 @@ const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: 
   const visiveis = porAba[abaAtiva].filter(r => casaSolicitante(r.solicitante));
 
   const addLinha    = () => setItens(rows => [...rows, linhaVazia()]);
-  const removeLinha = (i: number) => setItens(rows => rows.length <= 1 ? rows : rows.filter((_, idx) => idx !== i));
+  const removeLinha = (i: number) => {
+    // Voltando a um item só, o motivo por item some — senão ficaria valendo escondido.
+    if (itens.length === 2) setJustPorItem(false);
+    setItens(rows => {
+      if (rows.length <= 1) return rows;
+      const resto = rows.filter((_, idx) => idx !== i);
+      return resto.length === 1 ? resto.map(r => ({ ...r, justificativa: '' })) : resto;
+    });
+  };
   const updateLinha = (i: number, patch: Partial<{ item: string; marca: string; qtd: string; unidade: string; justificativa: string; embalagem: string; fator: string }>) =>
     setItens(rows => rows.map((r, idx) => idx === i ? { ...r, ...patch } : r));
 
-  // Quais linhas estão com campo de motivo próprio aberto. Fica fora do estado
-  // do item porque é visibilidade de UI, não dado da requisição: fechar o campo
-  // apaga o texto, e é isso que "voltar a usar o motivo geral" quer dizer.
-  // Chaveado por `uid` e não por índice — remover a linha 1 não pode transferir
-  // o campo aberto para quem era a linha 2.
-  const [justAberta, setJustAberta] = useState<Record<number, boolean>>({});
-  const toggleJust = (i: number, uid: number) => {
-    setJustAberta(m => ({ ...m, [uid]: !m[uid] }));
-    if (justAberta[uid]) updateLinha(i, { justificativa: '' });
+  // Motivo por item (migr. 354): desligar apaga os motivos, e todos voltam a
+  // usar a justificativa geral.
+  const [justPorItem, setJustPorItem] = useState(false);
+  const toggleJustPorItem = () => {
+    if (justPorItem) setItens(rows => rows.map(r => ({ ...r, justificativa: '' })));
+    setJustPorItem(v => !v);
   };
+  const mostraJustItem = justPorItem && itens.length > 1;
 
   const closeForm = () => {
     setShowForm(false);
     setCab({ urgencia: 'Normal', centro_custo: '', justificativa: '', data_necessidade: '' });
     setItens([linhaVazia()]);
-    setJustAberta({});
+    setJustPorItem(false);
     setEstoqueForm({ produto_id: '', qtd: '1', destino: '', centro_custo_id: '' });
     setRepo(new Map());
     setRepoEmb(new Set());
@@ -560,17 +588,20 @@ const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: 
   // Material do almoxarifado: sai do que já existe, então o produto vem do
   // catálogo — e o Estoque é quem libera (migr. 284).
   const handleEnviarEstoque = async () => {
-    if (!estoqueForm.produto_id) {
-      setErros({ produto_id: 'Escolha o produto' });
-      return;
-    }
+    const qtdEst = parseQtd(estoqueForm.qtd);
+    const saldoEst = Number(produtos.find((p: any) => p.id === estoqueForm.produto_id)?.estoque ?? 0);
+    const e: Record<string, string> = {};
+    if (!estoqueForm.produto_id) e.produto_id = 'Escolha o produto';
+    else if (!(qtdEst > 0)) e.qtd_estoque = 'Informe a quantidade';
+    else if (qtdEst > saldoEst) e.qtd_estoque = `Só há ${qtdBR(saldoEst)} ${unidadeEstoqueSel} no estoque`;
+    if (Object.keys(e).length) { setErros(e); return; }
     if (!supabase) return;
     setSaving(true);
     try {
       const { data: saved, error } = await supabase.rpc('criar_requisicao_estoque', {
         p_produto_id:  estoqueForm.produto_id,
         p_solicitante: profile.nome,
-        p_qtd:         parseQtd(estoqueForm.qtd) || 1,
+        p_qtd:         qtdEst,
         p_destino:     estoqueForm.destino.trim() || null,
         p_filial:      filial,
         // Migr. 442: o que sai do almoxarifado vira despesa no centro de custo
@@ -596,6 +627,7 @@ const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: 
   const validarReposicao = (): boolean => {
     const e: Record<string, string> = {};
     if (repo.size === 0) e.repo = 'Escolha ao menos um item do catálogo';
+    else if ([...repo.values()].some(q => !(parseQtd(q) > 0))) e.repo = 'Informe a quantidade de cada item marcado';
     if (!cab.data_necessidade) e.data_necessidade = 'Obrigatório';
     else if (cab.data_necessidade < todayBR()) e.data_necessidade = 'Não pode ser no passado';
     setErros(e);
@@ -614,6 +646,7 @@ const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: 
     else if (cab.data_necessidade < todayBR()) e.data_necessidade = 'Não pode ser no passado';
     itens.forEach((r, i) => {
       if (!r.item.trim()) e[`item_${i}`] = 'Descreva o item';
+      if (!(parseQtd(r.qtd) > 0)) e[`qtd_${i}`] = 'Informe a quantidade';
       const j = r.justificativa.trim();
       if (j.length > 0 && j.length < 10) e[`just_${i}`] = 'Mín. 10 caracteres';
       // Migr. 591: embalagem declarada tem de vir completa. A RPC recusa os
@@ -774,7 +807,7 @@ const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: 
       // cabem num fardo (mesma lição da marca, migr. 582).
       const p_itens = ehRepo
         ? [...repo.entries()].map(([produto_id, qtd]) => {
-            const n = parseQtd(qtd) || 1;
+            const n = parseQtd(qtd);
             const emb = embalagemDoProduto(produtos.find((p: any) => p.id === produto_id));
             return emb && repoEmb.has(produto_id)
               ? { produto_id, qtd_embalagens: n }
@@ -790,10 +823,10 @@ const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: 
             // número de FARDOS — a RPC multiplica pelo fator e grava as duas
             // leituras. Sem ela, segue sendo a quantidade na unidade.
             ...(r.embalagem
-              ? { qtd_embalagens: parseQtd(r.qtd) || 1,
+              ? { qtd_embalagens: parseQtd(r.qtd),
                   embalagem_nome: r.embalagem,
                   embalagem_fator: parseQtd(r.fator) }
-              : { qtd: parseQtd(r.qtd) || 1 }),
+              : { qtd: parseQtd(r.qtd) }),
             // Vazio = a RPC cai na justificativa do cabeçalho (migr. 354).
             justificativa: r.justificativa.trim() || null,
           }));
@@ -851,21 +884,6 @@ const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: 
             className="neu-flat rounded-2xl border border-white/5 shrink-0"
           >
             <div className="p-5 flex flex-col gap-5">
-              {/* Identificação — não se digita, se lê. Quem pediu é quem está logado. */}
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                {[
-                  { label: 'Solicitante', val: profile.nome },
-                  { label: 'Setor',       val: profile.setor === 'all' ? 'Matriz' : profile.setor },
-                  { label: 'Unidade',     val: filial },
-                  { label: 'Data',        val: todayBR().split('-').reverse().join('/') },
-                ].map(({ label, val }) => (
-                  <div key={label} className="neu-pressed p-3 rounded-xl">
-                    <span className="text-[10px] text-gray-500 uppercase tracking-widest font-bold block mb-1">{label}</span>
-                    <span className="text-xs text-gray-200 font-semibold capitalize">{val}</span>
-                  </div>
-                ))}
-              </div>
-
               {/* O tipo é a primeira pergunta porque muda o destino do pedido:
                   material sai da prateleira (Estoque libera), compra vai para
                   a fila de cotação (gerente decide). */}
@@ -873,64 +891,25 @@ const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: 
                 <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">O que você precisa</span>
                 <div className="flex flex-wrap gap-2">
                   {([
-                    { id: 'reposicao' as TipoReq, label: 'Reposição',       hint: 'item do catálogo que acabou ou bateu o mínimo' },
-                    { id: 'eventual'  as TipoReq, label: 'Compra eventual', hint: 'ainda não existe no catálogo — descreva com suas palavras' },
-                    { id: 'estoque'   as TipoReq, label: 'Material do estoque', hint: 'já existe no almoxarifado — o Estoque libera' },
+                    { id: 'eventual'  as TipoReq, label: 'Compra eventual', hint: 'item fora do catálogo ou serviço', cor: 'bg-yellow-500 border-yellow-600 text-black', sub: 'text-black/70' },
+                    { id: 'reposicao' as TipoReq, label: 'Reposição',       hint: 'item do catálogo que acabou',     cor: 'bg-red-600 border-red-700 text-white',       sub: 'text-white/80' },
+                    { id: 'estoque'   as TipoReq, label: 'Material do estoque', hint: 'retirar do almoxarifado',     cor: 'bg-blue-600 border-blue-700 text-white',     sub: 'text-white/80' },
                   ]).map(op => (
                     <button
                       key={op.id}
                       onClick={() => { setTipo(op.id); setErros({}); }}
-                      className={`flex-1 min-w-[180px] text-left py-2 px-3 rounded-xl border transition-colors ${
+                      aria-pressed={tipo === op.id}
+                      className={`flex-1 min-w-[180px] text-left py-2.5 px-4 rounded-xl border transition ${op.cor} ${
                         tipo === op.id
-                          ? 'bg-accent/15 border-accent/30 text-accent'
-                          : 'neu-button border-transparent text-gray-400 hover:text-gray-200'
+                          ? 'ring-2 ring-offset-2 ring-offset-[color:var(--color-bg-base,#000)] ring-white/70'
+                          : 'opacity-45 hover:opacity-75'
                       }`}
                     >
-                      <span className="block text-xs font-bold">{op.label}</span>
-                      <span className="block text-[10px] text-gray-500 mt-0.5">{op.hint}</span>
+                      <span className="block text-sm font-extrabold">{op.label}</span>
+                      <span className={`block text-[11px] mt-0.5 ${op.sub}`}>{op.hint}</span>
                     </button>
                   ))}
                 </div>
-                {/* A regra do campo obrigatório fica visível ANTES de o aluno
-                    esbarrar nela — era o que faltava para ele entender que a
-                    justificativa não é burocracia, é o que o comprador lê
-                    quando não tem histórico nenhum. */}
-                <p className="text-[11px] text-gray-500 leading-snug">
-                  {tipo === 'reposicao'
-                    ? 'Reposição não pede justificativa escrita: o motivo é o saldo, e o sistema grava o saldo e o mínimo do produto no momento do pedido.'
-                    : tipo === 'eventual'
-                      ? 'Compra eventual pede justificativa: Compras não tem histórico deste item para decidir sozinho.'
-                      : 'Sai do almoxarifado, sem passar por Compras. Quando o Estoque liberar, o material vira despesa do centro de custo escolhido, pelo custo médio.'}
-                </p>
-                {/* A dúvida que aparecia em sala: "o item não está no catálogo,
-                    tenho de cadastrar antes de pedir?". Não — e o setor
-                    solicitante nem tem acesso a Cadastros. Quem dá código ao
-                    item é quem compra, na geração do pedido (migr. 480). Dizer
-                    isso aqui é mais barato do que deixar o aluno descobrir
-                    esbarrando numa tela que ele não pode abrir. */}
-                {tipo === 'eventual' && (
-                  <div className="neu-inset rounded-xl p-3 border border-white/5">
-                    <p className="text-[11px] text-gray-400 leading-relaxed">
-                      <span className="font-bold text-gray-200">Você não precisa cadastrar o produto antes.</span>{' '}
-                      Descreva o que precisa em português — "Bolsa feminina transversal Anacapri" já basta.
-                      Quem compra é que amarra sua descrição a um item de catálogo quando o pedido for emitido,
-                      e cadastra o que faltar. Da próxima vez que a unidade pedir o mesmo item, ele já aparece
-                      na <span className="font-bold text-gray-300">Reposição</span>.
-                    </p>
-                    {/* Serviço deixou de ser beco sem saída (migr. 499): o pedido
-                        tem duas categorias de item, e a unidade SV é a forma de
-                        dizer qual é. Sem esta linha, "troca do compressor" era
-                        pedido em UN e virava mercadoria de estoque — item com
-                        saldo que nunca existiu. */}
-                    <p className="text-[11px] text-gray-400 leading-relaxed mt-2">
-                      <span className="font-bold text-gray-200">Precisa contratar um serviço?</span>{' '}
-                      Manutenção, frete, licença, dedetização — escolha a unidade{' '}
-                      <span className="font-bold text-gray-300">SV</span> na linha do item. Serviço não
-                      entra no estoque: quando for executado, alguém atesta a execução e é isso que
-                      libera o pagamento.
-                    </p>
-                  </div>
-                )}
               </div>
 
               {tipo === 'estoque' ? (
@@ -942,10 +921,17 @@ const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: 
                       onChange={e => { setEstoqueForm(f => ({ ...f, produto_id: e.target.value })); setErros({}); }}
                     >
                       <option value="">Selecione o produto em estoque…</option>
-                      {produtosEmEstoque.map((p: any) => (
-                        <option key={p.id} value={p.id}>
-                          {p.nome}{p.codigo ? ` (${p.codigo})` : ''} — saldo {qtdBR(p.estoque ?? 0)} {normalizarUnidade(p.unidade)}
-                        </option>
+                      {([
+                        { label: 'Uso e consumo', lista: produtosEmEstoque.filter((p: any) => !ehVendavel(p.tipo)) },
+                        { label: 'Mercadoria da loja (consumo próprio)', lista: produtosEmEstoque.filter((p: any) => ehVendavel(p.tipo)) },
+                      ]).filter(g => g.lista.length > 0).map(g => (
+                        <optgroup key={g.label} label={g.label}>
+                          {g.lista.map((p: any) => (
+                            <option key={p.id} value={p.id}>
+                              {p.nome}{p.codigo ? ` (${p.codigo})` : ''} — saldo {qtdBR(p.estoque ?? 0)} {normalizarUnidade(p.unidade)}
+                            </option>
+                          ))}
+                        </optgroup>
                       ))}
                     </select>
                   </FormField>
@@ -953,10 +939,10 @@ const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: 
                   {/* A unidade é a do produto escolhido, não uma escolha à
                       parte: quem pede queijo do almoxarifado pede em KG porque
                       é assim que o queijo está lá. */}
-                  <FormField label={`Quantidade${unidadeEstoqueSel ? ` (${unidadeEstoqueSel})` : ''}`}>
+                  <FormField label={`Quantidade${unidadeEstoqueSel ? ` (${unidadeEstoqueSel})` : ''}`} error={erros.qtd_estoque}>
                     <input
                       type="text" inputMode="decimal"
-                      className="neu-input py-2 px-3 rounded-xl text-sm tabular-nums"
+                      className={`neu-input py-2 px-3 rounded-xl text-sm tabular-nums ${erros.qtd_estoque ? 'border border-red-500/40' : ''}`}
                       value={estoqueForm.qtd}
                       onChange={e => setEstoqueForm(f => ({ ...f, qtd: formatQtd(e.target.value, estoqueFrac) }))}
                       onKeyDown={handleQtdKeyDown(estoqueFrac)}
@@ -1171,63 +1157,17 @@ const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: 
                       );
                     })}
                   </div>
-                  <span className="text-[10px] text-gray-500">
-                    Cada item marcado vira uma requisição própria, com o saldo do momento anexado — é isso que Compras lê no lugar da justificativa.
-                    {' '}Pedir em fardo é só a forma de pedir: o estoque continua contando na unidade do produto, e a conversão fica registrada no documento.
-                  </span>
                 </div>
               ) : (
               <>
-              {/* O rótulo diz "geral" porque o campo é o padrão das linhas, não
-                  a única fonte: quem tem motivos diferentes justifica item a
-                  item lá embaixo (migr. 354). */}
-              <FormField
-                label={itens.length > 1
-                  ? `Justificativa geral${cabJustObrigatoria ? ' *' : ''} — vale para os itens sem motivo próprio`
-                  : 'Justificativa * — por que a empresa precisa disto'}
-                error={erros.justificativa}
-              >
-                <textarea
-                  className={`neu-input py-2 px-3 rounded-xl text-sm resize-none h-20 ${erros.justificativa ? 'border border-red-500/40' : ''}`}
-                  placeholder="Ex.: o estoque de papel acaba na sexta e o setor emite 200 boletos por semana."
-                  value={cab.justificativa}
-                  onChange={e => setCab(c => ({ ...c, justificativa: e.target.value }))}
-                />
-              </FormField>
-
               {/* Itens: texto livre. O catálogo é sugestão, não obrigação. */}
               <div className="flex flex-col gap-2">
-                <div className="flex items-center justify-between">
-                  <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Itens solicitados</span>
-                  <button onClick={addLinha} className="neu-button py-1 px-3 rounded-lg text-[11px] font-bold text-accent flex items-center gap-1">
-                    <Plus size={11} /> Adicionar item
-                  </button>
-                </div>
-
-                {/* Vinha depois da lista, em cinza, e ninguém lia — mas é o fato
-                    que explica por que cada linha pode ter motivo próprio. */}
-                <p className="text-[11px] text-gray-400 leading-snug bg-white/[0.03] border border-white/5 rounded-lg py-2 px-3">
-                  Cada item vira uma <strong className="text-gray-300">requisição própria</strong> — Compras cota e
-                  fecha um a um, e o gerente aprova um a um. Por isso cada item pode ter o seu próprio motivo:
-                  use <em>Motivo próprio</em> quando a razão de pedir for diferente da geral.
-                </p>
-
-
-                {/* MIGR 582. "Papel" não é um pedido: é um assunto. Quem vai
-                    comprar precisa saber QUAL produto e de QUE marca, senão
-                    volta perguntando — ou compra errado, que é pior. */}
-                <p className="text-[11px] text-gray-400 leading-snug bg-white/[0.03] border border-white/5 rounded-lg py-2 px-3">
-                  Escreva o <strong className="text-gray-300">nome do produto</strong> e a{' '}
-                  <strong className="text-gray-300">marca</strong> como quem vai à loja comprar. Compras
-                  não adivinha: quanto mais preciso o pedido, mais rápido a cotação volta com o item certo.
-                  Se a marca for indiferente, deixe em branco — isso também é uma resposta. Item que já
-                  existe no catálogo se pede por <strong className="text-gray-300">Reposição</strong>, não aqui.
-                </p>
+                <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Itens solicitados</span>
 
                 {itens.map((row, i) => (
-                  <div key={row.uid} className="flex flex-col gap-1.5">
-                    <div className="flex flex-wrap md:flex-nowrap gap-2 items-start">
-                      <div className="flex-1 min-w-[180px]">
+                  <div key={row.uid} className="flex flex-col gap-1.5 neu-pressed rounded-xl p-3 border border-white/5">
+                    <div className="flex flex-wrap xl:flex-nowrap gap-2 items-start">
+                      <div className="w-full xl:w-auto xl:flex-1 xl:min-w-[180px]">
                         <input
                           className={`neu-input py-2 px-3 rounded-xl text-sm w-full ${erros[`item_${i}`] ? 'border border-red-500/40' : ''}`}
                           placeholder={`Nome do produto — ${exemploItemRequisicao(filial)}`}
@@ -1255,9 +1195,8 @@ const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: 
                             <div className="mt-1.5 rounded-lg border border-amber-400/25 bg-amber-400/5 px-2.5 py-2">
                               <p className="text-[11px] text-amber-200/90 leading-snug">
                                 {servico
-                                  ? <>O catálogo já tem serviço parecido. Se for o mesmo, use o nome dele — Compras reconhece pelo nome e não cadastra de novo.</>
-                                  : <>{parecidos[0].s === 'igual' ? 'Este produto já está no catálogo.' : 'O catálogo já tem item parecido.'}
-                                      {' '}Se for o mesmo, peça por <strong>Reposição</strong> — sai com o código e Compras não cadastra de novo.</>}
+                                  ? 'O catálogo já tem serviço parecido.'
+                                  : parecidos[0].s === 'igual' ? 'Este produto já está no catálogo.' : 'O catálogo já tem item parecido.'}
                               </p>
                               <div className="flex flex-col gap-1 mt-1.5">
                                 {parecidos.map(({ p }) => (
@@ -1266,11 +1205,11 @@ const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: 
                                       {p.nome}
                                       {p.codigo && <span className="text-gray-500"> · {p.codigo}</span>}
                                     </span>
-                                    <button type="button"
+                                    {(servico || podeReporMercadoria || !ehVendavel(p.tipo)) && <button type="button"
                                       onClick={() => servico ? updateLinha(i, { item: p.nome }) : moverParaReposicao(i, p)}
                                       className="shrink-0 text-[10px] font-bold text-accent underline hover:text-accent/80">
                                       {servico ? 'É este — usar o nome' : 'É este — pedir por Reposição'}
-                                    </button>
+                                    </button>}
                                   </div>
                                 ))}
                               </div>
@@ -1278,7 +1217,7 @@ const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: 
                           );
                         })()}
                       </div>
-                      <div className="w-full md:w-44">
+                      <div className="flex-1 min-w-[140px] xl:flex-none xl:w-44">
                         <input
                           list="sugestoes-marcas"
                           className="neu-input py-2 px-3 rounded-xl text-sm w-full"
@@ -1287,87 +1226,71 @@ const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: 
                           onChange={e => updateLinha(i, { marca: e.target.value })}
                         />
                       </div>
-                      {/* Quantidade: de FARDOS quando a linha declara
-                          embalagem, de unidades quando não (migr. 591). Fardo
-                          não se parte, então lá a máscara não aceita vírgula. */}
-                      <input
-                        type="text" inputMode="decimal"
-                        title={row.embalagem
-                          ? `Quantidade a pedir, em ${pluralEmbalagem(row.embalagem, 2).toLowerCase()}`
-                          : `Quantidade a pedir (${normalizarUnidade(row.unidade)})`}
-                        className="neu-input py-2 px-3 rounded-xl text-sm w-20 tabular-nums"
-                        value={row.qtd}
-                        onChange={e => updateLinha(i, { qtd: formatQtd(e.target.value, !row.embalagem && ehFracionaria(row.unidade)) })}
-                        onKeyDown={handleQtdKeyDown(!row.embalagem && ehFracionaria(row.unidade))}
-                      />
-                      <select
-                        className="neu-input py-2 px-3 rounded-xl text-sm w-24"
-                        value={row.unidade}
-                        onChange={e => {
-                          // Trocar a unidade remascara a quantidade da linha —
-                          // "12,5" digitado em KG não pode virar 125 em UN.
-                          const u = e.target.value;
-                          // Serviço não vem em embalagem: escolher SV desfaz a
-                          // declaração em vez de deixá-la barrar o envio.
-                          const emb = u === 'SV' ? '' : row.embalagem;
-                          updateLinha(i, {
-                            unidade: u, embalagem: emb, fator: emb ? row.fator : '',
-                            qtd: formatQtd(row.qtd, !emb && ehFracionaria(u)),
-                          });
-                        }}
-                      >
-                        {unidadesReq.map(u => <option key={u} value={u}>{rotuloUnidade(u)}</option>)}
-                      </select>
-                      {/* A embalagem que o fornecedor vende. Vazia = unidade
-                          solta, que é a maioria — por isso o select nasce em
-                          "avulso" e o fator só aparece quando há o que
-                          multiplicar. Antes disso, o aluno escrevia o fardo no
-                          NOME do item ("sacola 50x60 — fardo com 500") e
-                          Compras cotava adivinhando. */}
-                      {row.unidade !== 'SV' && (
-                        <div className="w-full md:w-auto flex gap-2 items-start">
-                          <select
-                            className="neu-input py-2 px-2 rounded-xl text-xs w-28 shrink-0"
-                            value={row.embalagem}
-                            title="Como o fornecedor vende este item"
-                            onChange={e => {
-                              const emb = e.target.value;
+                      {/* Quantidade + em quê: numa unidade de medida, ou numa
+                          embalagem fechada "com N" unidades (migr. 591). Com
+                          embalagem, a qtd conta embalagens e não aceita vírgula. */}
+                      <div className="flex gap-2 items-start">
+                        <input
+                          type="text" inputMode="decimal"
+                          title={erros[`qtd_${i}`] ?? 'Quantidade'}
+                          className={`neu-input py-2 px-3 rounded-xl text-sm w-20 tabular-nums ${erros[`qtd_${i}`] ? 'border border-red-500/60' : ''}`}
+                          value={row.qtd}
+                          onChange={e => updateLinha(i, { qtd: formatQtd(e.target.value, !row.embalagem && ehFracionaria(row.unidade)) })}
+                          onKeyDown={handleQtdKeyDown(!row.embalagem && ehFracionaria(row.unidade))}
+                        />
+                        <select
+                          className="neu-input py-2 px-2 rounded-xl text-sm w-32 shrink-0"
+                          value={row.embalagem ? `${EMB_PREFIX}${row.embalagem}` : row.unidade}
+                          onChange={e => {
+                            const v = e.target.value;
+                            if (v.startsWith(EMB_PREFIX)) {
+                              const base = unidadesBaseReq.includes(row.unidade) ? row.unidade : 'UN';
                               updateLinha(i, {
-                                embalagem: emb,
-                                fator: emb ? row.fator : '',
-                                qtd: formatQtd(row.qtd, !emb && ehFracionaria(row.unidade)),
+                                embalagem: v.slice(EMB_PREFIX.length), unidade: base,
+                                fator: row.embalagem ? row.fator : '',
+                                qtd: formatQtd(row.qtd, false),
                               });
-                            }}
-                          >
-                            <option value="">Avulso</option>
-                            {EMBALAGENS_COMPRA.map(e => <option key={e} value={e}>{e}</option>)}
-                          </select>
-                          {row.embalagem && (
-                            <div className="w-24 shrink-0">
-                              <input
-                                type="text" inputMode="decimal"
-                                className={`neu-input py-2 px-2 rounded-xl text-xs w-full tabular-nums ${erros[`fator_${i}`] ? 'border border-red-500/40' : ''}`}
-                                placeholder={`${normalizarUnidade(row.unidade)} por ${row.embalagem.toLowerCase()}`}
-                                title={`Quantas ${normalizarUnidade(row.unidade)} vêm em um ${row.embalagem.toLowerCase()}`}
-                                value={row.fator}
-                                onChange={e => updateLinha(i, { fator: formatQtd(e.target.value, ehFracionaria(row.unidade)) })}
-                                onKeyDown={handleQtdKeyDown(ehFracionaria(row.unidade))}
-                              />
-                            </div>
-                          )}
-                        </div>
-                      )}
-                      <button
-                        onClick={() => toggleJust(i, row.uid)}
-                        title={justAberta[row.uid] ? 'Voltar a usar a justificativa geral' : 'Dar um motivo só para este item'}
-                        className={`py-2 px-2.5 rounded-xl border transition-colors mt-0.5 ${
-                          justAberta[row.uid]
-                            ? 'bg-accent/15 border-accent/30 text-accent'
-                            : 'neu-button border-transparent text-gray-500 hover:text-gray-300'
-                        }`}
-                      >
-                        <MessageSquareText size={13} />
-                      </button>
+                            } else {
+                              updateLinha(i, {
+                                unidade: v, embalagem: '', fator: '',
+                                qtd: formatQtd(row.qtd, ehFracionaria(v)),
+                              });
+                            }
+                          }}
+                        >
+                          <optgroup label="Unidade">
+                            {[...unidadesReq, ...(unidadesReq.includes(row.unidade) ? [] : [row.unidade])].map(u => (
+                              <option key={u} value={u}>{rotuloUnidade(u)}</option>
+                            ))}
+                          </optgroup>
+                          <optgroup label="Embalagem fechada">
+                            {EMBALAGENS_COMPRA.map(emb => (
+                              <option key={emb} value={`${EMB_PREFIX}${emb}`}>{emb.charAt(0) + emb.slice(1).toLowerCase()}</option>
+                            ))}
+                          </optgroup>
+                        </select>
+                        {row.embalagem && (
+                          <>
+                            <span className="text-xs text-gray-400 py-2 shrink-0">com</span>
+                            <input
+                              type="text" inputMode="decimal"
+                              className={`neu-input py-2 px-2 rounded-xl text-sm w-16 tabular-nums ${erros[`fator_${i}`] ? 'border border-red-500/40' : ''}`}
+                              title={`Quantas ${normalizarUnidade(row.unidade)} vêm em cada ${row.embalagem.toLowerCase()}`}
+                              placeholder="?"
+                              value={row.fator}
+                              onChange={e => updateLinha(i, { fator: formatQtd(e.target.value, ehFracionaria(row.unidade)) })}
+                              onKeyDown={handleQtdKeyDown(ehFracionaria(row.unidade))}
+                            />
+                            <select
+                              className="neu-input py-2 px-2 rounded-xl text-sm w-20 shrink-0"
+                              value={row.unidade}
+                              onChange={e => updateLinha(i, { unidade: e.target.value, fator: formatQtd(row.fator, ehFracionaria(e.target.value)) })}
+                            >
+                              {unidadesBaseReq.map(u => <option key={u} value={u}>{u}</option>)}
+                            </select>
+                          </>
+                        )}
+                      </div>
                       <button
                         onClick={() => removeLinha(i)}
                         disabled={itens.length <= 1}
@@ -1380,6 +1303,9 @@ const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: 
 
                     {/* A conta à vista, antes de enviar (migr. 591) — e o erro
                         da declaração incompleta no mesmo lugar. */}
+                    {erros[`qtd_${i}`] && (
+                      <span className="text-[10px] text-red-500 font-semibold">{erros[`qtd_${i}`]}</span>
+                    )}
                     {row.embalagem && (erros[`fator_${i}`] ? (
                       <span className="text-[10px] text-red-500 font-semibold">{erros[`fator_${i}`]}</span>
                     ) : parseQtd(row.fator) > 1 && parseQtd(row.qtd) > 0 ? (
@@ -1389,11 +1315,11 @@ const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: 
                       </span>
                     ) : null)}
 
-                    {justAberta[row.uid] && (
+                    {mostraJustItem && (
                       <div className="pl-3 border-l-2 border-accent/30 ml-1">
-                        <textarea
-                          className={`neu-input py-2 px-3 rounded-xl text-xs resize-none h-14 w-full ${erros[`just_${i}`] ? 'border border-red-500/40' : ''}`}
-                          placeholder={`Motivo só deste item${row.item.trim() ? ` (${row.item.trim()})` : ''} — substitui a justificativa geral`}
+                        <input
+                          className={`neu-input py-2 px-3 rounded-xl text-xs w-full ${erros[`just_${i}`] ? 'border border-red-500/40' : ''}`}
+                          placeholder="Motivo deste item (vazio = usa a justificativa geral)"
                           value={row.justificativa}
                           onChange={e => updateLinha(i, { justificativa: e.target.value })}
                         />
@@ -1404,7 +1330,29 @@ const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: 
                     )}
                   </div>
                 ))}
+                <button onClick={addLinha} className="btn-solido btn-solido--verde self-start">
+                  <Plus size={13} /> Adicionar item
+                </button>
               </div>
+
+              <FormField
+                label={mostraJustItem ? `Justificativa geral${cabJustObrigatoria ? ' *' : ''}` : 'Justificativa *'}
+                error={erros.justificativa}
+              >
+                <textarea
+                  rows={2}
+                  className={`neu-input py-2 px-3 rounded-xl text-sm resize-none ${erros.justificativa ? 'border border-red-500/40' : ''}`}
+                  placeholder="Por que a empresa precisa disto?"
+                  value={cab.justificativa}
+                  onChange={e => setCab(c => ({ ...c, justificativa: e.target.value }))}
+                />
+                {itens.length > 1 && (
+                  <button type="button" onClick={toggleJustPorItem}
+                    className="self-start mt-1 text-[11px] font-bold text-accent hover:underline">
+                    {justPorItem ? 'Usar a mesma justificativa para todos' : 'Justificar item por item'}
+                  </button>
+                )}
+              </FormField>
               </>
               )}
               </>
@@ -1743,15 +1691,11 @@ const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: 
                       value={corrForm.marca}
                       onChange={e => setCorrForm(f => ({ ...f, marca: e.target.value }))}
                       placeholder="Marca (opcional)" />
-                    <p className="text-[10px] text-gray-500 mt-1 leading-relaxed">
-                      Se o gerente devolveu pedindo precisão, é aqui que ela entra: a marca é o que faz
-                      Compras achar o produto certo. Em branco significa "qualquer marca".
-                    </p>
                   </FormField>
                 )}
-                <FormField label="Item *">
-                  <input className="neu-input py-2 px-3 rounded-xl text-sm w-full"
-                    value={corrForm.item}
+                <FormField label={corrEhReposicao ? 'Item (do catálogo)' : 'Item *'}>
+                  <input className={`neu-input py-2 px-3 rounded-xl text-sm w-full ${corrEhReposicao ? 'opacity-60 cursor-not-allowed' : ''}`}
+                    value={corrForm.item} readOnly={corrEhReposicao} disabled={corrEhReposicao}
                     onChange={e => setCorrForm(f => ({ ...f, item: e.target.value }))} />
                 </FormField>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -1761,24 +1705,19 @@ const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: 
                       value={corrForm.qtd}
                       onChange={e => setCorrForm(f => ({ ...f, qtd: formatQtd(e.target.value, corrFrac) }))}
                       onKeyDown={handleQtdKeyDown(corrFrac)} />
-                    {/* Aqui a quantidade é sempre a de estoque, mesmo no pedido
-                        que nasceu em fardo — e o aluno precisa saber disso antes
-                        de digitar. Mantendo múltiplo do fardo, o documento
-                        continua contando em fardo (migr. 590); saindo do
-                        múltiplo, ele passa a falar só em unidade, porque 610 não
-                        são 20 fardos de 30. */}
+                    {/* A quantidade aqui é sempre na unidade (migr. 590). */}
                     {corrigindo?.embNome && corrigindo?.embFator ? (
-                      <p className="text-[10px] text-gray-500 mt-1 leading-snug">
-                        Pedido em <span className="text-gray-400">{qtdBR(corrigindo.qtdEmb)} {pluralEmbalagem(corrigindo.embNome, Number(corrigindo.qtdEmb))} de {qtdBR(corrigindo.embFator)}</span>.
-                        Digite em {normalizarUnidade(corrForm.unidade)}: múltiplo de {qtdBR(corrigindo.embFator)} continua contando em {corrigindo.embNome.toLowerCase()}.
+                      <p className="text-[10px] text-gray-500 mt-1">
+                        Pedido: {qtdBR(corrigindo.qtdEmb)} {pluralEmbalagem(corrigindo.embNome, Number(corrigindo.qtdEmb)).toLowerCase()} com {qtdBR(corrigindo.embFator)}. Digite em {normalizarUnidade(corrForm.unidade)}.
                       </p>
                     ) : null}
                   </FormField>
                   <FormField label="Unidade">
-                    <select className="neu-input py-2 px-3 rounded-xl text-sm w-full"
-                      value={corrForm.unidade}
+                    <select className={`neu-input py-2 px-3 rounded-xl text-sm w-full ${corrEhReposicao ? 'opacity-60 cursor-not-allowed' : ''}`}
+                      value={corrForm.unidade} disabled={corrEhReposicao}
                       onChange={e => setCorrForm(f => ({ ...f, unidade: e.target.value }))}>
-                      {unidadesReq.map(u => <option key={u} value={u}>{rotuloUnidade(u)}</option>)}
+                      {[...unidadesReqTodas, ...(unidadesReqTodas.includes(corrForm.unidade) ? [] : [corrForm.unidade])]
+                        .map(u => <option key={u} value={u}>{rotuloUnidade(u)}</option>)}
                     </select>
                   </FormField>
                   <FormField label="Necessário até">
@@ -1811,12 +1750,6 @@ const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: 
                 </FormField>
               </div>
               )}
-
-              <p className="text-[11px] text-gray-500 leading-snug mt-3">
-                {corrigindo.tipo === 'estoque'
-                  ? 'O produto do catálogo não muda aqui — se o pedido era de outro item, o caminho é negar este e abrir um novo, para o histórico não misturar duas coisas num documento só.'
-                  : 'O tipo da requisição, o produto do catálogo e o setor não mudam aqui — se o pedido era de outro item, o caminho é negar este e abrir um novo, para o histórico não misturar duas coisas num documento só.'}
-              </p>
 
               <div className="flex justify-end gap-2 mt-5">
                 <button onClick={() => setCorrigindo(null)} disabled={reenviando}
