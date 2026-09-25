@@ -288,11 +288,13 @@ export const AprovacoesEstoqueBloco = ({ showToast, profile, filial, mostrar = '
 
   return (
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
+      // Nenhum pedaço trava a altura nem rola por dentro: a tela rola inteira,
+      // no <main> do app. Com `h-full` e a fila rolando por conta própria,
+      // cabeçalho e filtro comiam a altura e sobravam dois cards — o mesmo
+      // defeito corrigido em Aprovações (AprovacoesComprasView).
       className={mostrar === 'ambos'
-        ? 'flex flex-col h-full gap-8'
-        // Como aba de outra tela, quem manda na altura — e na rolagem — é a
-        // tela de fora. Aqui dentro nada disputa espaço nem rola por conta.
-        : mostrar === 'fila' ? 'flex flex-col flex-1 min-h-0 gap-4' : 'flex flex-col gap-4 shrink-0'}>
+        ? 'flex flex-col gap-8'
+        : mostrar === 'fila' ? 'flex flex-col gap-4' : 'flex flex-col gap-4 shrink-0'}>
       {mostrar === 'ambos' && (
         <div className="flex flex-wrap justify-between items-start gap-3 shrink-0">
           <div><h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Liberar Requisições — {filial}</h2><p className="text-sm text-gray-400 mt-1">Material pedido pelas áreas — o que já existe na prateleira, e por isso não passa por Compras. Liberar dá baixa no estoque; quem pediu não libera a própria (migr. 284). Esta é a fila do almoxarife; a fila do gerente para os dois documentos, compra e material, fica em Requisições → Aprovações.</p></div>
@@ -325,7 +327,7 @@ export const AprovacoesEstoqueBloco = ({ showToast, profile, filial, mostrar = '
           ? `Nada de ${solicAtivo} esperando liberação.`
           : 'Nenhum material esperando liberação'} />
       ) : (
-        <div className="flex flex-col gap-4 flex-1 min-h-0 overflow-y-auto main-scrollbar pr-2 pb-6">
+        <div className="flex flex-col gap-4 pb-6">
           {paraDecidir.map(ap => (
             <motion.div key={ap.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
               className="neu-flat rounded-2xl border border-white/5 p-5 flex flex-col gap-4">
@@ -453,11 +455,9 @@ export const AprovacoesEstoqueBloco = ({ showToast, profile, filial, mostrar = '
             já saiu da prateleira, e desfazer contaria a mesma saída duas vezes — o caminho é registrar a
             entrada de devolução em Estoque → Movimentações.
           </p>
-          {/* Embutido em Aprovações, a rolagem é da aba inteira — rolagem
-              dentro de rolagem foi o que espremeu a lista para um card. */}
-          <div className={mostrar === 'ambos'
-            ? 'flex flex-col gap-2 max-h-80 overflow-y-auto main-scrollbar pr-1'
-            : 'flex flex-col gap-2'}>
+          {/* Sem caixa rolando dentro da página — rolagem dentro de rolagem
+              foi o que espremeu a lista para um card. São no máximo 15. */}
+          <div className="flex flex-col gap-2">
             {decididasVisiveis.slice(0, 15).map(ap => {
               const req = requisicoes.find(r => r.id === ap.requisicao_estoque_id);
               const prod = req ? produtos.find(p => p.id === req.produto_id) : undefined;

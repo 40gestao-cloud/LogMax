@@ -546,7 +546,9 @@ export const AprovacoesPromocaoFinanceiroView = ({ showToast }: any) => {
   ];
 
   return (
-    <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col h-full gap-6">
+    // A tela rola inteira, no <main> do app — sem `h-full` e sem rolagem
+    // própria no conteúdo das abas, que espremia a lista abaixo do cabeçalho.
+    <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col gap-6">
       <div>
         <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Aprovações — Marketing</h2>
         <p className="text-sm text-gray-400 mt-1">Analise e aprove promoções individuais e itens de campanhas enviados pelo Marketing.</p>
@@ -566,7 +568,7 @@ export const AprovacoesPromocaoFinanceiroView = ({ showToast }: any) => {
         ))}
       </div>
 
-      <div className="flex-1 overflow-y-auto main-scrollbar pb-6 space-y-4">
+      <div className="pb-6 space-y-4">
         {aba === 'promocoes' ? <AbaPromocoes showToast={showToast} filial={filialAtiva} /> : <AbaCampanhas showToast={showToast} filial={filialAtiva} />}
       </div>
     </motion.div>
