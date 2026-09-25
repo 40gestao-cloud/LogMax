@@ -299,14 +299,15 @@ function InlineForm({ initial, onSave, onCancel, saving, comMargem, comSubcatego
           <FormField label="Subcategorias">
             <div className="neu-input w-full flex flex-wrap items-center gap-1.5 !py-1.5">
               {subs.map(nome => (
-                <span key={nome} className="inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-md"
+                /* A etiqueta inteira é o botão de tirar: alvo maior que o "x"
+                   sozinho, e o nome dentro diz o que sai. */
+                <button key={nome} type="button" onClick={() => setSubs(p => p.filter(x => x !== nome))}
+                  title={`Tirar "${nome}"`}
+                  className="inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-md text-gray-200 hover:brightness-125"
                   style={{ background: `${f.cor}1f`, border: `1px solid ${f.cor}55` }}>
                   {nome}
-                  <button type="button" onClick={() => setSubs(p => p.filter(x => x !== nome))}
-                    className="text-gray-400 hover:text-gray-100" title={`Tirar "${nome}"`}>
-                    <X size={11} />
-                  </button>
-                </span>
+                  <X size={11} className="text-gray-400" />
+                </button>
               ))}
               <input data-etiqueta="1" value={subTexto}
                 onChange={e => setSubTexto(e.target.value)}
