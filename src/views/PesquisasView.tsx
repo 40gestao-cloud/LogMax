@@ -5,16 +5,11 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Plus, X, Send, Lock, BarChart3, ChevronRight, Trash2, Eye, FileText } from 'lucide-react';
 import { useFetchData, dbInsert, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
 import { supabase } from '../lib/supabase';
-import { LoadingSpinner, EmptyState, NeuButtonAccent, CardContador, type TomContador } from '../components/ui';
+import { LoadingSpinner, EmptyState, NeuButtonAccent, CardContador, type TomContador, corDoStatus } from '../components/ui';
 import { hasSetor } from '../lib/rbac';
 
 type Status = 'Rascunho' | 'Ativa' | 'Encerrada';
 
-const STATUS_STYLE: Record<Status, string> = {
-  'Rascunho':  'bg-gray-500/10 text-gray-400 border-gray-500/20',
-  'Ativa':     'bg-accent/10 text-accent border-accent/20',
-  'Encerrada': 'bg-purple-500/10 text-purple-400 border-purple-500/20',
-};
 
 const ROLES_DISPONIVEIS = ['admin', 'ceo', 'gerente', 'colaborador'] as const;
 const SETORES_DISPONIVEIS = ['all', 'logistica', 'vendas', 'financeiro', 'rh', 'marketing'] as const;
@@ -297,7 +292,7 @@ function PesquisaCard({ pesquisa, expanded, onToggleExpand, onPublicar, onEncerr
       <div className="flex flex-col sm:flex-row sm:items-center gap-3">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap mb-1">
-            <span className={`inline-flex text-[10px] font-bold px-2 py-0.5 rounded-full border ${STATUS_STYLE[pesquisa.status as Status] ?? ''}`}>
+            <span className={`inline-flex text-[10px] font-bold px-2 py-0.5 rounded-full border ${corDoStatus(pesquisa.status as Status)}`}>
               {pesquisa.status}
             </span>
             {pesquisa.anonima && (

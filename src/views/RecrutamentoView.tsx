@@ -9,7 +9,7 @@ import {
 import { freshToken } from '../lib/authFetch';
 import { useFetchData } from '../hooks/useSupabaseData';
 import { supabase } from '../lib/supabase';
-import { LoadingSpinner, NeuButtonAccent, CardContador, type TomContador } from '../components/ui';
+import { LoadingSpinner, NeuButtonAccent, CardContador, type TomContador, corDoStatus } from '../components/ui';
 import { hasSetor } from '../lib/rbac';
 import { formatBRL, parseBRL } from '../lib/viewUtils';
 import { todayBR } from '../lib/dates';
@@ -35,20 +35,7 @@ const OUTRO = '__outro__';
 
 const ETAPAS = ['Triagem', 'Entrevista', 'Teste', 'Aprovado', 'Reprovado'] as const;
 
-const VAGA_STATUS_CLS: Record<string, string> = {
-  'Aguardando Matriz': 'bg-yellow-400/10 text-yellow-400 border-yellow-400/20',
-  'Aprovada':          'bg-accent/10 text-accent border-accent/20',
-  'Negada':            'bg-red-500/10 text-red-500 border-red-500/20',
-  'Preenchida':        'bg-green-500/10 text-green-400 border-green-500/20',
-  'Cancelada':         'bg-gray-500/10 text-gray-500 border-gray-500/20',
-};
 
-const CONVITE_CLS: Record<string, string> = {
-  'Pendente':  'bg-yellow-400/10 text-yellow-400 border-yellow-400/20',
-  'Aceito':    'bg-green-500/10 text-green-400 border-green-500/20',
-  'Recusado':  'bg-red-500/10 text-red-500 border-red-500/20',
-  'Cancelado': 'bg-gray-500/10 text-gray-500 border-gray-500/20',
-};
 
 const ETAPA_CLS: Record<string, string> = {
   'Triagem':    'bg-gray-500/10 text-gray-400',
@@ -880,7 +867,7 @@ const RecrutamentoInner = ({ showToast, profile, filial }: {
                     <Badge label={`acesso ${v.role_alvo}`}
                       cls="bg-yellow-400/10 text-yellow-400 border-yellow-400/20" />
                   )}
-                  <Badge label={v.status} cls={VAGA_STATUS_CLS[v.status]} />
+                  <Badge label={v.status} cls={corDoStatus(v.status)} />
                 </div>
               </button>
 
@@ -940,7 +927,7 @@ const RecrutamentoInner = ({ showToast, profile, filial }: {
                                       <span className="text-gray-600"> · prazo {String(c.prazo).slice(8, 10)}/{String(c.prazo).slice(5, 7)}</span>
                                     </span>
                                     <span className="flex items-center gap-2">
-                                      <Badge label={c.status} cls={CONVITE_CLS[c.status]} />
+                                      <Badge label={c.status} cls={corDoStatus(c.status)} />
                                       {c.status === 'Pendente' && (
                                         <button onClick={() => handleCancelarConvite(c)} disabled={acaoId === c.id}
                                           className="text-gray-600 hover:text-red-400 disabled:opacity-50">
@@ -1523,7 +1510,7 @@ const FilaAprovacaoMatriz = ({ secao, showToast, profile, vagas, reload }: {
                   <p className="text-sm text-gray-200 truncate">{v.quantidade}x {v.cargo} — {v.filial}</p>
                   <p className="text-[11px] text-gray-500 truncate">{v.decidido_por_nome ? `Decidido por ${v.decidido_por_nome}` : ''}</p>
                 </div>
-                <Badge label={v.status} cls={VAGA_STATUS_CLS[v.status]} />
+                <Badge label={v.status} cls={corDoStatus(v.status)} />
               </div>
             ))}
           </div>

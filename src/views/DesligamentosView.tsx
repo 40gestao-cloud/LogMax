@@ -10,7 +10,7 @@ import {
 } from 'lucide-react';
 import { useFetchData } from '../hooks/useSupabaseData';
 import { supabase } from '../lib/supabase';
-import { LoadingSpinner, EmptyState, NeuButtonAccent } from '../components/ui';
+import { LoadingSpinner, EmptyState, NeuButtonAccent, corDoStatus } from '../components/ui';
 import { hasSetor } from '../lib/rbac';
 import { useConfirm } from '../contexts/ConfirmContext';
 import type { UserProfile } from '../hooks/useUserProfile';
@@ -102,8 +102,7 @@ const fmtData = (s?: string | null) => {
   return `${d}/${m}/${y}`;
 };
 
-const statusCls = (s: string) =>
-  s === 'Paga' ? 'text-green-400' : s === 'Processada' ? 'text-blue-400' : 'text-yellow-400';
+const statusCls = (s: string) => `${corDoStatus(s)} px-2 py-0.5 rounded`;
 
 const EMPTY = {
   funcionario_id: '',

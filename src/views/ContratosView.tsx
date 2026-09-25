@@ -22,7 +22,7 @@ import {
 import { supabase } from '../lib/supabase';
 import { formatDataHoraBR, todayBR } from '../lib/dates';
 import { formatBRL, parseBRL, handleMoneyKeyDown } from '../lib/viewUtils';
-import { LoadingSpinner, EmptyState, NeuButtonAccent } from '../components/ui';
+import { LoadingSpinner, EmptyState, NeuButtonAccent, corDoStatus } from '../components/ui';
 import { useConfirm } from '../contexts/ConfirmContext';
 import { usePrompt } from '../contexts/PromptContext';
 import { useFilial } from '../contexts/FilialContext';
@@ -70,20 +70,12 @@ function pathSeguro(uid: string, nome: string): string {
 
 const dataBR = (iso: string | null) => (iso ? iso.split('-').reverse().join('/') : '');
 
-const STATUS_COR: Record<StatusContrato, string> = {
-  rascunho:   'bg-gray-500/15 text-gray-400 border-gray-500/30',
-  aguardando: 'bg-amber-400/15 text-amber-300 border-amber-400/30',
-  vigente:    'bg-emerald-400/15 text-emerald-300 border-emerald-400/30',
-  recusado:   'bg-red-400/15 text-red-300 border-red-400/30',
-  encerrado:  'bg-gray-500/15 text-gray-300 border-gray-500/30',
-  rescindido: 'bg-red-400/15 text-red-300 border-red-400/30',
-};
 
 const StatusPill = ({ c, hoje }: { c: Contrato; hoje: string }) => {
   const vencido = c.status === 'vigente' && venceu(c, hoje);
   return (
     <span className={`text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full border ${
-      vencido ? 'bg-red-400/15 text-red-300 border-red-400/30' : STATUS_COR[c.status]
+      vencido ? corDoStatus('Vencido') : corDoStatus(c.status)
     }`}>
       {vencido ? 'Vigência encerrada' : STATUS_LABEL[c.status]}
     </span>

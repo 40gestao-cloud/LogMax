@@ -6,21 +6,14 @@ import { MenuMais, ItemMenu } from '../components/MenuMais';
 import { useFetchData } from '../hooks/useSupabaseData';
 import { supabase } from '../lib/supabase';
 import { setorLabel } from '../lib/setores';
-import { LoadingSpinner, EmptyState, NeuButtonAccent, CardContador, type TomContador } from '../components/ui';
+import { LoadingSpinner, EmptyState, NeuButtonAccent, CardContador, type TomContador, corDoStatus } from '../components/ui';
 import { useConfirm } from '../contexts/ConfirmContext';
 import { GOLD, GOLD_DARK, BLACK } from '../lib/pdfPalette';
 
-const statusCls = (s: string) => {
-  if (s === 'Em Produção') return 'meta-status meta-status--producao';
-  if (s === 'Rascunho')    return 'meta-status meta-status--rascunho';
-  if (s === 'Pausada')     return 'meta-status meta-status--pausada';
-  if (s === 'Encerrada')   return 'meta-status meta-status--encerrada';
-  return 'meta-status meta-status--rascunho';
-};
+const CHIP_META = 'inline-block px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-widest whitespace-nowrap';
+const statusCls = (s: string) => `${CHIP_META} ${corDoStatus(s)}`;
 
-const metaResultCls   = (m: any) => m.pool_distribuido
-  ? 'meta-status meta-status--alcancada'
-  : 'meta-status meta-status--nao-alcancada';
+const metaResultCls   = (m: any) => `${CHIP_META} ${corDoStatus(m.pool_distribuido ? 'Concluído' : 'Negado')}`;
 const metaResultLabel = (m: any) => m.pool_distribuido ? '✓ Alcançada' : '✗ Não alcançada';
 
 const SETORES = ['vendas', 'logistica', 'financeiro', 'rh', 'marketing', 'ti', 'all'] as const;

@@ -6,7 +6,7 @@ import { useFilial } from '../contexts/FilialContext';
 import { useFetchData, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
 import { ehVendavel } from '../lib/tipoProduto';
 import { supabase } from '../lib/supabase';
-import { LoadingSpinner, EmptyState, NeuButtonAccent, CardContador, type TomContador } from '../components/ui';
+import { LoadingSpinner, EmptyState, NeuButtonAccent, CardContador, type TomContador, corDoStatus } from '../components/ui';
 import { useConfirm } from '../contexts/ConfirmContext';
 import { usePrompt } from '../contexts/PromptContext';
 import { groupCadastrosParaSelect } from '../lib/cadastrosSelect';
@@ -17,12 +17,6 @@ import { formatBRL, parseBRL } from '../lib/viewUtils';
 // (migração 293). Se o clique do comprador já fechasse a venda, a filial
 // viraria espectadora de um sistema que vende sozinho.
 
-const STATUS_CLS: Record<string, string> = {
-  'Novo':           'bg-yellow-400/10 text-yellow-400 border-yellow-400/20',
-  'Em Atendimento': 'bg-blue-500/10   text-blue-400   border-blue-500/20',
-  'Confirmado':     'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
-  'Cancelado':      'bg-red-500/10    text-red-400    border-red-500/20',
-};
 
 // Formas que `criar_venda_pdv` conhece. A preferência declarada na loja é só
 // um palpite do comprador — quem fecha escolhe a real.
@@ -565,7 +559,7 @@ const PedidosOnlineInner = ({ showToast, profile, filial }: { showToast: any; pr
 
                       <span className="font-mono text-sm font-bold text-accent tracking-wider">{p.codigo}</span>
 
-                      <span className={`inline-flex text-[10px] font-bold px-2 py-0.5 rounded-full border ${STATUS_CLS[p.status] ?? STATUS_CLS['Novo']}`}>
+                      <span className={`inline-flex text-[10px] font-bold px-2 py-0.5 rounded-full border ${corDoStatus(p.status)}`}>
                         {p.status}
                       </span>
 

@@ -7,19 +7,14 @@ import { Plus, BookOpen, X, Edit2, Trash2, Users, Search, Check } from 'lucide-r
 import { useFetchData, dbInsert, dbUpdate, dbDelete, dbSetStatus } from '../hooks/useSupabaseData';
 import { supabase } from '../lib/supabase';
 import { notificarSetor } from '../lib/notificar';
-import { LoadingSpinner, EmptyState, NeuButtonAccent, CardContador, type TomContador } from '../components/ui';
+import { LoadingSpinner, EmptyState, NeuButtonAccent, CardContador, type TomContador, corDoStatus } from '../components/ui';
 import { TreinamentoInscricoesModal } from '../components/TreinamentoInscricoesModal';
 import { useConfirm } from '../contexts/ConfirmContext';
 import { fmtInstrutores } from '../lib/viewUtils';
 
 type Funcionario = { id: string; nome: string; cargo?: string | null; status?: string | null };
 
-const statusCls = (s: string) => {
-  if (s === 'Concluído') return 'bg-green-900/30 text-green-400';
-  if (s === 'Em Andamento') return 'bg-blue-900/30 text-blue-400';
-  if (s === 'Cancelado') return 'bg-red-950/50 text-red-500';
-  return 'bg-yellow-900/30 text-yellow-400';
-};
+const statusCls = (s: string) => corDoStatus(s);
 
 const statusNext = (s: string) =>
   s === 'Agendado' ? 'Em Andamento' : s === 'Em Andamento' ? 'Concluído' : s;

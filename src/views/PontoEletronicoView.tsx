@@ -6,7 +6,7 @@ import { Clock, Trash2, ClipboardList, ListChecks, FileDown } from 'lucide-react
 import { FrequenciaTrabalhoView } from './FrequenciaTrabalhoView';
 import { FrequenciaRelatorioTab } from './FrequenciaRelatorioTab';
 import { useFetchData, dbDelete } from '../hooks/useSupabaseData';
-import { LoadingSpinner, EmptyState, FilialBadge, CardContador, type TomContador } from '../components/ui';
+import { LoadingSpinner, EmptyState, FilialBadge, CardContador, type TomContador, corDoStatus } from '../components/ui';
 import type { UserProfile } from '../hooks/useUserProfile';
 import { hasSetor, isConselheiro } from '../lib/rbac';
 import { todayBR } from '../lib/dates';
@@ -29,12 +29,7 @@ const fimDoMes = (mes: string) => {
   return `${mes}-${String(new Date(Date.UTC(y, m, 0)).getUTCDate()).padStart(2, '0')}`;
 };
 
-const statusCls = (s: string) => {
-  if (s === 'Falta')      return `${PILL} bg-red-500/12 border-red-500/30 text-red-400`;
-  if (s === 'Hora Extra') return `${PILL} bg-blue-500/12 border-blue-500/30 text-blue-400`;
-  if (s === 'Justificado') return `${PILL} bg-yellow-500/12 border-yellow-500/30 text-yellow-400`;
-  return `${PILL} bg-emerald-500/12 border-emerald-500/30 text-emerald-400`;
-};
+const statusCls = (s: string) => `${PILL} ${corDoStatus(s || 'Presente')}`;
 
 
 // ─── View principal ───────────────────────────────────────────────────────────

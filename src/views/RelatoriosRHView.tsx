@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Search, FileDown, Sheet } from 'lucide-react';
 import { useFetchData } from '../hooks/useSupabaseData';
 import { useFilial } from '../contexts/FilialContext';
-import { LoadingSpinner, EmptyState, ExportButton, StatusBadge } from '../components/ui';
+import { LoadingSpinner, EmptyState, ExportButton, StatusBadge, corDoStatus } from '../components/ui';
 import { exportToPDF, exportToExcel, fmtInstrutores } from '../lib/viewUtils';
 
 const TABS = ['Funcionários', 'Folha de Pagamento', 'Férias', 'Treinamentos'];
@@ -13,15 +13,7 @@ const TABS = ['Funcionários', 'Folha de Pagamento', 'Férias', 'Treinamentos'];
 // casava — férias aprovada e negada saíam as duas em cinza neutro, que é
 // justamente a informação que a coluna existe pra dar. 'Processada' e
 // 'Em Andamento' ganham o azul que já usam nas telas de origem.
-const statusCls = (s: string) => {
-  if (!s) return 'text-gray-500';
-  const lower = s.toLowerCase();
-  if (lower.includes('ativo') || lower.includes('paga') || lower.includes('aprovad') || lower.includes('concluí')) return 'bg-green-900/30 text-green-400';
-  if (lower.includes('processada') || lower.includes('em andamento')) return 'bg-blue-900/30 text-blue-400';
-  if (lower.includes('pendente') || lower.includes('solicitada') || lower.includes('agendado')) return 'bg-yellow-900/30 text-yellow-400';
-  if (lower.includes('negad') || lower.includes('cancelado') || lower.includes('desligado')) return 'bg-red-950/50 text-red-500';
-  return 'bg-gray-700/40 text-gray-400';
-};
+const statusCls = (s: string) => corDoStatus(s);
 
 const FILIAIS_REL = ['SuperMax', 'MaxLook', 'TechMax'] as const;
 

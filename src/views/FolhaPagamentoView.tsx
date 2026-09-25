@@ -7,7 +7,7 @@ import { Plus, CheckCircle, Clock, DollarSign, X, Edit2, Trash2, Lock, Calculato
 import { HistoricoOperacoes } from '../components/HistoricoOperacoes';
 import { MenuMais, ItemMenu } from '../components/MenuMais';
 import { useFetchData, dbInsert, dbUpdate, dbDelete, dbSetStatus } from '../hooks/useSupabaseData';
-import { LoadingSpinner, EmptyState, NeuButtonAccent, CardContador, type TomContador } from '../components/ui';
+import { LoadingSpinner, EmptyState, NeuButtonAccent, CardContador, type TomContador, corDoStatus } from '../components/ui';
 import { supabase } from '../lib/supabase';
 import { hasSetor } from '../lib/rbac';
 import { formatBRL, parseBRL } from '../lib/viewUtils';
@@ -65,8 +65,7 @@ type Rubrica = {
   ordem: number;
 };
 
-const statusCls = (s: string) =>
-  s === 'Paga' ? 'text-green-400' : s === 'Processada' ? 'text-blue-400' : 'text-yellow-400';
+const statusCls = (s: string) => corDoStatus(s);
 
 // Segregação de funções (migr. 282): o RH fecha a folha, o Financeiro paga.
 //

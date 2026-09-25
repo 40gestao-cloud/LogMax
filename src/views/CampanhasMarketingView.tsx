@@ -6,23 +6,13 @@ import { useFilial } from '../contexts/FilialContext';
 import { motion, AnimatePresence } from 'motion/react';
 import { Plus, X, Trash2, Edit3, TrendingUp, TrendingDown, Target, Calendar, DollarSign, Package, Send, CheckCircle, XCircle, Search } from 'lucide-react';
 import { useFetchData, dbInsert, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
-import { LoadingSpinner, EmptyState, NeuButtonAccent, CardContador, type TomContador } from '../components/ui';
+import { LoadingSpinner, EmptyState, NeuButtonAccent, CardContador, type TomContador, corDoStatus } from '../components/ui';
 import { formatBRL, parseBRL, handleMoneyKeyDown } from '../lib/viewUtils';
 import { hasSetor } from '../lib/rbac';
 import { supabase } from '../lib/supabase';
 import { useConfirm } from '../contexts/ConfirmContext';
 import { usePrompt } from '../contexts/PromptContext';
 
-const STATUS_STYLE: Record<string, string> = {
-  'Rascunho':                 'bg-gray-500/10  text-gray-400  border-gray-500/20',
-  'Aguardando Financeiro':    'bg-yellow-500/10 text-yellow-400 border-yellow-500/20',
-  'Aprovado':                 'bg-green-500/10 text-green-400 border-green-500/20',
-  'Parcialmente Aprovado':    'bg-blue-400/10  text-blue-300  border-blue-400/20',
-  'Reprovado':                'bg-red-500/10   text-red-400   border-red-500/20',
-  'Ativa':                    'bg-accent/10    text-accent    border-accent/20',
-  'Concluída':                'bg-blue-500/10  text-blue-400  border-blue-500/20',
-  'Cancelada':                'bg-red-500/10   text-red-500   border-red-500/20',
-};
 
 // 'Ativa' não é mais escolha livre no formulário — só chega lá vindo de
 // 'Aprovado'/'Parcialmente Aprovado' (aprovação do Financeiro via "Enviar
@@ -215,7 +205,7 @@ function ModalProdutos({ campanha, onClose, showToast, profile }: {
                     <p className="text-sm font-semibold text-gray-200 truncate">{prod.nome}</p>
                     <p className="text-[10px] text-gray-500">{prod.filial ?? 'Sem loja'} · {prod.codigo ?? '—'}</p>
                     {adicionado && itemSalvo?.status && (
-                      <span className={`inline-flex text-[10px] px-1.5 py-0.5 rounded-full border mt-0.5 ${STATUS_STYLE[itemSalvo.status] ?? ''}`}>
+                      <span className={`inline-flex text-[10px] px-1.5 py-0.5 rounded-full border mt-0.5 ${corDoStatus(itemSalvo.status)}`}>
                         {itemSalvo.status}
                         {itemSalvo.motivo_reprovacao ? ` — ${itemSalvo.motivo_reprovacao}` : ''}
                       </span>
@@ -555,7 +545,7 @@ const CampanhasMarketingViewInner = ({ showToast, profile, filial }: { showToast
                             )}
                           </td>
                           <td className="py-3 px-4 text-center">
-                            <span className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-1 rounded-full border ${STATUS_STYLE[c.status] ?? 'bg-gray-500/10 text-gray-400 border-gray-500/20'}`}>
+                            <span className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-1 rounded-full border ${corDoStatus(c.status)}`}>
                               {c.status}
                             </span>
                           </td>

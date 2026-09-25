@@ -7,7 +7,7 @@ import { useFetchData, dbInsert, dbDelete } from '../hooks/useSupabaseData';
 import { supabase } from '../lib/supabase';
 import { notificarSetor } from '../lib/notificar';
 import { freshToken, lerJsonDaApi } from '../lib/authFetch';
-import { LoadingSpinner, EmptyState, NeuButtonAccent, ExportButton, CardContador, type TomContador } from '../components/ui';
+import { LoadingSpinner, EmptyState, NeuButtonAccent, ExportButton, CardContador, type TomContador, corDoStatus } from '../components/ui';
 import { exportToPDF, exportToExcel, formatBRL, parseBRL, handleMoneyKeyDown } from '../lib/viewUtils';
 import { ehPrestado } from '../lib/naturezaServico';
 import {
@@ -826,7 +826,7 @@ const PromocoesMarketingViewInner = ({ showToast, profile, filial }: { showToast
                           {periodoArte(p.data_inicio, p.data_fim) ?? '—'}
                         </td>
                         <td className="py-3 px-4 text-center">
-                          <span className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-1 rounded-full border whitespace-nowrap ${style?.badge ?? ''}`}>
+                          <span className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-1 rounded-full border whitespace-nowrap ${corDoStatus(p.status)}`}>
                             {style?.icon}{p.status}
                           </span>
                         </td>

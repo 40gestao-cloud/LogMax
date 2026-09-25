@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 import { useFetchData, dbInsert, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
 import { supabase } from '../lib/supabase';
-import { LoadingSpinner, EmptyState, NeuButtonAccent, CardContador, type TomContador } from '../components/ui';
+import { LoadingSpinner, EmptyState, NeuButtonAccent, CardContador, type TomContador, corDoStatus } from '../components/ui';
 import type { UserProfile } from '../hooks/useUserProfile';
 import { hasSetor, isConselheiro } from '../lib/rbac';
 import { CRITERIOS, CategoriaCriterio } from '../lib/avaliacaoCriterios';
@@ -32,12 +32,6 @@ type DesenvolvimentoIA = {
   created_at: string;
 };
 
-const STATUS_STYLE: Record<string, string> = {
-  'Agendado':     'bg-blue-500/15 text-blue-400 border border-blue-500/30',
-  'Em Andamento': 'bg-yellow-400/15 text-yellow-400 border border-yellow-400/30',
-  'Concluído':    'bg-accent/15 text-accent border border-accent/30',
-  'Cancelado':    'bg-red-500/15 text-red-500 border border-red-500/30',
-};
 
 const STATUS_ORDER: Record<string, number> = {
   'Em Andamento': 0,
@@ -308,7 +302,7 @@ export const DesenvolvimentoIAView = ({ showToast, profile }: Props) => {
                   <div className="flex flex-col sm:flex-row sm:items-start gap-3">
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap mb-1">
-                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${STATUS_STYLE[s.status] ?? ''}`}>{s.status}</span>
+                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${corDoStatus(s.status)}`}>{s.status}</span>
                         <span className="text-[10px] text-gray-600">• {s.ferramenta}</span>
                       </div>
                       <p className="text-sm font-bold text-gray-200">{s.nome}</p>

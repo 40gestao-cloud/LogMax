@@ -5,18 +5,12 @@ import { useFilial } from '../contexts/FilialContext';
 import { motion, AnimatePresence } from 'motion/react';
 import { Plus, Check, X as XIcon, Palmtree, Edit2, Trash2 } from 'lucide-react';
 import { useFetchData, dbInsert, dbUpdate, dbDelete, dbSetStatus } from '../hooks/useSupabaseData';
-import { LoadingSpinner, EmptyState, NeuButtonAccent, CardContador } from '../components/ui';
+import { LoadingSpinner, EmptyState, NeuButtonAccent, CardContador, corDoStatus } from '../components/ui';
 import { useConfirm } from '../contexts/ConfirmContext';
 import type { UserProfile } from '../hooks/useUserProfile';
 import { isConselheiro } from '../lib/rbac';
 
-const statusCls = (s: string) => {
-  if (s === 'Aprovado') return 'bg-green-900/30 text-green-400';
-  if (s === 'Negado') return 'bg-red-950/50 text-red-500';
-  if (s === 'Em Andamento') return 'bg-blue-900/30 text-blue-400';
-  if (s === 'Concluída') return 'bg-gray-700/40 text-gray-400';
-  return 'bg-yellow-900/30 text-yellow-400'; // Solicitada
-};
+const statusCls = (s: string) => corDoStatus(s);
 
 const EMPTY: any = { funcionario_id: '', data_inicio: '', data_fim: '', dias: '30', status: 'Solicitada' };
 

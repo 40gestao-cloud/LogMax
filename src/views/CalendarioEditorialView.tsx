@@ -4,7 +4,7 @@ import { useFilial } from '../contexts/FilialContext';
 import { motion, AnimatePresence } from 'motion/react';
 import { Plus, X, Trash2, Edit3, Calendar, ChevronRight, ExternalLink, Filter, Sparkles, Loader2, Copy, CheckCircle2 } from 'lucide-react';
 import { useFetchData, dbInsert, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
-import { LoadingSpinner, EmptyState, NeuButtonAccent, CardContador, type TomContador } from '../components/ui';
+import { LoadingSpinner, EmptyState, NeuButtonAccent, CardContador, type TomContador, corDoStatus } from '../components/ui';
 import { formatDataHoraBR } from '../lib/dates';
 import { hasSetor } from '../lib/rbac';
 import { freshToken, lerJsonDaApi } from '../lib/authFetch';
@@ -25,14 +25,6 @@ const CANAIS = [
 const STATUS_FLOW = ['Rascunho', 'Agendado', 'Publicado', 'Cancelado'] as const;
 type Status = typeof STATUS_FLOW[number];
 
-const STATUS_STYLE: Record<Status, string> = {
-  'Rascunho':   'bg-gray-500/10  text-gray-400  border-gray-500/20',
-  'Agendado':   'bg-yellow-400/10 text-yellow-400 border-yellow-400/20',
-  'Publicado':  'bg-accent/10    text-accent    border-accent/20',
-  'Cancelada':  'bg-red-500/10   text-red-500   border-red-500/20',
-} as any;
-STATUS_STYLE['Cancelado'] = 'bg-red-500/10 text-red-500 border-red-500/20';
-
 const CANAL_BADGE: Record<string, string> = {
   'Instagram Feed':    'bg-pink-500/10 text-pink-400 border-pink-500/20',
   'Instagram Reels':   'bg-pink-500/10 text-pink-400 border-pink-500/20',
@@ -44,6 +36,7 @@ const CANAL_BADGE: Record<string, string> = {
   'E-mail Marketing':  'bg-orange-500/10 text-orange-400 border-orange-500/20',
   'Outros':            'bg-gray-500/10 text-gray-400 border-gray-500/20',
 };
+
 
 type Post = {
   id: string;
@@ -450,7 +443,7 @@ const CalendarioEditorialViewInner = ({ showToast, profile, filial }: any) => {
                       <span className={`inline-flex text-[10px] font-bold px-2 py-0.5 rounded-full border ${CANAL_BADGE[p.canal] ?? CANAL_BADGE['Outros']}`}>
                         {p.canal}
                       </span>
-                      <span className={`inline-flex text-[10px] font-bold px-2 py-0.5 rounded-full border ${STATUS_STYLE[status]}`}>
+                      <span className={`inline-flex text-[10px] font-bold px-2 py-0.5 rounded-full border ${corDoStatus(status)}`}>
                         {status}
                       </span>
                     </div>

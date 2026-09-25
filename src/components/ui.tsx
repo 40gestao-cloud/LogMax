@@ -4,45 +4,54 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Package, Landmark } from 'lucide-react';
 import { diasDesde } from '../lib/dates';
 
-// `solido`: cor cheia e sem transparência para as três saídas de uma decisão
-// (aprovado verde, negado vermelho, em correção laranja) — nas telas em que a
-// lista é justamente essas decisões, como Cotações. O resto segue a régua comum.
-const STATUS_SOLIDO: Record<string, string> = {
-  'Aprovado':    'bg-green-600 text-white font-bold',
-  'Negado':      'bg-red-600 text-white font-bold',
-  'Cancelado':   'bg-red-600 text-white font-bold',
-  'Em correção': 'bg-orange-600 text-white font-bold',
+// Situação em cor cheia, sem transparência, com uma régua de SIGNIFICADO
+// única no app (Pedidos, Cotações, Requisições, Contas…): verde = deu certo,
+// azul = andando, amarelo = esperando alguém decidir, laranja = voltou para
+// ajuste ou está pela metade, vermelho = parou/deu errado, cinza = fora de
+// cena. O translúcido lia apagado e "Em Entrega" dourado se confundia com
+// "Aprovado".
+const VERDE = 'bg-green-600 text-white';
+const AZUL = 'bg-blue-600 text-white';
+const AMARELO = 'bg-yellow-400 text-black';
+const LARANJA = 'bg-orange-600 text-white';
+const VERMELHO = 'bg-red-600 text-white';
+const ROXO = 'bg-purple-600 text-white';
+const CINZA = 'bg-zinc-600 text-white';
+const COR_STATUS: Record<string, string> = {
+  // deu certo
+  'Aprovado': VERDE, 'Aprovada': VERDE, 'Recebido': VERDE, 'Pago': VERDE, 'Paga': VERDE, 'Entregue': VERDE,
+  'Autorizado': VERDE, 'Vinculada': VERDE, 'Atendida': VERDE, 'Concluído': VERDE, 'Concluída': VERDE,
+  'Conciliado': VERDE, 'Despachado': VERDE, 'Expedido': VERDE, 'Ativo': VERDE, 'Ativa': VERDE,
+  'Confirmado': VERDE, 'Processada': VERDE, 'Processado': VERDE, 'Homologado': VERDE, 'Publicado': VERDE,
+  'Presente': VERDE, 'Preenchida': VERDE, 'Convertido em Pedido': VERDE, 'Aprovado Cliente': VERDE,
+  'Aprovado Financeiro': VERDE, 'Aceito': VERDE, 'vigente': VERDE,
+  // andando
+  'Em Entrega': AZUL, 'Em Andamento': AZUL, 'Em Cotação': AZUL, 'Em Faturamento': AZUL, 'Emitida': AZUL,
+  'Aberto': AZUL, 'Em Produção': AZUL, 'Agendado': AZUL, 'Enviado ao Cliente': AZUL, 'Em Análise': AZUL,
+  'Novo': AZUL, 'Hora Extra': AZUL, 'Em Atendimento': AZUL,
+  // esperando decisão
+  'Pendente': AMARELO, 'Aguardando Financeiro': AMARELO, 'Aguardando Matriz': AMARELO,
+  'Aguardando Aprovação': AMARELO, 'Aguardando Confirmação': AMARELO, 'Solicitada': AMARELO, 'Próximo': AMARELO,
+  'Justificado': AMARELO, 'Justificada': AMARELO, 'aguardando': AMARELO,
+  // voltou para ajuste / pela metade
+  'Em correção': LARANJA, 'Parcial': LARANJA, 'Parcialmente Aprovado': LARANJA, 'Presente com Atraso': LARANJA, 'Pausada': LARANJA, 'Suspenso': LARANJA,
+  // parou / deu errado
+  'Cancelado': VERMELHO, 'Cancelada': VERMELHO, 'Negado': VERMELHO, 'Negada': VERMELHO, 'Reprovado': VERMELHO,
+  'Divergente': VERMELHO, 'Atrasado': VERMELHO, 'Vencido': VERMELHO, 'Erro': VERMELHO, 'Falta': VERMELHO,
+  'Desligado': VERMELHO, 'Expirada': VERMELHO, 'Não Vinculada': VERMELHO, 'Recusado': VERMELHO,
+  'recusado': VERMELHO, 'rescindido': VERMELHO,
+  // afastado é situação própria
+  'Afastado': ROXO,
 };
 
-export const StatusBadge = ({ status, solido = false }: { status: string; solido?: boolean }) => {
-  let colorClass = 'text-gray-400';
-  let style: React.CSSProperties = { background: 'var(--color-badge-neutral-bg)' };
+// `solido` ficou sem efeito (tudo é cheio agora); mantido para não quebrar
+// quem ainda passa a prop.
+/** Só a cor (fundo cheio + texto), para quem desenha o próprio chip. */
+export const corDoStatus = (status: string | null | undefined): string =>
+  `${COR_STATUS[status ?? ''] ?? CINZA} border-transparent`;
 
-  if (['Aprovado','Atendida','Vinculada','Entregue','Autorizado','Despachado','Recebido','Pago'].includes(status)) {
-    colorClass = 'bg-accent/20 text-accent font-bold shadow-[0_0_8px_var(--color-accent)]';
-    style = {};
-  } else if (status === 'Em correção') {
-    // Devolvida (migr. 467): a proposta está viva, só voltou para quem a
-    // cadastrou — não é recusa. Laranja: no âmbar ela se confundia com o
-    // dourado de Aprovado/Pendente na mesma lista.
-    colorClass = 'bg-orange-500/15 text-orange-400 font-bold';
-    style = {};
-  } else if (status === 'Parcial') {
-    // Meio do caminho (migr. 422): recebeu parte e ainda deve. Âmbar próprio
-    // para não se confundir nem com "em aberto" nem com "quitado".
-    colorClass = 'bg-amber-400/15 text-amber-400 font-bold';
-    style = {};
-  } else if (['Em Cotação','Aguardando Financeiro','Em Entrega','Em Faturamento','Emitida','Em Andamento','Aberto','Pendente'].includes(status)) {
-    colorClass = 'bg-accent/10 text-accent';
-    style = {};
-  } else if (['Cancelado','Negado','Divergente','Atrasado'].includes(status)) {
-    colorClass = 'bg-red-500/15 text-red-500';
-    style = {};
-  }
-  if (solido && STATUS_SOLIDO[status]) {
-    colorClass = STATUS_SOLIDO[status];
-    style = {};
-  }
+export const StatusBadge = ({ status }: { status: string; solido?: boolean }) => {
+  const colorClass = COR_STATUS[status] ?? CINZA;
 
   // "Atendida" é feminino no meio de uma régua masculina (Aprovado/Negado/
   // Aberto); o valor gravado no banco continua 'Atendida' — trocar exigiria
@@ -52,8 +61,7 @@ export const StatusBadge = ({ status, solido = false }: { status: string; solido
 
   return (
     <span
-      className={`px-2.5 py-1 rounded-md text-[10px] uppercase tracking-widest ${colorClass}`}
-      style={style}
+      className={`inline-block px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-widest whitespace-nowrap ${colorClass}`}
     >
       {rotulo}
     </span>
