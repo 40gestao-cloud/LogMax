@@ -1,8 +1,8 @@
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   Plus, Save, Edit2, Trash2, ChevronRight, X, Search,
-  Eye, EyeOff, Layers, FolderTree, Percent,
+  Eye, EyeOff, FolderTree, Percent,
 } from 'lucide-react';
 import { useFetchData, dbInsert, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
 import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent, FilialBadge } from '../components/ui';
@@ -165,13 +165,16 @@ async function anexarImagem(
 }
 
 // ── Form inline ───────────────────────────────────────────────────────────────
-function InlineForm({ initial, onSave, onCancel, saving, comMargem, nomesEmUso, titulo }: {
+function InlineForm({ initial, onSave, onCancel, saving, comMargem, comSubcategorias, nomesEmUso, titulo }: {
   initial: FormData;
-  /** Grava o cadastro e, só depois, anexa `novaImagem` — ver handleSubmit. */
-  onSave: (v: FormData, novaImagem: File | null) => Promise<void>;
+  /** Grava o cadastro e, só depois, anexa `novaImagem` — ver handleSubmit.
+   *  `subcategorias`: os nomes digitados no campo de etiquetas (categoria nova). */
+  onSave: (v: FormData, novaImagem: File | null, subcategorias: string[]) => Promise<void>;
   onCancel: () => void; saving: boolean;
   /** Só categoria tem markup — subcategoria herda o da mãe. */
   comMargem?: boolean;
+  /** Categoria nova já nasce com as filhas: o campo de etiquetas aparece. */
+  comSubcategorias?: boolean;
   /** Nomes já cadastrados no mesmo nível, para barrar duplicata antes do save. */
   nomesEmUso: string[];
   titulo: string;
@@ -179,6 +182,17 @@ function InlineForm({ initial, onSave, onCancel, saving, comMargem, nomesEmUso, 
   const [f, setF]           = useState<FormData>(initial);
   const [pendingFile, setPendingFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl]   = useState<string>(initial.imagem_url);
+  // Subcategorias digitadas na criação (24/09). Antes a categoria nascia
+  // sozinha e as filhas moravam num painel à parte, que só abria clicando na
+  // categoria — o aluno salvava "Mercearia" e não via onde pôr "Massas".
+  const [subs, setSubs] = useState<string[]>([]);
+  const [subTexto, setSubTexto] = useState('');
+  const addSub = (texto: string) => {
+    const nome = texto.trim();
+    if (!nome) return;
+    if (!subs.some(x => normalizar(x) === normalizar(nome))) setSubs(p => [...p, nome]);
+    setSubTexto('');
+  };
 
   const duplicado = !!f.nome.trim() && nomesEmUso.includes(normalizar(f.nome));
   const podeSalvar = !!f.nome.trim() && !duplicado && !saving;
@@ -213,7 +227,11 @@ function InlineForm({ initial, onSave, onCancel, saving, comMargem, nomesEmUso, 
   const handleSubmit = () => {
     if (!podeSalvar) return;
     const urlPersistida = pendingFile ? initial.imagem_url : f.imagem_url;
-    void onSave({ ...f, imagem_url: urlPersistida }, pendingFile);
+    // O que ficou digitado no campo e não virou etiqueta também entra — quem
+    // escreve "Enlatados" e clica em Salvar espera que ela exista.
+    const pendente = subTexto.trim();
+    const todas = pendente && !subs.some(x => normalizar(x) === normalizar(pendente)) ? [...subs, pendente] : subs;
+    void onSave({ ...f, imagem_url: urlPersistida }, pendingFile, todas);
   };
 
   return (
@@ -226,6 +244,8 @@ function InlineForm({ initial, onSave, onCancel, saving, comMargem, nomesEmUso, 
         // botão E o save junto, pelo bubbling — quem navega por teclado salvava
         // a categoria ao escolher o ícone.
         const alvo = e.target as HTMLElement;
+        // No campo de subcategorias o Enter vira etiqueta, não salva.
+        if (alvo.dataset.etiqueta) return;
         const ehCampoTexto = alvo.tagName === 'INPUT'
           && !['color', 'file', 'checkbox', 'radio'].includes((alvo as HTMLInputElement).type);
         if (e.key === 'Enter' && !e.shiftKey && ehCampoTexto) { e.preventDefault(); void handleSubmit(); }
@@ -271,6 +291,35 @@ function InlineForm({ initial, onSave, onCancel, saving, comMargem, nomesEmUso, 
             <span className="text-[10px] text-gray-500 leading-relaxed">
               Markup padrão da linha. O cadastro de produto usa isto para sugerir o preço de venda
               a partir do custo — deixe vazio para preço livre.
+            </span>
+          </FormField>
+        )}
+
+        {comSubcategorias && (
+          <FormField label="Subcategorias">
+            <div className="neu-input w-full flex flex-wrap items-center gap-1.5 !py-1.5">
+              {subs.map(nome => (
+                <span key={nome} className="inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-md"
+                  style={{ background: `${f.cor}1f`, border: `1px solid ${f.cor}55` }}>
+                  {nome}
+                  <button type="button" onClick={() => setSubs(p => p.filter(x => x !== nome))}
+                    className="text-gray-400 hover:text-gray-100" title={`Tirar "${nome}"`}>
+                    <X size={11} />
+                  </button>
+                </span>
+              ))}
+              <input data-etiqueta="1" value={subTexto}
+                onChange={e => setSubTexto(e.target.value)}
+                onKeyDown={e => {
+                  if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); addSub(subTexto); }
+                  else if (e.key === 'Backspace' && !subTexto && subs.length) setSubs(p => p.slice(0, -1));
+                }}
+                onBlur={() => addSub(subTexto)}
+                placeholder={subs.length ? 'Mais uma…' : 'Ex: Massas — Enter para adicionar'}
+                className="flex-1 min-w-[10rem] bg-transparent outline-none text-sm py-1" />
+            </div>
+            <span className="text-[10px] text-gray-500 leading-relaxed">
+              Opcional. Digite o nome e aperte Enter; dá para acrescentar outras depois, dentro da categoria.
             </span>
           </FormField>
         )}
@@ -329,14 +378,22 @@ function AcoesLinha({ ativo, onToggle, onEdit, onDelete }: {
   );
 }
 
-// ── Painel de Categorias ──────────────────────────────────────────────────────
-function PainelCategorias({
-  canEdit, selectedId, onSelect, filial, data, isLoading, error, reload, contagemSubs, showToast,
+// ── Árvore de categorias ──────────────────────────────────────────────────────
+// Uma lista só, em árvore (24/09). Antes eram dois painéis: categorias à
+// esquerda e, à direita, as subcategorias da categoria CLICADA — o painel
+// abria vazio, o aluno salvava "Mercearia" e não havia nada dizendo que o
+// passo seguinte era clicar nela para chegar às filhas. Agora a categoria
+// abre ali mesmo, com as subcategorias dentro e o campo para criar mais —
+// o desenho de árvore de Bling, Tiny e Omie.
+function ArvoreCategorias({
+  canEdit, abertas, onAlternar, onAbrir, filial, data, isLoading, error, reload,
+  subsPorCategoria, subsError, showToast,
 }: {
-  canEdit: boolean; selectedId: string | null;
-  onSelect: (id: string, nome: string) => void; filial: FilialOp | null;
+  canEdit: boolean; abertas: Set<string>;
+  onAlternar: (id: string) => void; onAbrir: (id: string) => void;
+  filial: FilialOp | null;
   data: any[]; isLoading: boolean; error: string | null; reload: () => void;
-  contagemSubs: Record<string, number>; showToast: any;
+  subsPorCategoria: Record<string, any[]>; subsError: string | null; showToast: any;
 }) {
   // Sem esta linha, `confirm` cai no `window.confirm` do navegador — a função
   // global existe, aceita string e devolve boolean, então o TypeScript aprova
@@ -349,29 +406,53 @@ function PainelCategorias({
   const [saving,   setSaving]   = useState(false);
   const [busca,    setBusca]    = useState('');
 
+  // A busca olha também as subcategorias: procurar "Massas" acha Mercearia.
   const filtradas = useMemo(() => {
     const q = normalizar(busca);
-    return q ? data.filter((c: any) => normalizar(c.nome ?? '').includes(q)) : data;
-  }, [data, busca]);
+    if (!q) return data;
+    return data.filter((c: any) => normalizar(c.nome ?? '').includes(q)
+      || (subsPorCategoria[c.id] ?? []).some((sub: any) => normalizar(sub.nome ?? '').includes(q)));
+  }, [data, busca, subsPorCategoria]);
 
   const nomesEmUso = (excetoId?: string) =>
     data.filter((c: any) => c.id !== excetoId).map((c: any) => normalizar(c.nome ?? ''));
 
-  const handleSave = async (f: FormData, novaImagem: File | null) => {
+  const handleSave = async (f: FormData, novaImagem: File | null, subcategorias: string[]) => {
     if (!filial) return;
     setSaving(true);
     const imagemAntiga = editItem?.imagem_url ?? '';
+    const editando = !!editItem;
     try {
       // String vazia vira NULL: "sem markup" é ausência de regra, não zero por
       // cento — zero faria o produto sugerir preço igual ao custo.
       const margem = f.margem_alvo.trim() === '' ? null : Number(f.margem_alvo.replace(',', '.'));
       const base = { nome: f.nome.trim(), cor: f.cor, icone: f.icone, imagem_url: f.imagem_url || null, margem_alvo: margem };
-      const salvo = editItem
+      const salvo = editando
         ? await dbUpdate<any>('categorias_produto', editItem.id, base)
         : await dbInsert<any>('categorias_produto', { ...base, filial });
       const id = salvo?.id ?? editItem?.id ?? null;
+
+      // As filhas digitadas no formulário. Uma a uma e sem abortar: se uma
+      // falhar, a categoria e as outras ficam, e o aviso diz qual faltou.
+      const falharam: string[] = [];
+      if (!editando && id) {
+        for (const nome of subcategorias) {
+          try {
+            await dbInsert<any>('subcategorias_produto', { nome, cor: f.cor, icone: f.icone, categoria_id: id });
+          } catch { falharam.push(nome); }
+        }
+      }
       reload(); setEditItem(null); setShowForm(false);
-      showToast?.(editItem ? 'Categoria atualizada.' : 'Categoria criada.', 'success');
+      // Categoria nova abre: é ali que o aluno continua (as filhas aparecem
+      // dentro dela, com o campo para criar mais).
+      if (!editando && id) onAbrir(id);
+      const criadas = subcategorias.length - falharam.length;
+      showToast?.(
+        editando ? 'Categoria atualizada.'
+          : falharam.length
+            ? `Categoria criada, mas ${falharam.length === 1 ? 'a subcategoria' : 'as subcategorias'} ${falharam.join(', ')} não ${falharam.length === 1 ? 'foi criada' : 'foram criadas'} — crie de novo dentro da categoria.`
+            : criadas > 0 ? `Categoria criada com ${criadas} subcategoria${criadas > 1 ? 's' : ''}.` : 'Categoria criada.',
+        falharam.length ? 'error' : 'success');
 
       // A partir daqui o cadastro já está no banco. Qualquer coisa que dê
       // errado com a imagem é aviso, não perda: a categoria está salva e o
@@ -385,7 +466,7 @@ function PainelCategorias({
   };
 
   const handleDelete = async (item: any) => {
-    const n = contagemSubs[item.id] ?? 0;
+    const n = (subsPorCategoria[item.id] ?? []).length;
     const aviso = n > 0 ? ` As ${n} subcategoria(s) serão removidas e` : ' Os';
     if (!await confirm(`Excluir a categoria "${item.nome}"?${aviso} produtos vinculados perderão a categoria.`)) return;
     try {
@@ -410,28 +491,29 @@ function PainelCategorias({
 
   return (
     <div className="flex flex-col gap-3">
-      <div className="flex items-center justify-between gap-2">
+      <div className="flex items-center justify-between gap-2 flex-wrap">
         <p className="text-xs font-bold text-gray-400 uppercase tracking-wider flex items-center gap-1.5">
-          <FolderTree size={13} className="text-gray-600" /> Categorias
+          <FolderTree size={13} className="text-gray-600" /> Categorias e subcategorias
         </p>
-        {canEdit && (
-          <NeuButtonAccent onClick={() => { setEditItem(null); setShowForm(true); }} className="text-xs flex items-center gap-1 px-2 py-1">
-            <Plus size={12} /> Nova
-          </NeuButtonAccent>
-        )}
-      </div>
-
-      {data.length > 6 && (
-        <div className="relative">
-          <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-600 pointer-events-none" />
-          <input value={busca} onChange={e => setBusca(e.target.value)} placeholder="Buscar categoria…"
-            className="neu-input w-full text-sm pl-8" />
+        <div className="flex items-center gap-2 flex-1 sm:flex-none justify-end">
+          {data.length > 6 && (
+            <div className="relative flex-1 sm:w-56">
+              <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-600 pointer-events-none" />
+              <input value={busca} onChange={e => setBusca(e.target.value)} placeholder="Buscar categoria ou subcategoria…"
+                className="neu-input w-full text-sm pl-8" />
+            </div>
+          )}
+          {canEdit && (
+            <NeuButtonAccent onClick={() => { setEditItem(null); setShowForm(true); }} className="text-xs flex items-center gap-1 px-2 py-1">
+              <Plus size={12} /> Nova categoria
+            </NeuButtonAccent>
+          )}
         </div>
-      )}
+      </div>
 
       <AnimatePresence>
         {showForm && !editItem && (
-          <InlineForm titulo="Nova categoria" comMargem nomesEmUso={nomesEmUso()} initial={{ ...EMPTY }}
+          <InlineForm titulo="Nova categoria" comMargem comSubcategorias nomesEmUso={nomesEmUso()} initial={{ ...EMPTY }}
             onSave={handleSave} onCancel={() => setShowForm(false)} saving={saving} />
         )}
       </AnimatePresence>
@@ -440,78 +522,83 @@ function PainelCategorias({
         <EmptyState
           error={error}
           message={busca
-            ? `Nenhuma categoria com "${busca}".`
+            ? `Nenhuma categoria ou subcategoria com "${busca}".`
             : canEdit
-              ? 'Nenhuma categoria ainda — crie a primeira em "Nova".'
+              ? 'Nenhuma categoria ainda — crie a primeira em "Nova categoria".'
               : 'Nenhuma categoria cadastrada nas unidades.'}
         />
       ) : (
         <div className="flex flex-col gap-1.5">
           {filtradas.map((cat: any) => {
-            const selecionada = selectedId === cat.id;
-            const nSubs = contagemSubs[cat.id] ?? 0;
+            const subs = subsPorCategoria[cat.id] ?? [];
+            // Buscando, a categoria que casou pela filha abre sozinha — senão a
+            // busca achava "Mercearia" e escondia justamente o "Massas".
+            const aberta = abertas.has(cat.id) || (!!busca && subs.some((sub: any) => normalizar(sub.nome ?? '').includes(normalizar(busca))));
+            if (editItem?.id === cat.id) {
+              return (
+                <InlineForm key={cat.id}
+                  titulo={`Editando "${cat.nome}"`}
+                  comMargem
+                  nomesEmUso={nomesEmUso(cat.id)}
+                  initial={{
+                    nome: cat.nome, cor: cat.cor ?? '#6b7280', icone: cat.icone ?? '📦',
+                    imagem_url: cat.imagem_url ?? '',
+                    margem_alvo: cat.margem_alvo == null ? '' : String(cat.margem_alvo),
+                  }}
+                  onSave={handleSave} onCancel={() => setEditItem(null)} saving={saving} />
+              );
+            }
             return (
-              <div key={cat.id}>
-                <AnimatePresence>
-                  {editItem?.id === cat.id && (
-                    <InlineForm
-                      titulo={`Editando "${cat.nome}"`}
-                      comMargem
-                      nomesEmUso={nomesEmUso(cat.id)}
-                      initial={{
-                        nome: cat.nome, cor: cat.cor ?? '#6b7280', icone: cat.icone ?? '📦',
-                        imagem_url: cat.imagem_url ?? '',
-                        margem_alvo: cat.margem_alvo == null ? '' : String(cat.margem_alvo),
-                      }}
-                      onSave={handleSave} onCancel={() => setEditItem(null)} saving={saving} />
+              <div key={cat.id} className={`rounded-xl overflow-hidden transition-all ${aberta
+                ? 'neu-pressed border border-accent/25' : 'neu-flat border border-white/5 hover:border-accent/20'}
+                ${!cat.ativo ? 'opacity-50' : ''}`}>
+                {/* Linha = <div> com um <button> que abre ao lado dos botões de
+                    ação: botão dentro de botão é HTML inválido. */}
+                <div className="group relative flex items-center">
+                  <span className="absolute left-0 top-0 bottom-0 w-1" style={{ background: cat.cor ?? '#6b7280' }} />
+                  <button onClick={() => onAlternar(cat.id)} aria-expanded={aberta}
+                    title={aberta ? 'Fechar' : 'Abrir as subcategorias'}
+                    className="flex-1 min-w-0 flex items-center gap-2.5 pl-4 pr-2 py-2.5 text-left">
+                    <ChevronRight size={14}
+                      className={`shrink-0 transition-transform ${aberta ? 'rotate-90 text-accent' : 'text-gray-600 group-hover:text-gray-400'}`} />
+                    <CatThumb imagem_url={cat.imagem_url} icone={cat.icone} cor={cat.cor} size={34} />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <p className="text-sm font-semibold text-gray-200 truncate">{cat.nome}</p>
+                        {!cat.ativo && (
+                          <span className="text-[9px] uppercase tracking-wider font-bold text-amber-400 bg-amber-400/10 px-1.5 py-0.5 rounded shrink-0">
+                            Inativa
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2 mt-0.5">
+                        <span className="text-[10px] text-gray-500">
+                          {subs.length === 0 ? 'sem subcategorias' : `${subs.length} subcategoria${subs.length > 1 ? 's' : ''}`}
+                        </span>
+                        {cat.margem_alvo != null && (
+                          <span className="text-[10px] text-gray-500" title="Markup-alvo: percentual acrescentado ao custo para sugerir o preço de venda.">· markup {cat.margem_alvo}%</span>
+                        )}
+                        {!filial && <FilialBadge filial={cat.filial} />}
+                      </div>
+                    </div>
+                  </button>
+                  {canEdit && (
+                    <AcoesLinha
+                      ativo={cat.ativo}
+                      onToggle={() => handleToggle(cat)}
+                      onEdit={() => { setEditItem(cat); setShowForm(false); }}
+                      onDelete={() => handleDelete(cat)} />
+                  )}
+                </div>
+                <AnimatePresence initial={false}>
+                  {aberta && (
+                    <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }}
+                      exit={{ height: 0, opacity: 0 }} className="overflow-hidden">
+                      <SubcategoriasDaCategoria categoria={cat} canEdit={canEdit} data={subs}
+                        error={subsError} reload={reload} showToast={showToast} />
+                    </motion.div>
                   )}
                 </AnimatePresence>
-                {editItem?.id !== cat.id && (
-                  /* Linha = <div> com um <button> de seleção ao lado dos botões
-                     de ação. Antes as ações moravam dentro do botão da linha:
-                     botão dentro de botão é HTML inválido e o clique era
-                     imprevisível. E as ações sumiam justamente na categoria
-                     selecionada — para editar uma, era preciso selecionar outra. */
-                  <div className={`group relative flex items-center rounded-xl overflow-hidden transition-all
-                    ${selecionada ? 'neu-pressed border border-accent/30' : 'neu-flat border border-white/5 hover:border-accent/20'}
-                    ${!cat.ativo ? 'opacity-50' : ''}`}>
-                    <span className="absolute left-0 top-0 bottom-0 w-1" style={{ background: cat.cor ?? '#6b7280' }} />
-                    <button onClick={() => onSelect(cat.id, cat.nome)}
-                      className="flex-1 min-w-0 flex items-center gap-2.5 pl-4 pr-2 py-2.5 text-left">
-                      <CatThumb imagem_url={cat.imagem_url} icone={cat.icone} cor={cat.cor} size={34} />
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-1.5 min-w-0">
-                          <p className="text-sm font-semibold text-gray-200 truncate">{cat.nome}</p>
-                          {!cat.ativo && (
-                            <span className="text-[9px] uppercase tracking-wider font-bold text-amber-400 bg-amber-400/10 px-1.5 py-0.5 rounded shrink-0">
-                              Inativa
-                            </span>
-                          )}
-                        </div>
-                        <div className="flex items-center gap-2 mt-0.5">
-                          {/* Contagem no lugar do hexadecimal: o que ajuda a
-                              decidir onde clicar é quantas subcategorias há. */}
-                          <span className="text-[10px] text-gray-500">
-                            {nSubs === 0 ? 'sem subcategorias' : `${nSubs} subcategoria${nSubs > 1 ? 's' : ''}`}
-                          </span>
-                          {cat.margem_alvo != null && (
-                            <span className="text-[10px] text-gray-500" title="Markup-alvo: percentual acrescentado ao custo para sugerir o preço de venda.">· markup {cat.margem_alvo}%</span>
-                          )}
-                          {!filial && <FilialBadge filial={cat.filial} />}
-                        </div>
-                      </div>
-                      <ChevronRight size={14}
-                        className={`shrink-0 transition-colors ${selecionada ? 'text-accent' : 'text-gray-700 group-hover:text-gray-500'}`} />
-                    </button>
-                    {canEdit && (
-                      <AcoesLinha
-                        ativo={cat.ativo}
-                        onToggle={() => handleToggle(cat)}
-                        onEdit={() => { setEditItem(cat); setShowForm(false); }}
-                        onDelete={() => handleDelete(cat)} />
-                    )}
-                  </div>
-                )}
               </div>
             );
           })}
@@ -521,30 +608,48 @@ function PainelCategorias({
   );
 }
 
-// ── Painel de Subcategorias ───────────────────────────────────────────────────
-function PainelSubcategorias({ categoria, canEdit, data, error, reload, showToast }: {
+// ── Subcategorias, dentro da categoria aberta ─────────────────────────────────
+function SubcategoriasDaCategoria({ categoria, canEdit, data, error, reload, showToast }: {
   categoria: any; canEdit: boolean; data: any[]; error: string | null;
   reload: () => void; showToast: any;
 }) {
   const confirm = useConfirm();
-  const [showForm, setShowForm] = useState(false);
   const [editItem, setEditItem] = useState<any | null>(null);
   const [saving,   setSaving]   = useState(false);
+  const [nova,     setNova]     = useState('');
+  const [criando,  setCriando]  = useState(false);
 
   const nomesEmUso = (excetoId?: string) =>
-    data.filter((s: any) => s.id !== excetoId).map((s: any) => normalizar(s.nome ?? ''));
+    data.filter((sub: any) => sub.id !== excetoId).map((sub: any) => normalizar(sub.nome ?? ''));
+  const novaDuplicada = !!nova.trim() && nomesEmUso().includes(normalizar(nova));
+
+  // Criação rápida: só o nome. Ícone e cor vêm da categoria mãe — para o
+  // aluno, a subcategoria é o nome; quem quiser personalizar usa o lápis.
+  const criar = async () => {
+    const nome = nova.trim();
+    if (!nome || novaDuplicada || criando) return;
+    setCriando(true);
+    try {
+      await dbInsert<any>('subcategorias_produto', {
+        nome, cor: categoria.cor ?? EMPTY.cor, icone: categoria.icone ?? EMPTY.icone, categoria_id: categoria.id,
+      });
+      setNova('');
+      reload();
+    } catch (e: any) {
+      showToast?.(e?.message ?? 'Não foi possível criar a subcategoria.', 'error');
+    } finally { setCriando(false); }
+  };
 
   const handleSave = async (f: FormData, novaImagem: File | null) => {
+    if (!editItem) return;
     setSaving(true);
-    const imagemAntiga = editItem?.imagem_url ?? '';
+    const imagemAntiga = editItem.imagem_url ?? '';
     try {
       const payload = { nome: f.nome.trim(), cor: f.cor, icone: f.icone, imagem_url: f.imagem_url || null };
-      const salvo = editItem
-        ? await dbUpdate<any>('subcategorias_produto', editItem.id, payload)
-        : await dbInsert<any>('subcategorias_produto', { ...payload, categoria_id: categoria.id });
-      const id = salvo?.id ?? editItem?.id ?? null;
-      reload(); setEditItem(null); setShowForm(false);
-      showToast?.(editItem ? 'Subcategoria atualizada.' : 'Subcategoria criada.', 'success');
+      await dbUpdate<any>('subcategorias_produto', editItem.id, payload);
+      const id = editItem.id;
+      reload(); setEditItem(null);
+      showToast?.('Subcategoria atualizada.', 'success');
       await anexarImagem('subcategorias_produto', id, novaImagem, imagemAntiga, f.imagem_url, reload, showToast, 'subcategoria');
     } catch (e: any) {
       showToast?.(e?.message ?? 'Não foi possível salvar a subcategoria.', 'error');
@@ -573,76 +678,69 @@ function PainelSubcategorias({ categoria, canEdit, data, error, reload, showToas
   };
 
   return (
-    <div className="flex flex-col gap-3">
-      <div className="flex items-center justify-between gap-2">
-        <div className="flex items-center gap-2.5 min-w-0">
-          <CatThumb imagem_url={categoria.imagem_url} icone={categoria.icone} cor={categoria.cor} size={30} />
-          <div className="min-w-0">
-            <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Subcategorias de</p>
-            <p className="text-sm font-bold text-gray-100 truncate">{categoria.nome}</p>
-          </div>
-        </div>
-        {canEdit && (
-          <NeuButtonAccent onClick={() => { setEditItem(null); setShowForm(true); }} className="text-xs flex items-center gap-1 px-2 py-1">
-            <Plus size={12} /> Nova
-          </NeuButtonAccent>
-        )}
-      </div>
-
-      <AnimatePresence>
-        {showForm && !editItem && (
-          <InlineForm titulo="Nova subcategoria" nomesEmUso={nomesEmUso()}
-            initial={{ ...EMPTY, cor: categoria.cor ?? EMPTY.cor }}
-            onSave={handleSave} onCancel={() => setShowForm(false)} saving={saving} />
-        )}
-      </AnimatePresence>
-
-      {data.length === 0 ? (
+    <div className="pl-10 pr-3 pb-3 pt-1 flex flex-col gap-1.5 border-t border-white/5">
+      {data.length === 0 && (
         /* `error` repassado: sem ele, uma falha de RLS na consulta de
            subcategorias é indistinguível de "esta categoria não tem nenhuma". */
-        <EmptyState error={error} message={canEdit
-          ? `"${categoria.nome}" ainda não tem subcategorias. Elas refinam a categoria — ex.: Mercearia → Massas, Enlatados.`
-          : `"${categoria.nome}" não tem subcategorias.`} />
-      ) : (
-        <div className="flex flex-col gap-1.5">
-          {data.map((sub: any) => (
-            <div key={sub.id}>
-              <AnimatePresence>
-                {editItem?.id === sub.id && (
-                  <InlineForm
-                    titulo={`Editando "${sub.nome}"`}
-                    nomesEmUso={nomesEmUso(sub.id)}
-                    initial={{
-                      nome: sub.nome, cor: sub.cor ?? '#6b7280', icone: sub.icone ?? '📦',
-                      imagem_url: sub.imagem_url ?? '', margem_alvo: '',
-                    }}
-                    onSave={handleSave} onCancel={() => setEditItem(null)} saving={saving} />
-                )}
-              </AnimatePresence>
-              {editItem?.id !== sub.id && (
-                <div className={`relative flex items-center rounded-xl overflow-hidden neu-flat border border-white/5 ${!sub.ativo ? 'opacity-50' : ''}`}>
-                  <span className="absolute left-0 top-0 bottom-0 w-1" style={{ background: sub.cor ?? '#6b7280' }} />
-                  <div className="flex-1 min-w-0 flex items-center gap-2.5 pl-4 pr-2 py-2.5">
-                    <CatThumb imagem_url={sub.imagem_url} icone={sub.icone} cor={sub.cor} size={28} />
-                    <p className="flex-1 text-sm font-medium text-gray-200 truncate">{sub.nome}</p>
-                    {!sub.ativo && (
-                      <span className="text-[9px] uppercase tracking-wider font-bold text-amber-400 bg-amber-400/10 px-1.5 py-0.5 rounded shrink-0">
-                        Inativa
-                      </span>
-                    )}
-                  </div>
-                  {canEdit && (
-                    <AcoesLinha
-                      ativo={sub.ativo}
-                      onToggle={() => handleToggle(sub)}
-                      onEdit={() => { setEditItem(sub); setShowForm(false); }}
-                      onDelete={() => handleDelete(sub)} />
-                  )}
-                </div>
+        error
+          ? <EmptyState error={error} message="Não foi possível ler as subcategorias." />
+          : <p className="text-[11px] text-gray-500 py-1.5">
+              {canEdit
+                ? `"${categoria.nome}" ainda não tem subcategorias. Elas refinam a categoria — ex.: Mercearia → Massas, Enlatados.`
+                : `"${categoria.nome}" não tem subcategorias.`}
+            </p>
+      )}
+
+      {data.map((sub: any) => (
+        editItem?.id === sub.id ? (
+          <InlineForm key={sub.id}
+            titulo={`Editando "${sub.nome}"`}
+            nomesEmUso={nomesEmUso(sub.id)}
+            initial={{
+              nome: sub.nome, cor: sub.cor ?? '#6b7280', icone: sub.icone ?? '📦',
+              imagem_url: sub.imagem_url ?? '', margem_alvo: '',
+            }}
+            onSave={handleSave} onCancel={() => setEditItem(null)} saving={saving} />
+        ) : (
+          <div key={sub.id} className={`relative flex items-center rounded-lg overflow-hidden neu-flat border border-white/5 ${!sub.ativo ? 'opacity-50' : ''}`}>
+            <span className="absolute left-0 top-0 bottom-0 w-1" style={{ background: sub.cor ?? '#6b7280' }} />
+            <div className="flex-1 min-w-0 flex items-center gap-2.5 pl-3.5 pr-2 py-2">
+              <CatThumb imagem_url={sub.imagem_url} icone={sub.icone} cor={sub.cor} size={24} />
+              <p className="flex-1 text-sm font-medium text-gray-200 truncate">{sub.nome}</p>
+              {!sub.ativo && (
+                <span className="text-[9px] uppercase tracking-wider font-bold text-amber-400 bg-amber-400/10 px-1.5 py-0.5 rounded shrink-0">
+                  Inativa
+                </span>
               )}
             </div>
-          ))}
+            {canEdit && (
+              <AcoesLinha
+                ativo={sub.ativo}
+                onToggle={() => handleToggle(sub)}
+                onEdit={() => setEditItem(sub)}
+                onDelete={() => handleDelete(sub)} />
+            )}
+          </div>
+        )
+      ))}
+
+      {canEdit && (
+        <div className="flex items-center gap-2 mt-1">
+          <div className="relative flex-1">
+            <Plus size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-600 pointer-events-none" />
+            <input value={nova} onChange={e => setNova(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); void criar(); } }}
+              placeholder={`Nova subcategoria de ${categoria.nome}…`}
+              className={`neu-input w-full text-sm pl-8 ${novaDuplicada ? 'border border-red-500/40' : ''}`} />
+          </div>
+          <button type="button" onClick={() => void criar()} disabled={!nova.trim() || novaDuplicada || criando}
+            className="neu-button px-3 py-2 rounded-lg text-xs font-bold text-accent disabled:opacity-40">
+            {criando ? '…' : 'Adicionar'}
+          </button>
         </div>
+      )}
+      {novaDuplicada && (
+        <span className="text-[10px] text-red-400">Já existe "{nova.trim()}" nesta categoria.</span>
       )}
     </div>
   );
@@ -652,15 +750,21 @@ function PainelSubcategorias({ categoria, canEdit, data, error, reload, showToas
 const CategoriasProdutoViewInner = ({ showToast, filial }: {
   showToast: any; filial: FilialOp | null;
 }) => {
-  const [selectedCatId, setSelectedCatId] = useState<string | null>(null);
-  const subPanelRef = useRef<HTMLDivElement>(null);
+  // Categorias abertas na árvore. Várias ao mesmo tempo: comparar duas linhas
+  // de produto lado a lado é o caso comum ao organizar o catálogo.
+  const [abertas, setAbertas] = useState<Set<string>>(new Set());
+  const alternar = (id: string) => setAbertas(prev => {
+    const n = new Set(prev);
+    if (n.has(id)) n.delete(id); else n.add(id);
+    return n;
+  });
+  const abrir = (id: string) => setAbertas(prev => new Set(prev).add(id));
 
   // Matriz (filial null) vê o consolidado de todas as unidades, só leitura.
   const cats = useFetchData<any>('categorias_produto', filial ? { filial } : undefined, false,
     { orderBy: 'nome', ascending: true });
-  // Subcategorias carregam de uma vez só: alimentam o painel da direita e a
-  // contagem por categoria na lista da esquerda com uma única ida ao servidor,
-  // e um único `reload` mantém os dois lados em sincronia.
+  // Subcategorias carregam de uma vez só: alimentam a árvore e a contagem com
+  // uma única ida ao servidor, e um único `reload` mantém tudo em sincronia.
   const subs = useFetchData<any>('subcategorias_produto', undefined, false,
     { orderBy: 'nome', ascending: true });
 
@@ -673,20 +777,11 @@ const CategoriasProdutoViewInner = ({ showToast, filial }: {
     return subs.data.filter((s: any) => ids.has(s.categoria_id));
   }, [subs.data, cats.data]);
 
-  const contagemSubs = useMemo(() => {
-    const m: Record<string, number> = {};
-    for (const s of subsVisiveis) m[s.categoria_id] = (m[s.categoria_id] ?? 0) + 1;
+  const subsPorCategoria = useMemo(() => {
+    const m: Record<string, any[]> = {};
+    for (const s of subsVisiveis) (m[s.categoria_id] ??= []).push(s);
     return m;
   }, [subsVisiveis]);
-
-  const selectedCat = useMemo(
-    () => cats.data.find((c: any) => c.id === selectedCatId) ?? null,
-    [cats.data, selectedCatId],
-  );
-  const subsDaCategoria = useMemo(
-    () => (selectedCatId ? subsVisiveis.filter((s: any) => s.categoria_id === selectedCatId) : []),
-    [subsVisiveis, selectedCatId],
-  );
 
   // Qualquer colaborador com acesso ao módulo Empresa gerencia as categorias
   // da própria filial. Matriz continua só-leitura (consolidado, sem filial).
@@ -694,19 +789,10 @@ const CategoriasProdutoViewInner = ({ showToast, filial }: {
 
   const totalInativas = cats.data.filter((c: any) => !c.ativo).length;
 
-  const handleSelect = (id: string) => {
-    setSelectedCatId(id);
-    // No celular os painéis empilham: sem isto, o toque na categoria parecia
-    // não fazer nada, porque a resposta acontecia fora da tela.
-    if (window.matchMedia('(max-width: 767px)').matches) {
-      requestAnimationFrame(() => subPanelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
-    }
-  };
-
   const recarregarTudo = () => { cats.reload(); subs.reload(); };
 
   return (
-    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="p-4 sm:p-6 space-y-4 max-w-5xl mx-auto">
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="p-4 sm:p-6 space-y-4 max-w-4xl mx-auto">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Categorias{filial ? ` — ${filial}` : ' — Consolidado'}</h1>
@@ -733,36 +819,11 @@ const CategoriasProdutoViewInner = ({ showToast, filial }: {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
-        <div className="neu-flat border border-white/5 rounded-xl p-4">
-          <PainelCategorias
-            canEdit={canEdit} selectedId={selectedCatId} filial={filial}
-            data={cats.data} isLoading={cats.isLoading} error={cats.error} reload={recarregarTudo}
-            contagemSubs={contagemSubs} showToast={showToast}
-            onSelect={handleSelect} />
-        </div>
-
-        <div ref={subPanelRef} className="neu-flat border border-white/5 rounded-xl p-4 scroll-mt-4">
-          {selectedCat ? (
-            <PainelSubcategorias
-              categoria={selectedCat} canEdit={canEdit}
-              data={subsDaCategoria} error={subs.error} reload={recarregarTudo} showToast={showToast} />
-          ) : (
-            /* Placeholder com instrução em vez da seta solta que estava aqui:
-               a metade direita da tela abria vazia sem dizer o que ela é. */
-            <div className="flex flex-col items-center justify-center min-h-[220px] text-center gap-3 px-6">
-              <div className="w-14 h-14 rounded-2xl neu-pressed border border-white/5 flex items-center justify-center">
-                <Layers size={22} className="text-gray-700" />
-              </div>
-              <div>
-                <p className="text-sm font-semibold text-gray-300">Nenhuma categoria selecionada</p>
-                <p className="text-xs text-gray-500 mt-1 leading-relaxed">
-                  Escolha uma categoria à esquerda para ver e organizar as subcategorias dela.
-                </p>
-              </div>
-            </div>
-          )}
-        </div>
+      <div className="neu-flat border border-white/5 rounded-xl p-4">
+        <ArvoreCategorias
+          canEdit={canEdit} abertas={abertas} onAlternar={alternar} onAbrir={abrir} filial={filial}
+          data={cats.data} isLoading={cats.isLoading} error={cats.error} reload={recarregarTudo}
+          subsPorCategoria={subsPorCategoria} subsError={subs.error} showToast={showToast} />
       </div>
     </motion.div>
   );
