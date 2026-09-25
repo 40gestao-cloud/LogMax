@@ -4,7 +4,7 @@ import { useFilial } from '../contexts/FilialContext';
 import { motion, AnimatePresence } from 'motion/react';
 import { ChevronDown, ClipboardList, ThumbsDown, ThumbsUp, Loader2, RotateCcw, Package } from 'lucide-react';
 import { useFetchData } from '../hooks/useSupabaseData';
-import { LoadingSpinner, EmptyState, UrgenciaBadge, SelecioneUnidade, IdadeBadge } from '../components/ui';
+import { LoadingSpinner, EmptyState, UrgenciaBadge, SelecioneUnidade, IdadeBadge, AbaComContador } from '../components/ui';
 import { supabase } from '../lib/supabase';
 import { useConfirm } from '../contexts/ConfirmContext';
 import { usePrompt } from '../contexts/PromptContext';
@@ -362,7 +362,11 @@ const AprovacoesComprasViewInner = ({ showToast, profile, filial }: { showToast:
     // toda linha é uma requisição de compra, então o rótulo não dizia nada ao
     // gerente sobre o que falta ali. Agora as duas primeiras abas nomeiam o
     // verbo que se espera dele — aprovar a compra, liberar o material.
-    { key: 'decidir' as const, label: 'Compras a aprovar', n: paraDecidir.length },
+    //
+    // `cor` (AbaComContador, ui.tsx), escolhida pelo professor em 24/09:
+    // amarelo o que espera a decisão, roxo a outra fila (material do
+    // estoque), vermelho o que voltou, verde o que já foi decidido.
+    { key: 'decidir' as const, label: 'Compras a aprovar', n: paraDecidir.length, cor: 'amarelo' as const },
     // Material do almoxarifado (2026-08-24). São dois documentos diferentes e
     // duas decisões diferentes — comprar não é entregar o que já está na
     // prateleira, e liberar material dá baixa no estoque na hora. Mas quem
@@ -372,11 +376,11 @@ const AprovacoesComprasViewInner = ({ showToast, profile, filial }: { showToast:
     // O número aqui é o total da fila, sem o filtro por solicitante: o nome de
     // quem pediu está em `requisicoes_estoque`, que só o bloco de Estoque
     // carrega. Dentro da aba a fila obedece ao filtro.
-    { key: 'material' as const, label: 'Material a liberar', n: filaMaterial.length },
-    { key: 'devolvidas' as const, label: 'Devolvidas', n: devolvidas.length },
+    { key: 'material' as const, label: 'Material a liberar', n: filaMaterial.length, cor: 'roxo' as const },
+    { key: 'devolvidas' as const, label: 'Devolvidas', n: devolvidas.length, cor: 'vermelho' as const },
     // Desfazer decisão é da direção (migr. 282): o gerente não reabre o que
     // decidiu. Sem essa autoridade, a aba nem existe.
-    ...(podeDevolver ? [{ key: 'decididas' as const, label: 'Decisões tomadas', n: decididasFiltradas.length }] : []),
+    ...(podeDevolver ? [{ key: 'decididas' as const, label: 'Decisões tomadas', n: decididasFiltradas.length, cor: 'verde' as const }] : []),
   ];
   type AbaKey = 'decidir' | 'material' | 'devolvidas' | 'decididas';
   const [aba, setAba] = useState<AbaKey | null>(null);
@@ -409,22 +413,14 @@ const AprovacoesComprasViewInner = ({ showToast, profile, filial }: { showToast:
 
       {isLoading ? <LoadingSpinner /> : (
       <>
-      {/* Pílulas no padrão da casa (as mesmas de Requisições > Do Setor). */}
-      <div className="flex gap-2 flex-wrap shrink-0">
-        {ABAS.map(a => {
-          const ativa = a.key === abaAtiva;
-          return (
-            <button key={a.key} onClick={() => setAba(a.key)}
-              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-all ${
-                ativa ? 'neu-pressed text-accent' : 'neu-button text-gray-400 hover:text-gray-200'
-              }`}>
-              {a.key === 'devolvidas' && <RotateCcw size={14} />}
-              {a.key === 'material' && <Package size={14} />}
-              {a.label}
-              <span className="text-[11px] font-bold tabular-nums text-gray-500">{a.n}</span>
-            </button>
-          );
-        })}
+      {/* Abas de fila no padrão AbaComContador (as mesmas de Requisições > Do
+          Setor e de Cotações). */}
+      <div className="flex gap-3 flex-wrap shrink-0" role="tablist">
+        {ABAS.map(a => (
+          <AbaComContador key={a.key} label={a.label} n={a.n} cor={a.cor}
+            ativa={a.key === abaAtiva} onClick={() => setAba(a.key)}
+            icon={a.key === 'devolvidas' ? RotateCcw : a.key === 'material' ? Package : undefined} />
+        ))}
       </div>
 
       {/* Quem pediu — o mesmo controle para as quatro abas. A contagem ao lado

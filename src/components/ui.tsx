@@ -290,7 +290,55 @@ export const ExportButton = ({ label, onClick, icon: Icon, variante }: {
   );
 };
 
-export const UrgenciaBadge = ({ urgencia }: { urgencia: string }) => {
+// Aba com contador — o padrão das abas de fila (Cotações, Requisições).
+//
+// Cada aba tem a cor do que ela SIGNIFICA (na paleta de vidro acima: amarelo
+// pede ação, verde é aprovado, vermelho é negado…), e nenhuma fica apagada —
+// com todas em cinza, a inativa lia como botão desabilitado. A quantidade vai
+// num card ao lado: dentro do botão, em fonte miúda, ninguém via. A ativa é a
+// única que brilha (shimmer) e ganha um traço embaixo; nas outras o brilho
+// fica parado, senão a fileira inteira pisca ao mesmo tempo.
+export const COR_ABA = {
+  amarelo:  { botao: 'btn-shimmer--glass-yellow', numero: 'text-yellow-300' },
+  azul:     { botao: 'btn-shimmer--glass-blue',   numero: 'text-blue-300' },
+  roxo:     { botao: 'btn-shimmer--glass-purple', numero: 'text-purple-300' },
+  roxo:     { botao: 'btn-shimmer--glass-purple', numero: 'text-purple-300' },
+  verde:    { botao: 'btn-shimmer--glass-green',  numero: 'text-green-400' },
+  cinza:    { botao: 'btn-shimmer--glass-gray',   numero: 'text-gray-300' },
+  vermelho: { botao: 'btn-shimmer--glass-red',    numero: 'text-red-300' },
+  dourado:  { botao: 'neu-button-accent',         numero: 'text-accent' },
+  // `!`: a `.btn-shimmer` do index.css fica fora das camadas do Tailwind e
+  // ganha dos utilitários — sem isto a borda saía transparente.
+  preto:    { botao: '!bg-black !border-accent !text-accent hover:!bg-accent/10', numero: 'text-accent' },
+} as const;
+export type CorAba = keyof typeof COR_ABA;
+
+export const AbaComContador = ({ label, n, cor, ativa, onClick, icon: Icon, title, alerta }: {
+  label: string; n: number; cor: CorAba; ativa: boolean; onClick: () => void;
+  icon?: any; title?: string; alerta?: boolean;
+}) => (
+  <div className="flex items-stretch gap-1.5">
+    {/* O traço fica FORA do botão: a `.btn-shimmer` tem overflow hidden e
+        cortava tudo que passasse da borda. Nas inativas o brilho (o fundo
+        animado e o reflexo do ::before) fica parado. */}
+    <div className="relative flex">
+      <button type="button" role="tab" aria-selected={ativa} title={title} onClick={onClick}
+        className={`btn-shimmer ${COR_ABA[cor].botao} !py-2.5 !px-4 !rounded-xl !text-[11px] uppercase tracking-widest ${
+          ativa ? '' : '[animation:none] before:!hidden'}`}>
+        {Icon && <Icon size={13} />}
+        {label}
+        {alerta && <span className="w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0" />}
+      </button>
+      {ativa && <span aria-hidden className="absolute left-3 right-3 -bottom-2 h-0.5 rounded-full bg-accent" />}
+    </div>
+    <div title={title}
+      className="min-w-[2.75rem] px-3 rounded-xl border border-white/10 bg-white/[0.03] flex items-center justify-center">
+      <span className={`text-base font-black tabular-nums ${COR_ABA[cor].numero}`}>{n}</span>
+    </div>
+  </div>
+);
+
+export const UrgenciaBadge =({ urgencia }: { urgencia: string }) => {
   const cls: Record<string, string> = {
     'Normal':  'text-gray-400',
     'Alta':    'bg-yellow-500/15 text-yellow-500',

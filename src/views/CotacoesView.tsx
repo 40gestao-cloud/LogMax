@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Plus, Save, Check, X, ShoppingBag, MessageSquare, Send, Loader2, Search, GitCompare, Award, RotateCcw, Ban, CornerUpLeft, Pencil, AlertTriangle } from 'lucide-react';
 import { HistoricoOperacoes } from '../components/HistoricoOperacoes';
 import { useFetchData, dbInsert, dbUpdate } from '../hooks/useSupabaseData';
-import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent, StatusBadge, Pagination, SelecioneUnidade, FilaDeTrabalho, TextoModal } from '../components/ui';
+import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent, StatusBadge, Pagination, SelecioneUnidade, FilaDeTrabalho, TextoModal, AbaComContador } from '../components/ui';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import { todayBR } from '../lib/dates';
 import { useFormValidation, formatBRL, parseBRL, handleMoneyKeyDown, qtdBR } from '../lib/viewUtils';
@@ -1503,36 +1503,14 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode, onNavigate }: { s
       {mostraAbas && (
         <div className="flex gap-3 flex-wrap shrink-0" role="tablist">
           {([
-            { id: 'cotacoes' as const, label: 'Cotações', n: totalCount ?? todasCotacoes.length,
-              dica: 'Todas as propostas: aguardando o Financeiro, devolvidas, aprovadas e o histórico',
-              // O mesmo dourado dos botões de ação do app (`neu-button-accent`,
-              // o de "Nova Cotação"). O dourado translúcido lia escurecido
-              // sobre o fundo preto.
-              estilo: 'neu-button-accent btn-shimmer border-transparent' },
-            { id: 'gerar' as const, label: 'Gerar pedidos', n: prontasParaPedido.length,
-              dica: 'Cotações aprovadas que ainda não viraram pedido',
-              // Preto com borda dourada.
-              estilo: 'bg-black border-accent text-accent hover:bg-accent/10' },
-          ]).map(a => {
-            const ativa = abaAtiva === a.id;
-            return (
-              <div key={a.id} className="flex items-stretch gap-1.5">
-                <button type="button" title={a.dica} role="tab" aria-selected={ativa}
-                  onClick={() => setAbaEscolhida(a.id)}
-                  className={`relative py-2.5 px-4 rounded-xl text-[11px] font-bold uppercase tracking-widest border transition-colors flex items-center ${a.estilo}`}>
-                  {a.label}
-                  {/* A aba ativa: um traço embaixo, sem mexer na cor do botão. */}
-                  {ativa && <span aria-hidden className="absolute left-3 right-3 -bottom-2 h-0.5 rounded-full bg-accent" />}
-                </button>
-                {/* A quantidade num card próprio, ao lado: dentro do botão, em
-                    fonte pequena, ninguém via. */}
-                <div title={a.dica}
-                  className="min-w-[2.75rem] px-3 rounded-xl border border-white/10 bg-white/[0.03] flex items-center justify-center">
-                  <span className="text-base font-black tabular-nums text-accent">{a.n}</span>
-                </div>
-              </div>
-            );
-          })}
+            { id: 'cotacoes' as const, label: 'Cotações', n: totalCount ?? todasCotacoes.length, cor: 'dourado' as const,
+              dica: 'Todas as propostas: aguardando o Financeiro, devolvidas, aprovadas e o histórico' },
+            { id: 'gerar' as const, label: 'Gerar pedidos', n: prontasParaPedido.length, cor: 'preto' as const,
+              dica: 'Cotações aprovadas que ainda não viraram pedido' },
+          ]).map(a => (
+            <AbaComContador key={a.id} label={a.label} n={a.n} cor={a.cor} title={a.dica}
+              ativa={abaAtiva === a.id} onClick={() => setAbaEscolhida(a.id)} />
+          ))}
         </div>
       )}
 

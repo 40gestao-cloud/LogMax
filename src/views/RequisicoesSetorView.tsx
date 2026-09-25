@@ -12,7 +12,7 @@ import { FluxoCompra } from '../components/FluxoCompra';
 import { BotaoModeloPlanilha } from '../components/BotaoModeloPlanilha';
 import { etapaDaRequisicao } from '../lib/fluxoCompra';
 import { numeroRequisicao } from '../lib/documentos';
-import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent, StatusBadge, UrgenciaBadge, SelecioneUnidade } from '../components/ui';
+import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent, StatusBadge, UrgenciaBadge, SelecioneUnidade, AbaComContador } from '../components/ui';
 import { todayBR } from '../lib/dates';
 import {
   unidadesDeRequisicao, exemploItemRequisicao, UNIDADES_FRACIONARIAS, normalizarUnidade,
@@ -460,11 +460,16 @@ const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: 
   // requisição que virou pedido sumiria da tela do setor que a abriu — e é
   // justamente ali que o aluno vai procurar para saber se a compra andou.
   const ABAS = [
-    { key: 'corrigir',  label: 'Para corrigir', status: ['Em correção'] },
-    { key: 'pendentes', label: 'Pendentes',     status: ['Pendente'] },
-    { key: 'aprovadas', label: 'Aprovadas',     status: ['Aprovado'] },
-    { key: 'atendidas', label: 'Atendidos',     status: ['Atendida'] },
-    { key: 'negadas',   label: 'Negadas',       status: ['Negado'] },
+    // `cor` é o significado da fila (ver AbaComContador em ui.tsx): corrigir
+    // pede ação, pendente espera o gerente, aprovada seguiu, atendida já é
+    // pedido (encerrada), negada parou. Pendente é preta com borda dourada —
+    // o dourado do selo "Pendente" da linha; azul se confundia com o "Minhas
+    // planilhas" da mesma barra.
+    { key: 'corrigir',  label: 'Para corrigir', status: ['Em correção'], cor: 'amarelo' },
+    { key: 'pendentes', label: 'Pendentes',     status: ['Pendente'],    cor: 'preto' },
+    { key: 'aprovadas', label: 'Aprovadas',     status: ['Aprovado'],    cor: 'verde' },
+    { key: 'atendidas', label: 'Atendidos',     status: ['Atendida'],    cor: 'cinza' },
+    { key: 'negadas',   label: 'Negadas',       status: ['Negado'],      cor: 'vermelho' },
   ] as const;
   type AbaKey = typeof ABAS[number]['key'];
 
@@ -1435,24 +1440,17 @@ const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: 
         <EmptyState message="O seu setor ainda não abriu nenhum pedido" />
       ) : (
       <>
-      {/* Pílulas no padrão da casa (mesmas de Relatórios e Documentos). O ponto
+      {/* Abas de fila no padrão AbaComContador (o mesmo de Cotações). O ponto
           âmbar diz "tem algo SEU aqui para consertar"; o que é, a lista mostra. */}
-      <div className="flex gap-2 flex-wrap shrink-0">
+      <div className="flex gap-3 flex-wrap shrink-0" role="tablist">
         {ABAS.map(a => {
-          const ativa = a.key === abaAtiva;
-          const n = porAba[a.key].filter(r => casaSolicitante(r.solicitante)).length;
           const chama = a.key === 'corrigir' && minhasParaCorrigir > 0;
           return (
-            <button key={a.key} onClick={() => setAba(a.key)}
-              title={chama ? `${minhasParaCorrigir} requisição(ões) sua(s) esperando correção` : undefined}
-              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-all ${
-                ativa ? 'neu-pressed text-accent' : 'neu-button text-gray-400 hover:text-gray-200'
-              }`}>
-              {a.key === 'corrigir' && <RotateCcw size={14} />}
-              {a.label}
-              <span className="text-[11px] font-bold tabular-nums text-gray-500">{n}</span>
-              {chama && <span className="w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0" />}
-            </button>
+            <AbaComContador key={a.key} label={a.label} cor={a.cor}
+              n={porAba[a.key].filter(r => casaSolicitante(r.solicitante)).length}
+              ativa={a.key === abaAtiva} onClick={() => setAba(a.key)}
+              icon={a.key === 'corrigir' ? RotateCcw : undefined} alerta={chama}
+              title={chama ? `${minhasParaCorrigir} requisição(ões) sua(s) esperando correção` : undefined} />
           );
         })}
       </div>
