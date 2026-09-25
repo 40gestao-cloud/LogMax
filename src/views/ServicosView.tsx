@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Search, Edit2, Trash2, Plus, Save, Tag } from 'lucide-react';
 import { useFilial } from '../contexts/FilialContext';
@@ -10,6 +10,7 @@ import { MatrizConsolidado } from '../components/MatrizConsolidado';
 import { BotaoModeloPlanilha } from '../components/BotaoModeloPlanilha';
 import { ImagemUploader, LogoCadastro } from '../components/ImagemCadastro';
 import { uploadImagem, removerImagem, CADASTRO_IMAGEM_BUCKET } from '../lib/imagemCadastro';
+import { lerCadastroDaCotacao, esquecerCadastroDaCotacao } from '../lib/cadastroDaCotacao';
 import { NATUREZAS_SERVICO, NATUREZA_LABEL, NATUREZA_AJUDA, NATUREZA_VALOR_LABEL,
          normalizarNatureza, ehContratado } from '../lib/naturezaServico';
 
@@ -63,7 +64,7 @@ const EMPTY_FORM = {
   atributos: {} as Record<string, any>,
 };
 
-export const ServicosView = ({ showToast }: { showToast: any }) => {
+export const ServicosView = ({ showToast, onNavigate }: { showToast: any; onNavigate?: (view: string) => void }) => {
   const { filialAtiva } = useFilial();
   const confirm = useConfirm();
   const [search, setSearch] = useState('');
@@ -79,6 +80,25 @@ export const ServicosView = ({ showToast }: { showToast: any }) => {
   // passarem em todas as filiais, então a RLS sozinha não basta — quem opera
   // dentro de uma unidade via catálogo/cadastro de outra.
   const { data: rawData, setData, isLoading } = useFetchData<any>('/api/servicosview', filialAtiva ? { filial: filialAtiva } : undefined);
+
+  // Chegou pelo "Cadastrar serviço" das Cotações (migr. 628): o formulário
+  // abre já como contratado e com o NOME DA REQUISIÇÃO, porque é pelo nome
+  // idêntico que o pedido reconhece o serviço — o cadastro de serviços não tem
+  // campo de origem como o de produtos. Salvo, a tela devolve o comprador às
+  // Cotações, onde a linha já aparece pronta para o pedido.
+  const nomeDaRequisicaoRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!filialAtiva) return;
+    const pedido = lerCadastroDaCotacao(filialAtiva, 'servico');
+    if (!pedido) return;
+    esquecerCadastroDaCotacao();
+    nomeDaRequisicaoRef.current = pedido.nome;
+    setEditItem(null);
+    setForm({ ...EMPTY_FORM, nome: pedido.nome, natureza: 'contratado' });
+    setImagemFile(null);
+    setErrors({});
+    setShowForm(true);
+  }, [filialAtiva]);
 
   const filial = filialAtiva ?? '';
   // Os atributos por nicho são todos do lado da VENDA — garantia ao cliente,
@@ -130,6 +150,13 @@ export const ServicosView = ({ showToast }: { showToast: any }) => {
     );
   }
   if (isLoading) return <LoadingSpinner />;
+
+  // Mesma normalização de `nome_item_normalizado` no banco (migr. 627).
+  const normNome = (t: string) => String(t ?? '')
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ').trim();
+  const mesmoNomeDaRequisicao = nomeDaRequisicaoRef.current === null
+    || normNome(form.nome) === normNome(nomeDaRequisicaoRef.current);
 
   const openNew = () => {
     setEditItem(null);
@@ -189,6 +216,7 @@ export const ServicosView = ({ showToast }: { showToast: any }) => {
     setForm({ ...EMPTY_FORM });
     setImagemFile(null);
     setErrors({});
+    nomeDaRequisicaoRef.current = null;
   };
 
   const validate = () => {
@@ -218,6 +246,7 @@ export const ServicosView = ({ showToast }: { showToast: any }) => {
     setIsSaving(true);
     // Fora do try porque o catch precisa saber o que apagar se a linha falhar.
     let imagemNova: string | null = null;
+    let voltar = false;
     try {
       // Sobe a imagem antes de gravar: sem URL definitiva não há o que salvar.
       let imagemUrl = form.imagem_url;
@@ -253,13 +282,19 @@ export const ServicosView = ({ showToast }: { showToast: any }) => {
       } else {
         const saved = await dbInsert<any>('/api/servicosview', payload);
         if (saved) setData((prev: any[]) => [saved, ...prev]);
-        showToast('Serviço cadastrado!', 'success', true);
+        voltar = nomeDaRequisicaoRef.current !== null && !!onNavigate;
+        showToast(voltar
+          ? (mesmoNomeDaRequisicao
+              ? 'Serviço cadastrado. De volta às Cotações — a requisição já está na aba "Gerar pedidos", pronta para o pedido.'
+              : 'Serviço cadastrado, mas com nome diferente do da requisição — em Cotações ela continua como não cadastrada.')
+          : 'Serviço cadastrado!', voltar && !mesmoNomeDaRequisicao ? 'error' : 'success', true);
       }
       // A imagem antiga só sai depois que a linha confirmou a nova.
       if (imagemAntiga && imagemAntiga !== imagemUrl) {
         removerImagem(CADASTRO_IMAGEM_BUCKET, imagemAntiga);
       }
       closeForm();
+      if (voltar) onNavigate?.('compras-cotações');
     } catch (err: any) {
       if (imagemNova) removerImagem(CADASTRO_IMAGEM_BUCKET, imagemNova);
       showToast(err?.message ?? 'Erro ao salvar.', 'error', true);
@@ -432,6 +467,13 @@ export const ServicosView = ({ showToast }: { showToast: any }) => {
                   <input className={`neu-input py-2 px-3 rounded-xl text-sm ${errors.nome ? 'border border-red-500/40' : ''}`}
                     value={form.nome} onChange={e => setForm(f => ({ ...f, nome: e.target.value }))}
                     placeholder={filial === 'TechMax' ? 'Ex: Troca de tela iPhone 12' : filial === 'MaxLook' ? 'Ex: Ajuste de bainha calça jeans' : 'Ex: Instalação'} />
+                  {nomeDaRequisicaoRef.current !== null && (
+                    <p className={`text-[10px] mt-1 leading-snug ${mesmoNomeDaRequisicao ? 'text-gray-500' : 'text-amber-300'}`}>
+                      {mesmoNomeDaRequisicao
+                        ? 'Veio da requisição. Mantenha este nome: é por ele que o pedido reconhece o serviço.'
+                        : `O nome mudou. O pedido só reconhece o serviço com o nome da requisição: “${nomeDaRequisicaoRef.current}”. Se ela está escrita errado, devolva-a para correção.`}
+                    </p>
+                  )}
                 </FormField>
                 <FormField label={NATUREZA_VALOR_LABEL[normalizarNatureza(form.natureza)]} error={errors.valor}>
                   <input type="text" inputMode="numeric" onKeyDown={handleMoneyKeyDown}

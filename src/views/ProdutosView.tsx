@@ -1137,7 +1137,8 @@ const ProdutosViewInner = ({ showToast, filial, profile, onNavigate }: { showToa
   // requisição na origem, em vez de mandar o comprador procurá-la no select.
   // Espera as requisições carregarem — antes disso a lista vazia leria como
   // "essa requisição não espera mais cadastro".
-  const [origemPedida, setOrigemPedida] = useState<string | null>(() => lerCadastroDaCotacao(filial));
+  const [origemPedida, setOrigemPedida] = useState<string | null>(
+    () => lerCadastroDaCotacao(filial, 'produto')?.requisicaoId ?? null);
   useEffect(() => {
     if (!origemPedida || requisicoesCarregando) return;
     esquecerCadastroDaCotacao();

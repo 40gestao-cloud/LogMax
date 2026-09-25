@@ -1447,7 +1447,7 @@ function LogMaxAppInner() {
       case 'requisicoes-dosetor':             return <RequisicoesSetorView showToast={st} profile={profile} />;
       case 'cadastros-fornecedores':          return <CRMView type="fornecedores" showToast={st} />;
       case 'cadastros-produtos':              return <ProdutosView showToast={st} profile={profile} onNavigate={navigate} />;
-      case 'cadastros-serviços':              return <ServicosView showToast={st} />;
+      case 'cadastros-serviços':              return <ServicosView showToast={st} onNavigate={navigate} />;
       case 'cadastros-lixeira':               return <LixeiraView showToast={st} profile={profile} />;
       case 'empresa-projetos':                return <GenericCRUDView showToast={st} filialScoped title="Projetos" subtitle="Gerencie os projetos em andamento." endpoint="/api/projetosview"
         fields={[{ key: 'codigo', label: 'Código', required: true, placeholder: 'Ex: PROJ-001' }, { key: 'nome', label: 'Nome', required: true, placeholder: 'Ex: Implantação ERP' }, { key: 'responsavel', label: 'Responsável', placeholder: 'Ex: Maria Santos' }, { key: 'data_inicio', label: 'Início', type: 'date' }, { key: 'data_fim', label: 'Fim', type: 'date' }, { key: 'orcamento', label: 'Orçamento (R$)', type: 'currency', placeholder: '0,00' }, { key: 'status', label: 'Status', type: 'select', options: ['Ativo', 'Concluído', 'Cancelado'] }, { key: 'descricao', label: 'Descrição', type: 'textarea', placeholder: 'Objetivos, escopo, observações…' }]} />;
