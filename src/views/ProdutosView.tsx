@@ -2376,14 +2376,16 @@ const ProdutosViewInner = ({ showToast, filial, profile, onNavigate }: { showToa
                               simplesmente não existiam — e no desktop obrigava
                               a varrer o mouse pela coluna para descobrir que
                               havia botão ali. Ficam a 70% e acendem na linha
-                              sob o cursor, que é o realce sem ser esconderijo. */}
-                          <div className="flex flex-nowrap justify-end gap-2 opacity-70 group-hover:opacity-100 transition-opacity">
+                              sob o cursor, que é o realce sem ser esconderijo.
+                              A etiqueta (`data-vivo`) fica fora do esmaecimento:
+                              dourado a 70% sobre o preto lia apagado. */}
+                          <div className="flex flex-nowrap justify-end gap-2 [&>*]:transition-opacity [&>*:not([data-vivo])]:opacity-70 group-hover:[&>*]:opacity-100">
                             <HistoricoOperacoes entidade="produtos" entidadeId={item.id} titulo={item.nome} criadoEm={item.created_at} atualizadoEm={item.updated_at} />
                             {normalizeEan13(item.ean).valid && (
-                              <button onClick={() => setEtiquetaPreview(item)}
+                              <button onClick={() => setEtiquetaPreview(item)} data-vivo
                                 title="Ver etiqueta EAN-13"
-                                className="action-btn-neutral">
-                                <Barcode size={12} />
+                                className="btn-shimmer btn-shimmer--gold !p-0 w-8 h-8 justify-center">
+                                <Barcode size={13} />
                               </button>
                             )}
                             {/* Grade de variantes (migr. 445). Só onde tamanho e
