@@ -20,6 +20,7 @@ import {
 } from '../lib/unidades';
 import { formatQtd, parseQtd, handleQtdKeyDown, qtdBR } from '../lib/viewUtils';
 import { temEstoque } from '../lib/tipoProduto';
+import { ehContratado } from '../lib/naturezaServico';
 import type { UserProfile } from '../hooks/useUserProfile';
 import { isConselheiro } from '../lib/rbac';
 import { useConfirm } from '../contexts/ConfirmContext';
@@ -111,6 +112,9 @@ const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: 
     '/api/requisicoesestoqueview', { filial }, true,
   );
   const { data: produtos } = useFetchData<any>('/api/produtosview', { filial });
+  // Serviços contratados, para o aviso da linha SV (ver `noCatalogoParecidos`).
+  // Sem filtro de filial no fetch: serviço sem unidade vale para todas.
+  const { data: servicosCat } = useFetchData<any>('/api/servicosview');
   const { data: centrosCusto } = useFetchData<any>('/api/centroscustoview');
 
   const confirm = useConfirm();
@@ -175,6 +179,50 @@ const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: 
         Number(b.abaixoMin) - Number(a.abaixoMin)
         || String(a.nome ?? '').localeCompare(String(b.nome ?? ''), 'pt-BR'));
   }, [produtos, buscaCat, soAbaixoMin]);
+
+  // Compra eventual de item que JÁ está no catálogo (24/09). Em Compras, a
+  // requisição de texto livre só vira pedido depois de ligada a um produto, e
+  // o nome escrito raramente bate com o cadastrado — então quem pedia
+  // "Detergente Ypê 500ml" com "DETERGENTE YPÊ NEUTRO 500ML" no catálogo
+  // mandava Compras cadastrar uma duplicata. O aviso aparece aqui, onde a
+  // decisão é barata: é o mesmo produto → vai para a Reposição, com código.
+  //
+  // A régua é `semelhancaDeItem`, a mesma do aviso de requisição duplicada:
+  // conservadora de propósito (medida diferente nunca casa, e cada lado com
+  // uma palavra própria também não). O aviso não trava nada — pedir por
+  // Eventual continua valendo quando o item é outro.
+  const catalogoAtivo = useMemo(
+    () => (produtos as any[]).filter(p => (p.status ?? 'Ativo') !== 'Inativo' && temEstoque(p.tipo)),
+    [produtos]);
+  // Serviço não tem Reposição: ele é pedido sempre como texto e se liga ao
+  // catálogo pelo NOME IDÊNTICO (migr. 628). Então o aviso aqui oferece trocar
+  // o texto da linha pelo nome cadastrado — "Dedetização mensal" vira
+  // "Dedetização", e Compras gera o pedido sem cadastrar o serviço de novo.
+  const servicosContratados = useMemo(
+    () => (servicosCat as any[]).filter(sv =>
+      ehContratado(sv.natureza) && (sv.filial == null || sv.filial === filial)
+      && (sv.status ?? 'Ativo') !== 'Inativo'),
+    [servicosCat, filial]);
+  const noCatalogoParecidos = (texto: string, servico = false) => {
+    if (String(texto ?? '').trim().length < 4) return [];
+    return (servico ? servicosContratados : catalogoAtivo)
+      .map(p => ({ p, s: semelhancaDeItem(texto, p.nome) }))
+      .filter(x => x.s !== 'nao')
+      .sort((x, y) => (x.s === 'igual' ? 0 : 1) - (y.s === 'igual' ? 0 : 1))
+      .slice(0, 3);
+  };
+  const moverParaReposicao = (i: number, produto: any) => {
+    const row = itens[i];
+    setRepo(m => new Map(m).set(produto.id, row?.qtd && row.qtd !== '0' ? row.qtd : '1'));
+    setItens(rows => rows.length <= 1 ? [linhaVazia()] : rows.filter((_, idx) => idx !== i));
+    setTipo('reposicao');
+    setErros({});
+    const sobram = itens.filter((r, idx) => idx !== i && r.item.trim()).length;
+    showToast(
+      `"${produto.nome}" foi marcado na Reposição.` +
+      (sobram > 0 ? ` As outras ${sobram} linha(s) continuam em Compra eventual — envie cada tipo separado.` : ''),
+      'success', true);
+  };
 
   // O nicho entra por aqui e só por aqui: mercearia compra por peso e volume,
   // loja de roupa e de eletrônico não. O formulário em si é o mesmo nas três —
@@ -1189,6 +1237,46 @@ const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: 
                         {erros[`item_${i}`] && (
                           <span className="text-[10px] text-red-500 font-semibold">{erros[`item_${i}`]}</span>
                         )}
+                        {/* Já está no catálogo? Ver `noCatalogoParecidos`. */}
+                        {(() => {
+                          const servico = row.unidade === 'SV';
+                          const parecidos = noCatalogoParecidos(row.item, servico);
+                          if (parecidos.length === 0) return null;
+                          // Serviço com o nome já idêntico ao do catálogo está
+                          // certo como está — Compras reconhece sozinho.
+                          if (servico && parecidos[0].s === 'igual') {
+                            return (
+                              <p className="mt-1 text-[10px] text-emerald-400/80">
+                                Serviço do catálogo — Compras vai reconhecer pelo nome.
+                              </p>
+                            );
+                          }
+                          return (
+                            <div className="mt-1.5 rounded-lg border border-amber-400/25 bg-amber-400/5 px-2.5 py-2">
+                              <p className="text-[11px] text-amber-200/90 leading-snug">
+                                {servico
+                                  ? <>O catálogo já tem serviço parecido. Se for o mesmo, use o nome dele — Compras reconhece pelo nome e não cadastra de novo.</>
+                                  : <>{parecidos[0].s === 'igual' ? 'Este produto já está no catálogo.' : 'O catálogo já tem item parecido.'}
+                                      {' '}Se for o mesmo, peça por <strong>Reposição</strong> — sai com o código e Compras não cadastra de novo.</>}
+                              </p>
+                              <div className="flex flex-col gap-1 mt-1.5">
+                                {parecidos.map(({ p }) => (
+                                  <div key={p.id} className="flex items-center justify-between gap-2">
+                                    <span className="text-[11px] text-gray-300 truncate">
+                                      {p.nome}
+                                      {p.codigo && <span className="text-gray-500"> · {p.codigo}</span>}
+                                    </span>
+                                    <button type="button"
+                                      onClick={() => servico ? updateLinha(i, { item: p.nome }) : moverParaReposicao(i, p)}
+                                      className="shrink-0 text-[10px] font-bold text-accent underline hover:text-accent/80">
+                                      {servico ? 'É este — usar o nome' : 'É este — pedir por Reposição'}
+                                    </button>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          );
+                        })()}
                       </div>
                       <div className="w-full md:w-44">
                         <input
