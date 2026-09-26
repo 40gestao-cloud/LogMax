@@ -5,7 +5,7 @@ import {
   FileIcon, Image as ImageIcon, ChevronDown, ChevronUp, Send,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
-import { LoadingSpinner, EmptyState, NeuButtonAccent } from '../components/ui';
+import { LoadingSpinner, EmptyState, NeuButtonAccent, StatusBadge, CardContador, FilialBadge } from '../components/ui';
 import { useFetchData } from '../hooks/useSupabaseData';
 import type { UserProfile } from '../hooks/useUserProfile';
 import { useConfirm } from '../contexts/ConfirmContext';
@@ -52,15 +52,6 @@ const fmtDateTime = (iso: string) =>
     timeZone: 'America/Rio_Branco',
   });
 
-function StatusBadgeReq({ status }: { status: StatusReq }) {
-  const cfg = STATUS_CFG[status];
-  const Icon = cfg.icon;
-  return (
-    <span className={`inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full border ${cfg.color}`}>
-      <Icon size={10} />{status}
-    </span>
-  );
-}
 
 function ArquivoPreview({ url, tipo }: { url: string; tipo: 'imagem' | 'pdf' }) {
   if (tipo === 'imagem') {
@@ -206,10 +197,8 @@ function MatrizReqCard({ r, profile, onResponder, onExcluir }: {
       >
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
-            <StatusBadgeReq status={r.status} />
-            <span className={`text-[10px] font-black uppercase tracking-widest ${FILIAL_COLOR[r.filial ?? ''] ?? 'text-gray-500'}`}>
-              {r.filial ?? '—'}
-            </span>
+            <StatusBadge status={r.status} />
+            {r.filial && <FilialBadge filial={r.filial} />}
             {r.arquivo_tipo === 'imagem' && <ImageIcon size={11} className="text-gray-500" />}
             {r.arquivo_tipo === 'pdf'    && <FileIcon  size={11} className="text-gray-500" />}
           </div>
@@ -248,7 +237,7 @@ function MatrizReqCard({ r, profile, onResponder, onExcluir }: {
               <div className="flex items-center gap-2 flex-wrap">
                 <button
                   onClick={() => onResponder(r)}
-                  className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-xl bg-accent/15 text-accent border border-accent/30 hover:bg-accent/25 transition-colors font-bold"
+                  className="btn-solido btn-solido--dourado"
                 >
                   <Send size={12} /> {r.resposta ? 'Editar Resposta' : 'Responder'}
                 </button>
@@ -340,65 +329,36 @@ export function MatrizRequerimentosView({
       transition={{ duration: 0.3 }}
       className="flex flex-col gap-5 pb-16"
     >
-      {/* Cabeçalho */}
-      <div className="flex items-center gap-2">
-        <FileText size={16} className="text-accent" />
-        <h2 className="text-base font-bold text-gray-100">Requerimentos das Filiais</h2>
-        <span className="text-xs text-gray-500 font-mono">({requerimentos.length})</span>
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 shrink-0">
+        {([
+          ['Pendente', 'Pendentes', 'amarelo'],
+          ['Em Análise', 'Em análise', 'azul'],
+          ['Aprovado', 'Aprovados', 'verde'],
+          ['Negado', 'Negados', 'vermelho'],
+        ] as const).map(([st, label, tom]) => (
+          <CardContador key={st} label={label} value={contadores[st]} tom={tom}
+            onClick={() => setStatusFiltro(f => f === st ? null : st)} ativo={statusFiltro === st} />
+        ))}
       </div>
 
-      {/* Filtros */}
-      <div className="flex flex-col gap-2">
-        {/* Filial */}
-        <div className="flex gap-1 flex-wrap">
-          {([null, ...FILIAIS] as (string | null)[]).map(f => (
-            <button
-              key={f ?? 'todas'}
-              onClick={() => setFilialFiltro(f)}
-              className={`px-3 py-1 rounded-xl text-xs font-bold border transition-all ${
-                filialFiltro === f
-                  ? 'bg-accent/20 text-accent border-accent/30'
-                  : 'neu-pressed text-gray-400 border-white/5 hover:text-gray-200'
-              }`}
-            >
-              {f ?? 'Todas as filiais'}
-            </button>
-          ))}
-        </div>
-
-        {/* Status */}
-        <div className="flex gap-1 flex-wrap">
-          <button
-            onClick={() => setStatusFiltro(null)}
-            className={`px-3 py-1 rounded-xl text-xs font-bold border transition-all ${!statusFiltro ? 'bg-accent/20 text-accent border-accent/30' : 'neu-pressed text-gray-400 border-white/5 hover:text-gray-200'}`}
-          >
-            Todos status
-          </button>
-          {(['Pendente', 'Em Análise', 'Aprovado', 'Negado'] as StatusReq[]).map(s => {
-            const cfg = STATUS_CFG[s];
-            const Icon = cfg.icon;
-            return (
-              <button
-                key={s}
-                onClick={() => setStatusFiltro(statusFiltro === s ? null : s)}
-                className={`flex items-center gap-1 px-3 py-1 rounded-xl text-xs font-bold border transition-all ${statusFiltro === s ? cfg.color : 'neu-pressed text-gray-400 border-white/5 hover:text-gray-200'}`}
-              >
-                <Icon size={10} />{s}
-                {contadores[s] > 0 && <span className="ml-0.5 opacity-70">({contadores[s]})</span>}
-              </button>
-            );
-          })}
-        </div>
-
-        {/* Busca */}
-        <div className="relative">
-          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
+      <div className="flex flex-wrap items-center gap-2.5 shrink-0">
+        <div className="relative flex-1 min-w-[14rem]">
+          <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
           <input
             type="text" value={search} onChange={e => setSearch(e.target.value)}
-            placeholder="Buscar por título, solicitante..."
-            className="neu-input w-full pl-9 pr-3 py-2 rounded-xl text-sm"
+            placeholder="Buscar por título, solicitante…"
+            className="neu-input w-full py-2.5 pl-10 pr-4 rounded-xl text-sm"
           />
         </div>
+        <select
+          value={filialFiltro ?? ''}
+          onChange={e => setFilialFiltro(e.target.value || null)}
+          className="neu-input py-2.5 px-3 rounded-xl text-sm"
+          aria-label="Filtrar por unidade"
+        >
+          <option value="">Todas as unidades</option>
+          {FILIAIS.map(f => <option key={f} value={f}>{f}</option>)}
+        </select>
       </div>
 
       {/* Lista */}

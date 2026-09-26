@@ -17,12 +17,12 @@ import { useMemo, useRef, useState, type ReactNode } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   FileSignature, Upload, Download, Trash2, Pencil, X, Loader2, ShieldCheck, ShieldAlert,
-  FileText, ArrowRight, PenLine, Ban, FilePlus2, FileDown, Info,
+  FileText, ArrowRight, PenLine, Ban, FilePlus2, FileDown, Info, Search, Plus, CalendarRange,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { formatDataHoraBR, todayBR } from '../lib/dates';
 import { formatBRL, parseBRL, handleMoneyKeyDown } from '../lib/viewUtils';
-import { LoadingSpinner, EmptyState, NeuButtonAccent, corDoStatus } from '../components/ui';
+import { LoadingSpinner, EmptyState, NeuButtonAccent, corDoStatus, CardContador, FilialBadge } from '../components/ui';
 import { useConfirm } from '../contexts/ConfirmContext';
 import { usePrompt } from '../contexts/PromptContext';
 import { useFilial } from '../contexts/FilialContext';
@@ -286,7 +286,7 @@ function ModalContrato({
         </div>
 
         <div className="flex flex-col gap-1">
-          <label className={label}>Arquivo {editando ? '' : '* '}(PDF ou Word, até 10 MB)</label>
+          <label className={label}>Arquivo {editando ? '' : '*'}</label>
           <input ref={inputRef} type="file" className="hidden"
             accept=".pdf,.docx,.doc,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/msword"
             onChange={e => escolher(e.target.files?.[0] ?? null)} />
@@ -295,13 +295,9 @@ function ModalContrato({
             <Upload size={14} className="text-accent shrink-0" />
             <span className="truncate">
               {arquivo ? `${arquivo.name} · ${tamanhoLegivel(arquivo.size)}`
-                : editando ? `${doc!.arquivo_nome} — clique para trocar` : 'Escolher arquivo…'}
+                : editando ? `${doc!.arquivo_nome} — trocar` : 'PDF ou Word · até 10 MB'}
             </span>
           </button>
-          <p className="text-[10px] text-gray-500 mt-1">
-            Enquanto é rascunho o arquivo pode ser trocado. Depois da primeira assinatura, não — mudar o
-            contrato vira um aditivo.
-          </p>
         </div>
 
         <div className="flex items-center gap-2 pt-1">
@@ -417,11 +413,11 @@ function DetalheContrato({
             <span className="text-sm text-gray-200 truncate flex-1 min-w-0">{c.arquivo_nome}</span>
             <span className="text-[10px] text-gray-500">{tamanhoLegivel(c.arquivo_tamanho)}</span>
             <button onClick={async () => { const { error } = await baixarContrato(c); if (error) showToast(error, 'error'); }}
-              className="neu-button rounded-xl px-3 py-1.5 text-[11px] font-black uppercase tracking-widest text-accent flex items-center gap-1.5">
+              className="btn-solido btn-solido--amarelo">
               <Download size={12} /> Baixar
             </button>
             <button onClick={conferir} disabled={conferindo}
-              className="neu-button rounded-xl px-3 py-1.5 text-[11px] font-black uppercase tracking-widest text-gray-300 flex items-center gap-1.5 disabled:opacity-50">
+              className="btn-solido btn-solido--azul">
               {conferindo ? <Loader2 size={12} className="animate-spin" /> : <ShieldCheck size={12} />} Conferir
             </button>
           </div>
@@ -463,12 +459,9 @@ function DetalheContrato({
 
         {podeAssinar && (
           <div className="neu-flat rounded-2xl p-4 border border-accent/30 flex flex-col gap-3">
-            <div className="text-xs text-gray-300 flex items-start gap-2">
-              <Info size={13} className="shrink-0 mt-0.5 text-accent" />
-              <span>
-                Baixe e leia o contrato. Para assinar, clique em <b>Conferir</b>: a tela calcula o resumo do
-                arquivo e sua assinatura fica presa a ele.
-              </span>
+            <div className="text-xs text-gray-300 flex items-center gap-2">
+              <Info size={13} className="shrink-0 text-accent" />
+              <span>Baixe, leia e clique em <b>Conferir</b> antes de assinar.</span>
             </div>
             <label className="flex items-start gap-2 text-xs text-gray-200 cursor-pointer">
               <input type="checkbox" checked={concordo} onChange={e => setConcordo(e.target.checked)} className="mt-0.5" />
@@ -477,7 +470,6 @@ function DetalheContrato({
             <NeuButtonAccent onClick={assinarAgora} isLoading={assinando} disabled={!conferido?.confere || !concordo}>
               {c.status === 'rascunho' ? 'Assinar e enviar' : 'Assinar'}
             </NeuButtonAccent>
-            {!conferido && <p className="text-[10px] text-gray-500 text-center">Confira o arquivo antes de assinar.</p>}
           </div>
         )}
         {souParte && !jaAssinei && c.status === 'aguardando' && venceu(c, hoje) && (
@@ -494,22 +486,22 @@ function DetalheContrato({
           )}
           {souParte && c.status === 'aguardando' && (
             <button onClick={() => acoes.recusar(c)}
-              className="neu-button rounded-xl px-3 py-2 text-[11px] font-black uppercase tracking-widest text-red-300 flex items-center gap-1.5">
+              className="btn-solido btn-solido--vermelho">
               <Ban size={13} /> {jaAssinei ? 'Retirar' : 'Recusar'}
             </button>
           )}
           {souParte && c.status === 'vigente' && (
             <>
               <button onClick={() => acoes.aditivo(c)}
-                className="neu-button rounded-xl px-3 py-2 text-[11px] font-black uppercase tracking-widest text-accent flex items-center gap-1.5">
+                className="btn-solido btn-solido--dourado">
                 <FilePlus2 size={13} /> Aditivo
               </button>
               <button onClick={() => acoes.encerrar(c, false)}
-                className="neu-button rounded-xl px-3 py-2 text-[11px] font-black uppercase tracking-widest text-gray-300">
+                className="btn-solido btn-solido--preto">
                 Encerrar
               </button>
               <button onClick={() => acoes.encerrar(c, true)}
-                className="neu-button rounded-xl px-3 py-2 text-[11px] font-black uppercase tracking-widest text-red-300">
+                className="btn-solido btn-solido--vermelho">
                 Rescindir
               </button>
             </>
@@ -542,6 +534,7 @@ export const ContratosView = ({ showToast, profile }: { showToast: any; profile:
   const ehAdmin = profile?.role === 'admin';
 
   const [aba, setAba] = useState<Aba>('pendentes');
+  const [busca, setBusca] = useState('');
   const [abertoId, setAbertoId] = useState<string | null>(null);
   const [form, setForm] = useState<{ doc: Contrato | null; pai: Contrato | null } | null>(null);
 
@@ -558,7 +551,10 @@ export const ContratosView = ({ showToast, profile }: { showToast: any; profile:
     && !(assinaturas[c.id] ?? []).some(a => a.parte === minhaParte);
 
   const paraAssinar = contratos.filter(esperaMinhaAssinatura);
-  const daAba = contratos.filter(c => ABA_DE[c.status] === aba);
+  const termo = busca.trim().toLowerCase();
+  const daAba = contratos.filter(c => ABA_DE[c.status] === aba && (!termo
+    || [c.titulo, numeroContrato(c.numero), c.parte_a, c.parte_b, c.objeto]
+      .some(v => String(v ?? '').toLowerCase().includes(termo))));
   // O que espera a minha assinatura sobe para o topo da aba.
   const visiveis = [...daAba].sort((x, y) => Number(esperaMinhaAssinatura(y)) - Number(esperaMinhaAssinatura(x)));
   const contagem = (a: Aba) => contratos.filter(c => ABA_DE[c.status] === a).length;
@@ -627,82 +623,92 @@ export const ContratosView = ({ showToast, profile }: { showToast: any; profile:
 
   if (loading) return <LoadingSpinner />;
 
-  const ABAS: { id: Aba; label: string }[] = [
-    { id: 'pendentes', label: 'Em andamento' },
-    { id: 'vigentes', label: 'Vigentes' },
-    { id: 'encerrados', label: 'Encerrados' },
-  ];
-
   return (
     <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}
       className="flex flex-col gap-5 pb-16">
-      <div className="neu-flat rounded-3xl p-5 border border-accent/20 flex items-center justify-between gap-4 flex-wrap">
-        <div>
-          <div className="flex items-center gap-2 mb-1">
-            <FileSignature size={14} className="text-accent" />
-            <h1 className="text-sm font-black uppercase tracking-widest text-gray-100">Contratos</h1>
-          </div>
-          <p className="text-xs text-gray-500">
-            {minhaParte
-              ? `Acordos da ${minhaParte} com a Matriz e as outras unidades. Quem cria assina primeiro; vale quando as duas partes assinam.`
-              : 'Acordos entre as unidades. Quem assina é o gerente de cada filial e, pela Matriz, o professor.'}
-          </p>
+      <div className="flex items-start justify-between gap-3 flex-wrap shrink-0">
+        <div className="flex flex-col gap-1 min-w-0">
+          <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Contratos</h2>
         </div>
         {minhaParte && (
-          <button onClick={() => setForm({ doc: null, pai: null })}
-            className="neu-button rounded-xl px-4 py-2.5 text-xs font-black uppercase tracking-widest text-accent flex items-center gap-2">
-            <Upload size={14} /> Novo contrato
-          </button>
+          <NeuButtonAccent variant="" onClick={() => setForm({ doc: null, pai: null })}>
+            <Plus size={14} /> Novo contrato
+          </NeuButtonAccent>
         )}
       </div>
 
-      {paraAssinar.length > 0 && (
-        <div className="neu-flat rounded-2xl p-4 border border-amber-400/25 flex items-start gap-2 text-xs text-amber-200">
-          <PenLine size={13} className="shrink-0 mt-0.5" />
-          <span>
-            {paraAssinar.length === 1
-              ? `1 contrato espera a assinatura da ${minhaParte}.`
-              : `${paraAssinar.length} contratos esperam a assinatura da ${minhaParte}.`}
-          </span>
-        </div>
-      )}
+      {/* Os três contadores de situação SÃO as abas: um clique troca a lista.
+          O primeiro não é aba — é o que espera a minha assinatura, e leva para
+          "Em andamento", onde esses contratos sobem para o topo. */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 shrink-0">
+        <CardContador label="Sua assinatura" value={paraAssinar.length} tom="amarelo"
+          onClick={minhaParte ? () => setAba('pendentes') : undefined} />
+        <CardContador label="Em andamento" value={contagem('pendentes')} tom="azul"
+          onClick={() => setAba('pendentes')} ativo={aba === 'pendentes'} />
+        <CardContador label="Vigentes" value={contagem('vigentes')} tom="verde"
+          onClick={() => setAba('vigentes')} ativo={aba === 'vigentes'} />
+        <CardContador label="Encerrados" value={contagem('encerrados')} tom="neutro"
+          onClick={() => setAba('encerrados')} ativo={aba === 'encerrados'} />
+      </div>
 
-      <div className="flex gap-2 flex-wrap">
-        {ABAS.map(a => (
-          <button key={a.id} onClick={() => setAba(a.id)}
-            className={`px-4 py-2 rounded-xl text-sm font-semibold transition-all ${
-              aba === a.id ? 'neu-pressed text-accent' : 'neu-button text-gray-400 hover:text-gray-200'}`}>
-            {a.label} <span className="text-[10px] text-gray-500 ml-1">{contagem(a.id)}</span>
-          </button>
-        ))}
+      <div className="relative shrink-0">
+        <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
+        <input type="text" value={busca} onChange={e => setBusca(e.target.value)}
+          placeholder="Buscar por número, título, unidade ou objeto…"
+          className="neu-input py-2.5 pl-10 pr-4 rounded-xl text-sm w-full" />
       </div>
 
       {visiveis.length === 0 ? (
-        <EmptyState message={aba === 'pendentes' ? 'Nenhum contrato em andamento.' : aba === 'vigentes' ? 'Nenhum contrato vigente.' : 'Nenhum contrato encerrado.'} />
+        <EmptyState message={termo ? 'Nenhum contrato com essa busca.'
+          : aba === 'pendentes' ? 'Nenhum contrato em andamento.' : aba === 'vigentes' ? 'Nenhum contrato vigente.' : 'Nenhum contrato encerrado.'} />
       ) : (
-        <div className="flex flex-col gap-2">
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
           {visiveis.map(c => {
             const minha = esperaMinhaAssinatura(c);
             const ass = assinaturas[c.id] ?? [];
+            const assinou = (p: string) => ass.some(a => a.parte === p);
             return (
               <button key={c.id} onClick={() => setAbertoId(c.id)}
-                className={`neu-flat rounded-2xl p-4 border text-left flex flex-col gap-2 hover:border-accent/30 transition-colors ${
-                  minha ? 'border-amber-400/30' : c.status === 'rascunho' ? 'border-dashed border-gray-500/40' : 'border-white/5'}`}>
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="text-[10px] font-black text-accent">{numeroContrato(c.numero)}</span>
-                  <h3 className="text-sm font-bold text-gray-100 truncate min-w-0 flex-1">{c.titulo}</h3>
-                  <StatusPill c={c} hoje={hoje} />
-                  {minha && (
-                    <span className="text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full bg-amber-400/15 text-amber-300 border border-amber-400/30">
-                      Sua assinatura
-                    </span>
+                className={`neu-flat rounded-2xl p-4 border text-left flex flex-col gap-3 hover:border-accent/40 transition-colors ${
+                  minha ? 'border-amber-400/40' : c.status === 'rascunho' ? 'border-dashed border-gray-500/40' : 'border-white/5'}`}>
+                <div className="flex items-start gap-3">
+                  <div className="w-10 h-10 rounded-xl neu-pressed flex items-center justify-center shrink-0 text-accent">
+                    <FileSignature size={17} />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-[10px] font-black text-accent tracking-widest">{numeroContrato(c.numero)}</span>
+                      <StatusPill c={c} hoje={hoje} />
+                      {minha && (
+                        <span className="text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full bg-yellow-400 text-black">
+                          Sua assinatura
+                        </span>
+                      )}
+                    </div>
+                    <h3 className="text-sm font-bold text-gray-100 mt-1 line-clamp-2">{c.titulo}</h3>
+                  </div>
+                  {c.valor != null && (
+                    <span className="text-sm font-black text-gray-100 tabular-nums shrink-0">R$ {formatBRL(Number(c.valor))}</span>
                   )}
                 </div>
-                <div className="text-[11px] text-gray-400 flex items-center gap-x-3 gap-y-1 flex-wrap">
-                  <span className="flex items-center gap-1">{c.parte_a} <ArrowRight size={10} /> {c.parte_b}</span>
-                  {c.valor != null && <span>R$ {formatBRL(Number(c.valor))}</span>}
-                  {c.vigencia_fim && <span>até {dataBR(c.vigencia_fim)}</span>}
-                  <span>{ass.length}/2 assinaturas</span>
+                <div className="flex items-center justify-between gap-3 flex-wrap pt-2 border-t border-white/5">
+                  {/* Cada parte com o seu tique: dá para ver de longe quem falta. */}
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {[c.parte_a, c.parte_b].map((p, i) => (
+                      <span key={p} className="flex items-center gap-1.5">
+                        {i === 1 && <ArrowRight size={11} className="text-gray-600" />}
+                        <FilialBadge filial={p} />
+                        <PenLine size={11} className={assinou(p) ? 'text-emerald-400' : 'text-gray-700'}
+                          aria-label={assinou(p) ? `${p} assinou` : `${p} não assinou`} />
+                      </span>
+                    ))}
+                  </div>
+                  <span className="text-[11px] text-gray-500 flex items-center gap-1.5">
+                    <CalendarRange size={11} />
+                    {c.vigencia_inicio || c.vigencia_fim
+                      ? `${dataBR(c.vigencia_inicio) || '—'} a ${dataBR(c.vigencia_fim) || 'indeterminado'}`
+                      : 'Sem vigência'}
+                  </span>
                 </div>
               </button>
             );

@@ -1,11 +1,11 @@
 import React, { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
-  FileText, Plus, X, Upload, Loader2, ChevronDown, ChevronUp,
-  Image as ImageIcon, FileIcon, Clock, CheckCircle2, XCircle, Search,
+  Plus, X, Upload, Loader2, ChevronDown, ChevronUp,
+  Image as ImageIcon, FileIcon, XCircle, Search,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
-import { LoadingSpinner, EmptyState, NeuButtonAccent } from '../components/ui';
+import { LoadingSpinner, EmptyState, NeuButtonAccent, StatusBadge, CardContador } from '../components/ui';
 import { useFetchData } from '../hooks/useSupabaseData';
 import type { UserProfile } from '../hooks/useUserProfile';
 import { isConselheiro } from '../lib/rbac';
@@ -36,12 +36,6 @@ const BUCKET = 'requerimentos-arquivos';
 const MAX_BYTES = 5 * 1024 * 1024; // 5 MB
 const ACCEPT = 'image/jpeg,image/jpg,image/png,image/webp,application/pdf';
 
-const STATUS_CFG: Record<StatusReq, { label: string; color: string; icon: any }> = {
-  'Pendente':    { label: 'Pendente',    color: 'text-gray-400 bg-gray-500/15 border-gray-500/30',     icon: Clock },
-  'Em Análise':  { label: 'Em Análise',  color: 'text-blue-300 bg-blue-500/15 border-blue-500/30',     icon: FileText },
-  'Aprovado':    { label: 'Aprovado',    color: 'text-emerald-300 bg-emerald-500/15 border-emerald-500/30', icon: CheckCircle2 },
-  'Negado':      { label: 'Negado',      color: 'text-red-300 bg-red-500/15 border-red-500/30',         icon: XCircle },
-};
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 const fmtDateTime = (iso: string) =>
@@ -66,17 +60,6 @@ async function uploadArquivo(file: File): Promise<{ url: string; tipo: 'imagem' 
   const { data } = supabase.storage.from(BUCKET).getPublicUrl(path);
   if (!data?.publicUrl) throw new Error('URL pública não gerada.');
   return { url: data.publicUrl, tipo: isPdf ? 'pdf' : 'imagem' };
-}
-
-// ── Badge de status ────────────────────────────────────────────────────────
-function StatusBadgeReq({ status }: { status: StatusReq }) {
-  const cfg = STATUS_CFG[status];
-  const Icon = cfg.icon;
-  return (
-    <span className={`inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full border ${cfg.color}`}>
-      <Icon size={10} />{cfg.label}
-    </span>
-  );
 }
 
 // ── Prévia do arquivo ──────────────────────────────────────────────────────
@@ -183,12 +166,12 @@ function ModalNovoRequerimento({
             value={descricao} onChange={e => setDescricao(e.target.value)}
             rows={4}
             className="neu-pressed rounded-xl px-3 py-2 text-sm text-gray-100 bg-transparent outline-none resize-none"
-            placeholder="Descreva o requerimento em detalhes..."
+            placeholder="O que você precisa e por quê."
           />
         </div>
 
         <div className="flex flex-col gap-1">
-          <label className="text-[10px] font-black uppercase tracking-widest text-gray-500">Anexo (imagem ou PDF, máx 5 MB)</label>
+          <label className="text-[10px] font-black uppercase tracking-widest text-gray-500">Anexo</label>
           {arquivo ? (
             <div className="relative">
               <ArquivoPreview url={arquivo.url} tipo={arquivo.tipo} />
@@ -203,7 +186,7 @@ function ModalNovoRequerimento({
             <label className="neu-pressed rounded-xl flex items-center justify-center gap-2 h-20 cursor-pointer text-gray-500 hover:text-gray-300 transition-colors border border-dashed border-gray-600">
               {uploading
                 ? <Loader2 size={16} className="animate-spin" />
-                : <><Upload size={15} /><span className="text-xs">Carregar imagem ou PDF</span></>}
+                : <><Upload size={15} /><span className="text-xs">Imagem ou PDF · até 5 MB</span></>}
               <input type="file" accept={ACCEPT} className="hidden" onChange={handleArquivo} disabled={uploading} />
             </label>
           )}
@@ -233,7 +216,7 @@ function RequerimentoCard({ r, podeExcluir, onExcluir }: {
       >
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
-            <StatusBadgeReq status={r.status} />
+            <StatusBadge status={r.status} />
             {r.arquivo_tipo === 'imagem' && <ImageIcon size={12} className="text-gray-500" />}
             {r.arquivo_tipo === 'pdf' && <FileIcon size={12} className="text-gray-500" />}
           </div>
@@ -292,6 +275,7 @@ export function RequerimentosView({
 }) {
   const [modalAberto, setModalAberto] = useState(false);
   const [search, setSearch] = useState('');
+  const [statusFiltro, setStatusFiltro] = useState<StatusReq | null>(null);
   const confirm = useConfirm();
 
   const isGerente = profile?.role === 'gerente' || profile?.role === 'admin' || profile?.role === 'ceo' || isConselheiro(profile);
@@ -305,15 +289,19 @@ export function RequerimentosView({
     'requerimentos', filialAtiva ? { filial: filialAtiva } : undefined);
 
   // Gerente vê todos da filial (RLS já filtra); colaborador vê só os próprios
+  const meus = useMemo(
+    () => (isGerente ? requerimentos : requerimentos.filter(r => r.criado_por === profile?.id)),
+    [requerimentos, isGerente, profile?.id]);
+  const conta = (st: StatusReq) => meus.filter(r => r.status === st).length;
   const visiveis = useMemo(() => {
-    let list = requerimentos;
-    if (!isGerente) list = list.filter(r => r.criado_por === profile?.id);
+    let list = meus;
+    if (statusFiltro) list = list.filter(r => r.status === statusFiltro);
     if (search.trim()) {
       const s = search.toLowerCase();
       list = list.filter(r => r.titulo.toLowerCase().includes(s) || (r.descricao ?? '').toLowerCase().includes(s));
     }
     return list;
-  }, [requerimentos, isGerente, profile?.id, search]);
+  }, [meus, statusFiltro, search]);
 
   const handleExcluir = async (id: string) => {
     const ok = await confirm({ message: 'Excluir este requerimento? Esta ação não pode ser desfeita.', danger: true });
@@ -329,29 +317,32 @@ export function RequerimentosView({
 
   return (
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
-      className="flex flex-col gap-5 h-full overflow-y-auto main-scrollbar pb-6"
+      className="flex flex-col gap-5"
     >
-      {/* Cabeçalho */}
-      <div className="flex items-center justify-between shrink-0">
-        <div>
-          <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Requerimentos</h2>
-        </div>
-        <button
-          onClick={() => setModalAberto(true)}
-          className="flex items-center gap-2 px-4 py-2 rounded-xl bg-accent/15 text-accent border border-accent/30 hover:bg-accent/25 transition-colors text-sm font-bold"
-        >
-          <Plus size={15} /> Novo
-        </button>
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 shrink-0">
+        {([
+          ['Pendente', 'Pendentes', 'amarelo'],
+          ['Em Análise', 'Em análise', 'azul'],
+          ['Aprovado', 'Aprovados', 'verde'],
+          ['Negado', 'Negados', 'vermelho'],
+        ] as const).map(([st, label, tom]) => (
+          <CardContador key={st} label={label} value={conta(st)} tom={tom}
+            onClick={() => setStatusFiltro(f => f === st ? null : st)} ativo={statusFiltro === st} />
+        ))}
       </div>
 
-      {/* Busca */}
-      <div className="relative shrink-0">
-        <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
-        <input
-          type="text" value={search} onChange={e => setSearch(e.target.value)}
-          placeholder="Buscar requerimento..."
-          className="neu-input w-full pl-9 pr-3 py-2 rounded-xl text-sm"
-        />
+      <div className="flex flex-wrap items-center gap-2.5 shrink-0">
+        <div className="relative flex-1 min-w-[14rem]">
+          <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
+          <input
+            type="text" value={search} onChange={e => setSearch(e.target.value)}
+            placeholder="Buscar requerimento…"
+            className="neu-input w-full py-2.5 pl-10 pr-4 rounded-xl text-sm"
+          />
+        </div>
+        <NeuButtonAccent variant="" onClick={() => setModalAberto(true)}>
+          <Plus size={14} /> Novo requerimento
+        </NeuButtonAccent>
       </div>
 
       {isLoading ? <LoadingSpinner /> : visiveis.length === 0 ? (

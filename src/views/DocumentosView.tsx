@@ -17,11 +17,11 @@ import { useMemo, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   FileText, Upload, Download, Trash2, Pencil, X, Building2, Loader2, Check, Info, Send, FileClock,
-  ChevronDown, ImageIcon, Eye,
+  ChevronDown, ImageIcon, Eye, Search, Plus,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { formatDataHoraBR } from '../lib/dates';
-import { LoadingSpinner, EmptyState, NeuButtonAccent, FilialBadge } from '../components/ui';
+import { LoadingSpinner, EmptyState, NeuButtonAccent, FilialBadge, CardContador } from '../components/ui';
 import { useConfirm } from '../contexts/ConfirmContext';
 import { useFilial } from '../contexts/FilialContext';
 import { useDocumentos, baixarDocumento, podeVisualizar, ehRascunho, type Documento } from '../hooks/useDocumentos';
@@ -42,6 +42,14 @@ const FILIAL_LOGO: Record<FilialAlvo, string> = {
   SuperMax: '/icon-supermax-view.png',
   MaxLook:  '/icon-maxlook.png',
   TechMax:  '/icon-techmax.png',
+};
+
+// Cor de cada unidade na aba ativa — a mesma do FilialBadge (index.css), para
+// a aba e o selo da linha falarem a mesma língua.
+const FILIAL_COR: Record<FilialAlvo, string> = {
+  SuperMax: '#3b82f6',
+  MaxLook:  '#c9a882',
+  TechMax:  '#f97316',
 };
 
 // Imagem entrou porque metade do que a Matriz manda é foto: o cartaz da
@@ -76,6 +84,18 @@ const MIME_POR_EXTENSAO: Record<string, string> = {
 };
 
 const EH_IMAGEM = (mime?: string | null) => String(mime ?? '').startsWith('image/');
+
+// Cor do ladrilho pelo tipo — a mesma convenção dos programas (PDF vermelho,
+// Word azul): o olho acha o formato antes de ler a extensão.
+function corDoTipo(mime?: string | null): string {
+  const m = String(mime ?? '');
+  if (m === 'application/pdf') return 'bg-red-600 text-white';
+  if (m.includes('word') || m === 'application/msword') return 'bg-blue-600 text-white';
+  if (m.startsWith('image/')) return 'bg-purple-600 text-white';
+  return 'bg-zinc-600 text-white';
+}
+
+type FiltroDoc = 'todos' | 'novos' | 'rascunhos' | 'publicados';
 
 function mimeDoArquivo(f: File): string | null {
   if (MIMES_ACEITOS.includes(f.type)) return f.type;
@@ -321,12 +341,11 @@ function ModalDocumento({
               <FileText size={14} className="text-accent shrink-0" />
               <span className="truncate">{doc!.arquivo_nome}{doc!.arquivo_tamanho ? ` · ${tamanhoLegivel(doc!.arquivo_tamanho)}` : ''}</span>
             </div>
-            <p className="text-[10px] text-gray-500 mt-1">Publicado não troca de arquivo — exclua e publique de novo.</p>
           </div>
         ) : (
           <div className="flex flex-col gap-1">
             <label className="text-[10px] font-black uppercase tracking-widest text-gray-500">
-              Arquivo {editando ? '' : '* '}(PDF, Word ou imagem, até 10 MB)
+              Arquivo {editando ? '' : '*'}
             </label>
             <input
               ref={inputRef} type="file" className="hidden"
@@ -342,24 +361,18 @@ function ModalDocumento({
                 {arquivo
                   ? `${arquivo.name} · ${tamanhoLegivel(arquivo.size)}`
                   : editando
-                    ? `${doc!.arquivo_nome} — clique para trocar`
-                    : 'Escolher arquivo…'}
+                    ? `${doc!.arquivo_nome} — trocar`
+                    : 'PDF, Word ou imagem · até 10 MB'}
               </span>
             </button>
-            {editando && (
-              <p className="text-[10px] text-gray-500 mt-1">
-                Ainda é rascunho: ninguém recebeu, então dá para trocar o arquivo.
-              </p>
-            )}
           </div>
         )}
 
         {/* Salvar mirando outra unidade tira o documento da lista na hora: a
             tela mostra só a filial aberta. Dizer antes evita o "sumiu". */}
         {filialAtiva && filialAlvo && filialAlvo !== filialAtiva && (
-          <p className="text-[10px] text-amber-300/80 leading-snug">
-            Você está operando a {filialAtiva} e este documento é só da {filialAlvo} — depois de salvar
-            ele sai desta lista. Troque a unidade no topo, ou vá para a Matriz, para encontrá-lo.
+          <p className="text-[11px] text-amber-300/90">
+            Vai só para a {filialAlvo} — sai da lista da {filialAtiva} ao salvar.
           </p>
         )}
 
@@ -384,9 +397,6 @@ function ModalDocumento({
                 </NeuButtonAccent>
               </div>
             </div>
-            <p className="text-[10px] text-gray-500 text-center">
-              O rascunho fica só com você. Publicar é o que manda para as unidades.
-            </p>
           </div>
         )}
       </motion.div>
@@ -460,10 +470,33 @@ export const DocumentosView = ({ showToast, profile }: { showToast: any; profile
   // esperando publicação; para quem lê (CEO e conselheiro enxergam as três) é
   // documento sem confirmação de leitura. É esse número que acende o ponto na
   // aba — o total de documentos a própria lista já mostra.
+  // Busca e recorte por situação valem dentro da aba. Os novos (sem
+  // confirmação) sobem: é o que a pessoa veio fazer aqui.
+  const [busca, setBusca] = useState('');
+  const [filtro, setFiltro] = useState<FiltroDoc>('todos');
+  const lista = useMemo(() => {
+    const t = busca.trim().toLowerCase();
+    return visiveis
+      .filter(d => filtro === 'todos'
+        || (filtro === 'novos' && idsNaoLidos.has(d.id))
+        || (filtro === 'rascunhos' && ehRascunho(d))
+        || (filtro === 'publicados' && !ehRascunho(d)))
+      .filter(d => !t || [d.titulo, d.descricao, d.arquivo_nome, d.publicado_por_nome]
+        .some(v => String(v ?? '').toLowerCase().includes(t)))
+      .sort((a, b) => Number(idsNaoLidos.has(b.id)) - Number(idsNaoLidos.has(a.id)));
+  }, [visiveis, filtro, busca, idsNaoLidos]);
+  const resumo = useMemo(() => ({
+    total: visiveis.length,
+    publicados: visiveis.filter(d => !ehRascunho(d)).length,
+    rascunhos: visiveis.filter(ehRascunho).length,
+    novos: visiveis.filter(d => idsNaoLidos.has(d.id)).length,
+  }), [visiveis, idsNaoLidos]);
+
   const contagem = useMemo(() => Object.fromEntries(FILIAIS.map(f => [f, {
+    total: documentos.filter(d => daAba(d, f)).length,
     rascunhos: documentos.filter(d => daAba(d, f) && ehRascunho(d)).length,
     novos: naoLidos.filter(d => daAba(d, f)).length,
-  }])) as Record<FilialAlvo, { rascunhos: number; novos: number }>,
+  }])) as Record<FilialAlvo, { total: number; rascunhos: number; novos: number }>,
   [documentos, naoLidos]);
 
   // Ver conta como ter recebido, igual a baixar: os dois querem dizer que a
@@ -525,55 +558,56 @@ export const DocumentosView = ({ showToast, profile }: { showToast: any; profile
       transition={{ duration: 0.3 }}
       className="flex flex-col gap-5 pb-16"
     >
-      <div className="neu-flat rounded-3xl p-5 border border-accent/20 flex items-center justify-between gap-4 flex-wrap">
-        <div>
-          <div className="flex items-center gap-2 mb-1">
-            <FileText size={14} className="text-accent" />
-            <h1 className="text-sm font-black uppercase tracking-widest text-gray-100">Documentos</h1>
-          </div>
-          <p className="text-xs text-gray-500">
-            {ehAdmin
-              ? 'Deixe pronto como rascunho e publique quando quiser — aí chega nas unidades e o sistema registra quem leu.'
-              : ehGerente
-                ? 'Publique para a equipe da sua unidade e veja quem leu. O que a Matriz enviar aparece aqui também, para você baixar e confirmar.'
-                : 'Documentos enviados pela Matriz. Baixe e confirme a leitura.'}
-          </p>
+      <div className="flex items-start justify-between gap-3 flex-wrap shrink-0">
+        <div className="flex flex-col gap-1 min-w-0">
+          <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Documentos</h2>
         </div>
         {podePublicar && (
-          <button
-            onClick={() => setModal('novo')}
-            className="neu-button rounded-xl px-4 py-2.5 text-xs font-black uppercase tracking-widest text-accent flex items-center gap-2"
-          >
-            <Upload size={14} /> Novo documento
-          </button>
+          <NeuButtonAccent variant="" onClick={() => setModal('novo')}>
+            <Plus size={14} /> Novo documento
+          </NeuButtonAccent>
         )}
       </div>
 
       {mostrarAbas && (
-        <div className="flex gap-2 flex-wrap shrink-0">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 shrink-0" role="tablist" aria-label="Unidade">
           {FILIAIS.map(f => {
             const ativa = f === aba;
-            // Um sinal só, e sem número: o ponto diz "tem algo seu aqui" — o
-            // que é, a lista da aba mostra em duas linhas. Dois contadores lado
-            // a lado só faziam a pessoa parar para decifrar qual era qual.
+            const cor = FILIAL_COR[f];
+            // Uma linha só embaixo do nome, com UM número: o que espera decisão
+            // quando há (em âmbar), senão o total. Dois contadores lado a lado
+            // faziam a pessoa parar para decifrar qual era qual.
             const pendente = podePublicar ? contagem[f].rascunhos : contagem[f].novos;
+            const total = contagem[f].total;
             return (
               <button
                 key={f}
+                type="button"
+                role="tab"
+                aria-selected={ativa}
                 onClick={() => setAba(f)}
-                title={pendente > 0
-                  ? `${pendente} ${podePublicar ? 'rascunho(s) esperando publicação' : 'documento(s) sem confirmação de leitura'}`
-                  : undefined}
-                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-all ${
-                  ativa ? 'neu-pressed text-accent' : 'neu-button text-gray-400 hover:text-gray-200'
-                }`}
+                className={`relative overflow-hidden rounded-2xl p-3 flex items-center gap-3 text-left border-2 transition-all ${
+                  ativa ? 'neu-flat' : 'neu-flat border-white/5 opacity-75 hover:opacity-100 hover:border-white/15'}`}
+                style={ativa ? {
+                  borderColor: cor,
+                  background: `linear-gradient(135deg, color-mix(in srgb, ${cor} 16%, transparent), transparent 70%)`,
+                } : undefined}
               >
-                <span className="w-7 h-7 rounded-lg bg-black/70 flex items-center justify-center shrink-0 overflow-hidden">
-                  <img src={FILIAL_LOGO[f]} alt="" aria-hidden className="w-full h-full object-contain p-0.5" />
+                <span className="w-12 h-12 rounded-xl bg-black flex items-center justify-center shrink-0 overflow-hidden ring-1 ring-white/10">
+                  <img src={FILIAL_LOGO[f]} alt="" aria-hidden className="w-full h-full object-contain p-1" />
                 </span>
-                {f}
-                {pendente > 0 && (
-                  <span className="w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0" />
+                <span className="flex flex-col min-w-0 flex-1">
+                  <span className="text-base font-black text-gray-100 leading-tight">{f}</span>
+                  <span className={`text-[11px] font-semibold ${pendente > 0 ? 'text-amber-400' : 'text-gray-500'}`}>
+                    {pendente > 0
+                      ? `${pendente} ${podePublicar
+                          ? (pendente === 1 ? 'rascunho a publicar' : 'rascunhos a publicar')
+                          : (pendente === 1 ? 'a confirmar' : 'a confirmar')}`
+                      : `${total} ${total === 1 ? 'documento' : 'documentos'}`}
+                  </span>
+                </span>
+                {ativa && (
+                  <span aria-hidden className="absolute left-0 right-0 bottom-0 h-1" style={{ background: cor }} />
                 )}
               </button>
             );
@@ -581,36 +615,38 @@ export const DocumentosView = ({ showToast, profile }: { showToast: any; profile
         </div>
       )}
 
-      {podePublicar && visiveis.some(ehRascunho) && (
-        <div className="neu-flat rounded-2xl p-4 border border-gray-500/25 flex items-start gap-2 text-xs text-gray-400">
-          <FileClock size={13} className="shrink-0 mt-0.5" />
-          <span>
-            {visiveis.filter(ehRascunho).length === 1
-              ? `Há 1 rascunho guardado para a ${filialAtiva ?? aba} — ela ainda não o recebeu.`
-              : `Há ${visiveis.filter(ehRascunho).length} rascunhos guardados para a ${filialAtiva ?? aba} — ela ainda não os recebeu.`}
-          </span>
-        </div>
-      )}
+      <div className={`grid grid-cols-2 gap-4 shrink-0 ${podePublicar && !ehAdmin ? 'lg:grid-cols-4' : 'lg:grid-cols-3'}`}>
+        <CardContador label="Documentos" value={resumo.total} tom="neutro" />
+        <CardContador label="Publicados" value={resumo.publicados} tom="verde"
+          onClick={() => setFiltro(f => f === 'publicados' ? 'todos' : 'publicados')} ativo={filtro === 'publicados'} />
+        {podePublicar && (
+          <CardContador label="Rascunhos" value={resumo.rascunhos} tom="amarelo"
+            onClick={() => setFiltro(f => f === 'rascunhos' ? 'todos' : 'rascunhos')} ativo={filtro === 'rascunhos'} />
+        )}
+        {!ehAdmin && (
+          <CardContador label="A confirmar" value={resumo.novos} tom="laranja"
+            onClick={() => setFiltro(f => f === 'novos' ? 'todos' : 'novos')} ativo={filtro === 'novos'} />
+        )}
+      </div>
 
-      {/* Migr. 528: o gerente publica E recebe. Amarrar este aviso a
-          `!podePublicar` o faria sumir justamente para quem tem as duas
-          caixas — e o que a Matriz manda continua esperando confirmação. */}
-      {!ehAdmin && naoLidos.length > 0 && (
-        <div className="neu-flat rounded-2xl p-4 border border-amber-400/25 flex items-start gap-2 text-xs text-amber-200">
-          <Info size={13} className="shrink-0 mt-0.5" />
-          <span>
-            {naoLidos.length === 1
-              ? 'Há 1 documento novo que você ainda não confirmou.'
-              : `Há ${naoLidos.length} documentos novos que você ainda não confirmou.`}
-          </span>
+      <div className="flex flex-wrap items-center gap-2.5 shrink-0">
+        <div className="relative flex-1 min-w-[14rem]">
+          <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
+          <input
+            type="text" value={busca} onChange={e => setBusca(e.target.value)}
+            placeholder="Buscar por título, descrição ou arquivo…"
+            className="neu-input py-2.5 pl-10 pr-4 rounded-xl text-sm w-full"
+          />
         </div>
-      )}
+      </div>
 
-      {visiveis.length === 0 ? (
-        <EmptyState message={`Nenhum documento para a ${filialAtiva ?? aba} ainda.`} />
+      {lista.length === 0 ? (
+        <EmptyState message={visiveis.length === 0
+          ? `Nenhum documento para a ${filialAtiva ?? aba} ainda.`
+          : 'Nenhum documento com esse filtro.'} />
       ) : (
         <div className="flex flex-col gap-2">
-          {visiveis.map(doc => {
+          {lista.map(doc => {
             const novo = idsNaoLidos.has(doc.id);
             const draft = ehRascunho(doc);
             return (
@@ -631,11 +667,12 @@ export const DocumentosView = ({ showToast, profile }: { showToast: any; profile
                   {/* Ícone de imagem quando é imagem: com a extensão embaixo em
                       8px, uma folha de papel escrita "PNG" faz o olho ler
                       documento de texto. */}
-                  <div className="w-11 h-11 rounded-2xl neu-pressed flex flex-col items-center justify-center shrink-0">
+                  <div className={`w-11 h-11 rounded-xl flex flex-col items-center justify-center shrink-0 ${
+                    draft ? 'opacity-60' : ''} ${corDoTipo(doc.arquivo_mime)}`}>
                     {EH_IMAGEM(doc.arquivo_mime)
-                      ? <ImageIcon size={15} className="text-accent" />
-                      : <FileText size={15} className="text-accent" />}
-                    <span className="text-[8px] font-black text-gray-500 mt-0.5">{extensaoDe(doc.arquivo_nome)}</span>
+                      ? <ImageIcon size={15} />
+                      : <FileText size={15} />}
+                    <span className="text-[8px] font-black mt-0.5 tracking-wide">{extensaoDe(doc.arquivo_nome)}</span>
                   </div>
 
                   <div className="flex-1 min-w-0">
@@ -670,12 +707,12 @@ export const DocumentosView = ({ showToast, profile }: { showToast: any; profile
                         <h3 className={`text-sm font-bold truncate ${draft ? 'text-gray-400' : 'text-gray-100'}`}>{doc.titulo}</h3>
                       )}
                       {draft && (
-                        <span className="text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full bg-gray-500/15 text-gray-400 border border-gray-500/30 flex items-center gap-1">
+                        <span className="text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded bg-zinc-600 text-white flex items-center gap-1">
                           <FileClock size={9} /> Rascunho
                         </span>
                       )}
                       {novo && (
-                        <span className="text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full bg-amber-400/15 text-amber-300 border border-amber-400/30">
+                        <span className="text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded bg-yellow-400 text-black">
                           Novo
                         </span>
                       )}
@@ -705,7 +742,7 @@ export const DocumentosView = ({ showToast, profile }: { showToast: any; profile
                       <button
                         onClick={() => ver(doc)}
                         title={`Ver ${extensaoDe(doc.arquivo_nome)} sem baixar`}
-                        className="neu-button rounded-xl px-3 py-2 text-[11px] font-black uppercase tracking-widest text-accent flex items-center gap-1.5"
+                        className="btn-solido btn-solido--azul"
                       >
                         <Eye size={13} /> Ver
                       </button>
@@ -714,7 +751,7 @@ export const DocumentosView = ({ showToast, profile }: { showToast: any; profile
                       onClick={() => baixar(doc)}
                       disabled={baixando === doc.id}
                       title={`Baixar ${extensaoDe(doc.arquivo_nome)}`}
-                      className="neu-button rounded-xl px-3 py-2 text-[11px] font-black uppercase tracking-widest text-accent flex items-center gap-1.5 disabled:opacity-50"
+                      className="btn-solido btn-solido--amarelo"
                     >
                       {baixando === doc.id ? <Loader2 size={13} className="animate-spin" /> : <Download size={13} />}
                       Baixar
@@ -723,16 +760,16 @@ export const DocumentosView = ({ showToast, profile }: { showToast: any; profile
                       <button
                         onClick={() => marcarLido(doc.id)}
                         title="Confirmar leitura"
-                        className="neu-button rounded-xl p-2 text-emerald-300"
+                        className="btn-solido btn-solido--verde"
                       >
-                        <Check size={13} />
+                        <Check size={13} /> Recebi
                       </button>
                     )}
                     {podeMexer(doc) && draft && (
                       <button
                         onClick={() => publicarAgora(doc)}
                         title="Publicar para as unidades"
-                        className="neu-button rounded-xl px-3 py-2 text-[11px] font-black uppercase tracking-widest text-emerald-300 ring-1 ring-emerald-500/40 hover:ring-emerald-400 flex items-center gap-1.5"
+                        className="btn-solido btn-solido--verde"
                       >
                         <Send size={13} /> Publicar
                       </button>

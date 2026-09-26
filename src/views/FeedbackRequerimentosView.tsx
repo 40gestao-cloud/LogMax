@@ -30,18 +30,21 @@ export function FeedbackRequerimentosView({
   return (
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
       className="flex flex-col h-full gap-5 overflow-y-auto main-scrollbar pb-6">
-      <div className="flex gap-1.5 shrink-0 neu-pressed rounded-2xl p-1.5 w-fit">
-        {TABS.map(t => {
-          const Icon = t.icon;
-          const active = tab === t.id;
-          return (
-            <button key={t.id} onClick={() => setTab(t.id)}
-              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold transition-all ${
-                active ? 'neu-flat text-accent border border-accent/20' : 'text-gray-500 hover:text-gray-300'}`}>
-              <Icon size={15} /> {t.label}
-            </button>
-          );
-        })}
+      <div className="flex items-center justify-between gap-3 flex-wrap shrink-0">
+        <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Feedback & Requerimentos</h2>
+        <div className="flex gap-1 neu-pressed rounded-xl p-1" role="tablist">
+          {TABS.map(t => {
+            const Icon = t.icon;
+            const active = tab === t.id;
+            return (
+              <button key={t.id} type="button" role="tab" aria-selected={active} onClick={() => setTab(t.id)}
+                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition-colors ${
+                  active ? 'btn-solido--dourado' : 'text-gray-400 hover:text-gray-200'}`}>
+                <Icon size={15} /> {t.label}
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       {tab === 'feedback' ? (
