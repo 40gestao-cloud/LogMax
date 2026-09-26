@@ -6,7 +6,7 @@ import { Search, Edit2, Trash2, MapPin, Building2, Plus, Save, FileDown, Sheet, 
 import { HistoricoOperacoes } from '../components/HistoricoOperacoes';
 import { useFetchData, dbInsert, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
 import { supabase } from '../lib/supabase';
-import { LoadingSpinner, EmptyState, FormField, ExportButton, NeuButtonAccent, StatusBadge } from '../components/ui';
+import { LoadingSpinner, EmptyState, FormField, ExportButton, NeuButtonAccent, StatusBadge, FilialBadge } from '../components/ui';
 import { useFormValidation, exportToPDF, exportToExcel, formatCNPJ, formatPhone, formatBRL, parseBRL, handleMoneyKeyDown } from '../lib/viewUtils';
 import { useConfirm } from '../contexts/ConfirmContext';
 import { uploadLogoFilial, removerLogoFilial, FILIAL_LOGO_ACCEPT, FILIAL_LOGO_MAX_LABEL, validarLogoFilial } from '../lib/filialLogo';
@@ -533,28 +533,31 @@ export const FiliaisView = ({ showToast }: any) => {
   const formEdicaoRef = useRolarAteFormulario(isFormOpen, editItem?.id);
 
   return (
-    <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col h-full gap-8">
-      <div className="flex flex-wrap justify-between items-start gap-3 shrink-0">
-        <div>
-          <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">
-            Gestão de Filiais {filialAtiva === null ? '— Matriz (consolidado)' : `— ${nichoAtivo}`}
-          </h2>
+    <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col h-full gap-6 overflow-y-auto main-scrollbar">
+      <div className="flex flex-wrap justify-between items-center gap-3 shrink-0">
+        <div className="flex items-center gap-3">
+          <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Filiais</h2>
+          {filialAtiva === null
+            ? <span className="text-[10px] font-black uppercase tracking-widest px-2 py-1 rounded bg-zinc-700 text-gray-200">Consolidado</span>
+            : <FilialBadge filial={nichoAtivo} />}
         </div>
-        <div className="flex flex-wrap gap-3 items-center w-full sm:w-auto">
+        <div className="flex flex-wrap gap-2.5 items-center w-full sm:w-auto">
           {data.length > 0 && (
             <>
               <ExportButton label="PDF" onClick={handleExportPDF} icon={FileDown} />
               <ExportButton label="Excel" onClick={handleExportExcel} icon={Sheet} />
             </>
           )}
-          <div className="relative flex-1 sm:flex-none">
-            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
-            <input type="text" placeholder="Buscar filial..." className="neu-input py-2.5 pl-10 pr-4 rounded-xl text-sm w-full sm:w-52"
-              value={search} onChange={e => setSearch(e.target.value)} />
-          </div>
+          {escopadoPorFilial.length > 1 && (
+            <div className="relative flex-1 sm:flex-none">
+              <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
+              <input type="text" placeholder="Buscar filial..." className="neu-input py-2.5 pl-10 pr-4 rounded-xl text-sm w-full sm:w-52"
+                value={search} onChange={e => setSearch(e.target.value)} />
+            </div>
+          )}
           {canCreate && (
             <NeuButtonAccent onClick={() => { closeForm(); setShowForm(v => !v); }}>
-              <Plus size={16} /> Novo
+              <Plus size={16} /> Nova filial
             </NeuButtonAccent>
           )}
         </div>
@@ -589,10 +592,7 @@ export const FiliaisView = ({ showToast }: any) => {
                         </button>
                       )}
                     </div>
-                    <p className="text-[11px] text-gray-500">
-                      JPG, PNG, WEBP ou SVG — até <span className="font-bold text-gray-300">{FILIAL_LOGO_MAX_LABEL}</span>.
-                      Raster é comprimido para WebP 512 px automaticamente; SVG sobe inalterado. Sem logo, exibe ícone padrão.
-                    </p>
+                    <p className="text-[11px] text-gray-500">JPG, PNG, WEBP ou SVG · até {FILIAL_LOGO_MAX_LABEL}</p>
                   </div>
                 </div>
               </div>
@@ -650,12 +650,6 @@ export const FiliaisView = ({ showToast }: any) => {
                       <option value="Alugado">Alugado</option>
                     </select>
                   </FormField>
-                  {detalhes.tipoImovel === 'Alugado' && (
-                    <div className="md:col-span-2 lg:col-span-3 text-xs text-gray-500 -mt-1">
-                      O valor do aluguel agora entra como item da lista de investimento
-                      abaixo (categoria "Aluguel") — é o que vira parcela mensal na Fase 3.
-                    </div>
-                  )}
                   <FormField label="Vagas de estacionamento">
                     <input className="neu-input py-2 px-3 rounded-xl text-sm" type="number" min="0" value={detalhes.vagas}
                       onChange={e => setDetalhes(d => ({ ...d, vagas: e.target.value }))}
@@ -901,123 +895,138 @@ export const FiliaisView = ({ showToast }: any) => {
       </AnimatePresence>
 
       {isLoading ? <LoadingSpinner /> : filtered.length === 0 ? <EmptyState /> : (
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 overflow-y-auto main-scrollbar pb-6 pr-2">
-          {filtered.map((item: any, i: number) => (
-            <motion.div key={item.id} initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}
-              transition={{ delay: i * 0.05 }}
-              className="neu-flat p-6 rounded-2xl flex flex-col border border-white/5 group gap-4">
-              <div className="flex justify-between items-start">
-                <div className="flex items-center gap-3">
-                  <FilialThumb url={item.imagem_url} size="md" alt={item.nome} />
-                  <div>
-                    <h3 className="text-sm font-bold text-gray-200 tracking-wide">{item.nome}</h3>
-                    <span className="text-xs font-mono text-gray-500">{item.cnpj}</span>
-                  </div>
-                </div>
-                <div className={`px-2 py-1 rounded text-[10px] font-bold uppercase tracking-widest shrink-0 ${item.status === 'Ativa' ? 'bg-accent/10 text-accent' : 'bg-gray-800 text-gray-400'}`}>
-                  {item.status}
-                </div>
-              </div>
-
-              <div className="neu-pressed p-3.5 rounded-xl flex flex-col gap-2 border border-white/5">
-                <div className="flex items-center gap-2 text-xs text-gray-400">
-                  <MapPin size={11} className="text-gray-500 shrink-0" />
-                  <span>{item.cidade}{item.endereco ? ` — ${item.endereco}` : ''}</span>
-                </div>
-                {item.celular && (
-                  <div className="flex items-center gap-2 text-xs text-gray-400">
-                    <Phone size={11} className="text-gray-500 shrink-0" />{item.celular}
-                  </div>
-                )}
-                {item.representante && (
-                  <div className="flex items-center gap-2 text-xs text-gray-400">
-                    <User size={11} className="text-gray-500 shrink-0" />{item.representante}
-                  </div>
-                )}
-                {item.detalhes?.tamanhoM2 != null && (
-                  <div className="flex items-center gap-2 text-xs text-gray-400">
-                    <Ruler size={11} className="text-gray-500 shrink-0" />{item.detalhes.tamanhoM2} m²
-                    {item.detalhes.tipoImovel ? ` · ${item.detalhes.tipoImovel}` : ''}
-                  </div>
-                )}
-                {item.detalhes?.horarioFuncionamento && (
-                  <div className="flex items-center gap-2 text-xs text-gray-400">
-                    <Clock size={11} className="text-gray-500 shrink-0" />{item.detalhes.horarioFuncionamento}
-                  </div>
-                )}
-                {item.detalhes?.vagas != null && (
-                  <div className="flex items-center gap-2 text-xs text-gray-400">
-                    <Car size={11} className="text-gray-500 shrink-0" />{item.detalhes.vagas} vagas
-                  </div>
-                )}
-                {item.detalhes?.capacidade != null && (
-                  <div className="flex items-center gap-2 text-xs text-gray-400">
-                    <Users2 size={11} className="text-gray-500 shrink-0" />Capacidade: {item.detalhes.capacidade}
-                  </div>
-                )}
-                {item.detalhes?.dataInauguracao && (
-                  <div className="flex items-center gap-2 text-xs text-gray-400">
-                    <Calendar size={11} className="text-gray-500 shrink-0" />Inaugurada em {new Date(item.detalhes.dataInauguracao + 'T00:00:00').toLocaleDateString('pt-BR')}
-                  </div>
-                )}
-                {(item.detalhes?.valorAluguel != null || item.detalhes?.investimentoInicial != null
-                  || item.detalhes?.folhaPagamento != null || item.detalhes?.valorTotalEquipamentos != null) && (
-                  <div className="flex items-start gap-2 text-xs text-gray-400">
-                    <Wallet size={11} className="text-gray-500 shrink-0 mt-0.5" />
-                    <div className="flex flex-col gap-0.5">
-                      {item.detalhes.valorAluguel != null && <span>Aluguel: R$ {formatBRL(item.detalhes.valorAluguel)}</span>}
-                      {item.detalhes.folhaPagamento != null && <span>Folha de pagamento: R$ {formatBRL(item.detalhes.folhaPagamento)}</span>}
-                      {item.detalhes.investimentoInicial != null && <span>Investimento inicial: R$ {formatBRL(item.detalhes.investimentoInicial)}</span>}
-                      {item.detalhes.valorTotalEquipamentos != null && <span>Equip. & mobiliário: R$ {formatBRL(item.detalhes.valorTotalEquipamentos)}</span>}
-                      {item.detalhes.valorTotalInvestido != null && (
-                        <span className="text-accent font-bold">Total investido: R$ {formatBRL(item.detalhes.valorTotalInvestido)}</span>
+        <div className={`grid gap-5 pb-6 ${filtered.length > 1 ? 'grid-cols-1 2xl:grid-cols-2' : 'grid-cols-1'}`}>
+          {filtered.map((item: any, i: number) => {
+            const d = item.detalhes ?? {};
+            const nichoItem = detectarNicho(d.nicho, item.nome);
+            const equipamentos = (nichoItem ? CAMPOS_NICHO[nichoItem] : [])
+              .map(([k, l]) => [l, d[k]] as const)
+              .filter(([, v]) => typeof v === 'number' && v > 0);
+            const brl = (v: any) => `R$ ${formatBRL(v)}`;
+            // Ficha do espaço: só o que foi preenchido vira ladrilho.
+            const espaco = [
+              d.tamanhoM2 != null && { icon: Ruler, rotulo: 'Área', valor: `${d.tamanhoM2} m²`, sub: d.tipoImovel || null },
+              d.horarioFuncionamento && { icon: Clock, rotulo: 'Horário', valor: d.horarioFuncionamento },
+              d.vagas != null && { icon: Car, rotulo: 'Vagas', valor: String(d.vagas) },
+              d.capacidade != null && { icon: Users2, rotulo: 'Capacidade', valor: String(d.capacidade) },
+              d.dataInauguracao && { icon: Calendar, rotulo: 'Inauguração', valor: new Date(d.dataInauguracao + 'T00:00:00').toLocaleDateString('pt-BR') },
+            ].filter(Boolean) as { icon: any; rotulo: string; valor: string; sub?: string | null }[];
+            const financeiro = [
+              d.valorAluguel != null && { rotulo: 'Aluguel / mês', valor: d.valorAluguel },
+              d.folhaPagamento != null && { rotulo: 'Folha de pagamento', valor: d.folhaPagamento },
+              d.investimentoInicial != null && { rotulo: 'Investimento inicial', valor: d.investimentoInicial },
+              d.valorTotalEquipamentos != null && { rotulo: 'Equipamentos', valor: d.valorTotalEquipamentos },
+            ].filter(Boolean) as { rotulo: string; valor: number }[];
+            return (
+              <motion.div key={item.id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: i * 0.05 }}
+                className="neu-flat rounded-2xl border border-white/5 flex flex-col overflow-hidden">
+                {/* Cabeçalho */}
+                <div className="p-5 flex items-center gap-4 border-b border-white/5">
+                  <FilialThumb url={item.imagem_url} size="lg" alt={item.nome} />
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <h3 className="text-xl font-black text-gray-100 leading-tight">{item.nome}</h3>
+                      <span className={`text-[10px] font-black uppercase tracking-widest px-2 py-0.5 rounded ${
+                        item.status === 'Ativa' ? 'bg-green-600 text-white' : 'bg-zinc-600 text-white'}`}>
+                        {item.status}
+                      </span>
+                    </div>
+                    <div className="text-xs text-gray-500 font-mono mt-0.5">{item.cnpj}</div>
+                    <div className="flex items-center gap-x-4 gap-y-1 flex-wrap mt-2 text-xs text-gray-400">
+                      {(item.cidade || item.endereco) && (
+                        <span className="flex items-center gap-1.5"><MapPin size={12} className="text-gray-500" />
+                          {item.endereco ? `${item.endereco} · ` : ''}{item.cidade}</span>
                       )}
+                      {item.celular && <span className="flex items-center gap-1.5"><Phone size={12} className="text-gray-500" />{item.celular}</span>}
+                      {item.representante && <span className="flex items-center gap-1.5"><User size={12} className="text-gray-500" />{item.representante}</span>}
                     </div>
                   </div>
+                  <div className="flex items-center gap-1.5 self-start shrink-0">
+                    {canEditRow(item) && (
+                      <button onClick={() => openEdit(item)} title="Editar" className="action-btn-edit"><Edit2 size={12} /></button>
+                    )}
+                    <MenuMais>
+                      {fechar => (
+                        <>
+                          <HistoricoOperacoes variante="menu" onAbrir={fechar} entidade="filiais" entidadeId={item.id} titulo={item.nome} criadoEm={item.created_at} atualizadoEm={item.updated_at} />
+                          {canDeleteRow(item) && (
+                            <ItemMenu onClick={() => { fechar(); handleDelete(item.id, item.imagem_url); }}
+                              cor="text-red-400 hover:bg-red-500/10" icon={Trash2}>
+                              Excluir
+                            </ItemMenu>
+                          )}
+                        </>
+                      )}
+                    </MenuMais>
+                  </div>
+                </div>
+
+                {/* Espaço */}
+                {espaco.length > 0 && (
+                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 border-b border-white/5 divide-x divide-white/5">
+                    {espaco.map(e => {
+                      const Icon = e.icon;
+                      return (
+                        <div key={e.rotulo} className="px-4 py-3 flex flex-col gap-0.5">
+                          <span className="text-[10px] uppercase tracking-widest font-bold text-gray-500 flex items-center gap-1.5">
+                            <Icon size={11} /> {e.rotulo}
+                          </span>
+                          <span className="text-sm font-bold text-gray-100">
+                            {e.valor}{e.sub && <span className="text-xs font-semibold text-gray-500"> · {e.sub}</span>}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
                 )}
-                {(() => {
-                  const d = item.detalhes ?? {};
-                  const nichoItem = detectarNicho(d.nicho, item.nome);
-                  const paresRelevantes = nichoItem ? CAMPOS_NICHO[nichoItem] : [];
-                  const chips = paresRelevantes
-                    .map(([k, l]) => [l, d[k]] as const)
-                    .filter(([, v]) => typeof v === 'number' && v > 0);
-                  if (chips.length === 0) return null;
-                  return (
-                    <div className="flex items-start gap-2 text-xs text-gray-400 pt-1 border-t border-white/5">
-                      <Package size={11} className="text-gray-500 shrink-0 mt-1" />
-                      <div className="flex flex-wrap gap-1">
-                        {chips.map(([label, v]) => (
-                          <span key={label} className="px-1.5 py-0.5 rounded bg-white/5 text-[10px] font-mono">
-                            {v}× {label}
+
+                {/* Financeiro + equipamentos */}
+                <div className={`p-5 grid gap-5 ${financeiro.length > 0 && equipamentos.length > 0 ? 'grid-cols-1 lg:grid-cols-2' : 'grid-cols-1'}`}>
+                  {(financeiro.length > 0 || d.valorTotalInvestido != null) && (
+                    <div className="flex flex-col gap-3">
+                      <span className="text-[10px] uppercase tracking-widest font-bold text-gray-500 flex items-center gap-1.5">
+                        <Wallet size={11} /> Financeiro
+                      </span>
+                      <div className="grid grid-cols-2 gap-2">
+                        {financeiro.map(f => (
+                          <div key={f.rotulo} className="neu-pressed rounded-xl px-3 py-2.5 flex flex-col gap-0.5">
+                            <span className="text-[10px] text-gray-500">{f.rotulo}</span>
+                            <span className="text-sm font-black text-gray-100 tabular-nums">{brl(f.valor)}</span>
+                          </div>
+                        ))}
+                      </div>
+                      {d.valorTotalInvestido != null && (
+                        <div className="rounded-xl px-4 py-3 flex items-center justify-between border border-accent/30"
+                          style={{ background: 'color-mix(in srgb, var(--color-accent) 8%, transparent)' }}>
+                          <span className="text-xs font-bold uppercase tracking-widest text-gray-300">Total investido</span>
+                          <span className="text-xl font-black text-accent tabular-nums">{brl(d.valorTotalInvestido)}</span>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  {equipamentos.length > 0 && (
+                    <div className="flex flex-col gap-3">
+                      <span className="text-[10px] uppercase tracking-widest font-bold text-gray-500 flex items-center gap-1.5">
+                        <Package size={11} /> Equipamentos e mobiliário
+                      </span>
+                      <div className="flex flex-wrap gap-1.5">
+                        {equipamentos.map(([label, v]) => (
+                          <span key={label} className="neu-pressed rounded-lg pl-1 pr-2.5 py-1 text-xs text-gray-300 flex items-center gap-2">
+                            <span className="min-w-[1.75rem] text-center rounded-md bg-accent/15 text-accent font-black tabular-nums px-1.5 py-0.5">{v}</span>
+                            {label}
                           </span>
                         ))}
                       </div>
                     </div>
-                  );
-                })()}
-              </div>
-
-              <div className="flex justify-end items-center gap-1.5 mt-auto">
-                {canEditRow(item) && (
-                  <button onClick={() => openEdit(item)} title="Editar" className="action-btn-edit"><Edit2 size={12} /></button>
-                )}
-                <MenuMais>
-                  {fechar => (
-                    <>
-                      <HistoricoOperacoes variante="menu" onAbrir={fechar} entidade="filiais" entidadeId={item.id} titulo={item.nome} criadoEm={item.created_at} atualizadoEm={item.updated_at} />
-                      {canDeleteRow(item) && (
-                        <ItemMenu onClick={() => { fechar(); handleDelete(item.id, item.imagem_url); }}
-                          cor="text-red-400 hover:bg-red-500/10" icon={Trash2}>
-                          Excluir
-                        </ItemMenu>
-                      )}
-                    </>
                   )}
-                </MenuMais>
-              </div>
-            </motion.div>
-          ))}
+                  {financeiro.length === 0 && d.valorTotalInvestido == null && equipamentos.length === 0 && (
+                    <span className="text-xs text-gray-600">Sem dados de investimento ou equipamentos.</span>
+                  )}
+                </div>
+              </motion.div>
+            );
+          })}
         </div>
       )}
     </motion.div>
