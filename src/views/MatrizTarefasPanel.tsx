@@ -744,6 +744,28 @@ function PainelTipoTarefa({ tipoConfig, competicao, profile, podeAvaliar, ehAval
   );
 }
 
+// Cor de cada unidade — a mesma do FilialBadge (index.css). Pinta o círculo
+// de iniciais e a barra de progresso da coluna.
+const FILIAL_COR: Record<FilialOp, { bg: string; texto: string }> = {
+  SuperMax: { bg: '#2563eb', texto: '#fff' },
+  MaxLook:  { bg: '#c9a882', texto: '#1c1917' },
+  TechMax:  { bg: '#ea580c', texto: '#fff' },
+};
+
+const iniciais = (nome: string) => {
+  const partes = nome.trim().split(/\s+/).filter(Boolean);
+  if (partes.length === 0) return '?';
+  const ultima = partes.length > 1 ? partes[partes.length - 1][0] : '';
+  return (partes[0][0] + ultima).toUpperCase();
+};
+
+// Quem já tem nota, pela régua de quem olha: o conselheiro enxerga só a
+// própria (voto selado), o admin e a tarefa encerrada enxergam a do conselho.
+const temNota = (avals: AvaliacaoParticipante[], minhaId: string, revelado: boolean) =>
+  revelado
+    ? avals.some(a => a.avaliador?.role !== 'admin' && a.nota != null)
+    : avals.some(a => a.avaliador_id === minhaId && a.nota != null);
+
 // ── Card de uma tarefa com lista de participantes votáveis ───────────
 function TarefaCard({ tarefa, tipoConfig, participantes, avalsPorParticipante, submittingIds, podeAvaliar, ehAvaliador, podeGerenciar, souCriador, emAndamento, desligados, minhaId, onAbrirAvaliacao, onRemover, onEditar, onEncerrar, onReabrir, onLiberar, onBriefingIa }: {
   tarefa: Tarefa;
@@ -866,14 +888,28 @@ function TarefaCard({ tarefa, tipoConfig, participantes, avalsPorParticipante, s
           const lista = porFilial[f];
           return (
             <div key={f} className="p-3 flex flex-col gap-1.5 border-b md:border-b-0 border-white/5 last:border-b-0">
-              <div className="flex items-center justify-between gap-2 pb-1">
-                <FilialBadge filial={f} />
-                <span className="text-xs text-gray-500 tabular-nums">{lista.length}</span>
-              </div>
+              {(() => {
+                const feitos = lista.filter(p => temNota(avalsPorParticipante[p.id] ?? [], minhaId, revelado)).length;
+                const pct = lista.length > 0 ? Math.round((feitos / lista.length) * 100) : 0;
+                return (
+                  <div className="flex flex-col gap-2 pb-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <FilialBadge filial={f} />
+                      <span className="text-[11px] text-gray-500 tabular-nums"
+                        title={revelado ? 'Participantes com nota do conselho' : 'Participantes com a sua nota'}>
+                        <b className="text-gray-200">{feitos}</b>/{lista.length} com nota
+                      </span>
+                    </div>
+                    <div className="h-1 rounded-full bg-white/5 overflow-hidden">
+                      <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, background: FILIAL_COR[f].bg }} />
+                    </div>
+                  </div>
+                );
+              })()}
               {lista.length === 0 ? (
                 <span className="text-xs text-gray-600 py-1.5">Sem participantes</span>
               ) : (
-                <div className="flex flex-col">
+                <div className="flex flex-col gap-0.5">
                   {lista.map(p => (
                     <ParticipanteRow
                       key={p.id}
@@ -912,65 +948,46 @@ function ParticipanteRow({ participante, avals, minhaId, desligado, podeAvaliar,
 }) {
   const minha = avals.find(a => a.avaliador_id === minhaId);
   // Notas de admin não entram na média — admin é moderador aqui.
-  const avalsConselho = avals.filter(a => a.avaliador?.role !== 'admin');
-  const notas = avalsConselho.filter(a => a.nota !== null && a.nota !== undefined).map(a => Number(a.nota));
+  const notas = avals
+    .filter(a => a.avaliador?.role !== 'admin' && a.nota !== null && a.nota !== undefined)
+    .map(a => Number(a.nota));
   const media = notas.length > 0 ? notas.reduce((s, n) => s + n, 0) / notas.length : null;
-  // Conta quem deu nota OU só comentou (comentário sem nota é avaliação
-  // válida — constraint chk_algo_avaliado da migr. 210).
-  const total = avals.filter(a => (a.nota !== null && a.nota !== undefined) || !!a.comentario).length;
+  const cor = FILIAL_COR[participante.filial] ?? { bg: '#52525b', texto: '#fff' };
+
+  // Sem nota não escreve nada: o vazio já diz. Só aparece o que existe —
+  // a nota (sua, ou a média revelada), o cadeado do voto selado, o desligado.
+  let fim: React.ReactNode = null;
+  if (submitting) fim = <Loader2 size={14} className="animate-spin text-accent" />;
+  else if (desligado) fim = <span className="text-[9px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded bg-red-600 text-white">Desligado</span>;
+  else if (revelado && media !== null) fim = (
+    <span className="text-sm font-black text-amber-400 tabular-nums" title={`${notas.length} nota${notas.length === 1 ? '' : 's'} do conselho`}>
+      {media.toFixed(1)}
+    </span>
+  );
+  else if (minha?.nota != null) fim = (
+    <span className="text-[11px] font-black px-1.5 py-0.5 rounded btn-solido--dourado tabular-nums" title="Sua nota (as demais seguem seladas)">
+      {Number(minha.nota).toFixed(1)}
+    </span>
+  );
+  else if (!revelado) fim = <EyeOff size={13} className="text-gray-700" aria-label="Nota selada" />;
+  else if (podeAvaliar) fim = <Star size={14} className="text-gray-700 group-hover:text-amber-400 transition-colors" />;
 
   return (
     <button
       onClick={onAbrir}
       disabled={submitting}
-      className="w-full flex items-center gap-2 px-2 py-2 -mx-2 rounded-lg hover:bg-white/5 text-left group disabled:opacity-60"
+      title={participante.nome_snapshot}
+      className="w-full flex items-center gap-2.5 px-2 py-1.5 -mx-2 rounded-lg hover:bg-white/5 text-left group disabled:opacity-60"
     >
-      <span className={`text-sm flex-1 truncate transition-colors ${
-        desligado ? 'text-gray-500 line-through' : 'text-gray-200 group-hover:text-white'
-      }`}>
+      <span className={`w-7 h-7 shrink-0 rounded-full flex items-center justify-center text-[10px] font-black ${desligado ? 'opacity-40' : ''}`}
+        style={{ background: cor.bg, color: cor.texto }}>
+        {iniciais(participante.nome_snapshot)}
+      </span>
+      <span className={`text-sm flex-1 min-w-0 truncate ${desligado ? 'text-gray-500 line-through' : 'text-gray-200 group-hover:text-white'}`}>
         {participante.nome_snapshot}
       </span>
-
-      {desligado && (
-        <span
-          title="Desligado depois de entrar nesta tarefa — não recebe mais nota e as notas dele saíram do placar da filial."
-          className="text-[9px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded bg-red-600 text-white shrink-0"
-        >
-          Desligado
-        </span>
-      )}
-
-      {revelado && total > 0 && (
-        <span className="text-[10px] uppercase tracking-widest font-bold text-gray-500 tabular-nums shrink-0">
-          {total} aval.
-        </span>
-      )}
-
-      {minha?.comentario && <MessageSquare size={13} className="text-accent shrink-0" />}
-
-      {minha?.nota != null && (
-        <span className="text-[10px] font-black px-1.5 py-0.5 rounded btn-solido--dourado tabular-nums shrink-0" title="Sua nota">
-          {Number(minha.nota).toFixed(1)}
-        </span>
-      )}
-
-      {!revelado ? (
-        <span className="text-[10px] uppercase tracking-widest font-bold text-gray-600 shrink-0 flex items-center gap-1">
-          <EyeOff size={11} /> selado
-        </span>
-      ) : media !== null ? (
-        <span className="text-sm font-mono font-black text-amber-300 tabular-nums shrink-0">
-          {media.toFixed(1)}<span className="text-gray-500 text-[11px]">/10</span>
-        </span>
-      ) : (
-        <span className="text-[10px] uppercase tracking-widest font-bold text-gray-600 shrink-0">sem nota</span>
-      )}
-
-      {submitting
-        ? <Loader2 size={14} className="animate-spin text-accent shrink-0" />
-        : podeAvaliar
-          ? <Star size={14} className="text-gray-600 group-hover:text-amber-400 transition-colors shrink-0" />
-          : <ChevronRight size={14} className="text-gray-600 group-hover:text-accent transition-colors shrink-0" />}
+      {minha?.comentario && <MessageSquare size={12} className="text-accent shrink-0" aria-label="Você comentou" />}
+      <span className="shrink-0 min-w-[1.75rem] flex justify-end">{fim}</span>
     </button>
   );
 }
