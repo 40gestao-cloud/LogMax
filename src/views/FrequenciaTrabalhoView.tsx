@@ -913,7 +913,7 @@ const FrequenciaTrabalhoViewInner = ({ showToast, profile, filial, embedded }: a
                   await reload({ silent: true });
                   showToast(falhas
                     ? `${removiveis.length - falhas} excluído(s), ${falhas} recusado(s).`
-                    : `${removiveis.length} registro(s) de ${fmtData(dataSelecionada)} excluído(s).`, falhas ? 'error' : 'success', !!falhas);
+                    : `${removiveis.length} registro(s) de ${fmtData(dataSelecionada)} excluído(s).`, falhas ? 'error' : 'success');
                 }}
                 title="Exclui os registros deste dia — para dia sem aula lançado por engano"
                 className="btn-solido btn-solido--vermelho !py-2.5 !px-4 !text-xs ml-auto"
