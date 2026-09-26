@@ -2,7 +2,7 @@ import { MenuMais, ItemMenu } from '../components/MenuMais';
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { todayBR } from '../lib/dates';
 import { motion, AnimatePresence } from 'motion/react';
-import { Plus, Users, X, Eye, EyeOff, Shield, User, Trash2, Pencil, FileDown, FileSpreadsheet, AlertTriangle, Camera, KeyRound, Copy, Building2, ChevronRight } from 'lucide-react';
+import { Plus, Users, X, Eye, EyeOff, Shield, User, Trash2, Pencil, FileDown, FileSpreadsheet, AlertTriangle, Camera, KeyRound, Copy, Building2, ChevronRight, CalendarDays } from 'lucide-react';
 import { uploadFotoPerfil, validarFotoPerfil, PERFIL_FOTO_ACCEPT } from '../lib/perfilFoto';
 import { supabase } from '../lib/supabase';
 import { freshToken } from '../lib/authFetch';
@@ -272,9 +272,8 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
         headStyles: { fillColor: BLACK, textColor: GOLD, fontStyle: 'bold', fontSize: 9 },
         bodyStyles: { textColor: GRAY_INK, fontSize: 9 },
         alternateRowStyles: { fillColor: GOLD_TINT },
-        // Courier pelo mesmo motivo da `.font-credencial` na tela: e-mail e
-        // senha são ditados, e em fonte proporcional o "l" e o "1" viram o
-        // mesmo traço.
+        // Courier no papel: e-mail e senha são ditados, e em fonte
+        // proporcional o "l" e o "1" viram o mesmo traço.
         columnStyles: {
           1: { font: 'courier', fontSize: 9 },
           2: { font: 'courier', fontStyle: 'bold', fontSize: 10 },
@@ -914,7 +913,7 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
                 <div key={k} className="flex flex-col gap-1.5">
                   <label htmlFor={`user-${k}`} className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">{label}</label>
                   <input id={`user-${k}`} type={type} value={form[k]} onChange={e => setForm((p: any) => ({ ...p, [k]: e.target.value }))}
-                    className={`neu-input rounded-xl px-3 py-2.5 text-sm ${k === 'email' ? 'font-credencial' : ''}`} />
+                    className={`neu-input rounded-xl px-3 py-2.5 text-sm `} />
                 </div>
               ))}
 
@@ -924,7 +923,7 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
                 <div className="relative">
                   <input id="user-password" type={showPass ? 'text' : 'password'} value={form.password}
                     onChange={e => setForm((p: any) => ({ ...p, password: e.target.value }))}
-                    className="neu-input rounded-xl px-3 py-2.5 pr-10 text-sm w-full font-credencial" />
+                    className="neu-input rounded-xl px-3 py-2.5 pr-10 text-sm w-full" />
                   <button type="button" onClick={() => setShowPass(v => !v)}
                     className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300">
                     {showPass ? <EyeOff size={14} /> : <Eye size={14} />}
@@ -1027,7 +1026,6 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
                   <th className="pb-4 font-bold px-4 text-center">Cargo</th>
                   <th className="pb-4 font-bold px-4 text-center">Filial</th>
                   <th className="pb-4 font-bold px-4 min-w-[10rem]">Vínculo RH</th>
-                  <th className="pb-4 font-bold px-4 text-center">Criado em</th>
                   <th className="pb-4 px-4">Ações</th>
                 </tr>
               </thead>
@@ -1054,12 +1052,13 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
                         </div>
                       </td>
                       <td className="py-3 px-4 text-sm font-semibold text-gray-200">{u.nome}</td>
-                      <td className="py-3 px-4 text-xs text-gray-400 font-credencial select-all">{u.email}</td>
+                      <td className="py-3 px-4 text-xs text-gray-300 select-all">{u.email}</td>
                       {isAdmin && (
                         <td className="py-3 px-4">
                           {senhas[u.id] ? (
                             <div className="flex items-center gap-1.5">
-                              <span className="inline-block text-xs font-credencial text-gray-300 select-all min-w-[5.5rem]">
+                              <span className={`inline-block font-semibold text-gray-100 select-all min-w-[5.5rem] ${
+                                senhaVisivel[u.id] ? 'text-sm' : 'text-lg leading-none tracking-wider'}`}>
                                 {senhaVisivel[u.id] ? senhas[u.id] : '••••••••'}
                               </span>
                               <button
@@ -1123,9 +1122,6 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
                           </span>
                         )}
                       </td>
-                      <td className="py-3 px-4 text-xs font-mono text-center text-gray-500">
-                        {u.created_at ? new Date(u.created_at).toLocaleDateString('pt-BR') : '—'}
-                      </td>
                       <td className="py-3 px-4 text-right">
                         {confirmReset === u.id ? (
                           <div className="flex items-center justify-end gap-2">
@@ -1159,32 +1155,33 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
                                 <Pencil size={13} />
                               </button>
                             )}
-                            {isAdmin && (
-                              (u.role !== 'admin' || u.id === callerProfile.id)
-                              || (u.id !== callerProfile.id && u.role !== 'admin')
-                            ) && (
-                              <MenuMais>
-                                {fechar => (
+                            <MenuMais>
+                              {fechar => {
+                                return (
                                   <>
+                                    <div className="px-3 py-2 text-[11px] text-gray-400 flex items-center gap-2 border-b border-white/5 mb-0.5">
+                                      <CalendarDays size={13} className="text-gray-500" />
+                                      Criado em {u.created_at ? new Date(u.created_at).toLocaleDateString('pt-BR') : '—'}
+                                    </div>
                                     {/* Só admin: a resposta traz a senha em texto, então
                                         quem reseta entra na conta do alvo. CEO,
                                         conselheiro e gerente são alunos. */}
-                                    {(u.role !== 'admin' || u.id === callerProfile.id) && (
+                                    {isAdmin && (u.role !== 'admin' || u.id === callerProfile.id) && (
                                       <ItemMenu onClick={() => { fechar(); setConfirmReset(u.id); }}
                                         cor="text-gray-200 hover:bg-white/5" icon={KeyRound}>
                                         Redefinir senha
                                       </ItemMenu>
                                     )}
-                                    {u.id !== callerProfile.id && u.role !== 'admin' && (
+                                    {isAdmin && u.id !== callerProfile.id && u.role !== 'admin' && (
                                       <ItemMenu onClick={() => { fechar(); setConfirmDelete(u.id); }}
                                         cor="text-red-400 hover:bg-red-500/10" icon={Trash2}>
                                         Excluir
                                       </ItemMenu>
                                     )}
                                   </>
-                                )}
-                              </MenuMais>
-                            )}
+                                );
+                              }}
+                            </MenuMais>
                           </div>
                         )}
                       </td>
@@ -1558,7 +1555,7 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
                   <label htmlFor="user-edit-email" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">E-mail *</label>
                   <input id="user-edit-email" type="email" value={editForm.email}
                     onChange={e => setEditForm((p: any) => ({ ...p, email: e.target.value }))}
-                    className="neu-input rounded-xl px-3 py-2.5 text-sm font-credencial" />
+                    className="neu-input rounded-xl px-3 py-2.5 text-sm" />
                 </div>
 
                 {/* Nova senha (opcional) — trocar a de OUTRA pessoa é só do
@@ -1572,7 +1569,7 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
                     <input id="user-edit-password" type={editShowPass ? 'text' : 'password'} value={editForm.password}
                       placeholder="Deixe em branco para manter"
                       onChange={e => setEditForm((p: any) => ({ ...p, password: e.target.value }))}
-                      className="neu-input rounded-xl px-3 py-2.5 pr-10 text-sm w-full font-credencial" />
+                      className="neu-input rounded-xl px-3 py-2.5 pr-10 text-sm w-full" />
                     <button type="button" onClick={() => setEditShowPass(v => !v)}
                       className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300">
                       {editShowPass ? <EyeOff size={14} /> : <Eye size={14} />}

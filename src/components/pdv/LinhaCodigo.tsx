@@ -51,7 +51,7 @@ export function LinhaCodigo({
             {fmtQtd(qtdArmada)} ×
           </span>
         )}
-        <div className="relative">
+        <div className="relative flex-1 min-w-0 max-w-2xl mr-auto">
           <input
             ref={inputRef}
             value={code}
@@ -68,7 +68,7 @@ export function LinhaCodigo({
             autoComplete="off"
             spellCheck={false}
             placeholder="EAN / REF ou nome do produto"
-            className="w-96 bg-white border-2 text-2xl font-bold text-gray-900 outline-none px-3 py-1.5 focus:border-blue-700"
+            className="w-full bg-white border-2 text-2xl font-bold text-gray-900 outline-none px-3 py-1.5 focus:border-blue-700"
             style={{ borderColor: '#9ca3af', fontFamily: 'Consolas, "Courier New", monospace' }}
           />
           {suggestions.length > 0 && (
@@ -99,7 +99,6 @@ export function LinhaCodigo({
             </div>
           )}
         </div>
-        <div className="flex-1" />
         {temItens ? (
           <button
             onClick={() => onSuspender()}

@@ -19,13 +19,13 @@
 //
 // O PDF nasce das duas juntas, nessa ordem: números primeiro, opinião depois.
 
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  AlertTriangle, RefreshCw, Sparkles, FileDown, CheckCircle2, Clock, Users,
+  AlertTriangle, RefreshCw, Sparkles, FileDown, CheckCircle2, Clock, Users, ChevronDown,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { authFetch } from '../lib/authFetch';
-import { LoadingSpinner } from '../components/ui';
+import { LoadingSpinner, CardContador } from '../components/ui';
 import { formatDataHoraBR } from '../lib/dates';
 import { exportPendenciasPDF, type PendenciaLinha, type PendenciaLeitura } from '../lib/pendenciasPdf';
 import type { UserProfile } from '../hooks/useUserProfile';
@@ -33,10 +33,20 @@ import type { UserProfile } from '../hooks/useUserProfile';
 const UNIDADES = ['SuperMax', 'MaxLook', 'TechMax', 'Matriz'] as const;
 
 const COR_GRAVIDADE: Record<string, string> = {
-  alta:  'text-red-400 border-red-500/30 bg-red-500/5',
-  media: 'text-yellow-400 border-yellow-500/30 bg-yellow-500/5',
-  baixa: 'text-gray-400 border-white/10 bg-white/5',
+  alta:  'bg-red-600 text-white',
+  media: 'bg-amber-500 text-black',
+  baixa: 'bg-zinc-700 text-zinc-200',
 };
+const ORDEM_GRAVIDADE: Record<string, number> = { alta: 0, media: 1, baixa: 2 };
+
+// Com centenas de linhas, a pergunta muda conforme o recorte: onde está
+// parado (unidade), o que está parado (tipo) ou quem segura (responsável).
+type Agrupamento = 'unidade' | 'tipo' | 'responsavel';
+const AGRUPAMENTOS: { id: Agrupamento; label: string }[] = [
+  { id: 'unidade', label: 'Unidade' },
+  { id: 'tipo', label: 'Tipo' },
+  { id: 'responsavel', label: 'Responsável' },
+];
 const ROTULO_GRAVIDADE: Record<string, string> = {
   alta: 'Urgente', media: 'Atenção', baixa: 'Na fila',
 };
@@ -65,6 +75,9 @@ export const PendenciasView: React.FC<Props> = ({ showToast, profile }) => {
   const [modeloIA, setModeloIA] = useState('');
   const [lidasIA, setLidasIA] = useState<number | null>(null);
   const [gerandoPdf, setGerandoPdf] = useState(false);
+  const [agrupar, setAgrupar] = useState<Agrupamento>(ehGerente ? 'tipo' : 'unidade');
+  const [gravidade, setGravidade] = useState<string>('');
+  const [abertos, setAbertos] = useState<Record<string, boolean>>({});
 
   const levantar = useCallback(async () => {
     if (!supabase) return;
@@ -86,6 +99,9 @@ export const PendenciasView: React.FC<Props> = ({ showToast, profile }) => {
     }
     setLinhas((data ?? []) as PendenciaLinha[]);
   }, [filial, showToast]);
+
+  // Abre já levantada: a tela existe para mostrar o que está parado.
+  useEffect(() => { void levantar(); }, [levantar]);
 
   const pedirLeitura = useCallback(async () => {
     setLoadingIA(true);
@@ -163,27 +179,32 @@ export const PendenciasView: React.FC<Props> = ({ showToast, profile }) => {
     };
   }, [linhas]);
 
-  // Agrupado por quem tem a caneta: a pergunta do professor em aula é "quem
-  // está segurando a fila?", e uma lista plana de 86 linhas não responde isso.
-  const porResponsavel = useMemo(() => {
+  const chaveDe = useCallback((l: PendenciaLinha) => {
+    if (agrupar === 'unidade') return l.filial ?? 'Sem unidade';
+    if (agrupar === 'tipo') return l.etapa;
+    return `${l.responsavel} · ${l.responsavel_papel}${filial ? '' : ` · ${l.filial ?? '—'}`}`;
+  }, [agrupar, filial]);
+
+  const grupos = useMemo(() => {
     const mapa = new Map<string, PendenciaLinha[]>();
     for (const l of linhas ?? []) {
-      const chave = `${l.responsavel} · ${l.responsavel_papel}${filial ? '' : ` · ${l.filial ?? '—'}`}`;
-      const g = mapa.get(chave) ?? [];
+      if (gravidade && l.gravidade !== gravidade) continue;
+      const k = chaveDe(l);
+      const g = mapa.get(k) ?? [];
       g.push(l);
-      mapa.set(chave, g);
+      mapa.set(k, g);
     }
-    return [...mapa.entries()].sort((a, b) => {
-      const urg = (x: PendenciaLinha[]) => x.filter(i => i.gravidade === 'alta').length;
-      if (urg(b[1]) !== urg(a[1])) return urg(b[1]) - urg(a[1]);
-      return b[1].length - a[1].length;
-    });
-  }, [linhas, filial]);
+    const urg = (x: PendenciaLinha[]) => x.filter(i => i.gravidade === 'alta').length;
+    return [...mapa.entries()]
+      .map(([k, itens]) => [k, [...itens].sort((a, b) =>
+        (ORDEM_GRAVIDADE[a.gravidade] ?? 9) - (ORDEM_GRAVIDADE[b.gravidade] ?? 9) || b.dias_parado - a.dias_parado)] as const)
+      .sort((a, b) => urg(b[1]) - urg(a[1]) || b[1].length - a[1].length);
+  }, [linhas, gravidade, chaveDe]);
 
   return (
     <div className="flex flex-col gap-5">
       {/* Controles */}
-      <div className="neu-flat rounded-2xl p-4 border border-accent/15 flex flex-wrap items-end gap-3">
+      <div className="neu-flat rounded-2xl p-4 border border-white/5 flex flex-wrap items-end gap-3">
         <div className="flex flex-col gap-1">
           <label className="text-[10px] font-black uppercase tracking-widest text-gray-500">Unidade</label>
           {ehGerente ? (
@@ -202,15 +223,25 @@ export const PendenciasView: React.FC<Props> = ({ showToast, profile }) => {
           )}
         </div>
 
-        <button
-          type="button"
-          onClick={levantar}
-          disabled={loading}
-          className="neu-button rounded-xl px-4 py-2.5 text-[11px] font-black uppercase tracking-widest text-accent flex items-center gap-2 disabled:opacity-50"
-        >
-          <RefreshCw size={13} className={loading ? 'animate-spin' : ''} />
-          {linhas ? 'Atualizar' : 'Levantar pendências'}
+        <div className="flex flex-col gap-1">
+          <span className="text-[10px] font-black uppercase tracking-widest text-gray-500">Agrupar por</span>
+          <div className="flex gap-1 neu-pressed rounded-xl p-1 border border-white/5" role="radiogroup">
+            {AGRUPAMENTOS.filter(g => !(ehGerente && g.id === 'unidade')).map(g => (
+              <button key={g.id} type="button" role="radio" aria-checked={agrupar === g.id}
+                onClick={() => { setAgrupar(g.id); setAbertos({}); }}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${
+                  agrupar === g.id ? 'bg-accent text-[var(--color-accent-text)]' : 'text-gray-400 hover:text-gray-200'}`}>
+                {g.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <button type="button" onClick={levantar} disabled={loading} title="Atualizar"
+          className="neu-button w-10 h-10 rounded-xl flex items-center justify-center text-gray-400 hover:text-accent disabled:opacity-50">
+          <RefreshCw size={15} className={loading ? 'animate-spin' : ''} />
         </button>
+        <span className="flex-1" />
 
         {!!linhas?.length && (
           <>
@@ -255,21 +286,17 @@ export const PendenciasView: React.FC<Props> = ({ showToast, profile }) => {
 
       {!!linhas?.length && (
         <>
-          {/* Painel de números — apuração, não opinião */}
-          <div className="grid grid-cols-2 md:grid-cols-6 gap-2">
-            {[
-              { label: 'Paradas', valor: String(resumo.total), cor: 'text-gray-100' },
-              { label: 'Urgentes', valor: String(resumo.urgentes), cor: 'text-red-400' },
-              { label: 'Atenção', valor: String(resumo.atencao), cor: 'text-yellow-400' },
-              { label: 'A pagar parado', valor: BRL(resumo.aPagar), cor: 'text-red-300' },
-              { label: 'A receber parado', valor: BRL(resumo.aReceber), cor: 'text-emerald-300' },
-              { label: 'Há mais tempo', valor: `${resumo.maisAntiga}d`, cor: 'text-gray-100' },
-            ].map(c => (
-              <div key={c.label} className="neu-pressed rounded-xl p-3">
-                <div className="text-[9px] font-black uppercase tracking-widest text-gray-500">{c.label}</div>
-                <div className={`text-base font-black tabular-nums mt-0.5 ${c.cor}`}>{c.valor}</div>
-              </div>
-            ))}
+          {/* Números do SQL, nunca da IA. Clicar em Urgentes/Atenção filtra a lista. */}
+          <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
+            <CardContador label="Paradas" value={resumo.total}
+              onClick={() => setGravidade('')} ativo={gravidade === ''} />
+            <CardContador label="Urgentes" value={resumo.urgentes} tom="vermelho"
+              onClick={() => setGravidade(g => g === 'alta' ? '' : 'alta')} ativo={gravidade === 'alta'} />
+            <CardContador label="Atenção" value={resumo.atencao} tom="amarelo"
+              onClick={() => setGravidade(g => g === 'media' ? '' : 'media')} ativo={gravidade === 'media'} />
+            <CardContador label="A pagar parado" value={BRL(resumo.aPagar)} tom="laranja" />
+            <CardContador label="A receber parado" value={BRL(resumo.aReceber)} tom="verde" />
+            <CardContador label="Há mais tempo" value={`${resumo.maisAntiga} dias`} />
           </div>
 
           {/* Leitura da IA — bloco separado, cor separada, rótulo explícito */}
@@ -316,52 +343,66 @@ export const PendenciasView: React.FC<Props> = ({ showToast, profile }) => {
             </div>
           )}
 
-          {/* A lista, agrupada por quem tem a caneta */}
-          <div className="flex flex-col gap-3">
-            {porResponsavel.map(([chave, itens]) => (
-              <div key={chave} className="neu-flat rounded-2xl border border-white/5 overflow-hidden">
-                <div className="px-4 py-3 bg-white/[0.03] border-b border-white/5 flex items-center justify-between gap-3">
-                  <div className="flex items-center gap-2 min-w-0">
-                    <Users size={13} className="text-accent shrink-0" />
-                    <span className="text-sm font-bold text-gray-100 truncate">{chave}</span>
-                  </div>
-                  <div className="flex items-center gap-2 shrink-0">
-                    {itens.filter(i => i.gravidade === 'alta').length > 0 && (
-                      <span className="text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full text-red-300 bg-red-500/10 border border-red-500/30">
-                        {itens.filter(i => i.gravidade === 'alta').length} urgente(s)
-                      </span>
+          {/* Grupos recolhidos: 300 linhas abertas de uma vez não se leem. */}
+          <div className="flex flex-col gap-2">
+            {grupos.length === 0 && (
+              <p className="text-sm text-gray-500 px-1">Nada com esse filtro.</p>
+            )}
+            {grupos.map(([chave, itens], idx) => {
+              const aberto = abertos[chave] ?? (grupos.length === 1 && idx === 0);
+              const urgentes = itens.filter(i => i.gravidade === 'alta').length;
+              const atencao = itens.filter(i => i.gravidade === 'media').length;
+              const maisVelho = itens.reduce((m, i) => Math.max(m, i.dias_parado || 0), 0);
+              return (
+                <div key={chave} className="neu-flat rounded-2xl border border-white/5 overflow-hidden">
+                  <button type="button" onClick={() => setAbertos(a => ({ ...a, [chave]: !aberto }))}
+                    aria-expanded={aberto}
+                    className="w-full px-4 py-3 flex items-center gap-3 text-left hover:bg-white/[0.03] transition-colors">
+                    {agrupar === 'responsavel' && <Users size={14} className="text-accent shrink-0" />}
+                    <span className="flex-1 min-w-0 text-sm font-bold text-gray-100 truncate">{chave}</span>
+                    <span className="hidden sm:flex items-center gap-1 text-[11px] text-gray-500 shrink-0">
+                      <Clock size={11} /> até {maisVelho}d
+                    </span>
+                    {urgentes > 0 && (
+                      <span className="shrink-0 px-2 py-0.5 rounded-md text-[10px] font-black bg-red-600 text-white tabular-nums">{urgentes} urgente(s)</span>
                     )}
-                    <span className="text-[10px] text-gray-500 tabular-nums">{itens.length} parada(s)</span>
-                  </div>
-                </div>
+                    {atencao > 0 && (
+                      <span className="shrink-0 px-2 py-0.5 rounded-md text-[10px] font-black bg-amber-500 text-black tabular-nums">{atencao} atenção</span>
+                    )}
+                    <span className="shrink-0 min-w-8 text-center px-2 py-0.5 rounded-md text-xs font-black bg-white/10 text-gray-200 tabular-nums">{itens.length}</span>
+                    <ChevronDown size={16} className={`shrink-0 text-gray-500 transition-transform ${aberto ? 'rotate-180' : ''}`} />
+                  </button>
 
-                <div className="flex flex-col divide-y divide-white/5">
-                  {itens.map(l => (
-                    <div key={`${l.documento_id ?? l.documento}-${l.etapa}`} className="px-4 py-2.5 flex items-start gap-3">
-                      <span className={`text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full border shrink-0 ${COR_GRAVIDADE[l.gravidade]}`}>
-                        {ROTULO_GRAVIDADE[l.gravidade] ?? l.gravidade}
-                      </span>
-                      <div className="flex-1 min-w-0">
-                        <div className="text-[13px] text-gray-200">{l.etapa}</div>
-                        <div className="text-[11px] text-gray-500 mt-0.5">
-                          {l.documento}
-                          {!filial && ` · ${l.filial ?? '—'}`}
-                          {' · '}{l.onde} · {l.acao}
+                  {aberto && (
+                    <div className="flex flex-col divide-y divide-white/5 border-t border-white/5">
+                      {itens.map(l => (
+                        <div key={`${l.documento_id ?? l.documento}-${l.etapa}`} className="px-4 py-2.5 flex items-center gap-3">
+                          <span className={`w-16 text-center text-[9px] font-black uppercase tracking-widest py-1 rounded-md shrink-0 ${COR_GRAVIDADE[l.gravidade] ?? ''}`}>
+                            {ROTULO_GRAVIDADE[l.gravidade] ?? l.gravidade}
+                          </span>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-[13px] text-gray-200 truncate">
+                              {agrupar === 'tipo' ? l.documento : <>{l.etapa} <span className="text-gray-500">· {l.documento}</span></>}
+                            </p>
+                            <p className="text-[11px] text-gray-500 truncate">
+                              {agrupar !== 'unidade' && !filial && `${l.filial ?? '—'} · `}
+                              {agrupar !== 'responsavel' && `${l.responsavel} · `}
+                              {l.acao} <span className="text-gray-600">em {l.onde}</span>
+                            </p>
+                          </div>
+                          {l.valor != null && Number(l.valor) > 0 && (
+                            <span className="text-[12px] font-bold text-gray-200 tabular-nums shrink-0">{BRL(l.valor)}</span>
+                          )}
+                          <span className={`w-12 text-right text-[11px] tabular-nums shrink-0 ${l.dias_parado >= 7 ? 'text-red-400 font-bold' : 'text-gray-500'}`}>
+                            {l.dias_parado}d
+                          </span>
                         </div>
-                      </div>
-                      <div className="text-right shrink-0">
-                        {l.valor != null && Number(l.valor) > 0 && (
-                          <div className="text-[12px] font-bold text-gray-200 tabular-nums">{BRL(l.valor)}</div>
-                        )}
-                        <div className="text-[10px] text-gray-500 flex items-center gap-1 justify-end">
-                          <Clock size={10} /> {l.dias_parado}d
-                        </div>
-                      </div>
+                      ))}
                     </div>
-                  ))}
+                  )}
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </>
       )}

@@ -1,4 +1,4 @@
-import { X } from 'lucide-react';
+import { ScanBarcode, X } from 'lucide-react';
 import { formatBRL } from '../../lib/viewUtils';
 import { fmtQtdArmada as fmtQtd } from '../../lib/pdv/quantidade';
 import { NAVY_DARK, MONEY, RED } from './coresMaxPos';
@@ -14,6 +14,9 @@ export interface ItemCupom {
   estoque: number;
   unidade: string;
 }
+
+// Colunas mais estreitas abaixo de xl: com o menu lateral aberto a tabela rolava de lado.
+const COLUNAS = 'grid-cols-[44px_110px_1fr_56px_64px_90px_104px_32px] xl:grid-cols-[70px_160px_1fr_80px_90px_130px_150px_40px]';
 
 // O cupom em andamento do PDV SuperMax: a tabela de itens (com Oferta e
 // Ruptura por linha) e a barra lateral com o último item lido e os totais.
@@ -35,7 +38,7 @@ export function CupomItens({
     <div className="flex-1 flex overflow-hidden min-h-0">
       <div className="flex-1 flex flex-col min-w-0 border-r border-gray-300">
         <div
-          className="grid grid-cols-[70px_160px_1fr_80px_90px_130px_150px_40px] gap-2 px-4 py-3 text-sm font-bold uppercase tracking-wide shrink-0 text-white"
+          className={`grid ${COLUNAS} gap-2 px-4 py-3 text-xs xl:text-sm font-bold uppercase tracking-wide shrink-0 text-white`}
           style={{ background: NAVY_DARK }}
         >
           <div>ITEM</div>
@@ -57,7 +60,7 @@ export function CupomItens({
             return (
             <div
               key={item.produto_id}
-              className={`grid grid-cols-[70px_160px_1fr_80px_90px_130px_150px_40px] gap-2 px-4 py-2.5 text-lg tabular-nums border-b ${
+              className={`grid ${COLUNAS} gap-2 px-4 py-2.5 text-base xl:text-lg tabular-nums border-b ${
                 idx === selectedCartIdx
                   ? 'bg-yellow-200 border-yellow-500 ring-2 ring-yellow-500'
                   : idx === cart.length - 1 && selectedCartIdx < 0
@@ -118,8 +121,7 @@ export function CupomItens({
         </div>
       </div>
 
-      {/* Sidebar 420px */}
-      <div className="w-[420px] shrink-0 flex flex-col bg-gray-50">
+      <div className="w-[300px] xl:w-[420px] shrink-0 flex flex-col bg-gray-50">
         <div className="px-5 py-5 border-b border-gray-300">
           <div className="text-sm font-bold uppercase tracking-wider text-gray-500 mb-3">ÚLTIMO ITEM LIDO</div>
           {lastAdded ? (
@@ -150,12 +152,15 @@ export function CupomItens({
                   </div>
                 );
               })()}
-              <div className="text-6xl font-bold tabular-nums mt-1" style={{ color: MONEY }}>
+              <div className="text-4xl xl:text-6xl font-bold tabular-nums mt-1" style={{ color: MONEY }}>
                 R$ {formatBRL(lastAdded.subtotal)}
               </div>
             </>
           ) : (
-            <div className="h-32" />
+            <div className="h-32 flex flex-col items-center justify-center gap-2 text-gray-300">
+              <ScanBarcode size={48} strokeWidth={1.25} />
+              <span className="text-sm font-semibold uppercase tracking-widest">Aguardando leitura</span>
+            </div>
           )}
         </div>
         <div className="px-5 py-5 flex-1 space-y-4 text-lg">

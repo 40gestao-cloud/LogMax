@@ -240,19 +240,13 @@ const ValidadesViewInner = ({ showToast, filial }: { showToast: any; filial: Fil
         {showForm && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
             <div className="neu-flat rounded-2xl p-6 border border-white/5 flex flex-col gap-4">
+              {/* O caminho normal é o lote no recebimento; aqui entra o que já estava na prateleira. */}
               <h3 className="text-sm font-bold text-gray-200">Novo lote</h3>
-              <p className="text-[11px] text-gray-500 -mt-2">
-                O caminho normal é registrar o lote na hora de confirmar o recebimento. Este formulário é para
-                o que já estava na prateleira antes do controle existir.
-              </p>
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 <FormField label="Produto *">
                   <select className="neu-input py-2 px-3 rounded-xl text-sm" value={form.produto_id}
                     onChange={e => {
-                      // A ficha do produto sugere a data: hoje + validade_dias
-                      // (migr. 360). Era o dado que o cadastro guardava e que
-                      // esta tela pedia de novo, digitado. Continua editável —
-                      // o lote que chega perto do fim do prazo é comum.
+                      // A ficha sugere hoje + validade_dias (migr. 360); continua editável.
                       const prod = produtos.find((p: any) => p.id === e.target.value);
                       const sugerida = prod ? vencimentoPrevisto(prod, hoje) : null;
                       setForm(f => ({
@@ -278,12 +272,12 @@ const ValidadesViewInner = ({ showToast, filial }: { showToast: any; filial: Fil
                     if (!prod) return null;
                     const dias = validadeDias(prod);
                     if (dias !== null) {
-                      return <p className="text-[10px] text-gray-500 mt-1">Sugerida pelo cadastro: {dias} dia(s) a partir de hoje.</p>;
+                      return <p className="text-[10px] text-gray-500 mt-1">{dias} dia(s) a partir de hoje</p>;
                     }
                     if (ehPerecivel(prod)) {
-                      return <p className="text-[10px] text-amber-400/90 mt-1">Perecível sem prazo no cadastro — a data vai à mão.</p>;
+                      return <p className="text-[10px] text-amber-400/90 mt-1">Informe a data</p>;
                     }
-                    return <p className="text-[10px] text-gray-500 mt-1">Este produto não está marcado como perecível no cadastro.</p>;
+                    return null;
                   })()}
                 </FormField>
                 {/* Frios e laticínios são loteados a peso — 12,5 KG de queijo é

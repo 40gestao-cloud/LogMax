@@ -50,9 +50,7 @@ export const AULA_PRESETS: { nome: string; modulos: string[] }[] = [
   { nome: 'Finanças',     modulos: ['financeiro'] },
   { nome: 'RH',           modulos: ['rh'] },
   { nome: 'Marketing',    modulos: ['marketing'] },
-  // O nome importa: «Todos» lia como atalho e é, na prática, o Modo Aula sem
-  // recorte nenhum — a sidebar da turma volta inteira.
-  { nome: 'Tudo liberado', modulos: AULA_MODULOS.map(m => m.id) },
+  // "Tudo" é o botão «Aplicar tudo» da tela, não um atalho.
   { nome: 'Só Início',    modulos: [] },
 ];
 

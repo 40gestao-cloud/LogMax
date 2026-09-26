@@ -1,5 +1,4 @@
-import React, { useMemo, useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
+import React, { useMemo, useEffect } from 'react';
 import {
   Package, DollarSign, Users, Building2,
   Database, ShoppingCart, Megaphone, Monitor, Brain, ListTodo, TrendingUp,
@@ -24,19 +23,19 @@ const subLabel = (s: SubmenuLike) => (typeof s === 'string' ? s : s.label);
 // Paleta de tints — mapeada a partir do primeiro token de cor de MacroDef.color.
 // Classes listadas explicitamente pra o JIT do Tailwind gerar tudo.
 type TintKey = 'slate'|'sky'|'blue'|'green'|'purple'|'indigo'|'cyan'|'teal'|'pink'|'amber'|'red'|'orange';
-const TINTS: Record<TintKey, { icon: string; iconBg: string; iconRing: string; glow: string; hairline: string }> = {
-  slate:  { icon: 'text-slate-300',  iconBg: 'bg-slate-500/10',  iconRing: 'ring-slate-500/25',  glow: 'bg-slate-500/20',  hairline: 'border-slate-500/20'  },
-  sky:    { icon: 'text-sky-400',    iconBg: 'bg-sky-500/10',    iconRing: 'ring-sky-500/25',    glow: 'bg-sky-500/25',    hairline: 'border-sky-500/25'    },
-  blue:   { icon: 'text-blue-400',   iconBg: 'bg-blue-500/10',   iconRing: 'ring-blue-500/25',   glow: 'bg-blue-500/25',   hairline: 'border-blue-500/25'   },
-  green:  { icon: 'text-emerald-400',iconBg: 'bg-emerald-500/10',iconRing: 'ring-emerald-500/25',glow: 'bg-emerald-500/25',hairline: 'border-emerald-500/25'},
-  purple: { icon: 'text-purple-400', iconBg: 'bg-purple-500/10', iconRing: 'ring-purple-500/25', glow: 'bg-purple-500/25', hairline: 'border-purple-500/25' },
-  indigo: { icon: 'text-indigo-400', iconBg: 'bg-indigo-500/10', iconRing: 'ring-indigo-500/25', glow: 'bg-indigo-500/25', hairline: 'border-indigo-500/25' },
-  cyan:   { icon: 'text-cyan-400',   iconBg: 'bg-cyan-500/10',   iconRing: 'ring-cyan-500/25',   glow: 'bg-cyan-500/25',   hairline: 'border-cyan-500/25'   },
-  teal:   { icon: 'text-teal-400',   iconBg: 'bg-teal-500/10',   iconRing: 'ring-teal-500/25',   glow: 'bg-teal-500/25',   hairline: 'border-teal-500/25'   },
-  pink:   { icon: 'text-pink-400',   iconBg: 'bg-pink-500/10',   iconRing: 'ring-pink-500/25',   glow: 'bg-pink-500/25',   hairline: 'border-pink-500/25'   },
-  amber:  { icon: 'text-amber-300',  iconBg: 'bg-amber-500/10',  iconRing: 'ring-amber-500/25',  glow: 'bg-amber-500/25',  hairline: 'border-amber-500/25'  },
-  red:    { icon: 'text-red-400',    iconBg: 'bg-red-500/10',    iconRing: 'ring-red-500/25',    glow: 'bg-red-500/25',    hairline: 'border-red-500/25'    },
-  orange: { icon: 'text-orange-400', iconBg: 'bg-orange-500/10', iconRing: 'ring-orange-500/25', glow: 'bg-orange-500/25', hairline: 'border-orange-500/25' },
+const TINTS: Record<TintKey, { icon: string; iconBg: string; iconRing: string; glow: string; hairline: string; bar: string }> = {
+  slate:  { icon: 'text-slate-300',  iconBg: 'bg-slate-500/10',  iconRing: 'ring-slate-500/25',  glow: 'bg-slate-500/20',  hairline: 'border-slate-500/20', bar: 'bg-slate-400'  },
+  sky:    { icon: 'text-sky-400',    iconBg: 'bg-sky-500/10',    iconRing: 'ring-sky-500/25',    glow: 'bg-sky-500/25',    hairline: 'border-sky-500/25', bar: 'bg-sky-500'    },
+  blue:   { icon: 'text-blue-400',   iconBg: 'bg-blue-500/10',   iconRing: 'ring-blue-500/25',   glow: 'bg-blue-500/25',   hairline: 'border-blue-500/25', bar: 'bg-blue-500'   },
+  green:  { icon: 'text-emerald-400',iconBg: 'bg-emerald-500/10',iconRing: 'ring-emerald-500/25',glow: 'bg-emerald-500/25',hairline: 'border-emerald-500/25', bar: 'bg-emerald-500'},
+  purple: { icon: 'text-purple-400', iconBg: 'bg-purple-500/10', iconRing: 'ring-purple-500/25', glow: 'bg-purple-500/25', hairline: 'border-purple-500/25', bar: 'bg-purple-500' },
+  indigo: { icon: 'text-indigo-400', iconBg: 'bg-indigo-500/10', iconRing: 'ring-indigo-500/25', glow: 'bg-indigo-500/25', hairline: 'border-indigo-500/25', bar: 'bg-indigo-500' },
+  cyan:   { icon: 'text-cyan-400',   iconBg: 'bg-cyan-500/10',   iconRing: 'ring-cyan-500/25',   glow: 'bg-cyan-500/25',   hairline: 'border-cyan-500/25', bar: 'bg-cyan-500'   },
+  teal:   { icon: 'text-teal-400',   iconBg: 'bg-teal-500/10',   iconRing: 'ring-teal-500/25',   glow: 'bg-teal-500/25',   hairline: 'border-teal-500/25', bar: 'bg-teal-500'   },
+  pink:   { icon: 'text-pink-400',   iconBg: 'bg-pink-500/10',   iconRing: 'ring-pink-500/25',   glow: 'bg-pink-500/25',   hairline: 'border-pink-500/25', bar: 'bg-pink-500'   },
+  amber:  { icon: 'text-amber-300',  iconBg: 'bg-amber-500/10',  iconRing: 'ring-amber-500/25',  glow: 'bg-amber-500/25',  hairline: 'border-amber-500/25', bar: 'bg-amber-500'  },
+  red:    { icon: 'text-red-400',    iconBg: 'bg-red-500/10',    iconRing: 'ring-red-500/25',    glow: 'bg-red-500/25',    hairline: 'border-red-500/25', bar: 'bg-red-500'    },
+  orange: { icon: 'text-orange-400', iconBg: 'bg-orange-500/10', iconRing: 'ring-orange-500/25', glow: 'bg-orange-500/25', hairline: 'border-orange-500/25', bar: 'bg-orange-500' },
 };
 function pickTint(color: string): typeof TINTS[TintKey] {
   const m = color.match(/(?:from-|text-)([a-z]+)-/);
@@ -207,11 +206,8 @@ export const ANALISE_IA_MACROS: MacroDef[] = [
 ];
 
 // ── UI ─────────────────────────────────────────────────────────────────────
-type Stage =
-  | { kind: 'macros' }
-  | { kind: 'modulos'; macro: GroupMacro }
-  | { kind: 'submenus'; macro: GroupMacro; modulo: ModuleDef };
-
+// Um cartão por área com as telas dentro, clicáveis direto. Antes eram três
+// níveis (área → módulo → tela) e os chips do cartão pareciam botões sem ser.
 export function HubView({
   title,
   macros,
@@ -227,59 +223,8 @@ export function HubView({
   badges?: Record<string, number>;
   registerBackHandler?: (h: (() => boolean) | null) => void;
 }) {
-  // Persistimos o estágio interno em sessionStorage keyado pelo título do hub,
-  // pra que o botão Voltar (que traz o usuário de volta pro hub) restaure o
-  // breadcrumb onde ele parou — em vez de sempre reabrir na tela de macros.
-  const storageKey = `logmax:hub:${title}`;
-  const [stage, setStage] = useState<Stage>(() => {
-    try {
-      const raw = sessionStorage.getItem(storageKey);
-      if (!raw) return { kind: 'macros' };
-      const saved = JSON.parse(raw);
-      if (saved.kind === 'modulos') {
-        const macro = macros.find(m => m.kind === 'group' && m.id === saved.macroId);
-        if (macro && macro.kind === 'group') return { kind: 'modulos', macro };
-      }
-      if (saved.kind === 'submenus') {
-        const macro = macros.find(m => m.kind === 'group' && m.id === saved.macroId);
-        if (macro && macro.kind === 'group') {
-          const modulo = macro.modulos.find(m => m.id === saved.moduloId);
-          if (modulo) return { kind: 'submenus', macro, modulo };
-        }
-      }
-    } catch {}
-    return { kind: 'macros' };
-  });
-  useEffect(() => {
-    try {
-      const s =
-        stage.kind === 'macros'   ? { kind: 'macros' } :
-        stage.kind === 'modulos'  ? { kind: 'modulos',  macroId: stage.macro.id } :
-                                    { kind: 'submenus', macroId: stage.macro.id, moduloId: stage.modulo.id };
-      sessionStorage.setItem(storageKey, JSON.stringify(s));
-    } catch {}
-  }, [stage, storageKey]);
-  // Registra um back handler enquanto o hub estiver em nível interno; assim o
-  // botão Voltar do topbar consome uma etapa do breadcrumb antes de sair da
-  // view. Em macros o handler é nulo e o Voltar segue o fluxo normal (view
-  // anterior). Também considera que grupos com 1 módulo pulam a etapa modulos.
-  useEffect(() => {
-    if (!registerBackHandler) return;
-    if (stage.kind === 'macros') { registerBackHandler(null); return; }
-    registerBackHandler(() => {
-      if (stage.kind === 'submenus') {
-        if (stage.macro.modulos.length === 1) setStage({ kind: 'macros' });
-        else setStage({ kind: 'modulos', macro: stage.macro });
-        return true;
-      }
-      if (stage.kind === 'modulos') {
-        setStage({ kind: 'macros' });
-        return true;
-      }
-      return false;
-    });
-    return () => registerBackHandler(null);
-  }, [stage, registerBackHandler]);
+  // Sem etapas internas: o Voltar segue o fluxo normal da navegação.
+  useEffect(() => { registerBackHandler?.(null); }, [registerBackHandler]);
 
   // Filtro por setor: para group macros, mantém só módulos que o setor acessa
   const allowedModuleIds = useMemo(() => new Set(
@@ -289,221 +234,94 @@ export function HubView({
   const macrosVisiveis = useMemo<MacroDef[]>(() =>
     macros.map(m => {
       if (m.kind === 'leaf') return m;
-      const modulos = m.modulos.filter(md => allowedModuleIds.has(md.id));
+      const modulos = m.modulos
+        .filter(md => allowedModuleIds.has(md.id))
+        .map(md => ({ ...md, submenus: md.submenus.filter(s => subPermitido(s, profile)) }))
+        .filter(md => md.submenus.length > 0);
       return { ...m, modulos };
     }).filter(m => m.kind === 'leaf' || m.modulos.length > 0),
-  [macros, allowedModuleIds]);
+  [macros, allowedModuleIds, profile]);
 
-  const moduleBadge = (mod: ModuleDef) =>
-    mod.submenus.reduce((acc, s) => acc + (badges[`${mod.id}-${slug(subLabel(s))}`] ?? 0), 0);
-  const macroBadge = (macro: MacroDef) =>
-    macro.kind === 'leaf' ? (badges[macro.viewId] ?? 0) : macro.modulos.reduce((acc, m) => acc + moduleBadge(m), 0);
+  const badgeDe = (viewId: string) => badges[viewId] ?? 0;
+  const totalDe = (macro: MacroDef) =>
+    macro.kind === 'leaf' ? badgeDe(macro.viewId)
+      : macro.modulos.reduce((acc, md) =>
+          acc + md.submenus.reduce((a, s) => a + badgeDe(`${md.id}-${slug(subLabel(s))}`), 0), 0);
 
-  const handleMacroClick = (macro: MacroDef) => {
-    if (macro.kind === 'leaf') { navigate(macro.viewId); return; }
-    if (macro.modulos.length === 1) {
-      setStage({ kind: 'submenus', macro, modulo: macro.modulos[0] });
-    } else {
-      setStage({ kind: 'modulos', macro });
-    }
+  const Linha = ({ label, viewId, tint }: { label: string; viewId: string; tint: typeof TINTS[TintKey] }) => {
+    const b = badgeDe(viewId);
+    return (
+      <button type="button" onClick={() => navigate(viewId)}
+        className="group w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left transition-colors hover:bg-white/[0.05]">
+        <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${tint.bar}`} />
+        <span className="flex-1 min-w-0 text-sm font-semibold text-gray-200 truncate group-hover:text-accent transition-colors">{label}</span>
+        {b > 0 && (
+          <span className="shrink-0 min-w-5 h-5 px-1.5 rounded-full bg-red-600 text-white text-[10px] font-black tabular-nums flex items-center justify-center">
+            {b}
+          </span>
+        )}
+        <ChevronRight size={15} className="shrink-0 text-gray-600 group-hover:text-accent transition-colors" />
+      </button>
+    );
   };
 
   return (
-    <div className="flex flex-col gap-6 pb-16">
-      <div className="flex items-center gap-2 text-sm">
-        <button
-          onClick={() => setStage({ kind: 'macros' })}
-          className={`font-bold transition-colors ${stage.kind === 'macros' ? 'text-accent' : 'text-gray-500 hover:text-gray-300'}`}
-        >
-          {title}
-        </button>
-        {stage.kind !== 'macros' && (
-          <>
-            <ChevronRight size={14} className="text-gray-600" />
-            <button
-              onClick={() => stage.kind === 'submenus' ? setStage({ kind: 'modulos', macro: stage.macro }) : null}
-              className={`font-bold transition-colors ${stage.kind === 'modulos' ? 'text-accent' : 'text-gray-500 hover:text-gray-300'}`}
-            >
-              {stage.macro.label}
-            </button>
-          </>
-        )}
-        {stage.kind === 'submenus' && (
-          <>
-            <ChevronRight size={14} className="text-gray-600" />
-            <span className="font-bold text-accent">{stage.modulo.label}</span>
-          </>
-        )}
-      </div>
+    <div className="flex flex-col gap-5 pb-16">
+      <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">{title}</h2>
 
-      <AnimatePresence mode="wait">
-        {stage.kind === 'macros' && (
-          <motion.div
-            key="macros"
-            initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -12 }}
-            transition={{ duration: 0.2 }}
-            className="grid grid-cols-1 md:grid-cols-2 gap-4"
-          >
-            {macrosVisiveis.map(macro => {
-              const total = macroBadge(macro);
-              const Icon = macro.icon;
-              const tint = pickTint(macro.color);
-              // Sem repetir rótulo: o card junta os submenus de TODOS os
-              // módulos do grupo, e vários nomes se repetem entre eles —
-              // Logística tem 'Gerenciamento' e 'Relatórios' em Compras E em
-              // Estoque. Duplicado, o chip não informava nada (é prévia do
-              // que há dentro, não contagem), gastava duas das cinco vagas
-              // visíveis empurrando os outros para o '+N', e o React ainda
-              // reclamava de chave repetida, já que a chave é o rótulo.
-              const chips = macro.kind === 'leaf'
-                ? []
-                : [...new Set(macro.modulos.flatMap(m => m.submenus.filter(s => subPermitido(s, profile)).map(subLabel)))];
-              return (
-                <button
-                  key={macro.id}
-                  onClick={() => handleMacroClick(macro)}
-                  className="relative neu-flat rounded-2xl p-6 text-left overflow-hidden group hover:border-accent/40 hover:ring-1 hover:ring-accent/25 transition-all"
-                >
-                  {/* Halo colorido no canto — dá identidade sem apelar pra gradient washed */}
-                  <div className={`pointer-events-none absolute -top-20 -right-20 w-56 h-56 rounded-full blur-3xl opacity-60 ${tint.glow}`} />
-
-                  <div className="relative flex items-start justify-between gap-4 mb-5">
-                    <div className={`w-12 h-12 rounded-xl flex items-center justify-center ring-1 ${tint.iconBg} ${tint.iconRing}`}>
-                      <Icon size={22} strokeWidth={1.8} className={tint.icon} />
-                    </div>
-                    <div className="flex items-center gap-2">
-                      {total > 0 && (
-                        <span className="text-[10px] font-black px-2 py-1 rounded-full bg-red-500/15 text-red-300 ring-1 ring-red-500/30">
-                          {total} pend.
-                        </span>
-                      )}
-                      <ChevronRight size={16} className="text-gray-600 group-hover:text-accent transition-colors" />
-                    </div>
-                  </div>
-
-                  <div className="relative">
-                    <h3 className="text-lg font-black text-gray-100 tracking-tight">{macro.label}</h3>
-                    {macro.kind === 'leaf' && macro.description && (
-                      <p className="text-xs text-gray-400 mt-1 leading-snug">{macro.description}</p>
-                    )}
-                    {chips.length > 0 && (
-                      <div className={`mt-4 pt-3 border-t ${tint.hairline} flex flex-wrap gap-1.5`}>
-                        {chips.slice(0, 5).map(c => (
-                          <span key={c} className="text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full bg-white/[0.04] text-gray-400 ring-1 ring-white/5">
-                            {c}
-                          </span>
-                        ))}
-                        {chips.length > 5 && (
-                          <span className="text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full bg-white/[0.04] text-gray-500 ring-1 ring-white/5">
-                            +{chips.length - 5}
-                          </span>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                </button>
-              );
-            })}
-          </motion.div>
-        )}
-
-        {stage.kind === 'modulos' && (
-          <motion.div
-            key="modulos"
-            initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -12 }}
-            transition={{ duration: 0.2 }}
-            className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"
-          >
-            {stage.macro.modulos.map(mod => {
-              const Icon = mod.icon;
-              const b = moduleBadge(mod);
-              const tint = pickTint(mod.color);
-              const submenusVisiveis = mod.submenus.filter(s => subPermitido(s, profile));
-              return (
-                <button
-                  key={mod.id}
-                  onClick={() => setStage({ kind: 'submenus', macro: stage.macro, modulo: mod })}
-                  className="relative neu-flat rounded-2xl p-5 text-left overflow-hidden group hover:border-accent/40 hover:ring-1 hover:ring-accent/20 transition-all"
-                >
-                  <div className={`pointer-events-none absolute -top-16 -right-16 w-40 h-40 rounded-full blur-3xl opacity-50 ${tint.glow}`} />
-
-                  <div className="relative flex items-start justify-between gap-3 mb-4">
-                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center ring-1 ${tint.iconBg} ${tint.iconRing}`}>
-                      <Icon size={18} strokeWidth={1.8} className={tint.icon} />
-                    </div>
-                    <div className="flex items-center gap-2">
-                      {b > 0 && (
-                        <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-red-500/15 text-red-300 ring-1 ring-red-500/30">
-                          {b}
-                        </span>
-                      )}
-                      <ChevronRight size={14} className="text-gray-600 group-hover:text-accent transition-colors" />
-                    </div>
-                  </div>
-
-                  <div className="relative">
-                    <h4 className="text-base font-black text-gray-100 tracking-tight">{mod.label}</h4>
-                    <p className="text-[11px] uppercase tracking-widest text-gray-500 font-bold mt-0.5">
-                      {submenusVisiveis.length} submódulo{submenusVisiveis.length === 1 ? '' : 's'}
-                    </p>
-                  </div>
-                </button>
-              );
-            })}
-          </motion.div>
-        )}
-
-        {stage.kind === 'submenus' && (() => {
-          const ModIcon = stage.modulo.icon;
-          const tint = pickTint(stage.modulo.color);
+      {/* Mural: cada cartão tem a altura do que tem dentro, sem buracos na grade. */}
+      <div className="columns-1 md:columns-2 2xl:columns-3 gap-4">
+        {macrosVisiveis.map(macro => {
+          const Icon = macro.icon;
+          const tint = pickTint(macro.color);
+          const total = totalDe(macro);
+          const varios = macro.kind === 'group' && macro.modulos.length > 1;
           return (
-          <motion.div
-            key="submenus"
-            initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -12 }}
-            transition={{ duration: 0.2 }}
-            className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"
-          >
-            {stage.modulo.submenus
-              .filter(s => subPermitido(s, profile))
-              .map(s => {
-                const label = subLabel(s);
-                const viewId = `${stage.modulo.id}-${slug(label)}`;
-                const b = badges[viewId] ?? 0;
-                return (
-                  <button
-                    key={label}
-                    onClick={() => navigate(viewId)}
-                    className="relative neu-flat rounded-2xl p-5 text-left overflow-hidden group hover:border-accent/40 hover:ring-1 hover:ring-accent/20 transition-all"
-                  >
-                    <div className={`pointer-events-none absolute -top-16 -right-16 w-40 h-40 rounded-full blur-3xl opacity-50 ${tint.glow}`} />
+            <section key={macro.id}
+              className={`break-inside-avoid mb-4 neu-flat rounded-2xl border border-white/5 overflow-hidden relative ${
+                macro.kind === 'leaf' ? 'group transition-colors hover:border-accent/40' : ''}`}>
+              <div className={`h-1 ${tint.bar}`} />
+              <div className="flex items-center gap-3 px-4 pt-4 pb-3">
+                <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${tint.iconBg}`}>
+                  <Icon size={19} strokeWidth={2} className={tint.icon} />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <h3 className="text-base font-black text-gray-100 tracking-tight">{macro.label}</h3>
+                  {macro.kind === 'leaf' && macro.description && (
+                    <p className="text-xs text-gray-500 truncate">{macro.description}</p>
+                  )}
+                </div>
+                {total > 0 && (
+                  <span className="shrink-0 px-2 py-1 rounded-lg bg-red-600 text-white text-[11px] font-black tabular-nums">
+                    {total} pend.
+                  </span>
+                )}
+                {macro.kind === 'leaf' && (
+                  <button type="button" onClick={() => navigate(macro.viewId)} aria-label={`Abrir ${macro.label}`}
+                    className="absolute inset-0 rounded-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent" />
+                )}
+                {macro.kind === 'leaf' && <ChevronRight size={16} className="shrink-0 text-gray-500 group-hover:text-accent transition-colors" />}
+              </div>
 
-                    <div className="relative flex items-start justify-between gap-3 mb-4">
-                      <div className={`w-10 h-10 rounded-xl flex items-center justify-center ring-1 ${tint.iconBg} ${tint.iconRing}`}>
-                        <ModIcon size={18} strokeWidth={1.8} className={tint.icon} />
-                      </div>
-                      <div className="flex items-center gap-2">
-                        {b > 0 && (
-                          <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-red-500/15 text-red-300 ring-1 ring-red-500/30">
-                            {b} pend.
-                          </span>
-                        )}
-                        <ChevronRight size={14} className="text-gray-600 group-hover:text-accent transition-colors" />
-                      </div>
-                    </div>
-
-                    <div className="relative">
-                      <h4 className="text-base font-black text-gray-100 tracking-tight group-hover:text-accent transition-colors">{label}</h4>
-                      <p className="text-[11px] uppercase tracking-widest text-gray-500 font-bold mt-0.5">
-                        {stage.modulo.label}
-                      </p>
-                    </div>
-                  </button>
-                );
-              })}
-          </motion.div>
+              {macro.kind === 'group' && (
+              <div className="px-2 pb-2 flex flex-col">
+                {macro.modulos.map(md => (
+                  <div key={md.id} className="flex flex-col">
+                    {varios && (
+                      <p className="px-3 pt-2 pb-1 text-[10px] font-bold uppercase tracking-widest text-gray-500">{md.label}</p>
+                    )}
+                    {md.submenus.map(s => {
+                      const label = subLabel(s);
+                      return <Linha key={label} label={label} viewId={`${md.id}-${slug(label)}`} tint={tint} />;
+                    })}
+                  </div>
+                ))}
+              </div>
+              )}
+            </section>
           );
-        })()}
-      </AnimatePresence>
+        })}
+      </div>
     </div>
   );
 }

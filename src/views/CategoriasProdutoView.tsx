@@ -262,15 +262,10 @@ function InlineForm({ initial, onSave, onCancel, saving, comMargem, comSubcatego
       </div>
 
       <div className="p-4 space-y-4">
-        {/* Prévia ao vivo: o cadastro deixa de ser um formulário às cegas — o
-            aluno vê o mesmo chip que vai aparecer em Produtos e no PDV. */}
         <div className="rounded-xl px-3 py-2.5 flex items-center gap-3"
           style={{ background: `${f.cor}12`, border: `1px solid ${f.cor}33` }}>
           <CatThumb imagem_url={previewUrl} icone={f.icone} cor={f.cor} size={40} />
-          <div className="min-w-0">
-            <p className="text-sm font-bold text-gray-100 truncate">{f.nome.trim() || 'Nome da categoria'}</p>
-            <p className="text-[10px] text-gray-500">Prévia — é assim que aparece em Produtos e no PDV</p>
-          </div>
+          <p className="text-sm font-bold text-gray-100 truncate min-w-0">{f.nome.trim() || 'Nome da categoria'}</p>
         </div>
 
         <FormField label="Nome *" error={duplicado ? 'Já existe um registro com este nome.' : undefined}>
@@ -279,27 +274,19 @@ function InlineForm({ initial, onSave, onCancel, saving, comMargem, comSubcatego
             onChange={e => { if (!nomeTravado) setF(p => ({ ...p, nome: e.target.value })); }}
             placeholder="Ex: Mercearia, Bebidas, Smartphones…" autoFocus={!nomeTravado} />
           {nomeTravado && (
-            <span className="text-[10px] text-gray-500 leading-relaxed">
-              Faz parte da lista padrão da loja: o nome é o mesmo em todas as turmas. Imagem, cor, ícone e markup continuam livres.
-            </span>
+            <span className="text-[10px] text-gray-500">Nome da lista padrão — não muda.</span>
           )}
         </FormField>
 
         {comMargem && (
-          /* Markup por linha de produto — é o que faz a categoria deixar de
-             ser cor e ícone. Com o custo preenchido, o cadastro de produto
-             sugere o preço de venda; vazio, o preço fica livre. */
+          /* Com o custo preenchido, o cadastro de produto sugere o preço a partir daqui. */
           <FormField label="Markup-alvo">
             <div className="relative">
               <input className="neu-input w-full text-sm pr-9" inputMode="decimal" value={f.margem_alvo}
                 onChange={e => setF(p => ({ ...p, margem_alvo: e.target.value.replace(/[^0-9,.]/g, '') }))}
-                placeholder="Ex: 35" />
+                placeholder="Vazio = preço livre" />
               <Percent size={13} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-600 pointer-events-none" />
             </div>
-            <span className="text-[10px] text-gray-500 leading-relaxed">
-              Markup padrão da linha. O cadastro de produto usa isto para sugerir o preço de venda
-              a partir do custo — deixe vazio para preço livre.
-            </span>
           </FormField>
         )}
 
@@ -327,9 +314,6 @@ function InlineForm({ initial, onSave, onCancel, saving, comMargem, comSubcatego
                 placeholder={subs.length ? 'Mais uma…' : 'Ex: Massas — Enter para adicionar'}
                 className="flex-1 min-w-[10rem] bg-transparent outline-none text-sm py-1" />
             </div>
-            <span className="text-[10px] text-gray-500 leading-relaxed">
-              Opcional. Digite o nome e aperte Enter; dá para acrescentar outras depois, dentro da categoria.
-            </span>
           </FormField>
         )}
 

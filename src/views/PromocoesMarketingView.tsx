@@ -1012,7 +1012,7 @@ const PromocoesMarketingViewInner = ({ showToast, profile, filial }: { showToast
                   </div>
                 ) : (
                   <span className="text-[10px] text-gray-600 leading-snug">
-                    JPG, PNG ou WEBP. É reduzida para até {ARTE_IMAGEM_OUTPUT_MAX_LABEL} antes de subir.
+                    JPG, PNG ou WEBP
                   </span>
                 )}
               </div>
@@ -1036,14 +1036,8 @@ const PromocoesMarketingViewInner = ({ showToast, profile, filial }: { showToast
                 disabled={!!arteFile}
                 className="neu-input rounded-xl px-3 py-2.5 text-sm w-full mt-1.5 disabled:opacity-40"
               />
-              <p className="text-[11px] text-gray-500 mt-2 leading-relaxed">
-                O link só funciona no carrossel se apontar direto para o <span className="text-gray-400">arquivo de imagem</span> —
-                link da página do Canva aparece quebrado. Na dúvida, envie a imagem acima.
-              </p>
-              <p className="text-[11px] text-gray-500 mt-2 leading-relaxed">
-                {arteModal.arte
-                  ? 'A nova arte substitui a atual.'
-                  : 'Ao publicar, todos os setores recebem uma notificação. O professor decide, na Vitrine da Tela de Login, quais artes entram no carrossel.'}
+              <p className="text-[11px] text-gray-500 mt-2">
+                O link precisa apontar direto para o arquivo de imagem.
               </p>
               <div className="flex justify-end gap-2 mt-5">
                 <button onClick={closeArteModal} className="neu-button rounded-xl px-4 py-2 text-xs font-bold uppercase tracking-widest text-gray-400 hover:text-white">

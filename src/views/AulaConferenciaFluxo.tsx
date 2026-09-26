@@ -317,13 +317,6 @@ export const AulaConferenciaFluxo: React.FC<Props> = ({ showToast }) => {
             <FileWarning size={14} className="text-accent" />
             <h3 className="text-sm font-bold text-gray-200">Conferência do fluxo</h3>
           </div>
-          <p className="text-[11px] text-gray-500 mt-1 max-w-2xl">
-            O que saiu torto no caminho Requisição → Cotação → Pedido → Recebimento →
-            Cadastro de Produto. <span className="text-gray-300 font-bold">Conferir</span> aplica
-            regras fixas — campo em branco, etapa pulada, valor que não bate.{' '}
-            <span className="text-gray-300 font-bold">Leitura da IA</span> é opinião sobre o que
-            a turma escreveu. Serve para conversar com a turma, não para dar nota.
-          </p>
         </div>
         <div className="shrink-0 flex items-center gap-2">
           {modo === 'aluno' ? (
@@ -539,15 +532,6 @@ export const AulaConferenciaFluxo: React.FC<Props> = ({ showToast }) => {
         </div>
       )}
 
-      <p className="text-[10px] text-gray-500 leading-relaxed shrink-0">
-        <span className="text-gray-400 font-bold">O que está errado</span> é regra fixa e não
-        julga intenção: "Cadastrado fora do fluxo", por exemplo, é o esperado quando a
-        atividade da aula era montar catálogo.{' '}
-        <span className="text-purple-300 font-bold">O que parece descuidado</span> é leitura de
-        IA sobre o texto que o aluno escreveu — pode errar, e o texto original vem junto
-        justamente para você discordar dela.
-        {modeloIA && <span className="text-gray-600"> Modelo: {modeloIA}.</span>}
-      </p>
       </>}
 
       {/* ── Aba Cadeia (migr. 533) ─────────────────────────────────────────

@@ -7,7 +7,7 @@ import { useFilial } from '../contexts/FilialContext';
 import { supabase } from '../lib/supabase';
 import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent, StatusBadge } from '../components/ui';
 import { HistoricoOperacoes } from '../components/HistoricoOperacoes';
-import { formatBRL } from '../lib/viewUtils';
+import { formatBRL, formatQtd, parseQtd, handleQtdKeyDown } from '../lib/viewUtils';
 import type { UserProfile } from '../hooks/useUserProfile';
 
 // Devolução parcial de venda PDV (1 passo, autorizada por gerente+).
@@ -126,7 +126,7 @@ const DevolucoesViewInner = ({ showToast, profile, filial }: { showToast: any; p
 
   const totalPreview = useMemo(() => {
     return saldos.reduce((acc, it) => {
-      const q = Number(qtdEditada[it.item_venda_id] ?? '0') || 0;
+      const q = parseQtd(qtdEditada[it.item_venda_id]);
       return acc + q * it.preco_unitario;
     }, 0);
   }, [saldos, qtdEditada]);
@@ -136,7 +136,7 @@ const DevolucoesViewInner = ({ showToast, profile, filial }: { showToast: any; p
     if (!motivo.trim()) { showToast('Informe o motivo da devolução.', 'error', true); return; }
     // Monta itens > 0 respeitando saldo
     const itensPayload = saldos.flatMap((it) => {
-      const q = Number(qtdEditada[it.item_venda_id] ?? '0') || 0;
+      const q = parseQtd(qtdEditada[it.item_venda_id]);
       if (q <= 0) return [];
       if (q > it.qtd_saldo) throw new Error(`"${it.nome_produto}" excede o saldo (${it.qtd_saldo}).`);
       return [{
@@ -243,7 +243,7 @@ const DevolucoesViewInner = ({ showToast, profile, filial }: { showToast: any; p
                 </thead>
                 <tbody>
                   {saldos.map(it => {
-                    const q = Number(qtdEditada[it.item_venda_id] ?? '0') || 0;
+                    const q = parseQtd(qtdEditada[it.item_venda_id]);
                     const excede = q > it.qtd_saldo;
                     const esgotado = it.qtd_saldo <= 0;
                     return (
@@ -254,11 +254,13 @@ const DevolucoesViewInner = ({ showToast, profile, filial }: { showToast: any; p
                         <td className="py-2.5 px-3 text-xs font-mono text-amber-300 text-right tabular-nums font-bold">{it.qtd_saldo}</td>
                         <td className="py-2.5 px-3">
                           <input
-                            type="number" min="0" step="0.001"
+                            type="text" inputMode="decimal"
                             disabled={esgotado}
                             className={`neu-input py-1.5 px-2 rounded-lg text-xs font-mono w-24 text-right ${excede ? 'border border-red-500/40' : ''}`}
-                            value={qtdEditada[it.item_venda_id] ?? '0'}
-                            onChange={e => setQtdEditada(prev => ({ ...prev, [it.item_venda_id]: e.target.value }))}
+                            value={qtdEditada[it.item_venda_id] ?? ''}
+                            placeholder="0"
+                            onKeyDown={handleQtdKeyDown(true)}
+                            onChange={e => setQtdEditada(prev => ({ ...prev, [it.item_venda_id]: formatQtd(e.target.value, true) }))}
                           />
                         </td>
                         <td className="py-2.5 px-3 text-xs font-mono text-gray-300 text-right tabular-nums">
@@ -293,14 +295,9 @@ const DevolucoesViewInner = ({ showToast, profile, filial }: { showToast: any; p
                 value={formaEstorno}
                 onChange={e => setFormaEstorno(e.target.value as FormaEstorno)}
               >
-                <option value="cancela_pendencias">Cancelar pendências (fiado, cartão a prazo)</option>
-                <option value="devolve_caixa">Devolver no caixa (dinheiro / à vista)</option>
+                <option value="cancela_pendencias">Abater do a receber (fiado, cartão a prazo)</option>
+                <option value="devolve_caixa">Devolver no caixa (dinheiro, à vista)</option>
               </select>
-              <p className="text-[10px] text-gray-500 mt-1">
-                {formaEstorno === 'cancela_pendencias'
-                  ? 'Reduz/cancela contas a receber abertas desta venda. Se sobrar valor, gera saída em contas a pagar.'
-                  : 'Registra a saída em contas a pagar (já paga). Use quando entregar o valor no ato ao cliente.'}
-              </p>
             </FormField>
           </div>
 

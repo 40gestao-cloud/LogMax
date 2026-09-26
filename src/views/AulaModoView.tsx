@@ -19,7 +19,7 @@ import { AulaConferenciaFluxo } from './AulaConferenciaFluxo';
 import { PendenciasView } from './PendenciasView';
 import { AulaHistorico } from './AulaHistorico';
 import type { UserProfile } from '../hooks/useUserProfile';
-import { NeuButtonAccent, LoadingSpinner } from '../components/ui';
+import { NeuButtonAccent, LoadingSpinner, CardContador } from '../components/ui';
 import { BotaoRecarregarTurma } from '../components/BotaoRecarregarTurma';
 
 interface Props {
@@ -48,6 +48,14 @@ const ABAS: { id: AbaId; label: string; icone: any }[] = [
   { id: 'pendencias', label: 'Pendências', icone: Hourglass },
   { id: 'historico',  label: 'Histórico',  icone: History },
 ];
+
+// Fluxos por área, para achar o da aula sem ler seis nomes longos.
+const AREA_DO_FLUXO: Record<string, string> = {
+  'compra': 'Compras e estoque', 'material': 'Compras e estoque',
+  'venda-pdv': 'Vendas', 'venda-pedido': 'Vendas', 'marketing-promo': 'Vendas',
+  'rh-folha': 'Pessoas',
+};
+const AREAS_FLUXO = ['Compras e estoque', 'Vendas', 'Pessoas', 'Outros'];
 
 export const AulaModoView: React.FC<Props> = ({ showToast, profile }) => {
   // Simulação de perda de dados (migr. 339). Mora aqui porque é o painel de
@@ -102,6 +110,9 @@ export const AulaModoView: React.FC<Props> = ({ showToast, profile }) => {
   // aparecer no painel de acompanhamento sem o professor ter que recarregar.
   const [atividadesVersao, setAtividadesVersao] = useState(0);
   const [aba, setAba] = useState<AbaId>('montagem');
+  const [modoMontagem, setModoMontagem] = useState<'fluxos' | 'manual'>('fluxos');
+  const [alternando, setAlternando] = useState(false);
+  const [verTodosDados, setVerTodosDados] = useState(false);
 
   // Config em que a edição local se apoia. Comparar contra ela — e não contra
   // `config`, que o realtime troca por baixo — é o que separa "ainda não mexi"
@@ -130,27 +141,28 @@ export const AulaModoView: React.FC<Props> = ({ showToast, profile }) => {
     if (!loaded) return;
     const base = baseRef.current;
     const local = localRef.current;
+    // Só a montagem é edição local: o interruptor grava sozinho (`alternarAtivo`).
     const sujo = base !== null && (
-      local.ativo !== base.ativo ||
       !arraysIguais(local.modulos, base.modulos_ativos) ||
       !arraysIguais(local.submenus, base.submenus_ativos) ||
       !arraysIguais(local.roles, base.roles_afetados)
     );
     // Convergiu: o que chegou do servidor é exatamente o que está na tela.
-    // Sem esta saída, salvar de outro lugar uma config IGUAL à editada aqui
-    // levantava o aviso de conflito apontando para uma barra de ações que a
-    // própria convergência tinha acabado de esconder (`dirty` vira false).
     const igualAoServidor =
-      local.ativo === config.ativo &&
       arraysIguais(local.modulos, config.modulos_ativos) &&
       arraysIguais(local.submenus, config.submenus_ativos) &&
       arraysIguais(local.roles, config.roles_afetados);
 
-    // Sobrescrever aqui apagava, sem uma palavra, a whitelist que o professor
-    // acabou de montar — junto com a faixa "Alterações não salvas", que some e
-    // leva embora a única pista de que havia algo para salvar.
+    // Sobrescrever aqui apagaria, sem uma palavra, a montagem ainda não salva.
     if (sujo && !igualAoServidor) {
-      setConflito(config.atualizado_em ?? new Date().toISOString());
+      const servidorMexeuNaMontagem =
+        !arraysIguais(config.modulos_ativos, base!.modulos_ativos) ||
+        !arraysIguais(config.submenus_ativos, base!.submenus_ativos) ||
+        !arraysIguais(config.roles_afetados, base!.roles_afetados);
+      // Ligar/desligar (daqui ou de outra máquina) não conflita com a montagem pendente.
+      setAtivo(config.ativo);
+      baseRef.current = { ...base!, ativo: config.ativo, atualizado_em: config.atualizado_em };
+      if (servidorMexeuNaMontagem) setConflito(config.atualizado_em ?? new Date().toISOString());
       return;
     }
     adotarDoServidor();
@@ -172,6 +184,23 @@ export const AulaModoView: React.FC<Props> = ({ showToast, profile }) => {
     useAulaPreRequisitos(fluxosRelevantes.flatMap(f => f.prerequisitos));
   const preFaltando = preStatus.filter(p => !p.ok);
 
+  // Contagem das abas: o professor vê onde há algo a olhar sem abrir cada uma.
+  // Uma leitura ao abrir (e a cada publicação), sem realtime — aqui é só um sinal.
+  const [contagem, setContagem] = useState<Partial<Record<AbaId, number>>>({});
+  useEffect(() => {
+    if (!supabase || (profile.role !== 'admin' && profile.role !== 'ceo')) return;
+    let cancelado = false;
+    supabase.from('aula_atividades').select('id', { count: 'exact', head: true })
+      .eq('ativo', true)
+      .or(`expira_em.is.null,expira_em.gt.${new Date().toISOString()}`)
+      .then(({ count }) => { if (!cancelado) setContagem(c => ({ ...c, atividades: count ?? 0 })); });
+    if (profile.role === 'admin') {
+      supabase.rpc('listar_pendencias', { p_filial: null })
+        .then(({ data }) => { if (!cancelado && Array.isArray(data)) setContagem(c => ({ ...c, pendencias: data.length })); });
+    }
+    return () => { cancelado = true; };
+  }, [atividadesVersao, profile.role]);
+
   // Setores que a whitelist concede a todo aluno afetado (migr. 317).
   const setoresConcedidos = Array.from(new Set(
     modulos.flatMap(m => AULA_MODULO_SETORES[m] ?? []),
@@ -184,9 +213,6 @@ export const AulaModoView: React.FC<Props> = ({ showToast, profile }) => {
     const obrig = etapasObrigatorias(f);
     return obrig.length > 0 && obrig.every(e => etapaCoberta(e, modulos, submenus));
   });
-
-  const irPara = (id: string) =>
-    document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
 
   // «Montar» SUBSTITUI a whitelist; «Completar», ao lado, só acrescenta. Só o
   // title distinguia os dois, e o clique errado levava junto o recorte de
@@ -233,7 +259,6 @@ export const AulaModoView: React.FC<Props> = ({ showToast, profile }) => {
   if (!loaded) return <LoadingSpinner />;
 
   const dirty =
-    ativo !== config.ativo ||
     !arraysIguais(modulos, config.modulos_ativos) ||
     !arraysIguais(submenus, config.submenus_ativos) ||
     !arraysIguais(roles, config.roles_afetados);
@@ -254,6 +279,32 @@ export const AulaModoView: React.FC<Props> = ({ showToast, profile }) => {
   const limparSubmenusDoModulo = (modId: string) =>
     setSubmenus(prev => prev.filter(s => !s.startsWith(`${modId}-`)));
 
+  // Módulo ligado que esconde ao menos um submenu (todos marcados = sem recorte).
+  const modulosRecortados = modulos.filter(id => {
+    const total = AULA_SUBMENUS[id]?.length ?? 0;
+    const marcados = submenus.filter(s => s.startsWith(`${id}-`)).length;
+    return marcados > 0 && marcados < total;
+  }).length;
+
+  // Liga/desliga a área inteira; desligar leva junto os submenus recortados.
+  const alternarGrupo = (ids: string[], ligar: boolean) => {
+    setModulos(prev => ligar ? Array.from(new Set([...prev, ...ids])) : prev.filter(x => !ids.includes(x)));
+    if (!ligar) setSubmenus(prev => prev.filter(s => !ids.some(id => s.startsWith(`${id}-`))));
+  };
+
+  // Chip de submenu = "a turma vê isto". Sem recorte, todos aparecem ligados;
+  // o primeiro clique esconde aquele, e voltar a mostrar todos limpa o recorte.
+  const alternarSubmenuVisivel = (modId: string, sid: string) => {
+    const doMod = (AULA_SUBMENUS[modId] ?? []).map(l => aulaSubmenuId(modId, l));
+    setSubmenus(prev => {
+      const atuais = prev.filter(s => s.startsWith(`${modId}-`));
+      const resto = prev.filter(s => !s.startsWith(`${modId}-`));
+      const base = atuais.length === 0 ? doMod : atuais;
+      const prox = base.includes(sid) ? base.filter(x => x !== sid) : [...base, sid];
+      return prox.length === 0 || prox.length === doMod.length ? resto : [...resto, ...prox];
+    });
+  };
+
   const toggleRole = (id: string) =>
     setRoles(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
 
@@ -262,9 +313,37 @@ export const AulaModoView: React.FC<Props> = ({ showToast, profile }) => {
     setSubmenus([]);
   };
 
+  // Aula livre: todos os módulos, nenhum submenu recortado (vazio = todos).
+  const tudoAplicado = AULA_MODULOS.every(m => modulos.includes(m.id)) && modulosRecortados === 0;
+  const aplicarTudo = () => aplicarPreset(AULA_MODULOS.map(m => m.id));
+
   // Descartar volta ao que está NO SERVIDOR agora — inclusive quando quem
   // salvou por último foi outra pessoa.
   const resetar = adotarDoServidor;
+
+  // O interruptor vale na hora, sem passar pelo Salvar: era fácil ligar e
+  // esquecer de salvar. A montagem pendente continua pendente.
+  const alternarAtivo = async () => {
+    if (!supabase) { showToast('Supabase não configurado', 'error'); return; }
+    const novo = !ativo;
+    setAlternando(true);
+    try {
+      const { error } = await supabase
+        .from('aula_config')
+        .update({ ativo: novo, atualizado_por: profile.id, atualizado_em: new Date().toISOString() })
+        .eq('id', 1);
+      if (error) throw error;
+      setAtivo(novo);
+      if (baseRef.current) baseRef.current = { ...baseRef.current, ativo: novo };
+      showToast(novo
+        ? (dirty ? 'Modo Aula ligado. Salve a montagem para ela valer.' : 'Modo Aula ligado para a turma.')
+        : 'Modo Aula desligado. Sessão encerrada no histórico.', 'success');
+    } catch (err: any) {
+      showToast(`Erro: ${err?.message ?? 'verifique o console'}`, 'error');
+    } finally {
+      setAlternando(false);
+    }
+  };
 
   const salvar = async () => {
     if (!supabase) { showToast('Supabase não configurado', 'error'); return; }
@@ -273,7 +352,6 @@ export const AulaModoView: React.FC<Props> = ({ showToast, profile }) => {
       const { error } = await supabase
         .from('aula_config')
         .update({
-          ativo,
           modulos_ativos: modulos,
           submenus_ativos: submenus,
           roles_afetados: roles,
@@ -293,7 +371,7 @@ export const AulaModoView: React.FC<Props> = ({ showToast, profile }) => {
         atualizado_em: null,
       };
       setConflito(null);
-      showToast(ativo ? 'Modo Aula ativado' : 'Modo Aula desligado', 'success');
+      showToast(ativo ? 'Montagem salva — já vale para a turma.' : 'Montagem salva. Ligue o Modo Aula para valer.', 'success');
     } catch (err: any) {
       showToast(`Erro ao salvar: ${err?.message ?? 'verifique o console'}`, 'error');
     } finally {
@@ -303,714 +381,462 @@ export const AulaModoView: React.FC<Props> = ({ showToast, profile }) => {
 
   const grupos = Array.from(new Set(AULA_MODULOS.map(m => m.grupo)));
 
+  const totalAlertas = cadeiasQuebradas.length + preFaltando.length + (setoresConcedidos.length >= 2 ? 1 : 0);
+
   return (
-    // pb-24 reserva o espaço da barra sticky de ações. Sem isso ela cobre
-    // permanentemente a última faixa de conteúdo — no fim da rolagem os
-    // módulos do último grupo ficam atrás dela e não há como alcançá-los.
-    <div className="flex flex-col gap-6 pb-24">
-      {/* Header */}
-      <div className="flex items-start gap-4">
-        <div className="w-12 h-12 neu-pressed rounded-2xl flex items-center justify-center shrink-0">
-          <GraduationCap size={22} className="text-accent" />
-        </div>
-        <div className="flex-1">
-          <h1 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Modo Aula</h1>
+    <div className="flex flex-col gap-5 pb-8">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h1 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight flex items-center gap-2">
+          <GraduationCap size={26} /> Modo Aula
+        </h1>
+        {/* Conferência e Pendências só para o professor: o CEO é aluno e um dos auditados. */}
+        <div className="flex gap-1 neu-pressed rounded-xl p-1 border border-white/5 flex-wrap" role="tablist">
+          {ABAS.filter(t => !['conferencia', 'pendencias'].includes(t.id) || profile?.role === 'admin').map(t => (
+            <button key={t.id} type="button" role="tab" aria-selected={aba === t.id} onClick={() => setAba(t.id)}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-colors ${
+                aba === t.id ? 'bg-accent text-[var(--color-accent-text)]' : 'text-gray-400 hover:text-gray-200'}`}>
+              <t.icone size={13} /> {t.label}
+              {(contagem[t.id] ?? 0) > 0 && (
+                <span className={`min-w-5 h-5 px-1.5 rounded-full text-[10px] font-black tabular-nums flex items-center justify-center ${
+                  aba === t.id ? 'bg-black/25 text-current'
+                  : t.id === 'pendencias' ? 'bg-orange-600 text-white' : 'bg-blue-600 text-white'}`}>
+                  {contagem[t.id]}
+                </span>
+              )}
+              {/* Montagem não salva continua visível de qualquer aba. */}
+              {t.id === 'montagem' && dirty && <span className="w-2 h-2 rounded-full bg-amber-400" title="Montagem não salva" />}
+            </button>
+          ))}
         </div>
       </div>
 
-      {/* Outra pessoa salvou enquanto esta tela tinha trabalho pendente. As duas
-          versões continuam de pé: a do servidor está valendo para a turma, a
-          desta tela está na barra de ações esperando o Salvar. Quem decide qual
-          fica é quem está aqui. */}
+      {/* Outra pessoa salvou enquanto esta tela tinha trabalho pendente. */}
       {conflito && (
-        <div className="neu-flat rounded-3xl p-5 border border-yellow-500/40 flex items-start gap-3 flex-wrap">
-          <AlertTriangle size={16} className="text-yellow-400 shrink-0 mt-0.5" />
-          <div className="min-w-0 flex-1">
-            <h3 className="text-sm font-bold text-gray-200">
-              Outra pessoa alterou o Modo Aula agora
-            </h3>
-            <p className="text-[11px] text-gray-500 mt-1 leading-relaxed">
-              A config do servidor mudou{' '}
-              {new Date(conflito).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Rio_Branco' })}
-              {' '}e é ela que a turma está vendo. O que está nesta tela são as suas alterações,
-              ainda não salvas — <strong className="text-gray-400">Salvar</strong> sobrescreve a
-              do servidor, <strong className="text-gray-400">Descartar</strong> abandona a sua.
-            </p>
-          </div>
-          <button type="button" onClick={adotarDoServidor}
-            className="neu-button px-3 py-1.5 rounded-xl text-[10px] font-bold uppercase tracking-widest text-gray-400 hover:text-accent transition-colors border border-white/5 shrink-0">
+        <div className="rounded-2xl px-4 py-3 bg-amber-500/10 border border-amber-500/40 flex items-center gap-3 flex-wrap">
+          <AlertTriangle size={16} className="text-amber-400 shrink-0" />
+          <p className="flex-1 min-w-0 text-sm text-amber-100">
+            Outra pessoa alterou o Modo Aula às{' '}
+            {new Date(conflito).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Rio_Branco' })}.
+            {' '}Salvar sobrescreve; descartar fica com a dela.
+          </p>
+          <button type="button" onClick={adotarDoServidor} className="btn-solido btn-solido--laranja shrink-0">
             Carregar a do servidor
           </button>
         </div>
       )}
 
-      {/* Abas. A tela juntava tres trabalhos que acontecem em momentos
-          diferentes da aula -- montar, enviar, acompanhar -- num scroll unico
-          de oito cards. A barra de acoes fica FORA das abas: alteracao nao
-          salva nao pode sumir porque o professor foi conferir outra coisa. */}
-      <div className="flex items-center gap-1.5 flex-wrap">
-        {/* Conferência só para o professor. Modo Aula abre para admin E ceo,
-            mas o CEO é aluno (a régua de sempre: `auth_is_admin()` inclui
-            alunos, `role='admin'` é o professor e só) — e é justamente ele um
-            dos auditados. Sem este filtro, o CEO veria a aba e levaria um erro
-            de permissão vindo da RPC, que é a pior forma de descobrir isso. */}
-        {ABAS.filter(t => !['conferencia', 'pendencias'].includes(t.id) || profile?.role === 'admin').map(t => (
-          <button
-            key={t.id}
-            type="button"
-            onClick={() => setAba(t.id)}
-            className={`px-4 py-2 rounded-xl text-[11px] font-bold uppercase tracking-widest border transition-all flex items-center gap-2 ${
-              aba === t.id
-                ? 'bg-accent/15 text-accent border-accent/30'
-                : 'neu-button border-white/5 text-gray-500 hover:text-gray-300'}`}
-          >
-            <t.icone size={13} /> {t.label}
-          </button>
-        ))}
-      </div>
-
       {aba === 'montagem' && (<>
-      {/* Toggle mestre + estado da aula. Os dois juntos porque é a mesma
-          pergunta: "o que está valendo agora?". A tela é longa, e os avisos que
-          respondem isso ficam espalhados por ela — as pastilhas abaixo dizem
-          quantos são e levam até eles. */}
-      <div className="neu-flat rounded-3xl p-5 border border-white/5 flex flex-col gap-3">
-      <div className="flex items-center justify-between gap-4 flex-wrap">
-        <div className="flex items-center gap-4">
-          <button
-            type="button"
-            onClick={() => setAtivo(v => !v)}
-            className={`relative w-14 h-8 rounded-full transition-colors ${ativo ? 'bg-accent' : 'bg-gray-700'}`}
-            aria-pressed={ativo}
-          >
-            <motion.span
-              layout
-              transition={{ type: 'spring', stiffness: 500, damping: 30 }}
-              className="absolute top-1 w-6 h-6 rounded-full bg-white shadow"
-              style={{ left: ativo ? 28 : 4 }}
-            />
-          </button>
-          <div>
-            <div className="text-sm font-bold text-gray-100">
-              {ativo ? 'Modo Aula ativado' : 'Modo Aula desligado'}
-            </div>
-            <div className="text-[11px] text-gray-500 mt-0.5">
-              {ativo
-                ? `${modulos.length} módulo${modulos.length === 1 ? '' : 's'} liberado${modulos.length === 1 ? '' : 's'}`
-                : 'Sidebar segue o comportamento normal (RBAC por setor)'}
-            </div>
-            {/* O desligar deixou de ser só "devolver o menu": é ele que fecha a
-                sessão no histórico (migr. 406). Sem essa frase, o professor não
-                tem como saber que deixar ligado funde a aula de hoje com a de
-                amanhã numa linha só. */}
-            {ativo && (
-              <div className="text-[10px] text-gray-600 mt-1">
-                Desligue ao fim da aula: é o que fecha esta sessão no histórico.
-                Esquecida ligada, ela é encerrada automaticamente às 22h.
-              </div>
-            )}
-          </div>
-        </div>
-        {config.atualizado_em && (
-          <div className="text-[10px] text-gray-600 text-right hidden sm:block">
-            Última alteração<br />
-            <span className="text-gray-500">
-              {new Date(config.atualizado_em).toLocaleString('pt-BR', { timeZone: 'America/Rio_Branco' })}
-            </span>
-          </div>
-        )}
-      </div>
-
-        <div className="flex items-center gap-1.5 flex-wrap">
-          {fluxosCompletos.length > 0 ? (
-            fluxosCompletos.map(f => (
-              <span key={f.id} title="Todas as etapas obrigatórias deste fluxo estão na whitelist"
-                className="text-[10px] font-bold uppercase tracking-widest px-2 py-1 rounded-full bg-accent/15 text-accent border border-accent/30 flex items-center gap-1.5">
-                <Workflow size={10} /> {f.nome.split('—')[0].trim()}
-              </span>
-            ))
-          ) : (
-            <span className="text-[10px] font-bold uppercase tracking-widest px-2 py-1 rounded-full text-gray-500 border border-white/10">
-              Nenhum fluxo completo
-            </span>
-          )}
-          {/* Contadores que levam ao aviso. Um número sem caminho até ele
-              obrigaria a varrer a tela inteira atrás do card correspondente. */}
-          {cadeiasQuebradas.length > 0 && (
-            <button type="button" onClick={() => irPara('alerta-cadeia')}
-              className="text-[10px] font-bold uppercase tracking-widest px-2 py-1 rounded-full text-yellow-300 border border-yellow-500/40 hover:bg-yellow-500/10 transition-colors flex items-center gap-1.5">
-              <AlertTriangle size={10} /> {cadeiasQuebradas.length} cadeia{cadeiasQuebradas.length === 1 ? '' : 's'} incompleta{cadeiasQuebradas.length === 1 ? '' : 's'}
-            </button>
-          )}
-          {preFaltando.length > 0 && (
-            <button type="button" onClick={() => irPara('alerta-prereq')}
-              className="text-[10px] font-bold uppercase tracking-widest px-2 py-1 rounded-full text-yellow-300 border border-yellow-500/40 hover:bg-yellow-500/10 transition-colors flex items-center gap-1.5">
-              <ClipboardCheck size={10} /> {preFaltando.length} pré-requisito{preFaltando.length === 1 ? '' : 's'}
-            </button>
-          )}
-          {setoresConcedidos.length >= 2 && (
-            <button type="button" onClick={() => irPara('alerta-setores')}
-              className="text-[10px] font-bold uppercase tracking-widest px-2 py-1 rounded-full text-gray-400 border border-white/15 hover:bg-white/5 transition-colors flex items-center gap-1.5">
-              <ShieldAlert size={10} /> {setoresConcedidos.length} setores
-            </button>
-          )}
-        </div>
-      </div>
-
-      {/* Fluxos de operação — a seção principal desta tela.
-          Marcar módulo a módulo obrigava o professor a saber de cor que a
-          cotação morre sem o Financeiro. Aqui ele escolhe a OPERAÇÃO e a
-          whitelist sai pronta, com o diagrama que ele projeta para a turma. */}
-      <div className="neu-flat rounded-3xl p-5 border border-white/5 flex flex-col gap-4">
-        <div>
+      {/* Situação: o interruptor e o que está valendo, numa faixa só. */}
+      <div className="grid grid-cols-2 lg:grid-cols-[repeat(4,minmax(0,1fr))_auto] gap-4">
+        <button type="button" onClick={() => void alternarAtivo()} disabled={alternando} aria-pressed={ativo}
+          title={ativo ? 'Desligar agora (fecha a sessão no histórico; sozinho às 22h)' : 'Ligar agora para a turma'}
+          className={`contador ${ativo ? 'contador--verde' : 'contador--neutro'} rounded-2xl px-4 py-4 flex items-center justify-center gap-3 text-left disabled:opacity-60`}>
+          <span className={`relative w-12 h-7 rounded-full shrink-0 transition-colors ${ativo ? 'bg-green-500' : 'bg-zinc-600'}`}>
+            <motion.span layout transition={{ type: 'spring', stiffness: 500, damping: 30 }}
+              className="absolute top-1 w-5 h-5 rounded-full bg-white shadow" style={{ left: ativo ? 24 : 4 }} />
+          </span>
+          <span className="flex flex-col">
+            <span className="contador-rotulo text-[10px] uppercase tracking-widest font-bold">Modo Aula</span>
+            <span className="contador-valor text-xl font-black leading-tight">{ativo ? 'Ligado' : 'Desligado'}</span>
+          </span>
+        </button>
+        <CardContador label="Módulos aplicados" value={`${modulos.length}/${AULA_MODULOS.length}`} tom="azul"
+          sub={tudoAplicado ? 'Tudo aplicado' : modulosRecortados > 0 ? `${modulosRecortados} com submenus escondidos` : 'Todos os submenus'} />
+        <CardContador label="Fluxos completos" value={fluxosCompletos.length} tom="verde"
+          sub={`de ${AULA_FLUXOS.length} fluxos`} />
+        <CardContador label="Alertas" value={totalAlertas} tom="amarelo"
+          sub={totalAlertas > 0 ? 'Veja ao lado' : 'Tudo certo'} />
+        {/* Salvar mora aqui, ao lado do que está valendo — a barra flutuante cobria os fluxos. */}
+        <div className={`col-span-2 lg:col-span-1 rounded-2xl px-4 py-3 flex lg:flex-col items-center justify-center gap-2 border ${
+          dirty ? 'border-amber-500/60 bg-amber-500/10' : 'border-white/5'}`}>
+          <span className={`text-[10px] uppercase tracking-widest font-bold ${dirty ? 'text-amber-300' : 'text-gray-500'} mr-auto lg:mr-0`}>
+            {dirty ? 'Não salvo' : 'Montagem salva'}
+          </span>
           <div className="flex items-center gap-2">
-            <Workflow size={14} className="text-accent" />
-            <h3 className="text-sm font-bold text-gray-200">Fluxos de operação</h3>
+            <button type="button" onClick={resetar} disabled={!dirty || salvando} title="Voltar ao que está salvo"
+              className="neu-button w-9 h-9 rounded-xl flex items-center justify-center text-gray-400 hover:text-gray-200 disabled:opacity-30">
+              <RotateCcw size={15} />
+            </button>
+            <NeuButtonAccent onClick={salvar} isLoading={salvando} disabled={!dirty}>
+              <Save size={14} /> Salvar
+            </NeuButtonAccent>
           </div>
-          <p className="text-[11px] text-gray-500 mt-1 max-w-2xl">
-            A operação real atravessa vários módulos e mais de um papel. Escolha o fluxo
-            que a turma vai percorrer hoje e o Modo Aula liga exatamente as telas dele —
-            inclusive as dos outros setores, que são as que costumam faltar.
-          </p>
         </div>
+      </div>
 
-        {!ativo && (
-          <p className="text-[11px] text-yellow-300/90 rounded-xl border border-yellow-500/30 px-3 py-2">
-            O Modo Aula está desligado. Montar um fluxo prepara a whitelist, mas nada muda
-            para a turma até você ligar o interruptor acima e salvar.
-          </p>
-        )}
+      {dirty && ativo && (
+        <p className="text-xs text-amber-300 -mt-1">A turma ainda vê a montagem anterior até você salvar.</p>
+      )}
 
-        <div className="flex flex-col gap-2">
-          {AULA_FLUXOS.map(f => {
-            // Cobertura conta só o que é obrigatório: uma etapa opcional
-            // desligada não deixa o fluxo incompleto.
-            const obrig = etapasObrigatorias(f);
-            const cobertas = obrig.filter(e => etapaCoberta(e, modulos, submenus)).length;
-            const completo = cobertas === obrig.length;
-            const aberto = fluxoAberto === f.id;
-            return (
-              <div key={f.id}
-                className={`rounded-2xl border overflow-hidden ${
-                  completo ? 'border-accent/30 bg-accent/5'
-                  : cobertas > 0 ? 'border-yellow-500/30' : 'border-white/5'}`}>
-                <div className="flex items-start gap-3 p-3">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className={`text-xs font-bold ${completo ? 'text-accent' : 'text-gray-200'}`}>
-                        {f.nome}
-                      </span>
-                      <span className={`text-[9px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded-full border ${
-                        completo ? 'bg-accent/20 text-accent border-accent/30'
-                        : cobertas > 0 ? 'text-yellow-300 border-yellow-500/40'
-                        : 'text-gray-600 border-white/10'}`}>
-                        {cobertas}/{obrig.length} etapas
-                      </span>
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-5 items-start">
+        {/* Estrutura da aula: pelos fluxos de operação ou módulo a módulo. */}
+        <section className="xl:col-span-2 neu-flat rounded-2xl p-5 border border-white/5 flex flex-col gap-3">
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            {/* Duas formas de estruturar a aula; a montagem é uma só e vale nas duas. */}
+            <div className="flex gap-1 neu-pressed rounded-xl p-1 border border-white/5" role="radiogroup" aria-label="Estruturar a aula">
+              {([['fluxos', 'Pelos fluxos', Workflow], ['manual', 'À mão', Layers]] as const).map(([id, rotulo, Icone]) => (
+                <button key={id} type="button" role="radio" aria-checked={modoMontagem === id}
+                  onClick={() => setModoMontagem(id)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-colors ${
+                    modoMontagem === id ? 'bg-accent text-[var(--color-accent-text)]' : 'text-gray-400 hover:text-gray-200'}`}>
+                  <Icone size={13} /> {rotulo}
+                </button>
+              ))}
+            </div>
+            <button type="button" onClick={aplicarTudo} disabled={tudoAplicado}
+              title="Aplica todos os módulos e submenus à turma"
+              className="btn-solido btn-solido--verde disabled:opacity-60 disabled:cursor-default">
+              <Check size={15} /> {tudoAplicado ? 'Tudo aplicado' : 'Aplicar tudo'}
+            </button>
+          </div>
+          {modoMontagem === 'fluxos' ? (
+          <div className="flex flex-col gap-4">
+            {AREAS_FLUXO.map(area => {
+              const doGrupo = AULA_FLUXOS.filter(f => (AREA_DO_FLUXO[f.id] ?? 'Outros') === area);
+              if (doGrupo.length === 0) return null;
+              return (
+            <div key={area} className="flex flex-col gap-2">
+              <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500">{area}</p>
+            {doGrupo.map(f => {
+              const obrig = etapasObrigatorias(f);
+              const cobertas = obrig.filter(e => etapaCoberta(e, modulos, submenus)).length;
+              const completo = cobertas === obrig.length;
+              const parcial = !completo && cobertas > 0;
+              const aberto = fluxoAberto === f.id;
+              return (
+                <div key={f.id} className={`rounded-xl border overflow-hidden ${
+                  completo ? 'border-green-600/60 bg-green-500/5' : parcial ? 'border-amber-500/40' : 'border-white/5'}`}>
+                  <div className="flex items-center gap-3 px-3 py-2.5">
+                    <span className={`shrink-0 min-w-[3.25rem] text-center px-2 py-1 rounded-lg text-[11px] font-black tabular-nums ${
+                      completo ? 'bg-green-600 text-white' : parcial ? 'bg-amber-500 text-black' : 'bg-zinc-700 text-zinc-300'}`}>
+                      {cobertas}/{obrig.length}
+                    </span>
+                    <button type="button" onClick={() => setFluxoAberto(aberto ? null : f.id)} title={f.resumo}
+                      className="flex-1 min-w-0 text-left">
+                      <p className={`text-sm font-bold truncate ${completo ? 'text-green-400' : 'text-gray-200'}`}>{f.nome}</p>
+                    </button>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <button type="button" onClick={() => void montarFluxo(f.id)}
+                        title="Substitui a seleção pelos módulos deste fluxo"
+                        className={`px-3 py-1.5 rounded-lg text-[11px] font-bold transition-colors ${
+                          completo ? 'bg-white/5 text-gray-400 hover:text-gray-200' : 'bg-accent text-[var(--color-accent-text)] hover:brightness-110'}`}>
+                        Montar
+                      </button>
+                      <button type="button" onClick={() => setFluxoAtividade(f.id)} title="Atividade deste fluxo"
+                        className="neu-button w-8 h-8 rounded-lg flex items-center justify-center text-gray-400 hover:text-accent">
+                        <ClipboardList size={14} />
+                      </button>
+                      <button type="button" onClick={() => setFluxoProjetado(f.id)} title="Projetar para a turma"
+                        className="neu-button w-8 h-8 rounded-lg flex items-center justify-center text-gray-400 hover:text-accent">
+                        <Presentation size={14} />
+                      </button>
+                      <button type="button" onClick={() => setFluxoAberto(aberto ? null : f.id)} title="Etapas"
+                        className="neu-button w-8 h-8 rounded-lg flex items-center justify-center text-gray-400 hover:text-accent">
+                        <ChevronDown size={14} className={`transition-transform ${aberto ? 'rotate-180 text-accent' : ''}`} />
+                      </button>
                     </div>
-                    <p className="text-[11px] text-gray-500 mt-1 leading-relaxed">{f.resumo}</p>
                   </div>
-                  <div className="flex items-center gap-1.5 shrink-0">
-                    <button type="button" onClick={() => void montarFluxo(f.id)}
-                      title="Substitui a whitelist pelos módulos e submenus deste fluxo"
-                      className="neu-button px-3 py-1.5 rounded-xl text-[10px] font-bold uppercase tracking-widest text-gray-400 hover:text-accent transition-colors border border-white/5">
-                      Montar
-                    </button>
-                    {/* Liberar as telas é metade: sem enunciado o aluno abre a
-                        tela certa e não sabe o que fazer nela. */}
-                    <button type="button" onClick={() => setFluxoAtividade(f.id)}
-                      title="Montar a atividade deste fluxo, baixar em PDF e enviar às filiais"
-                      className="neu-button w-7 h-7 rounded-lg flex items-center justify-center text-gray-500 hover:text-accent">
-                      <ClipboardList size={13} />
-                    </button>
-                    {/* O diagrama do card é para conferir montando; este é o
-                        mesmo conteúdo do tamanho que a parede da sala exige. */}
-                    <button type="button" onClick={() => setFluxoProjetado(f.id)}
-                      title="Projetar o fluxo para a turma (tela cheia)"
-                      className="neu-button w-7 h-7 rounded-lg flex items-center justify-center text-gray-500 hover:text-accent">
-                      <Presentation size={13} />
-                    </button>
-                    <button type="button" onClick={() => setFluxoAberto(aberto ? null : f.id)}
-                      title="Ver as etapas e quem faz cada uma"
-                      className="neu-button w-7 h-7 rounded-lg flex items-center justify-center text-gray-500 hover:text-accent">
-                      <ChevronDown size={13} className={`transition-transform ${aberto ? 'rotate-180 text-accent' : ''}`} />
-                    </button>
-                  </div>
-                </div>
 
-                {aberto && (
-                  <div className="border-t border-white/5 bg-black/20 px-3 py-3 flex flex-col gap-0">
-                    {f.etapas.map((etapa, i) => {
-                      const ok = etapaCoberta(etapa, modulos, submenus);
-                      // O bloco de apoio continua o trilho: a última etapa só
-                      // é o fim quando o fluxo não abre tela de apoio nenhuma.
-                      const ultima = i === f.etapas.length - 1 && !apoioDoFluxo(f);
-                      return (
-                        <div key={`${etapa.view}-${i}`} className="flex gap-3">
-                          {/* Trilho: bolinha + linha que liga à etapa seguinte.
-                              É o que faz a lista ler como cadeia e não como
-                              checklist solto quando projetada. */}
-                          <div className="flex flex-col items-center shrink-0 pt-1">
-                            <div className={`w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-black border ${
-                              ok ? 'bg-accent border-accent text-black' : 'border-white/20 text-gray-600'}`}>
-                              {i + 1}
+                  {aberto && (
+                    <div className="border-t border-white/5 bg-black/20 px-4 py-3 flex flex-col">
+                      <p className="text-xs text-gray-400 mb-3">{f.resumo}</p>
+                      {f.etapas.map((etapa, i) => {
+                        const ok = etapaCoberta(etapa, modulos, submenus);
+                        const ultima = i === f.etapas.length - 1 && !apoioDoFluxo(f);
+                        return (
+                          <div key={`${etapa.view}-${i}`} className="flex gap-3">
+                            <div className="flex flex-col items-center shrink-0">
+                              <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-black ${
+                                ok ? 'bg-green-600 text-white' : etapa.opcional ? 'border border-white/20 text-gray-500' : 'bg-amber-500 text-black'}`}>
+                                {i + 1}
+                              </div>
+                              {!ultima && <div className={`w-px flex-1 my-1 ${ok ? 'bg-green-600/50' : 'bg-white/10'}`} />}
                             </div>
-                            {!ultima && <div className={`w-px flex-1 my-1 ${ok ? 'bg-accent/40' : 'bg-white/10'}`} />}
-                          </div>
-                          <div className={`min-w-0 flex-1 ${ultima ? 'pb-0' : 'pb-3'}`}>
-                            <div className="flex items-center gap-1.5 flex-wrap">
-                              <span className={`text-[11px] font-bold ${ok ? 'text-gray-200' : 'text-gray-500'}`}>
+                            <div className={`min-w-0 flex-1 ${ultima ? '' : 'pb-3'}`}>
+                              <p className={`text-xs font-bold ${ok ? 'text-gray-100' : 'text-gray-400'}`}>
                                 {etapa.titulo}
-                              </span>
-                              {etapa.opcional && (
-                                <span className="text-[9px] font-black uppercase tracking-widest text-gray-600 border border-white/10 rounded-full px-1.5 py-0.5">
-                                  Opcional
-                                </span>
+                                {etapa.opcional && <span className="ml-1.5 text-[9px] font-bold uppercase tracking-widest text-gray-500">opcional</span>}
+                              </p>
+                              <p className="text-[11px] text-accent/80">{etapa.quem}</p>
+                              {!ok && !etapa.opcional && (
+                                <p className="text-[11px] text-amber-300 mt-0.5">{etapa.seQuebra}</p>
                               )}
                             </div>
-                            <div className="text-[10px] text-accent/80 mt-0.5">{etapa.quem}</div>
-                            <div className="text-[10px] text-gray-500 mt-0.5 leading-relaxed">{etapa.detalhe}</div>
-                            {!ok && !etapa.opcional && (
-                              <div className="text-[10px] text-yellow-300/90 mt-1 leading-relaxed">
-                                Fora da aula: {etapa.seQuebra}
+                          </div>
+                        );
+                      })}
+                      {(() => {
+                        const apoio = apoioDoFluxo(f);
+                        if (!apoio) return null;
+                        return (
+                          <div className="flex gap-3">
+                            <div className="w-6 h-6 rounded-full border border-dashed border-white/25 flex items-center justify-center text-gray-500 shrink-0">
+                              <FolderPlus size={11} />
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <p className="text-xs font-bold text-gray-300" title={apoio.nota}>Apoio</p>
+                              <div className="flex flex-wrap gap-1.5 mt-1">
+                                {apoio.views.map(v => {
+                                  const okApoio = apoioCoberto(v, modulos, submenus);
+                                  return (
+                                    <span key={v} className={`text-[10px] font-semibold rounded-md px-2 py-0.5 ${
+                                      okApoio ? 'bg-green-600/20 text-green-300' : 'bg-amber-500/15 text-amber-300'}`}>
+                                      {rotuloDaView(v)}
+                                    </span>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })()}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+            </div>
+              );
+            })}
+          </div>
+          ) : (
+          <div className="flex flex-col gap-4">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-[10px] font-bold uppercase tracking-widest text-gray-500 mr-1">Atalhos</span>
+              {AULA_PRESETS.map(p => (
+                <button key={p.nome} type="button" onClick={() => aplicarPreset(p.modulos)}
+                  className="px-3 py-1.5 rounded-lg text-xs font-bold border border-white/10 text-gray-300 hover:border-accent hover:text-accent transition-colors">
+                  {p.nome}
+                </button>
+              ))}
+            </div>
+
+            {/* Um cartão por área, módulos em lista: a grade antiga deixava linhas tortas
+                quando um módulo abria os submenus. */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 items-start">
+              {grupos.map(g => {
+                const doGrupo = AULA_MODULOS.filter(m => m.grupo === g);
+                const marcados = doGrupo.filter(m => modulos.includes(m.id)).length;
+                const todosMarcados = marcados === doGrupo.length;
+                return (
+                  <div key={g} className="rounded-xl border border-white/10 overflow-hidden">
+                    <div className="flex items-center gap-2 px-3 py-2 bg-white/[0.04] border-b border-white/5">
+                      <p className="flex-1 text-[11px] font-black uppercase tracking-widest text-gray-300">{g}</p>
+                      <span className={`text-[11px] font-black tabular-nums px-1.5 py-0.5 rounded-md ${
+                        marcados === 0 ? 'text-gray-500' : 'bg-accent text-[var(--color-accent-text)]'}`}>
+                        {marcados}/{doGrupo.length}
+                      </span>
+                      <button type="button" onClick={() => alternarGrupo(doGrupo.map(m => m.id), !todosMarcados)}
+                        className="text-[10px] font-bold uppercase tracking-widest text-gray-500 hover:text-accent w-14 text-right">
+                        {todosMarcados ? 'Nenhum' : 'Todos'}
+                      </button>
+                    </div>
+                    <div className="flex flex-col divide-y divide-white/5">
+                      {doGrupo.map(m => {
+                        const active = modulos.includes(m.id);
+                        const temSubmenus = AULA_SUBMENUS[m.id]?.length > 0;
+                        const subsDoMod = temSubmenus ? AULA_SUBMENUS[m.id].map(l => aulaSubmenuId(m.id, l)) : [];
+                        const subsSelecionados = submenus.filter(s => s.startsWith(`${m.id}-`));
+                        // Todos marcados um a um é o mesmo que nenhum recorte.
+                        const restrito = active && subsSelecionados.length > 0 && subsSelecionados.length < subsDoMod.length;
+                        const isOpen = active && temSubmenus && !!expandido[m.id];
+                        return (
+                          <div key={m.id} className={active ? 'bg-accent/[0.06]' : ''}>
+                            <div className="flex items-center gap-2 px-3 py-2">
+                              <button type="button" onClick={() => toggleModulo(m.id)} className="flex items-center gap-2.5 flex-1 min-w-0 text-left">
+                                <span className={`w-[18px] h-[18px] rounded-md flex items-center justify-center shrink-0 transition-colors ${
+                                  active ? 'bg-accent' : 'border-2 border-white/20'}`}>
+                                  {active && <Check size={12} strokeWidth={3} className="text-black" />}
+                                </span>
+                                <span className={`text-sm truncate ${active ? 'text-gray-100 font-semibold' : 'text-gray-400'}`}>{m.label}</span>
+                              </button>
+                              {active && temSubmenus && (
+                                <button type="button" onClick={() => setExpandido(e => ({ ...e, [m.id]: !e[m.id] }))}
+                                  title="Escolher quais submenus a turma vê"
+                                  className={`shrink-0 flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-bold transition-colors ${
+                                    restrito ? 'bg-amber-500 text-black' : 'bg-white/5 text-gray-400 hover:text-gray-200'}`}>
+                                  {restrito ? `${subsSelecionados.length} de ${subsDoMod.length}` : 'Todos os submenus'}
+                                  <ChevronDown size={12} className={`transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+                                </button>
+                              )}
+                            </div>
+                            {/* Sem animação de altura: medir aqui fazia a página crescer a cada clique. */}
+                            {isOpen && (
+                              <div className="px-3 pb-3 pl-10 flex flex-wrap gap-1.5">
+                                {AULA_SUBMENUS[m.id].map(label => {
+                                  const sid = aulaSubmenuId(m.id, label);
+                                  const visivel = !restrito || submenus.includes(sid);
+                                  return (
+                                    <button key={sid} type="button" onClick={() => alternarSubmenuVisivel(m.id, sid)}
+                                      className={`px-2 py-1 rounded-md text-[11px] font-semibold transition-colors ${
+                                        visivel ? 'bg-accent/20 text-accent border border-accent/40' : 'text-gray-500 border border-white/10 line-through'}`}>
+                                      {label}
+                                    </button>
+                                  );
+                                })}
+                                {restrito && (
+                                  <button type="button" onClick={() => limparSubmenusDoModulo(m.id)}
+                                    className="px-2 py-1 text-[10px] font-bold uppercase tracking-widest text-gray-500 hover:text-accent">
+                                    Mostrar todos
+                                  </button>
+                                )}
                               </div>
                             )}
                           </div>
-                        </div>
-                      );
-                    })}
-
-                    {/* Apoio: as telas que «Montar» abre e a cadeia não numera.
-                        Sem isto, o professor via o botão ligar Cadastros e o
-                        diagrama nunca explicava por quê. */}
-                    {(() => {
-                      const apoio = apoioDoFluxo(f);
-                      if (!apoio) return null;
-                      return (
-                        <div className="flex gap-3">
-                          <div className="flex flex-col items-center shrink-0 pt-1">
-                            <div className="w-5 h-5 rounded-full border border-dashed border-white/25 flex items-center justify-center text-gray-500">
-                              <FolderPlus size={10} />
-                            </div>
-                          </div>
-                          <div className="min-w-0 flex-1">
-                            <div className="flex items-center gap-1.5 flex-wrap">
-                              <span className="text-[11px] font-bold text-gray-300">
-                                Apoio — o cadastro que a cadeia usa
-                              </span>
-                              <span className="text-[9px] font-black uppercase tracking-widest text-gray-600 border border-white/10 rounded-full px-1.5 py-0.5">
-                                Fora da numeração
-                              </span>
-                            </div>
-                            <div className="text-[10px] text-gray-500 mt-0.5 leading-relaxed">{apoio.nota}</div>
-                            <div className="flex flex-wrap gap-1.5 mt-1.5">
-                              {apoio.views.map(v => {
-                                const okApoio = apoioCoberto(v, modulos, submenus);
-                                return (
-                                  <span key={v}
-                                    className={`text-[10px] font-semibold rounded-lg px-2 py-0.5 border ${
-                                      okApoio ? 'border-accent/40 text-accent/90' : 'border-yellow-500/40 text-yellow-300/90'}`}>
-                                    {rotuloDaView(v)}
-                                  </span>
-                                );
-                              })}
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })()}
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* Cadeia quebrada: o fluxo foi começado e não fecha.
-          Não depende de `ativo`: o momento em que este aviso vale alguma coisa
-          é a PREPARAÇÃO — quem monta a aula na véspera, com o interruptor
-          desligado, era justamente quem não o via. */}
-      {cadeiasQuebradas.length > 0 && (
-        <div id="alerta-cadeia" className="neu-flat rounded-3xl p-5 border border-yellow-500/30 flex flex-col gap-3">
-          <div className="flex items-center gap-2">
-            <AlertTriangle size={14} className="text-yellow-400" />
-            <h3 className="text-sm font-bold text-gray-200">Cadeia incompleta</h3>
-          </div>
-          <p className="text-[11px] text-gray-500">
-            Estes fluxos têm etapas ligadas e etapas faltando. A turma chega até certo
-            ponto e para — e quem descobre é você, na frente deles.
-          </p>
-          {cadeiasQuebradas.map(c => (
-            <div key={c.fluxo.id} className="rounded-2xl border border-white/5 bg-black/20 p-3 flex flex-col gap-2">
-              <div className="flex items-start justify-between gap-3 flex-wrap">
-                <div className="min-w-0">
-                  <div className="text-xs font-bold text-gray-200">{c.fluxo.nome}</div>
-                  <div className="text-[10px] text-gray-500 mt-0.5">
-                    {c.cobertas} de {c.total} etapas ligadas
-                  </div>
-                </div>
-                <button type="button" onClick={() => completarCadeia(c.fluxo.id)}
-                  className="neu-button px-3 py-1.5 rounded-xl text-[10px] font-bold uppercase tracking-widest text-yellow-300 hover:text-accent transition-colors border border-yellow-500/30 shrink-0">
-                  Completar
-                </button>
-              </div>
-              {/* Só a primeira etapa faltante: é onde a turma vai parar de fato,
-                  e listar as sete seguintes esconderia justamente essa. */}
-              <div className="text-[11px] text-gray-400 leading-relaxed">
-                Para em <span className="text-gray-200 font-bold">{c.faltando[0].titulo}</span>
-                {' '}({c.faltando[0].quem}). {c.faltando[0].seQuebra}
-                {c.faltando.length > 1 && (
-                  <span className="text-gray-600"> +{c.faltando.length - 1} etapa(s) depois dessa.</span>
-                )}
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* Pré-requisitos de dado: o que trava a aula depois que os módulos já
-          estão certos. Consultado ao vivo no banco desta turma. */}
-      {fluxosRelevantes.length > 0 && preStatus.length > 0 && (
-        <div id="alerta-prereq" className={`neu-flat rounded-3xl p-5 border flex flex-col gap-3 ${
-          preFaltando.length > 0 ? 'border-yellow-500/30' : 'border-white/5'}`}>
-          <div className="flex items-center justify-between gap-3">
-            <div className="flex items-center gap-2">
-              <ClipboardCheck size={14} className="text-accent" />
-              <h3 className="text-sm font-bold text-gray-200">Pré-requisitos da turma</h3>
-            </div>
-            <button type="button" onClick={() => void reverificarPre()} disabled={preLoading}
-              title="Verificar de novo"
-              className="neu-button w-7 h-7 rounded-lg flex items-center justify-center text-gray-500 hover:text-accent disabled:opacity-50">
-              <RefreshCw size={12} className={preLoading ? 'animate-spin' : ''} />
-            </button>
-          </div>
-          <p className="text-[11px] text-gray-500">
-            Módulo liberado não basta: sem estes dados no banco desta turma, o fluxo não anda.
-          </p>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-            {preStatus.map(p => (
-              <div key={p.id} className="flex items-start gap-2 rounded-xl border border-white/5 bg-black/20 px-3 py-2">
-                {p.indefinido
-                  ? <AlertTriangle size={13} className="text-gray-500 shrink-0 mt-0.5" />
-                  : p.ok
-                    ? <Check size={13} className="text-accent shrink-0 mt-0.5" />
-                    : <Circle size={13} className="text-yellow-400 shrink-0 mt-0.5" />}
-                <div className="min-w-0">
-                  <div className={`text-[11px] font-bold ${
-                    p.indefinido ? 'text-gray-400' : p.ok ? 'text-gray-300' : 'text-yellow-300'}`}>
-                    {p.label}
-                    {p.quantidade >= 0 && <span className="text-gray-600 font-normal"> · {p.quantidade}</span>}
-                  </div>
-                  {p.indefinido && (
-                    <div className="text-[10px] text-gray-500 mt-0.5">
-                      Não foi possível verificar nesta turma — confira à mão em {p.onde}.
+                        );
+                      })}
                     </div>
-                  )}
-                  {/* Filial vazia é o caso que o total esconde: o aluno só vê
-                      o catálogo da unidade dele. */}
-                  {!p.indefinido && p.filiaisVazias && p.filiaisVazias.length > 0 && (
-                    <div className="text-[10px] text-yellow-300/90 mt-0.5">
-                      Nada em {p.filiaisVazias.join(', ')} — a turma dessa unidade fica sem material.
-                    </div>
-                  )}
-                  {!p.indefinido && !p.ok && !p.filiaisVazias?.length && (
-                    <div className="text-[10px] text-gray-500 mt-0.5">Resolva em {p.onde}</div>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Segregação de funções: a aula CONCEDE setor (migr. 317), não filtra.
-          Um fluxo largo entrega vários setores ao mesmo aluno e dissolve a
-          lição que o próprio fluxo existe para ensinar. */}
-      {/* Também sem `ativo`: decidir quantos setores a aula concede é escolha
-          de montagem, e depois de ligar o interruptor já é tarde. */}
-      {setoresConcedidos.length >= 2 && (
-        <div id="alerta-setores" className="neu-flat rounded-3xl p-5 border border-white/5 flex items-start gap-3">
-          <ShieldAlert size={16} className="text-gray-500 shrink-0 mt-0.5" />
-          <div className="min-w-0">
-            <h3 className="text-sm font-bold text-gray-200">
-              Esta aula concede {setoresConcedidos.length} setores de uma vez
-            </h3>
-            <p className="text-[11px] text-gray-500 mt-1 leading-relaxed">
-              <span className="text-gray-400">{setoresConcedidos.join(', ')}</span> — cada aluno
-              afetado recebe todos. As travas de papel do banco continuam de pé (quem abre uma
-              requisição segue sem poder aprová-la), mas os setores se somam dentro do mesmo
-              aluno. Se a aula for justamente sobre segregação de funções, ligue menos módulos
-              e distribua os papéis entre eles.
-            </p>
-          </div>
-        </div>
-      )}
-
-
-      {/* Roles alvo */}
-      <div className="neu-flat rounded-3xl p-5 border border-white/5 flex flex-col gap-3">
-        <div className="flex items-center gap-2">
-          <Users size={14} className="text-accent" />
-          <h3 className="text-sm font-bold text-gray-200">Quem cai no Modo Aula</h3>
-        </div>
-        <p className="text-[11px] text-gray-500">
-          Admin nunca é filtrado (pra não travar você mesmo). Escolha quais roles seguem a whitelist.
-          «Conselheiro» vale para a role pura; quem é gerente com o selo de conselheiro entra por «Gerente».
-        </p>
-        <div className="flex flex-wrap gap-2">
-          {AULA_ROLES_ALVO.map(r => {
-            const active = roles.includes(r.id);
-            return (
-              <button
-                key={r.id}
-                type="button"
-                onClick={() => toggleRole(r.id)}
-                title={r.hint}
-                className={`px-3 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-widest border transition-all
-                  ${active
-                    ? 'bg-accent/15 text-accent border-accent/30'
-                    : 'neu-button border-white/5 text-gray-500 hover:text-gray-300'}`}
-              >
-                {active && <Check size={11} className="inline mr-1 -mt-0.5" />}
-                {r.label}
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* Presets */}
-      <div className="neu-flat rounded-3xl p-5 border border-white/5 flex flex-col gap-3">
-        <div className="flex items-center gap-2">
-          <Layers size={14} className="text-accent" />
-          <h3 className="text-sm font-bold text-gray-200">Atalhos por módulo</h3>
-        </div>
-        <p className="text-[11px] text-gray-500">
-          Recorte por área, sem a cadeia. Servem para mostrar uma tela específica — para
-          ensinar a operação inteira, use os fluxos acima.
-        </p>
-        <div className="flex flex-wrap gap-2">
-          {AULA_PRESETS.map(p => (
-            <button
-              key={p.nome}
-              type="button"
-              onClick={() => aplicarPreset(p.modulos)}
-              className="neu-button px-3 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-widest text-gray-400 hover:text-accent transition-colors border border-white/5"
-            >
-              {p.nome}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      <div className="neu-flat rounded-3xl p-5 border border-white/5 flex flex-col gap-4">
-        <div>
-          <h3 className="text-sm font-bold text-gray-200">Módulos disponíveis na aula</h3>
-          <p className="text-[11px] text-gray-500 mt-0.5">
-            Clique no ícone <Filter size={10} className="inline mx-0.5" /> pra restringir também
-            os submenus do módulo (sem restrição = todos os submenus liberados).
-          </p>
-        </div>
-        {grupos.map(g => (
-          <div key={g} className="flex flex-col gap-2">
-            <div className="text-[10px] font-black uppercase tracking-widest text-gray-500 pl-1">{g}</div>
-            {/* items-start: sem isso o card expandido estica a linha inteira e os
-                vizinhos viram caixas vazias do mesmo tamanho. */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 items-start">
-              {AULA_MODULOS.filter(m => m.grupo === g).map(m => {
-                const active = modulos.includes(m.id);
-                const temSubmenus = AULA_SUBMENUS[m.id]?.length > 0;
-                const subsDoMod = temSubmenus
-                  ? AULA_SUBMENUS[m.id].map(l => aulaSubmenuId(m.id, l))
-                  : [];
-                const subsSelecionados = submenus.filter(s => s.startsWith(`${m.id}-`));
-                const restrito = active && temSubmenus && subsSelecionados.length > 0;
-                const isOpen = !!expandido[m.id];
-                return (
-                  <div key={m.id} className={`rounded-xl border ${active ? 'border-accent/30 bg-accent/5' : 'border-white/5'} overflow-hidden`}>
-                    <div className="flex items-center gap-2 px-3 py-2.5">
-                      <button
-                        type="button"
-                        onClick={() => toggleModulo(m.id)}
-                        className="flex items-center gap-2 flex-1 min-w-0 text-left"
-                      >
-                        <div className={`w-4 h-4 rounded flex items-center justify-center border shrink-0
-                          ${active ? 'bg-accent border-accent' : 'border-white/20'}`}>
-                          {active && <Check size={11} className="text-black" />}
-                        </div>
-                        <span className={`text-xs font-semibold truncate ${active ? 'text-accent' : 'text-gray-400'}`}>
-                          {m.label}
-                        </span>
-                        {restrito && (
-                          <span className="text-[9px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded-full bg-accent/20 text-accent border border-accent/30 shrink-0">
-                            {subsSelecionados.length}/{subsDoMod.length}
-                          </span>
-                        )}
-                      </button>
-                      {active && temSubmenus && (
-                        <button
-                          type="button"
-                          onClick={() => setExpandido(e => ({ ...e, [m.id]: !e[m.id] }))}
-                          title="Restringir submenus"
-                          className="neu-button w-7 h-7 rounded-lg flex items-center justify-center text-gray-500 hover:text-accent shrink-0"
-                        >
-                          <ChevronDown size={13} className={`transition-transform ${isOpen ? 'rotate-180 text-accent' : ''}`} />
-                        </button>
-                      )}
-                    </div>
-                    {/* Sem animação de altura de propósito. `height: 'auto'` no
-                        motion exige medir o conteúdo, e como marcar um submenu
-                        re-renderiza este bloco (setSubmenus), a medição voltava
-                        a rodar sobre um item de grid de altura livre e a altura
-                        crescia sem parar — a página ganhava milhares de pixels
-                        vazios a cada clique. Abrir/fechar não precisa animar. */}
-                    <>
-                      {active && temSubmenus && isOpen && (
-                        <div className="overflow-hidden border-t border-white/5">
-                          <div className="flex items-center justify-between px-3 py-2 bg-black/20">
-                            <span className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Submenus</span>
-                            <div className="flex items-center gap-2">
-                              <button
-                                type="button"
-                                onClick={() => setSubmenus(prev => [
-                                  ...prev.filter(s => !s.startsWith(`${m.id}-`)),
-                                  ...subsDoMod,
-                                ])}
-                                className="text-[9px] font-bold uppercase tracking-widest text-gray-500 hover:text-accent"
-                              >
-                                Todos
-                              </button>
-                              <span className="text-gray-700">·</span>
-                              <button
-                                type="button"
-                                onClick={() => limparSubmenusDoModulo(m.id)}
-                                className="text-[9px] font-bold uppercase tracking-widest text-gray-500 hover:text-accent"
-                              >
-                                Limpar
-                              </button>
-                            </div>
-                          </div>
-                          <div className="px-3 py-2 flex flex-col gap-1">
-                            {AULA_SUBMENUS[m.id].map(label => {
-                              const sid = aulaSubmenuId(m.id, label);
-                              const on = submenus.includes(sid);
-                              return (
-                                // `relative` é obrigatório: o input abaixo usa
-                                // `sr-only`, que é `position: absolute`. Sem um
-                                // ancestral posicionado o bloco contêiner dele
-                                // vira o documento — ele escapa do
-                                // `overflow-hidden` da raiz e estica o scroll da
-                                // página em centenas de pixels por submenu.
-                                <label key={sid} className="relative flex items-center gap-2 py-1 cursor-pointer group">
-                                  <div className={`w-3.5 h-3.5 rounded flex items-center justify-center border shrink-0
-                                    ${on ? 'bg-accent border-accent' : 'border-white/20 group-hover:border-white/40'}`}>
-                                    {on && <Check size={9} className="text-black" />}
-                                  </div>
-                                  <input
-                                    type="checkbox"
-                                    checked={on}
-                                    onChange={() => toggleSubmenu(sid)}
-                                    className="sr-only"
-                                  />
-                                  <span className={`text-[11px] ${on ? 'text-accent' : 'text-gray-500 group-hover:text-gray-300'}`}>
-                                    {label}
-                                  </span>
-                                </label>
-                              );
-                            })}
-                            <p className="text-[10px] text-gray-600 mt-1 leading-relaxed">
-                              {subsSelecionados.length === 0
-                                ? 'Nenhum submenu selecionado — todos ficam liberados.'
-                                : `${subsSelecionados.length} submenu(s) na whitelist — só esses aparecem.`}
-                            </p>
-                          </div>
-                        </div>
-                      )}
-                    </>
                   </div>
                 );
               })}
             </div>
           </div>
-        ))}
-      </div>
+          )}
+        </section>
 
-      {/* Recarregar todas as máquinas. Só `role = 'admin'` literal: a RLS da
-          migr. 564 recusa CEO e conselheiro, que aqui são alunos — e botão que
-          só dá erro é pior que botão nenhum. */}
-      {profile?.role === 'admin' && (
-      <div className="neu-flat rounded-3xl p-5 border border-white/5 flex items-start justify-between gap-4 flex-wrap">
-        <div className="flex items-start gap-3 min-w-0">
-          <div className="w-10 h-10 rounded-2xl flex items-center justify-center shrink-0 bg-sky-500/10">
-            <RefreshCw size={18} className="text-sky-400" />
-          </div>
-          <div className="min-w-0">
-            <h2 className="text-sm font-bold text-gray-100">Recarregar todas as máquinas</h2>
-            <p className="text-[11px] text-gray-500 leading-relaxed max-w-xl mt-0.5">
-              Manda a turma inteira recarregar com o cache limpo — o mesmo que o Ctrl+Shift+R,
-              e ainda apaga o cache do PWA, que é quem costuma servir a versão antiga.
-              Cada aluno vê um aviso e a tela recarrega em 10 segundos.
-              <strong className="text-gray-400"> Alcança a sua máquina também.</strong>
-              {' '}Quem estiver fechado obedece ao abrir, se for dentro de 30 minutos.
-            </p>
-          </div>
-        </div>
-        <BotaoRecarregarTurma profile={profile} showToast={showToast} />
-      </div>
-      )}
-
-      {/* Simulação de perda de dados — separada do Modo Aula de propósito: uma
-          esconde módulos para focar a aula, a outra tira o chão para ensinar por
-          que os dados importam. Confundir as duas seria fácil e caro. */}
-      <div className={`neu-flat rounded-3xl p-5 border ${blackout.ativo ? 'border-red-500/40' : 'border-white/5'} flex flex-col gap-3`}>
-        <div className="flex items-start justify-between gap-4 flex-wrap">
-          <div className="flex items-start gap-3 min-w-0">
-            <div className="w-10 h-10 rounded-2xl flex items-center justify-center shrink-0 bg-red-500/10">
-              <AlertTriangle size={18} className="text-red-400" />
+        <div className="flex flex-col gap-5">
+          {/* Alertas da montagem, juntos: cadeia que não fecha, dado que falta, setores somados. */}
+          <section id="alertas-aula" className={`neu-flat rounded-2xl p-5 border flex flex-col gap-3 ${
+            totalAlertas > 0 ? 'border-amber-500/40' : 'border-white/5'}`}>
+            <div className="flex items-center justify-between gap-2">
+              <h3 className="text-sm font-bold text-gray-200 flex items-center gap-2">
+                <AlertTriangle size={15} className={totalAlertas > 0 ? 'text-amber-400' : 'text-gray-500'} /> Alertas
+              </h3>
+              {fluxosRelevantes.length > 0 && (
+                <button type="button" onClick={() => void reverificarPre()} disabled={preLoading} title="Verificar os dados de novo"
+                  className="neu-button w-7 h-7 rounded-lg flex items-center justify-center text-gray-500 hover:text-accent disabled:opacity-50">
+                  <RefreshCw size={12} className={preLoading ? 'animate-spin' : ''} />
+                </button>
+              )}
             </div>
-            <div className="min-w-0">
-              <h2 className="text-sm font-bold text-gray-100">Simulação de perda de dados</h2>
-              <p className="text-[11px] text-gray-500 leading-relaxed max-w-xl mt-0.5">
-                Deixa a turma sem ver nem lançar movimento — pedidos, vendas, contas, estoque —
-                para mostrar, sentindo, o que é depender do sistema e não ter os dados.
-                <strong className="text-gray-400"> Nada é apagado</strong>: o bloqueio é de leitura e
-                escrita, e desligar devolve tudo na hora. Cadastros, login e esta tela continuam de pé.
-                A tela deles, porém, lê como falha real — e não diz que é exercício. Quem revela é você,
-                na hora que escolher.
+
+            {totalAlertas === 0 && (
+              <p className="text-xs text-gray-500 flex items-center gap-1.5"><Check size={13} className="text-green-500" /> Nada travando a aula.</p>
+            )}
+
+            {cadeiasQuebradas.map(c => (
+              <div key={c.fluxo.id} className="rounded-xl bg-amber-500/10 px-3 py-2.5 flex items-start gap-2">
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs font-bold text-amber-200">{c.fluxo.nome.split('—')[0].trim()} · {c.cobertas}/{c.total}</p>
+                  <p className="text-[11px] text-gray-400 mt-0.5">
+                    Para em <b className="text-gray-200">{c.faltando[0].titulo}</b>
+                    {c.faltando.length > 1 && ` +${c.faltando.length - 1}`}
+                  </p>
+                </div>
+                <button type="button" onClick={() => completarCadeia(c.fluxo.id)} title="Acrescenta as etapas que faltam, sem tirar nada"
+                  className="btn-solido btn-solido--amarelo !py-1 !px-2.5 !text-[11px] shrink-0">
+                  Completar
+                </button>
+              </div>
+            ))}
+
+            {fluxosRelevantes.length > 0 && preStatus.length > 0 && (
+              <div className="flex flex-col gap-1">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500">Dados da turma</p>
+                  {preStatus.some(p => p.ok && !p.indefinido) && (
+                    <button type="button" onClick={() => setVerTodosDados(v => !v)}
+                      className="text-[10px] font-bold uppercase tracking-widest text-gray-500 hover:text-accent">
+                      {verTodosDados ? 'Só pendentes' : `Ver todos (${preStatus.length})`}
+                    </button>
+                  )}
+                </div>
+                {preStatus.every(p => p.ok && !p.indefinido) && !verTodosDados && (
+                  <p className="text-xs text-gray-500 flex items-center gap-1.5">
+                    <Check size={13} className="text-green-500" /> Tudo cadastrado
+                  </p>
+                )}
+                {preStatus.filter(p => verTodosDados || !p.ok || p.indefinido).map(p => (
+                  <div key={p.id} className="flex items-center gap-2 py-0.5"
+                    title={p.indefinido ? `Não verificado — confira em ${p.onde}` : !p.ok ? `Resolva em ${p.onde}` : undefined}>
+                    {p.indefinido
+                      ? <AlertTriangle size={13} className="text-gray-500 shrink-0" />
+                      : p.ok ? <Check size={13} className="text-green-500 shrink-0" />
+                      : <Circle size={13} className="text-amber-400 shrink-0" />}
+                    <span className={`text-xs flex-1 min-w-0 truncate ${p.ok && !p.indefinido ? 'text-gray-300' : 'text-amber-200'}`}>{p.label}</span>
+                    {p.quantidade >= 0 && <span className="text-[11px] tabular-nums text-gray-500">{p.quantidade}</span>}
+                  </div>
+                ))}
+                {preStatus.some(p => !p.indefinido && p.filiaisVazias?.length) && (
+                  <p className="text-[11px] text-amber-300 mt-1">
+                    Sem material em {Array.from(new Set(preStatus.flatMap(p => p.filiaisVazias ?? []))).join(', ')}.
+                  </p>
+                )}
+              </div>
+            )}
+
+            {setoresConcedidos.length >= 2 && (
+              <p className="text-[11px] text-gray-400 flex items-start gap-1.5"
+                title="Cada aluno afetado recebe todos esses setores; as travas de papel do banco continuam valendo.">
+                <ShieldAlert size={13} className="text-gray-500 shrink-0 mt-px" />
+                <span>Concede <b className="text-gray-200">{setoresConcedidos.length} setores</b> a cada aluno: {setoresConcedidos.join(', ')}.</span>
               </p>
-            </div>
-          </div>
-          <button
-            type="button"
-            onClick={() => alternarSimulacao(!blackout.ativo)}
-            disabled={simSalvando}
-            className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest border transition-colors disabled:opacity-50 shrink-0 ${
-              blackout.ativo
-                ? 'text-emerald-300 border-emerald-500/40 hover:bg-emerald-500/10'
-                : 'text-red-300 border-red-500/40 hover:bg-red-500/10'
-            }`}
-          >
-            {simSalvando ? '…' : blackout.ativo ? 'Devolver os dados' : 'Ligar simulação'}
-          </button>
-        </div>
+            )}
+          </section>
 
-        {blackout.ativo ? (
-          <p className="text-[11px] text-red-300/90">
-            Ativa{blackout.iniciado_nome ? ` por ${blackout.iniciado_nome}` : ''}
-            {blackout.iniciado_em ? ` desde ${new Date(blackout.iniciado_em).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Rio_Branco' })}` : ''}.
-            Enquanto durar, aproveite para perguntar o que eles conseguem responder sem o sistema.
-          </p>
-        ) : (
-          <input
-            type="text"
-            value={simMensagem}
-            onChange={e => setSimMensagem(e.target.value)}
-            maxLength={200}
-            placeholder="O que a turma vai ler (opcional) — ex.: Todos os dados foram apagados por um erro no sistema."
-            className="neu-input rounded-xl px-3 py-2.5 text-sm"
-          />
-        )}
+          <section className="neu-flat rounded-2xl p-5 border border-white/5 flex flex-col gap-3">
+            <h3 className="text-sm font-bold text-gray-200 flex items-center gap-2">
+              <Users size={15} className="text-accent" /> Quem segue o Modo Aula
+            </h3>
+            {/* O professor (admin) nunca é filtrado. */}
+            <div className="flex flex-wrap gap-2">
+              {AULA_ROLES_ALVO.map(r => {
+                const on = roles.includes(r.id);
+                return (
+                  <button key={r.id} type="button" onClick={() => toggleRole(r.id)} title={r.hint}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors flex items-center gap-1.5 ${
+                      on ? 'bg-accent text-[var(--color-accent-text)]' : 'bg-white/5 text-gray-400 hover:text-gray-200'}`}>
+                    {on && <Check size={12} />} {r.label}
+                  </button>
+                );
+              })}
+            </div>
+          </section>
+
+          {/* Ferramentas da sala: agem na turma na hora, sem Salvar. */}
+          <section className="neu-flat rounded-2xl p-5 border border-white/5 flex flex-col gap-4">
+            <h3 className="text-sm font-bold text-gray-200">Ferramentas da turma</h3>
+            {profile?.role === 'admin' && (
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xl bg-sky-500/15 flex items-center justify-center shrink-0">
+                  <RefreshCw size={16} className="text-sky-400" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs font-bold text-gray-200">Recarregar máquinas</p>
+                  <p className="text-[11px] text-gray-500">Cache limpo em 10 s, inclusive a sua</p>
+                </div>
+                <BotaoRecarregarTurma profile={profile} showToast={showToast}
+                  className="btn-solido btn-solido--azul !py-1.5 !px-3 !text-[11px] shrink-0 disabled:opacity-50" />
+              </div>
+            )}
+            <div className="flex flex-col gap-2">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xl bg-red-500/15 flex items-center justify-center shrink-0">
+                  <AlertTriangle size={16} className="text-red-400" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs font-bold text-gray-200">Simulação de perda de dados</p>
+                  <p className={`text-[11px] ${blackout.ativo ? 'text-red-300' : 'text-gray-500'}`}>
+                    {blackout.ativo
+                      ? `Ativa${blackout.iniciado_em ? ` desde ${new Date(blackout.iniciado_em).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Rio_Branco' })}` : ''}`
+                      : 'Nada é apagado; desligar devolve tudo'}
+                  </p>
+                </div>
+                <button type="button" onClick={() => alternarSimulacao(!blackout.ativo)} disabled={simSalvando}
+                  className={`btn-solido ${blackout.ativo ? 'btn-solido--verde' : 'btn-solido--vermelho'} !py-1.5 !px-3 !text-[11px] shrink-0 disabled:opacity-50`}>
+                  {simSalvando ? '…' : blackout.ativo ? 'Devolver' : 'Ligar'}
+                </button>
+              </div>
+              {!blackout.ativo && (
+                <input type="text" value={simMensagem} onChange={e => setSimMensagem(e.target.value)} maxLength={200}
+                  placeholder="Mensagem para a turma (opcional)"
+                  className="neu-input rounded-xl px-3 py-2 text-xs" />
+              )}
+            </div>
+          </section>
+        </div>
       </div>
+
       </>)}
 
       {aba === 'atividades' && (<>
@@ -1072,37 +898,6 @@ export const AulaModoView: React.FC<Props> = ({ showToast, profile }) => {
         );
       })()}
 
-      {/* Footer sticky de ações */}
-      <AnimatePresence>
-        {dirty && (
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 20 }}
-            // A barra flutua sobre a grade enquanto se rola. Sem sombra e sem
-            // fundo opaco ela lia como uma linha cortando o card ao meio, em
-            // vez de uma faixa por cima dele.
-            // `bg-base` é utility do projeto (index.css), não cor do Tailwind:
-            // não aceita modificador de opacidade, tem que ser sólido.
-            className="sticky bottom-4 z-10 flex items-center justify-between gap-3 neu-flat rounded-2xl px-5 py-3 border border-accent/20 bg-base shadow-lg shadow-black/40"
-          >
-            <span className="text-xs text-accent font-bold">Alterações não salvas</span>
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={resetar}
-                disabled={salvando}
-                className="neu-button px-4 py-2 rounded-xl text-xs font-bold text-gray-400 hover:text-gray-200 transition-colors flex items-center gap-1.5"
-              >
-                <RotateCcw size={13} /> Descartar
-              </button>
-              <NeuButtonAccent onClick={salvar} isLoading={salvando}>
-                <Save size={14} /> Salvar
-              </NeuButtonAccent>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
     </div>
   );
 };

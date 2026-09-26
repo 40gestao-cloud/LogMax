@@ -41,12 +41,9 @@ export const NATUREZA_LABEL: Record<NaturezaServico, string> = {
   contratado: 'Contratado de terceiro',
 };
 
-/** Explica a escolha na própria tela — é onde se decide errado. */
 export const NATUREZA_AJUDA: Record<NaturezaServico, string> = {
-  prestado:
-    'A unidade executa e cobra do cliente: troca de tela, ajuste de bainha, entrega. Tem preço, garantia e prazo, e é isso que entra em promoção.',
-  contratado:
-    'A unidade paga a um fornecedor: manutenção, frete, dedetização, licença de software. Entra por requisição de compra, vira pedido, e o "recebimento" dele é o aceite da execução — que libera o pagamento.',
+  prestado:   'Cobrado do cliente',
+  contratado: 'Pago a um fornecedor',
 };
 
 /** O rótulo do campo de dinheiro muda com a natureza: preço x custo. */

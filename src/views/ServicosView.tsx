@@ -419,19 +419,12 @@ export const ServicosView = ({ showToast, onNavigate }: { showToast: any; onNavi
                     imagemUrl={form.imagem_url} rotulo="imagem"
                     onPreview={handleImagemPreview} onClear={handleImagemClear} />
                 </FormField>
-                <div className="flex items-center gap-3 pt-4">
+                <div className="pt-4">
                   <LogoCadastro imagemUrl={form.imagem_url} nome={form.nome} size={44} ajuste="cover" />
-                  <p className="text-[10px] text-gray-500 max-w-[16rem] leading-relaxed">
-                    Sem imagem, o card usa as iniciais do nome sobre uma cor fixa. Uma foto do
-                    serviço pronto ajuda o cliente a entender o que está comprando.
-                  </p>
                 </div>
               </div>
 
-              {/* A natureza é a PRIMEIRA pergunta, não um detalhe de cadastro:
-                  ela decide se o serviço é vendável (preço, garantia, promoção)
-                  ou comprável (item de pedido, aceite da execução). Mesma régua
-                  do Tipo em Cadastros > Produtos. */}
+              {/* A natureza decide se o serviço é vendável ou comprável. */}
               <div>
                 <p className="text-[10px] text-gray-600 uppercase tracking-widest font-bold mb-3">Natureza</p>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -464,11 +457,9 @@ export const ServicosView = ({ showToast, onNavigate }: { showToast: any; onNavi
                   <input className={`neu-input py-2 px-3 rounded-xl text-sm ${errors.nome ? 'border border-red-500/40' : ''}`}
                     value={form.nome} onChange={e => setForm(f => ({ ...f, nome: e.target.value }))}
                     placeholder={filial === 'TechMax' ? 'Ex: Troca de tela iPhone 12' : filial === 'MaxLook' ? 'Ex: Ajuste de bainha calça jeans' : 'Ex: Instalação'} />
-                  {nomeDaRequisicaoRef.current !== null && (
-                    <p className={`text-[10px] mt-1 leading-snug ${mesmoNomeDaRequisicao ? 'text-gray-500' : 'text-amber-300'}`}>
-                      {mesmoNomeDaRequisicao
-                        ? 'Veio da requisição. Mantenha este nome: é por ele que o pedido reconhece o serviço.'
-                        : `O nome mudou. O pedido só reconhece o serviço com o nome da requisição: “${nomeDaRequisicaoRef.current}”. Se ela está escrita errado, devolva-a para correção.`}
+                  {nomeDaRequisicaoRef.current !== null && !mesmoNomeDaRequisicao && (
+                    <p className="text-[10px] mt-1 text-amber-300">
+                      O pedido só reconhece “{nomeDaRequisicaoRef.current}”, o nome da requisição.
                     </p>
                   )}
                 </FormField>

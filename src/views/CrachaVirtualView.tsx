@@ -19,7 +19,7 @@ import { motion } from 'motion/react';
 import { IdCard, ScanLine, Search, User, Loader2, Clock, AlertTriangle, Building2, ShieldAlert, RotateCcw, X, Trash2 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useFetchData } from '../hooks/useSupabaseData';
-import { LoadingSpinner, EmptyState } from '../components/ui';
+import { LoadingSpinner, EmptyState, CardContador, NeuButtonAccent } from '../components/ui';
 import { QRScanner } from '../components/QRScanner';
 import { CrachaModal, type CrachaPessoa } from '../components/CrachaVirtual';
 import { lerCracha } from '../lib/cracha';
@@ -103,6 +103,8 @@ export const CrachaVirtualView = ({ showToast, profile }: { showToast: any; prof
       .sort((a: any, b: any) => String(a.nome ?? '').localeCompare(String(b.nome ?? ''), 'pt-BR')),
     [funcionarios, fotosPorFuncionario, fotosPorPerfil],
   );
+
+  const comFoto = useMemo(() => ativos.filter((f: any) => !!f.foto_url).length, [ativos]);
 
   const filtrados = useMemo(() => {
     const q = busca.trim().toLowerCase();
@@ -257,128 +259,104 @@ export const CrachaVirtualView = ({ showToast, profile }: { showToast: any; prof
   return (
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
       className="flex flex-col h-full gap-6 overflow-y-auto main-scrollbar pb-6">
-      <div className="shrink-0">
+      <div className="flex flex-wrap items-center justify-between gap-3 shrink-0">
         <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight flex items-center gap-2">
           <IdCard size={26} /> Crachá Virtual
         </h2>
-      </div>
-
-      {/* Só o botão. A explicação que morava aqui dizia o que a própria tela de
-          confirmação já mostra na hora — texto que se lê uma vez e depois vira
-          moldura ao redor da única coisa que se clica. */}
-      <div className="flex justify-center shrink-0">
-        <button
-          type="button"
-          onClick={() => setScannerAberto(true)}
-          className="inline-flex items-center justify-center gap-2.5 px-8 py-4 rounded-2xl text-sm font-bold uppercase tracking-widest bg-accent/10 text-accent border border-accent/40 hover:bg-accent/15 transition-colors"
-        >
-          <ScanLine size={18} /> Ler crachá
-        </button>
-      </div>
-
-      {/* Fila da sessão: quem já passou nesta rodada. Some ao recarregar — a
-          verdade continua sendo o Registro de Ponto; isto é só o retorno visual
-          de quem está com trinta pessoas na frente. */}
-      {lidosAgora.length > 0 && (
-        <div className="neu-flat rounded-3xl p-5 border border-emerald-500/20 shrink-0">
-          <p className="text-[10px] font-bold uppercase tracking-widest text-emerald-400/80 mb-3">
-            Lidos agora ({lidosAgora.length})
-          </p>
-          <div className="flex flex-wrap gap-2">
-            {lidosAgora.map((l, i) => (
-              <span key={`${l.nome}-${i}`}
-                className="text-[11px] px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-300 border border-emerald-500/25">
-                {l.nome} · {l.hora}
-              </span>
-            ))}
+        <div className="flex items-center gap-3 w-full sm:w-auto">
+          <div className="relative flex-1 sm:flex-none">
+            <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none" />
+            <input type="text" value={busca} onChange={e => setBusca(e.target.value)}
+              placeholder="Buscar pessoa…"
+              className="neu-input rounded-xl pl-9 pr-3 py-2.5 text-sm w-full sm:w-56" />
           </div>
+          <NeuButtonAccent onClick={() => setScannerAberto(true)}>
+            <ScanLine size={16} /> Ler crachá
+          </NeuButtonAccent>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 shrink-0">
+        <CardContador label="Crachás ativos" value={ativos.length} />
+        <CardContador label="Com foto" value={comFoto} tom="verde" />
+        <CardContador label="Sem foto" value={ativos.length - comFoto} tom="laranja" sub="Conferência só pelo nome" />
+        <CardContador label="Lidos nesta sessão" value={lidosAgora.length} tom="azul" />
+      </div>
+
+      {/* Fila da sessão: some ao recarregar — a verdade é o Registro de Ponto. */}
+      {lidosAgora.length > 0 && (
+        <div className="flex flex-wrap gap-2 shrink-0">
+          {lidosAgora.map((l, i) => (
+            <span key={`${l.nome}-${i}`}
+              className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full bg-emerald-600 text-white font-semibold">
+              <Clock size={12} /> {l.nome} · {l.hora}
+            </span>
+          ))}
         </div>
       )}
 
-      <div className="neu-flat rounded-3xl p-6 border border-white/5 flex flex-col gap-4">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500">
-            Crachás da turma ({filtrados.length})
-          </p>
-          <div className="relative">
-            <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none" />
-            <input
-              type="text"
-              value={busca}
-              onChange={e => setBusca(e.target.value)}
-              placeholder="Buscar pessoa…"
-              className="neu-input rounded-xl pl-8 pr-3 py-2 text-sm w-[200px]"
-            />
-          </div>
-        </div>
+      {isLoading ? <LoadingSpinner /> : filtrados.length === 0 ? (
+        <EmptyState message="Nenhum funcionário ativo encontrado." />
+      ) : (
+        // Uma coluna por unidade: a turma se lê em paralelo, não em pilha.
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5 items-start">
+          {grupos.map(({ unidade, pessoas }) => {
+            const semUnidade = unidade === 'Sem unidade';
+            const ident = identidadeDaFilial(semUnidade ? null : unidade);
+            return (
+              <section key={unidade} className="neu-flat rounded-2xl border border-white/5 overflow-hidden flex flex-col">
+                {/* Cabeçalho na cor da unidade, com o mesmo logo e placa do crachá:
+                    é assim que o olho casa a coluna com o cartão lido. */}
+                <div className="flex items-center gap-3 px-4 py-3" style={{ background: semUnidade ? '#27272a' : ident.escuro }}>
+                  {semUnidade ? (
+                    <div className="w-11 h-11 rounded-xl bg-black/30 flex items-center justify-center shrink-0">
+                      <Building2 size={18} className="text-gray-400" />
+                    </div>
+                  ) : (
+                    <div className="w-11 h-11 rounded-xl overflow-hidden flex items-center justify-center shrink-0"
+                      style={{ background: ident.plate ?? 'transparent' }}>
+                      <img src={ident.logo} alt="" className="w-full h-full object-contain" />
+                    </div>
+                  )}
+                  <p className="flex-1 min-w-0 text-sm font-black uppercase tracking-[0.16em] truncate"
+                    style={{ color: semUnidade ? '#d4d4d8' : ident.destaqueNaFaixa }}>
+                    {unidade}
+                  </p>
+                  <span className="shrink-0 min-w-7 h-7 px-2 rounded-full flex items-center justify-center text-xs font-black tabular-nums bg-black/25"
+                    style={{ color: semUnidade ? '#d4d4d8' : ident.textoNaFaixa }}>
+                    {pessoas.length}
+                  </span>
+                </div>
 
-        {isLoading ? <LoadingSpinner /> : filtrados.length === 0 ? (
-          <EmptyState message="Nenhum funcionário ativo encontrado." />
-        ) : (
-          // Uma coluna por unidade, lado a lado: a turma se lê em paralelo, não
-          // em pilha — e três unidades cabem numa tela de notebook.
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5 items-start">
-            {grupos.map(({ unidade, pessoas }) => {
-              const ident = identidadeDaFilial(unidade === 'Sem unidade' ? null : unidade);
-              return (
-                <div key={unidade} className="flex flex-col gap-3">
-                  {/* Cabeçalho do grupo: o logo da unidade, o mesmo que vai no
-                      crachá — é assim que o olho casa a coluna com o cartão que
-                      vai ser lido. A placa por trás repete a do crachá pelo
-                      mesmo motivo: os PNGs vieram com fundo queimado e cada um
-                      pede um fundo diferente para fechar.
-
-                      "Sem unidade" fica em texto: ali não há logo que diga a
-                      verdade, e emprestar o do LogMax seria dizer que aquelas
-                      pessoas são da holding. */}
-                  <div className="flex items-center gap-2.5">
-                    {unidade === 'Sem unidade' ? (
-                      <span className="inline-flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest text-gray-500">
-                        <Building2 size={12} /> Sem unidade
-                      </span>
-                    ) : (
-                      <div
-                        className="h-9 px-3 rounded-lg flex items-center justify-center shrink-0"
-                        style={ident.plate ? { background: ident.plate } : undefined}
-                      >
-                        <img src={ident.logo} alt={unidade}
-                          className="h-6 w-auto max-w-[110px] object-contain" />
-                      </div>
-                    )}
-                    <span className="text-[10px] text-gray-600 font-mono">({pessoas.length})</span>
-                    <span className="flex-1 h-px" style={{ background: `${ident.claro}26` }} />
-                  </div>
-
-                  <div className="flex flex-col gap-2">
-                    {pessoas.map((f: any) => (
-                      <button
-                        key={f.id}
-                        type="button"
-                        onClick={() => setCrachaAberto(f)}
-                        title="Abrir o crachá"
-                        className="flex items-center gap-3 p-3 rounded-2xl border transition-colors text-left hover:bg-white/5"
-                        style={{ borderColor: `${ident.claro}33` }}
-                      >
-                        <div className="w-11 h-11 rounded-xl overflow-hidden bg-black/30 flex items-center justify-center shrink-0"
-                          style={{ border: `1px solid ${ident.claro}55` }}>
+                <div className="flex flex-col p-2">
+                  {pessoas.map((f: any) => {
+                    const gerente = /gerente/.test(String(f.cargo ?? '').toLowerCase());
+                    return (
+                      <button key={f.id} type="button" onClick={() => setCrachaAberto(f)} title="Abrir o crachá"
+                        className="group flex items-center gap-3 px-2.5 py-2 rounded-xl text-left transition-colors hover:bg-white/5">
+                        <div className="w-10 h-10 rounded-full overflow-hidden bg-white/5 flex items-center justify-center shrink-0"
+                          style={{ boxShadow: `0 0 0 2px ${f.foto_url ? ident.claro : 'rgba(255,255,255,0.08)'}` }}>
                           {f.foto_url
                             ? <img src={f.foto_url} alt="" className="w-full h-full object-cover" />
-                            : <User size={18} className="text-gray-600" />}
+                            : <User size={17} className="text-gray-500" />}
                         </div>
                         <div className="min-w-0 flex-1">
-                          <p className="text-sm font-semibold text-gray-200 truncate">{f.nome}</p>
-                          <p className="text-[10px] text-gray-500 truncate">{f.cargo || 'sem cargo'}</p>
+                          <p className="text-sm font-semibold text-gray-100 truncate">{f.nome}</p>
+                          <p className={`text-[11px] truncate ${gerente ? 'font-bold' : 'text-gray-500'}`}
+                            style={gerente ? { color: ident.claro } : undefined}>
+                            {f.cargo || 'Sem cargo'}
+                          </p>
                         </div>
-                        <IdCard size={14} className="text-gray-600 shrink-0" />
+                        <IdCard size={15} className="text-gray-600 group-hover:text-accent shrink-0 transition-colors" />
                       </button>
-                    ))}
-                  </div>
+                    );
+                  })}
                 </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
+              </section>
+            );
+          })}
+        </div>
+      )}
 
       {/* O QRScanner NÃO é um modal: ele devolve um bloco comum, feito para ser
           posto dentro de um por quem chama (era assim no totem antigo). Solto

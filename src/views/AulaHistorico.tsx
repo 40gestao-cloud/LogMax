@@ -258,13 +258,6 @@ export const AulaHistorico: React.FC<Props> = ({ showToast }) => {
             <History size={14} className="text-accent" />
             <h3 className="text-sm font-bold text-gray-200">Histórico de aulas</h3>
           </div>
-          <p className="text-[11px] text-gray-500 mt-1 max-w-2xl">
-            Cada vez que o Modo Aula é ligado e desligado vira um encontro aqui, com o que
-            estava liberado. Aula que não cabe num dia é encadeada: marque o encontro como
-            continuação do anterior e os três viram uma aula só. Os fluxos são deduzidos da
-            whitelist daquele dia — não ficam gravados, para o histórico não citar cadeia
-            que o sistema não tem mais.
-          </p>
         </div>
         <button type="button" onClick={() => carregar()} disabled={loading}
           className="shrink-0 neu-button px-3 py-1.5 rounded-xl text-[10px] font-bold uppercase tracking-widest text-gray-400 hover:text-accent transition-colors border border-white/5 flex items-center gap-1.5 disabled:opacity-50">

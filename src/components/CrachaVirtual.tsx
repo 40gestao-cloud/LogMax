@@ -44,123 +44,75 @@ export const CrachaVirtual = ({ pessoa, semQr = false }: {
 }) => {
   const id = identidadeDaFilial(pessoa.filial);
 
+  // Tamanhos em % da largura do cartão (container query): o mesmo desenho
+  // serve ao modal, à tela do aluno e à impressão em 54 mm sem reescalar à mão.
   return (
     <div
-      className="cracha-cartao rounded-3xl overflow-hidden flex flex-col relative"
+      className="cracha-cartao @container rounded-3xl overflow-hidden flex flex-col relative"
       style={{
         aspectRatio: '54 / 85.6',
-        // Cartão CLARO, e sempre — crachá é cartão, não interface: não segue o
-        // tema do app, segue o que sai na impressora. O escuro anterior fazia o
-        // QR (que é preto sobre branco por obrigação óptica) virar um bloco
-        // gritante no meio de um retângulo preto.
+        // Claro sempre: crachá segue a impressora, não o tema do app.
         background: '#F7F8FA',
         border: `1px solid ${id.cor}33`,
         boxShadow: '0 24px 50px -26px rgba(0,0,0,0.55), 0 2px 6px rgba(0,0,0,0.15)',
       }}
     >
-      {/* Faixa do logo, de ponta a ponta. A cor da faixa é a `plate` da unidade
-          — e isso não é escolha estética, é a arte que manda: os PNGs vieram
-          com fundo queimado e cada um só fecha sobre um fundo (SuperMax e
-          TechMax sobre claro, MaxLook sobre preto). Como faixa inteira, aquilo
-          que seria uma caixa branca flutuando vira decisão de design. */}
-      <div
-        className="shrink-0 h-24 flex items-center justify-center px-4"
-        style={{
-          background: id.plate ?? id.escuro,
-          borderBottom: `3px solid ${id.cor}`,
-        }}
-      >
-        <img src={id.logo} alt={pessoa.filial ?? 'LogMax'} className="max-h-16 w-auto max-w-[82%] object-contain" />
+      {/* Faixa da unidade com a fenda do cordão e o logo na placa que a arte pede
+          (os PNGs vieram com fundo queimado: SuperMax/TechMax sobre claro, MaxLook sobre preto). */}
+      <div className="shrink-0 relative flex flex-col items-center pt-[5cqw] pb-[16cqw]"
+        style={{ background: id.escuro }}>
+        <span className="block w-[18cqw] h-[2.4cqw] rounded-full mb-[4cqw]"
+          style={{ background: 'rgba(255,255,255,0.35)', boxShadow: 'inset 0 1px 2px rgba(0,0,0,0.35)' }} />
+        <div className="w-[26cqw] h-[26cqw] rounded-[4cqw] overflow-hidden flex items-center justify-center"
+          style={{ background: id.plate ?? 'transparent', boxShadow: id.plate ? '0 2px 8px rgba(0,0,0,0.25)' : undefined }}>
+          <img src={id.logo} alt={pessoa.filial ?? 'LogMax'} className="w-full h-full object-contain" />
+        </div>
       </div>
 
-      {/* Linha de identificação: foto pequena ao lado do nome. A foto serve
-          para conferir quem está na frente, não para ser o assunto do cartão —
-          o assunto é o QR. */}
-      <div className="shrink-0 flex items-center gap-3 px-4 pt-4 pb-1">
-        <div
-          className="w-12 h-12 rounded-xl overflow-hidden flex items-center justify-center shrink-0 bg-neutral-100"
-          style={{ border: `1.5px solid ${id.cor}66` }}
-        >
+      {/* Foto grande, sobreposta à faixa: é o que o professor confere. */}
+      <div className="shrink-0 relative z-10 flex justify-center -mt-[14cqw]">
+        <div className="w-[34cqw] h-[34cqw] rounded-[6cqw] overflow-hidden flex items-center justify-center bg-neutral-200"
+          style={{ border: '1.2cqw solid #F7F8FA', boxShadow: `0 0 0 0.6cqw ${id.cor}` }}>
           {pessoa.foto_url
             ? <img src={pessoa.foto_url} alt={pessoa.nome} className="w-full h-full object-cover" />
-            : <User size={22} style={{ color: id.cor }} />}
-        </div>
-        <div className="min-w-0 flex-1">
-          {/* Nome em neutro escuro, e não no tom da unidade: o tom escuro da
-              TechMax é laranja queimado e o nome saía cor de terra. A identidade
-              já está na faixa do logo, no rodapé e nos detalhes — o nome só
-              precisa ser legível. */}
-          <p className="text-base font-black leading-[1.15] break-words line-clamp-2 tracking-tight text-neutral-900">
-            {pessoa.nome}
-          </p>
-          {pessoa.cargo && (
-            <p className="text-[10px] font-bold uppercase tracking-widest text-neutral-500 mt-0.5 line-clamp-1">
-              {pessoa.cargo}
-            </p>
-          )}
+            : <User className="w-[45%] h-[45%]" style={{ color: id.cor }} />}
         </div>
       </div>
 
-      {/* O QR no meio e grande — é o que se aponta a câmera para ler. Preto
-          sobre branco em qualquer unidade: leitor de câmera erra em código
-          claro sobre escuro, e a identidade da filial não entra aqui. Num
-          cartão claro ele finalmente deixa de ser um bloco estranho e passa a
-          ser o centro natural do desenho. */}
-      <div className="flex-1 min-h-0 flex items-center justify-center px-4 py-3">
+      <div className="shrink-0 px-[7cqw] pt-[3cqw] text-center flex flex-col items-center gap-[2cqw]">
+        <p className="text-[6.4cqw] font-black leading-[1.12] line-clamp-2 break-words tracking-tight text-neutral-900">
+          {pessoa.nome}
+        </p>
+        {pessoa.cargo && (
+          <span className="max-w-full truncate rounded-full px-[3.5cqw] py-[1.2cqw] text-[3.4cqw] font-bold uppercase tracking-[0.14em]"
+            style={{ background: id.escuro, color: id.destaqueNaFaixa }}>
+            {pessoa.cargo}
+          </span>
+        )}
+      </div>
+
+      {/* QR preto sobre branco em qualquer unidade: câmera erra em código claro sobre escuro. */}
+      <div className="flex-1 min-h-0 flex flex-col items-center justify-center gap-[1.5cqw] px-[7cqw]">
         {semQr ? (
-          <p className="text-[11px] text-neutral-500 text-center leading-relaxed px-4">
-            Crachá de identificação.<br />Sem registro de ponto associado.
+          <p className="text-[3.6cqw] text-neutral-500 text-center leading-snug">
+            Crachá de identificação<br />sem registro de ponto
           </p>
         ) : (
-          <div
-            className="bg-white p-2.5 rounded-2xl"
-            style={{ boxShadow: '0 2px 10px rgba(0,0,0,0.10)' }}
-          >
-            <QRCodeSVG
-              value={montarCracha(pessoa.id)}
-              size={148}
-              bgColor="#ffffff"
-              fgColor="#000000"
-              level="M"
-            />
+          <div className="bg-white p-[2cqw] rounded-[3cqw]" style={{ boxShadow: '0 1px 6px rgba(0,0,0,0.10)' }}>
+            <QRCodeSVG value={montarCracha(pessoa.id)} size={256} bgColor="#ffffff" fgColor="#000000" level="M"
+              style={{ width: '36cqw', height: '36cqw', display: 'block' }} />
           </div>
         )}
+        <p className="text-[3.2cqw] text-neutral-500 tracking-[0.12em] uppercase">
+          Matrícula <span className="font-mono font-bold text-neutral-800 tracking-[0.18em]">{codigoCracha(pessoa.id)}</span>
+        </p>
       </div>
 
-      {/* Rodapé: assinatura da unidade à esquerda, matrícula à direita.
-          Estava desalinhado porque misturava três tamanhos e duas opacidades na
-          MESMA linha — 8px de rótulo colado em 10px de código, tudo esmaecido.
-          Agora são dois blocos com papéis diferentes: um nome, e um campo de
-          dado com rótulo em cima do valor.
-
-          A matrícula vive numa pastilha translúcida em vez de flutuar solta.
-          Isso resolve a faixa da TechMax, que é laranja vivo: texto escuro com
-          opacidade sobre laranja vira lama, enquanto a pastilha clareia o fundo
-          e devolve contraste ao valor. E funciona igual nas outras unidades,
-          sem cor nova para cada uma. */}
-      <div
-        className="shrink-0 flex items-end justify-between gap-3 px-4 py-3"
-        style={{ background: id.escuro }}
-      >
-        {pessoa.filial && (
-          <p className="text-xs font-black uppercase tracking-[0.18em] truncate leading-none pb-1"
-            style={{ color: id.destaqueNaFaixa }}>
-            {pessoa.filial}
-          </p>
-        )}
-
-        <div className="shrink-0 text-right">
-          <p className="text-[7px] font-bold uppercase tracking-[0.22em] leading-none mb-1"
-            style={{ color: id.textoNaFaixa, opacity: 0.7 }}>
-            Matrícula
-          </p>
-          <span
-            className="inline-block rounded-md px-2 py-1 text-[11px] font-mono font-bold tracking-[0.15em] leading-none"
-            style={{ background: 'rgba(255,255,255,0.16)', color: id.textoNaFaixa }}
-          >
-            {codigoCracha(pessoa.id)}
-          </span>
-        </div>
+      <div className="shrink-0 flex items-center justify-center px-[5cqw] py-[3cqw]" style={{ background: id.escuro }}>
+        <p className="text-[3.8cqw] font-black uppercase tracking-[0.24em] truncate leading-none"
+          style={{ color: id.destaqueNaFaixa }}>
+          {pessoa.filial ?? 'LogMax'}
+        </p>
       </div>
     </div>
   );
@@ -200,9 +152,9 @@ export const CrachaModal = ({ pessoa, onClose }: { pessoa: CrachaPessoa; onClose
           type="button"
           onClick={() => window.print()}
           title="Imprimir este crachá"
-          className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-[10px] font-bold uppercase tracking-widest border border-white/15 text-gray-300 hover:text-accent hover:border-accent/40 transition-colors"
+          className="btn-solido btn-solido--cinza"
         >
-          <Printer size={12} /> Imprimir
+          <Printer size={15} /> Imprimir
         </button>
         <button
           type="button"

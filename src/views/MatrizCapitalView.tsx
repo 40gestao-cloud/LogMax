@@ -8,7 +8,7 @@ import {
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { tabelaPrice } from '../lib/mutuo';
-import { LoadingSpinner, NeuButtonAccent, FormField } from '../components/ui';
+import { LoadingSpinner, NeuButtonAccent, FormField, CardContador } from '../components/ui';
 import { useFetchData } from '../hooks/useSupabaseData';
 import { PeriodoCapitalAviso } from '../components/PeriodoCapitalAviso';
 import { AplicacoesPanel } from '../components/AplicacoesPanel';
@@ -110,11 +110,11 @@ type Filial = typeof FILIAIS[number];
 const UNIDADES = [...FILIAIS, 'Matriz'] as const;
 type UnidadeCapital = typeof UNIDADES[number];
 
-const FILIAL_COLOR: Record<UnidadeCapital, { accent: string; ring: string; bg: string }> = {
-  SuperMax: { accent: 'text-sky-400',    ring: 'ring-sky-500/30',    bg: 'bg-sky-500/10' },
-  MaxLook:  { accent: 'text-amber-300',  ring: 'ring-amber-400/30',  bg: 'bg-amber-400/10' },
-  TechMax:  { accent: 'text-orange-400', ring: 'ring-orange-500/30', bg: 'bg-orange-500/10' },
-  Matriz:   { accent: 'text-yellow-400', ring: 'ring-yellow-500/30', bg: 'bg-yellow-500/10' },
+const FILIAL_COLOR: Record<UnidadeCapital, { accent: string; ring: string; bg: string; bar: string }> = {
+  SuperMax: { accent: 'text-sky-400',    ring: 'ring-sky-500/30',    bg: 'bg-sky-500/10',    bar: 'bg-sky-500' },
+  MaxLook:  { accent: 'text-amber-300',  ring: 'ring-amber-400/30',  bg: 'bg-amber-400/10',  bar: 'bg-amber-400' },
+  TechMax:  { accent: 'text-orange-400', ring: 'ring-orange-500/30', bg: 'bg-orange-500/10', bar: 'bg-orange-500' },
+  Matriz:   { accent: 'text-yellow-400', ring: 'ring-yellow-500/30', bg: 'bg-yellow-500/10', bar: 'bg-yellow-500' },
 };
 
 const BRL = (v: number) =>
@@ -1180,10 +1180,12 @@ function ModalEditarEmprestimo({
 
 // ── Card por filial (Aportes) ──────────────────────────────────────────────
 function FilialCapitalCard({
-  filial, registros, saldo, profile, onNovo, onExcluir,
+  filial, registros, saldo, profile, onNovo, onExcluir, posicao,
 }: {
   filial: UnidadeCapital; registros: CapitalRow[]; saldo: SaldoFilial | null;
   profile: UserProfile | null; onNovo: (f: UnidadeCapital) => void; onExcluir: (r: CapitalRow) => void;
+  /** Posição no ranking de saúde (só as operacionais). */
+  posicao?: number;
 }) {
   const [historicoAberto, setHistoricoAberto] = useState(false);
   const cor = FILIAL_COLOR[filial];
@@ -1193,121 +1195,110 @@ function FilialCapitalCard({
   const pctGasto = saldo && saldo.capital_total > 0
     ? Math.min(100, (saldo.despesas_pagas / saldo.capital_total) * 100)
     : 0;
+  const pctLivre = saldo && saldo.capital_total > 0
+    ? Math.max(0, Math.min(100, (saldo.saldo_livre / saldo.capital_total) * 100))
+    : 0;
 
   return (
-    <div className="neu-flat rounded-3xl border border-accent/20 overflow-hidden">
-      <div className={`p-5 ${cor.bg} border-b border-white/5`}>
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Landmark size={16} className={cor.accent} />
-            <h3 className={`text-sm font-black uppercase tracking-widest ${cor.accent}`}>{filial}</h3>
-            {bloqueado && (
-              <span className="flex items-center gap-1 text-[10px] font-bold text-red-400 bg-red-500/10 px-2 py-0.5 rounded-full">
-                <ShieldAlert size={10} /> BLOQUEADO
-              </span>
-            )}
-          </div>
+    <div className={`neu-flat rounded-2xl border overflow-hidden flex flex-col ${bloqueado ? 'border-red-500/50' : 'border-white/5'}`}>
+      <div className={`h-1 ${cor.bar}`} />
+      <div className="p-5 flex flex-col gap-4">
+        <div className="flex items-center gap-2">
+          {posicao != null && (
+            <span className="w-7 h-7 rounded-lg bg-white/5 flex items-center justify-center text-xs font-black text-gray-400 shrink-0"
+              title="Posição no ranking de saúde financeira">
+              {posicao}º
+            </span>
+          )}
+          <h3 className={`flex-1 min-w-0 text-sm font-black uppercase tracking-widest truncate ${cor.accent}`}>{filial}</h3>
           {podeCriar(profile) && (
-            <button
-              onClick={() => onNovo(filial)}
-              className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-xl bg-white/10 text-gray-300 border border-white/10 hover:bg-white/20 transition-colors"
-            >
+            <button onClick={() => onNovo(filial)}
+              className="btn-solido btn-solido--cinza !py-1.5 !px-3 !text-[11px] shrink-0">
               <Plus size={13} /> Aporte
             </button>
           )}
         </div>
 
-        {/* Capital e saldo */}
-        <div className="mt-4 grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-2 gap-3">
           <div>
-            <span className="text-[10px] font-black uppercase tracking-widest text-gray-500">Capital Total</span>
-            <div className={`text-xl font-black tabular-nums mt-0.5 ${cor.accent}`}>
+            <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500">Capital total</p>
+            <p className="text-2xl font-black tabular-nums text-gray-100 mt-0.5">
               {saldo ? BRL(saldo.capital_total) : ultimo ? BRL(ultimo.valor) : '—'}
-            </div>
+            </p>
           </div>
-          <div>
-            <span className="text-[10px] font-black uppercase tracking-widest text-gray-500">Saldo Livre</span>
-            <div className={`text-xl font-black tabular-nums mt-0.5 ${bloqueado ? 'text-red-400' : 'text-green-400'}`}>
+          <div className="text-right">
+            <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500">Saldo livre</p>
+            <p className={`text-2xl font-black tabular-nums mt-0.5 ${bloqueado ? 'text-red-400' : 'text-green-400'}`}>
               {saldo ? BRL(saldo.saldo_livre) : '—'}
-            </div>
+            </p>
           </div>
         </div>
 
         {saldo && (
-          <>
+          <div className="flex flex-col gap-1.5">
             <HealthBar saldo={saldo.saldo_real} total={saldo.capital_total} />
-            <div className="flex justify-between text-[10px] text-gray-500 mt-1">
-              <span>Gasto: {BRL(saldo.despesas_pagas)} ({pctGasto.toFixed(0)}%)</span>
-              {saldo.reserva_pct > 0 && <span>Reserva: {BRL(saldo.reserva_valor)}</span>}
+            <div className="flex justify-between text-[11px] text-gray-500">
+              <span>{pctLivre.toFixed(0)}% livre · gasto {BRL(saldo.despesas_pagas)} ({pctGasto.toFixed(0)}%)</span>
+              {saldo.reserva_pct > 0 && <span>reserva {BRL(saldo.reserva_valor)}</span>}
             </div>
-            {/* A receita aparece aqui só para leitura: quem vende bem e mesmo
-                assim vê o saldo cair achava que a DRE discordava do card. Ela
-                NÃO entra no saldo livre — capital é aporte menos despesa. */}
-            <div className="flex justify-between text-[10px] mt-1 pt-1 border-t border-white/5">
-              <span className="text-gray-500">
-                Receita no período: <span className="text-green-400 font-bold tabular-nums">{BRL(saldo.receitas_pagas)}</span>
-              </span>
-              <span className="text-gray-600" title="O capital é aporte − despesas. A receita entra no caixa da filial e aparece na DRE, mas não aumenta o capital.">
-                não entra no saldo livre
-              </span>
-            </div>
+            {/* Receita só para leitura: capital é aporte − despesa, a receita vai para a DRE. */}
+            <p className="text-[11px] text-gray-500"
+              title="O capital é aporte − despesas. A receita entra no caixa da filial e aparece na DRE, mas não aumenta o capital.">
+              Receita no período <span className="text-green-400 font-bold tabular-nums">{BRL(saldo.receitas_pagas)}</span>
+              <span className="text-gray-600"> · fora do saldo</span>
+            </p>
+          </div>
+        )}
+
+        {(bloqueado || emReserva) && (
+          <div className="flex flex-wrap gap-1.5">
             {bloqueado && (
-              <p className="text-[11px] text-red-400 mt-2 flex items-center gap-1">
-                <AlertTriangle size={10} /> Capital estourado — novos lançamentos bloqueados.
-              </p>
+              <span className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-bold bg-red-600 text-white">
+                <ShieldAlert size={12} /> Capital estourado · lançamentos bloqueados
+              </span>
             )}
-            {emReserva && (
-              <p className="text-[11px] text-yellow-400 mt-2 flex items-center gap-1">
-                <AlertTriangle size={10} /> Invadiu reserva mínima — atenção.
-              </p>
+            {emReserva && !bloqueado && (
+              <span className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-bold bg-amber-500 text-black">
+                <AlertTriangle size={12} /> Abaixo da reserva mínima
+              </span>
             )}
-          </>
+          </div>
         )}
       </div>
 
-      {/* Histórico de aportes (todos, sem "atual" separado) */}
       {registros.length > 0 && (
-        <div className="p-4">
-          <button
-            onClick={() => setHistoricoAberto(v => !v)}
-            className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-gray-300 transition-colors"
-          >
-            {historicoAberto ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
-            Aportes registrados ({registros.length})
-            {ultimo && <span className="text-gray-600">· último: {BRL(ultimo.valor)} em {fmtDateTime(ultimo.created_at).slice(0, 10)}</span>}
+        <div className="mt-auto border-t border-white/5">
+          <button onClick={() => setHistoricoAberto(v => !v)}
+            className="w-full flex items-center gap-2 px-5 py-3 text-xs text-gray-400 hover:text-gray-200 hover:bg-white/[0.03] transition-colors text-left">
+            <span className="flex-1">
+              {registros.length} aporte(s)
+              {ultimo && <span className="text-gray-600"> · último {BRL(ultimo.valor)} em {fmtDateTime(ultimo.created_at).slice(0, 10)}</span>}
+            </span>
+            {historicoAberto ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
           </button>
-          <AnimatePresence>
-            {historicoAberto && (
-              <motion.div
-                initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }}
-                exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.2 }}
-                className="overflow-hidden"
-              >
-                <div className="mt-3 flex flex-col gap-1.5">
-                  {registros.map(r => (
-                    <div key={r.id} className="flex items-start gap-2 px-3 py-2 neu-pressed rounded-xl group">
-                      <div className="flex-1 min-w-0">
-                        <span className={`text-sm font-bold tabular-nums ${cor.accent}`}>{BRL(r.valor)}</span>
-                        <div className="text-[10px] text-gray-500 mt-0.5">
-                          {fmtDateTime(r.created_at)}{r.registrado_por_nome && ` · ${r.registrado_por_nome}`}
-                        </div>
-                        {r.observacao && <p className="text-[11px] text-gray-400 italic mt-0.5">"{r.observacao}"</p>}
-                      </div>
-                      {podeExcluir(profile) && (
-                        <button
-                          onClick={() => onExcluir(r)}
-                          title="Estornar aporte — devolve o dinheiro para a conta da Matriz"
-                          className="action-btn-delete opacity-0 group-hover:opacity-100"
-                        >
-                          <Trash2 size={12} />
-                        </button>
-                      )}
+          {/* Sem animação de altura: a lista abre e fecha seca. */}
+          {historicoAberto && (
+            <div className="px-3 pb-3 flex flex-col gap-1">
+              {registros.map(r => (
+                <div key={r.id} className="flex items-start gap-2 px-3 py-2 rounded-xl hover:bg-white/[0.03] group">
+                  <div className="flex-1 min-w-0">
+                    <span className="text-sm font-bold tabular-nums text-gray-100">{BRL(r.valor)}</span>
+                    <div className="text-[11px] text-gray-500">
+                      {fmtDateTime(r.created_at)}{r.registrado_por_nome && ` · ${r.registrado_por_nome}`}
                     </div>
-                  ))}
+                    {r.observacao && <p className="text-[11px] text-gray-400 italic">"{r.observacao}"</p>}
+                  </div>
+                  {podeExcluir(profile) && (
+                    <button onClick={() => onExcluir(r)}
+                      title="Estornar aporte — devolve o dinheiro para a conta da Matriz"
+                      className="action-btn-delete opacity-0 group-hover:opacity-100 focus:opacity-100">
+                      <Trash2 size={12} />
+                    </button>
+                  )}
                 </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
+              ))}
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -1316,71 +1307,53 @@ function FilialCapitalCard({
 
 // ── Tab: DRE ──────────────────────────────────────────────────────────────
 function TabDRE({ saldos, semConfig }: { saldos: Record<UnidadeCapital, SaldoFilial | null>; semConfig: boolean }) {
+  const linhas = UNIDADES.map(f => {
+    const s = saldos[f];
+    return { f, s, receita: s?.receitas_pagas ?? 0, despesa: s?.despesas_pagas ?? 0 };
+  });
+  const ops = linhas.filter(l => l.f !== 'Matriz');
+  const tot = { receita: ops.reduce((a, l) => a + l.receita, 0), despesa: ops.reduce((a, l) => a + l.despesa, 0) };
+  const cor = (v: number) => (v >= 0 ? 'text-green-400' : 'text-red-400');
   return (
     <div className="flex flex-col gap-4">
-      <div className="neu-flat rounded-2xl p-4 border border-accent/10 flex items-start gap-2 text-xs text-gray-400">
-        <Info size={13} className="shrink-0 text-accent mt-0.5" />
-        {semConfig
-          ? <span>
-              <b className="text-yellow-400">Sem período configurado</b> — a DRE está somando TODO o histórico,
-              não só o período em Config. Receita = contas a receber quitadas (as vendas do PDV entram pela conta
-              que elas geram). Despesa = contas pagas. Resultado = Receita − Despesa.
-            </span>
-          : <span>
-              DRE calculado dentro do período configurado. Receita = contas a receber quitadas (as vendas do PDV
-              entram pela conta que elas geram). Despesa = contas pagas. Resultado = Receita − Despesa.
-            </span>}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <CardContador label="Receita das unidades" value={BRL(tot.receita)} tom="verde" />
+        <CardContador label="Despesa das unidades" value={BRL(tot.despesa)} tom="vermelho" />
+        <CardContador label="Resultado" value={BRL(tot.receita - tot.despesa)} tom={tot.receita - tot.despesa >= 0 ? 'azul' : 'vermelho'}
+          sub={semConfig ? 'Todo o histórico' : 'No período configurado'} />
       </div>
-      {/* A Matriz entra na lista: a DRE dela é o custo corporativo contra o
-          que o rateio recupera das unidades. Resultado perto de zero é o
-          esperado numa holding que só recupera custo — sobra grande significa
-          que ela está cobrando mais do que gasta. */}
-      {UNIDADES.map(filial => {
-        const s = saldos[filial];
-        const cor = FILIAL_COLOR[filial];
-        const resultado = s ? (s.receitas_pagas - s.despesas_pagas) : 0;
-        return (
-          <div key={filial} className={`neu-flat rounded-3xl border border-accent/20 overflow-hidden`}>
-            <div className={`${cor.bg} px-5 py-3 flex items-center gap-2`}>
-              <Landmark size={14} className={cor.accent} />
-              <span className={`text-sm font-black uppercase tracking-widest ${cor.accent}`}>{filial}</span>
-              {/* Sem config a RPC devolve `data_inicio = CURRENT_DATE` e não
-                  filtra nada — imprimir a data de hoje aqui fazia a tela
-                  prometer um recorte que ela não aplicou. */}
-              {semConfig ? (
-                <span className="ml-auto text-[10px] text-gray-600">todo o histórico</span>
-              ) : s?.data_inicio && (
-                <span className="ml-auto text-[10px] text-gray-500">
-                  {fmtDate(s.data_inicio)}{s.data_fim ? ` → ${fmtDate(s.data_fim)}` : ' → hoje'}
-                </span>
-              )}
-            </div>
-            <div className="p-5 grid grid-cols-3 gap-4">
-              <div className="flex flex-col items-center gap-1">
-                <TrendingUp size={14} className="text-green-400" />
-                <span className="text-[10px] uppercase tracking-widest text-gray-500">Receita</span>
-                <span className="text-lg font-black text-green-400 tabular-nums">
-                  {s ? BRL(s.receitas_pagas) : '—'}
-                </span>
-              </div>
-              <div className="flex flex-col items-center gap-1">
-                <TrendingDown size={14} className="text-red-400" />
-                <span className="text-[10px] uppercase tracking-widest text-gray-500">Despesa</span>
-                <span className="text-lg font-black text-red-400 tabular-nums">
-                  {s ? BRL(s.despesas_pagas) : '—'}
-                </span>
-              </div>
-              <div className="flex flex-col items-center gap-1">
-                <BarChart3 size={14} className={resultado >= 0 ? 'text-accent' : 'text-orange-400'} />
-                <span className="text-[10px] uppercase tracking-widest text-gray-500">Resultado</span>
-                <span className={`text-lg font-black tabular-nums ${resultado >= 0 ? 'text-accent' : 'text-orange-400'}`}>
-                  {s ? BRL(resultado) : '—'}
-                </span>
-              </div>
-            </div>
-          </div>
-        );
-      })}
+      {semConfig && (
+        <p className="text-xs text-amber-300">Sem período configurado: a DRE soma todo o histórico.</p>
+      )}
+      {/* Receita = contas a receber quitadas; despesa = contas pagas. A Matriz entra à parte:
+          a DRE dela é o custo corporativo contra o que o rateio recupera. */}
+      <div className="neu-flat rounded-2xl border border-white/5 p-4 overflow-x-auto main-scrollbar">
+        <table className="tabela w-full text-left min-w-[560px]">
+          <thead>
+            <tr className="text-[10px] uppercase tracking-widest">
+              <th className="py-2.5 px-3 font-bold">Unidade</th>
+              <th className="py-2.5 px-3 font-bold text-center">Receita</th>
+              <th className="py-2.5 px-3 font-bold text-center">Despesa</th>
+              <th className="py-2.5 px-3 font-bold text-center">Resultado</th>
+              <th className="py-2.5 px-3 font-bold text-center">Período</th>
+            </tr>
+          </thead>
+          <tbody className="text-sm">
+            {linhas.map(({ f, s, receita, despesa }) => (
+              <tr key={f}>
+                <td className={`py-3 px-3 font-bold ${FILIAL_COLOR[f].accent}`}>{f}{f === 'Matriz' && <span className="text-gray-500 font-normal text-xs"> · holding</span>}</td>
+                <td className="py-3 px-3 tabular-nums text-green-400">{s ? BRL(receita) : '—'}</td>
+                <td className="py-3 px-3 tabular-nums text-red-400">{s ? BRL(despesa) : '—'}</td>
+                <td className={`py-3 px-3 tabular-nums font-bold ${cor(receita - despesa)}`}>{s ? BRL(receita - despesa) : '—'}</td>
+                <td className="py-3 px-3 text-xs text-gray-500 whitespace-nowrap">
+                  {/* Sem config a RPC não filtra nada: não imprimir uma data que não foi aplicada. */}
+                  {semConfig ? 'todo o histórico' : s?.data_inicio ? `${fmtDate(s.data_inicio)} a ${s.data_fim ? fmtDate(s.data_fim) : 'hoje'}` : '—'}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
@@ -1433,25 +1406,16 @@ function TabEmprestimos({
           da filial, e o único movimento que ela começava era o aporte — que
           não rende. */}
       {podeAprovar(profile) && (
-        <div className="neu-flat rounded-3xl p-4 border border-accent/20 flex items-center justify-between gap-3 flex-wrap">
-          <div className="min-w-0">
-            <p className="text-sm font-bold text-gray-200">Aplicar capital numa unidade</p>
-            <p className="text-[11px] text-gray-500 mt-0.5 max-w-xl">
-              Sem esperar a filial pedir. Vira empréstimo com juros ao mês e parcelas —
-              diferente do aporte, este dinheiro volta.
-            </p>
-          </div>
-          <button
-            onClick={() => setModalAplicar(true)}
-            className="shrink-0 flex items-center gap-1.5 text-xs px-4 py-2 rounded-xl bg-accent/10 text-accent border border-accent/20 hover:bg-accent/20 transition-colors"
-          >
-            <Plus size={12} /> Aplicar capital
-          </button>
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <p className="text-xs text-gray-500">Empréstimo com juros e parcelas: diferente do aporte, este dinheiro volta.</p>
+          <NeuButtonAccent onClick={() => setModalAplicar(true)}>
+            <Plus size={14} /> Aplicar capital numa unidade
+          </NeuButtonAccent>
         </div>
       )}
 
       {pendentes.length === 0 && (
-        <div className="text-center py-8 text-sm text-gray-500">Nenhum empréstimo pendente de análise.</div>
+        <div className="neu-flat rounded-2xl border border-white/5 py-8 text-center text-sm text-gray-500">Nenhum empréstimo aguardando análise.</div>
       )}
 
       {pendentes.length > 0 && (
@@ -1462,7 +1426,7 @@ function TabEmprestimos({
           {pendentes.map(emp => {
             const cor = FILIAL_COLOR[emp.filial as Filial] ?? FILIAL_COLOR.SuperMax;
             return (
-              <div key={emp.id} className="neu-flat rounded-2xl p-4 border border-yellow-500/20 flex flex-col gap-3">
+              <div key={emp.id} className="neu-flat rounded-2xl p-4 border border-amber-500/40 flex flex-col gap-3">
                 <div className="flex items-start justify-between gap-2">
                   <div>
                     <span className={`text-xs font-bold ${cor.accent}`}>{emp.filial}</span>
@@ -1471,18 +1435,15 @@ function TabEmprestimos({
                       {emp.num_parcelas}x · por {emp.solicitado_por_nome ?? '—'} · {fmtDate(emp.created_at)}
                     </div>
                   </div>
-                  <span className="flex items-center gap-1 text-[10px] font-bold text-yellow-400 bg-yellow-500/10 px-2 py-1 rounded-full shrink-0">
-                    <Clock size={10} /> Pendente
+                  <span className="flex items-center gap-1 text-[10px] font-black uppercase tracking-widest text-black bg-amber-500 px-2 py-1 rounded-md shrink-0">
+                    <Clock size={11} /> Pendente
                   </span>
                 </div>
                 <p className="text-xs text-gray-400 italic border-t border-white/5 pt-2">"{emp.justificativa}"</p>
                 {podeAprovar(profile) && (
-                  <button
-                    onClick={() => setModalEmp(emp)}
-                    className="self-end text-xs px-4 py-1.5 rounded-xl bg-accent/10 text-accent border border-accent/20 hover:bg-accent/20 transition-colors"
-                  >
-                    Analisar
-                  </button>
+                  <div className="self-end">
+                    <NeuButtonAccent onClick={() => setModalEmp(emp)}>Analisar</NeuButtonAccent>
+                  </div>
                 )}
               </div>
             );
@@ -1832,19 +1793,12 @@ function TabLucro({
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="neu-flat rounded-3xl p-5 border border-accent/20 flex flex-col gap-2">
-        <div className="flex items-center gap-2">
-          <Landmark size={14} className="text-accent" />
-          <span className="text-[10px] font-black uppercase tracking-widest text-gray-500">
-            Retorno do capital investido
-          </span>
-        </div>
-        <span className="text-3xl font-black text-accent tabular-nums">{BRL(totalDistribuido)}</span>
-        <p className="text-[11px] text-gray-500 leading-relaxed max-w-2xl">
-          O aporte não cobra juros — é dinheiro de sócio, e o retorno dele é o lucro.
-          O empréstimo é o contrário: cobra juros e a parcela vence mesmo no prejuízo.
-          Só se distribui o que a unidade lucrou, e só se houver dinheiro em caixa para pagar.
-        </p>
+      {/* Aporte não cobra juros: o retorno do sócio é o lucro, e só se distribui o que houve. */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <CardContador label="Retorno do capital" value={BRL(totalDistribuido)} tom="dourado" sub="Total já distribuído" />
+        <CardContador label="Distribuições" value={distribuicoes.length} />
+        <CardContador label="Disponível a distribuir" value={BRL(FILIAIS.reduce((a, f) => a + Math.max(0, disponivelPor(f)), 0))} tom="verde" />
+        <CardContador label="Unidades com lucro" value={FILIAIS.filter(f => disponivelPor(f) > 0).length} tom="azul" sub="de 3" />
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -1853,8 +1807,10 @@ function TabLucro({
           const cor = FILIAL_COLOR[f];
           const jaDist = distribuicoes.filter(d => d.filial === f);
           return (
-            <div key={f} className="neu-flat rounded-3xl p-5 border border-white/5 flex flex-col gap-3">
-              <span className={`text-xs font-bold ${cor.accent}`}>{f}</span>
+            <div key={f} className="neu-flat rounded-2xl border border-white/5 overflow-hidden flex flex-col">
+              <div className={`h-1 ${cor.bar}`} />
+              <div className="p-5 flex flex-col gap-3 flex-1">
+              <span className={`text-sm font-black uppercase tracking-widest ${cor.accent}`}>{f}</span>
               <div>
                 <span className="text-[10px] uppercase tracking-widest text-gray-500 block">
                   Lucro disponível a distribuir
@@ -1867,27 +1823,22 @@ function TabLucro({
                 Já distribuído: {BRL(jaDist.reduce((a, d) => a + Number(d.valor ?? 0), 0))}
               </div>
               {podeAprovar(profile) && (
-                <button
-                  onClick={() => setModalFilial(f)}
-                  disabled={disponivel <= 0}
-                  className="self-start text-xs px-4 py-1.5 rounded-xl bg-accent/10 text-accent border border-accent/20 hover:bg-accent/20 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-                >
-                  Distribuir
-                </button>
+                <div className="mt-auto">
+                  <NeuButtonAccent onClick={() => setModalFilial(f)} disabled={disponivel <= 0}>Distribuir lucro</NeuButtonAccent>
+                </div>
               )}
               {disponivel <= 0 && (
-                <span className="text-[10px] text-gray-600 leading-relaxed">
-                  Sem resultado a distribuir no período. Prejuízo não se distribui.
-                </span>
+                <span className="text-[11px] text-gray-500">Sem lucro no período.</span>
               )}
+              </div>
             </div>
           );
         })}
       </div>
 
       {distribuicoes.length > 0 && (
-        <div className="neu-flat rounded-3xl p-5 border border-white/5 flex flex-col gap-2">
-          <span className="text-[10px] font-black uppercase tracking-widest text-gray-500 mb-1">Histórico</span>
+        <div className="neu-flat rounded-2xl p-5 border border-white/5 flex flex-col gap-2">
+          <h3 className="text-sm font-bold text-gray-200 mb-1">Histórico</h3>
           {distribuicoes.map(d => (
             <div key={d.id} className="flex items-center gap-3 text-sm border-b border-white/5 last:border-0 py-2">
               <span className={`text-xs font-bold ${(FILIAL_COLOR[d.filial as Filial] ?? FILIAL_COLOR.SuperMax).accent}`}>
@@ -2061,49 +2012,6 @@ function ModalDistribuirLucro({
   );
 }
 
-// ── Ranking de saúde ──────────────────────────────────────────────────────
-// Só as 3 operacionais: a holding não compete com quem ela administra.
-function RankingCard({ saldos }: { saldos: Record<UnidadeCapital, SaldoFilial | null> }) {
-  const ranked = [...FILIAIS].sort((a, b) => {
-    const sa = saldos[a]?.saldo_livre ?? 0;
-    const sb = saldos[b]?.saldo_livre ?? 0;
-    return sb - sa;
-  });
-  return (
-    <div className="neu-flat rounded-3xl p-5 border border-accent/20">
-      <div className="flex items-center gap-2 mb-4">
-        <BarChart3 size={14} className="text-accent" />
-        <span className="text-[10px] font-black uppercase tracking-widest text-gray-500">Ranking Saúde Financeira</span>
-      </div>
-      <div className="flex flex-col gap-3">
-        {ranked.map((f, i) => {
-          const s = saldos[f];
-          const cor = FILIAL_COLOR[f];
-          const pct = s && s.capital_total > 0 ? Math.max(0, (s.saldo_livre / s.capital_total) * 100) : 0;
-          return (
-            <div key={f} className="flex items-center gap-3">
-              <span className="text-lg font-black text-gray-600 w-5 text-center">{i + 1}</span>
-              <div className="flex-1">
-                <div className="flex justify-between mb-1">
-                  <span className={`text-xs font-bold ${cor.accent}`}>{f}</span>
-                  <span className={`text-xs font-bold tabular-nums ${s?.bloqueado ? 'text-red-400' : 'text-gray-300'}`}>
-                    {s ? BRL(s.saldo_livre) : '—'}
-                  </span>
-                </div>
-                <HealthBar saldo={s?.saldo_livre ?? 0} total={s?.capital_total ?? 1} />
-                <div className="flex justify-between text-[10px] text-gray-600 mt-0.5">
-                  <span>{pct.toFixed(0)}% disponível</span>
-                  {s?.bloqueado && <span className="text-red-400 font-bold">ACUMULANDO DÍVIDA</span>}
-                </div>
-              </div>
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
 // ── Tab: Prestação de Contas (aplicação do Capital por Filial × Categoria) ─
 function TabPrestacaoContas({
   notas, saldos,
@@ -2157,36 +2065,16 @@ function TabPrestacaoContas({
 
   return (
     <div className="flex flex-col gap-4">
-      {/* Card resumo */}
-      <div className="neu-flat rounded-3xl p-5 border border-accent/20">
-        <div className="flex items-start justify-between gap-4 flex-wrap">
-          <div>
-            <div className="flex items-center gap-2 mb-1">
-              <Landmark size={14} className="text-accent" />
-              <span className="text-[10px] font-black uppercase tracking-widest text-gray-500">
-                Aplicação do Capital Inicial
-              </span>
-            </div>
-            <span className="text-4xl font-black text-accent tabular-nums">{BRL(totalGeral)}</span>
-            <p className="text-xs text-gray-500 mt-1">
-              {notas.filter(n => n.capital_origem && n.ativo).length} notas registradas ·
-              {' '}{pctAplicado.toFixed(1)}% do capital aportado ({BRL(totalCapitalAportado)})
-            </p>
-          </div>
-          <div className="text-xs text-gray-400 max-w-md">
-            <p className="flex items-start gap-2">
-              <Info size={12} className="text-accent shrink-0 mt-0.5" />
-              <span>
-                Notas marcadas em <strong>Compras → Notas Recebidas</strong> pelas filiais como
-                {' '}<em>"Saiu do Capital Inicial"</em>, agrupadas por unidade e categoria.
-              </span>
-            </p>
-          </div>
-        </div>
+      {/* Notas marcadas em Compras › Notas Recebidas como "Saiu do Capital Inicial". */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <CardContador label="Capital aplicado" value={BRL(totalGeral)} tom="dourado"
+          sub={`${notas.filter(n => n.capital_origem && n.ativo).length} nota(s) do capital inicial`} />
+        <CardContador label="Do capital aportado" value={`${pctAplicado.toFixed(1)}%`} tom="azul" />
+        <CardContador label="Capital aportado" value={BRL(totalCapitalAportado)} />
       </div>
 
       {/* Matriz Filial × Categoria */}
-      <div className="neu-flat rounded-3xl p-6 border border-white/5 overflow-x-auto main-scrollbar">
+      <div className="neu-flat rounded-2xl p-5 border border-white/5 overflow-x-auto main-scrollbar">
         <table className="tabela w-full text-left border-collapse min-w-[720px]">
           <thead>
             <tr className="border-b border-white/10 text-[10px] text-gray-500 uppercase tracking-widest">
@@ -2251,7 +2139,7 @@ function TabPrestacaoContas({
       </div>
 
       {/* Lista detalhada */}
-      <div className="neu-flat rounded-3xl p-6 border border-white/5">
+      <div className="neu-flat rounded-2xl p-5 border border-white/5">
         <h3 className="text-sm font-bold text-gray-200 mb-4 flex items-center gap-2">
           <Landmark size={14} className="text-accent" />
           Últimas notas aplicadas ao Capital
@@ -2374,19 +2262,10 @@ function TabFaturamento({ notas }: { notas: NotaEmitidaMatriz[] }) {
   return (
     <div className="flex flex-col gap-4">
       {/* Header + filtros */}
-      <div className="neu-flat rounded-3xl p-5 border border-accent/20">
-        <div className="flex items-start justify-between gap-4 flex-wrap">
-          <div>
-            <div className="flex items-center gap-2 mb-1">
-              <BarChart3 size={14} className="text-accent" />
-              <span className="text-[10px] font-black uppercase tracking-widest text-gray-500">
-                Faturamento por Filial
-              </span>
-            </div>
-            <span className="text-4xl font-black text-accent tabular-nums">{BRL(totalGeral)}</span>
-            <p className="text-xs text-gray-500 mt-1">{totalNotas} nota{totalNotas !== 1 && 's'} emitida{totalNotas !== 1 && 's'} no período</p>
-          </div>
-          <div className="flex gap-3 items-end">
+      <div className="grid grid-cols-1 lg:grid-cols-[1fr_1fr_auto] gap-4 items-stretch">
+          <CardContador label="Faturamento no período" value={BRL(totalGeral)} tom="dourado" />
+          <CardContador label="Notas emitidas" value={totalNotas} tom="azul" />
+          <div className="neu-flat rounded-2xl border border-white/5 px-4 py-3 flex gap-3 items-end">
             <FormField label="De">
               <input type="date" className="neu-input py-1.5 px-3 rounded-xl text-xs"
                 value={dtIni} onChange={e => setDtIni(e.target.value)} />
@@ -2396,11 +2275,10 @@ function TabFaturamento({ notas }: { notas: NotaEmitidaMatriz[] }) {
                 value={dtFim} onChange={e => setDtFim(e.target.value)} />
             </FormField>
           </div>
-        </div>
       </div>
 
       {/* Matriz Filial × Tipo */}
-      <div className="neu-flat rounded-3xl p-6 border border-white/5 overflow-x-auto main-scrollbar">
+      <div className="neu-flat rounded-2xl p-5 border border-white/5 overflow-x-auto main-scrollbar">
         <table className="tabela w-full text-left border-collapse min-w-[600px]">
           <thead>
             <tr className="border-b border-white/10 text-[10px] text-gray-500 uppercase tracking-widest">
@@ -2454,7 +2332,7 @@ function TabFaturamento({ notas }: { notas: NotaEmitidaMatriz[] }) {
       </div>
 
       {/* Últimas notas emitidas */}
-      <div className="neu-flat rounded-3xl p-6 border border-white/5">
+      <div className="neu-flat rounded-2xl p-5 border border-white/5">
         <h3 className="text-sm font-bold text-gray-200 mb-4 flex items-center gap-2">
           <BarChart3 size={14} className="text-accent" /> Últimas notas emitidas no período
         </h3>
@@ -2563,29 +2441,20 @@ function TabAplicacoes({
   return (
     <div className="flex flex-col gap-4">
       {ehProfessor && (
-        <div className="neu-flat rounded-3xl p-4 border border-accent/20 flex items-center justify-between gap-3">
-          <div>
-            <p className="text-sm font-bold text-gray-100">Relógio das aplicações</p>
-            <p className="text-[11px] text-gray-500 leading-relaxed mt-0.5">
-              Aplicação só rende quando o mês fecha. Um clique = um mês para todas
-              as unidades, com juro composto sobre o que já rendeu.
-            </p>
-          </div>
-          <button
-            onClick={fecharMes} disabled={fechando}
-            className="shrink-0 flex items-center gap-1.5 text-xs px-3 py-2 rounded-xl bg-accent/10 text-accent border border-accent/20 hover:bg-accent/20 transition-colors disabled:opacity-50"
-          >
-            <CalendarClock size={13} /> {fechando ? 'Fechando…' : 'Fechar mês'}
-          </button>
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <p className="text-xs text-gray-500">Aplicação só rende quando o mês fecha: um clique fecha o mês de todas as unidades.</p>
+          <NeuButtonAccent onClick={fecharMes} isLoading={fechando}>
+            <CalendarClock size={14} /> Fechar mês
+          </NeuButtonAccent>
         </div>
       )}
 
-      <div className="flex gap-1 p-1 neu-flat rounded-2xl border border-white/5">
+      <div className="flex gap-1 p-1 neu-pressed rounded-xl border border-white/5 self-start" role="tablist">
         {UNIDADES.map(u => (
           <button
-            key={u} onClick={() => setUnidade(u)}
-            className={`flex-1 py-2 rounded-xl text-xs font-bold transition-all ${
-              unidade === u ? 'bg-accent text-white' : 'text-gray-500 hover:text-gray-300'
+            key={u} onClick={() => setUnidade(u)} role="tab" aria-selected={unidade === u}
+            className={`px-4 py-2 rounded-lg text-xs font-bold transition-colors ${
+              unidade === u ? 'bg-accent text-[var(--color-accent-text)]' : 'text-gray-400 hover:text-gray-200'
             }`}
           >
             {u}
@@ -2638,64 +2507,70 @@ function EditorBancosInvestimento({
     } finally { setSalvando(null); }
   };
 
-  return (
-    <div className="neu-flat rounded-3xl p-5 border border-white/5">
-      <div className="flex items-center gap-2 mb-1">
-        <PiggyBank size={14} className="text-accent" />
-        <span className="text-[10px] font-black uppercase tracking-widest text-gray-500">
-          Praça financeira — onde as unidades aplicam
-        </span>
-      </div>
-      <p className="text-[11px] text-gray-500 mb-4 leading-relaxed">
-        Taxa em % ao mês. Carência é em meses fechados: quem paga mais costuma prender
-        o dinheiro por mais tempo — é essa troca que a unidade precisa pesar.
-      </p>
+  // Texto, não type=number: o teclado pt-BR digita "0,86" e o number recusava a vírgula.
+  const numero = (v: string) => parseFloat(v.includes(',') ? v.replace(/\./g, '').replace(',', '.') : v);
+  const campo = 'w-24 mx-auto neu-input rounded-lg px-2 py-1.5 text-sm text-center tabular-nums disabled:opacity-60';
 
-      <div className="flex flex-col gap-2">
-        {bancos.map(b => (
-          <div key={b.id} className="neu-pressed rounded-2xl p-3 flex flex-col gap-2">
-            <div className="flex items-center justify-between gap-2">
-              <div>
-                <span className="text-sm font-bold text-gray-100">{b.nome}</span>
-                <span className="text-[10px] text-gray-500 ml-2">{b.produto}</span>
-              </div>
-              {b.isento_ir && <span className="text-[10px] text-green-400">isento de IR</span>}
-            </div>
-            <div className="grid grid-cols-2 gap-2">
-              <div className="flex flex-col gap-1">
-                <label className="text-[9px] font-black uppercase tracking-widest text-gray-500">Taxa (% a.m.)</label>
-                <input
-                  type="number" step="0.01" min="0" max="100" defaultValue={Number(b.taxa_mensal)}
-                  disabled={!podeEditar || salvando === b.id}
-                  onBlur={e => {
-                    const v = parseFloat(e.target.value);
-                    if (!isNaN(v) && v !== Number(b.taxa_mensal)) salvar(b, { taxa_mensal: v });
-                  }}
-                  className="neu-flat rounded-xl px-3 py-2 text-sm text-gray-100 bg-transparent outline-none tabular-nums"
-                />
-              </div>
-              <div className="flex flex-col gap-1">
-                <label className="text-[9px] font-black uppercase tracking-widest text-gray-500">Carência (meses)</label>
-                <input
-                  type="number" step="1" min="0" max="60" defaultValue={b.carencia_meses}
-                  disabled={!podeEditar || salvando === b.id}
-                  onBlur={e => {
-                    const v = parseInt(e.target.value);
-                    if (!isNaN(v) && v !== b.carencia_meses) salvar(b, { carencia_meses: v });
-                  }}
-                  className="neu-flat rounded-xl px-3 py-2 text-sm text-gray-100 bg-transparent outline-none tabular-nums"
-                />
-              </div>
-            </div>
-          </div>
-        ))}
-        {bancos.length === 0 && (
-          <p className="text-sm text-gray-500">
-            Nenhum banco cadastrado — a semente da migração 604 não foi aplicada nesta turma.
-          </p>
-        )}
+  return (
+    <section className="neu-flat rounded-2xl p-5 border border-white/5 flex flex-col gap-4">
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <h3 className="text-sm font-bold text-gray-200 flex items-center gap-2">
+          <PiggyBank size={15} className="text-accent" /> Praça financeira
+        </h3>
+        <span className="text-[11px] text-gray-500">Onde as unidades aplicam · salva ao sair do campo</span>
       </div>
-    </div>
+
+      {bancos.length === 0 ? (
+        <p className="text-sm text-gray-500">Nenhum banco cadastrado — a semente da migração 604 não foi aplicada nesta turma.</p>
+      ) : (
+        <div className="overflow-x-auto main-scrollbar">
+          <table className="tabela w-full text-left min-w-[560px]">
+            <thead>
+              <tr className="text-[10px] uppercase tracking-widest">
+                <th className="py-2.5 px-3 font-bold">Banco</th>
+                <th className="py-2.5 px-3 font-bold text-center">Taxa (% a.m.)</th>
+                <th className="py-2.5 px-3 font-bold text-center">Carência (meses)</th>
+                <th className="py-2.5 px-3 font-bold text-center">IR</th>
+              </tr>
+            </thead>
+            <tbody className="text-sm">
+              {bancos.map(b => (
+                <tr key={b.id}>
+                  <td className="py-2.5 px-3">
+                    <p className="font-semibold text-gray-100">{b.nome}</p>
+                    <p className="text-[11px] text-gray-500">{b.produto}{b.pct_cdi != null && ` · ${Number(b.pct_cdi).toFixed(0)}% do CDI`}</p>
+                  </td>
+                  <td className="py-2.5 px-3">
+                    <input type="text" inputMode="decimal" className={campo}
+                      defaultValue={Number(b.taxa_mensal).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                      disabled={!podeEditar || salvando === b.id}
+                      onBlur={e => {
+                        const v = numero(e.target.value);
+                        if (!isNaN(v) && v >= 0 && v !== Number(b.taxa_mensal)) salvar(b, { taxa_mensal: v });
+                      }} />
+                  </td>
+                  <td className="py-2.5 px-3">
+                    <input type="text" inputMode="numeric" className={campo}
+                      defaultValue={b.carencia_meses}
+                      disabled={!podeEditar || salvando === b.id}
+                      onBlur={e => {
+                        const v = parseInt(e.target.value.replace(/\D/g, ''));
+                        if (!isNaN(v) && v !== b.carencia_meses) salvar(b, { carencia_meses: v });
+                      }} />
+                  </td>
+                  <td className="py-2.5 px-3">
+                    <span className={`px-2 py-0.5 rounded-md text-[10px] font-black ${
+                      b.isento_ir ? 'bg-green-600 text-white' : 'bg-white/10 text-gray-300'}`}>
+                      {b.isento_ir ? 'Isento' : 'Tributado'}
+                    </span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </section>
   );
 }
 
@@ -2797,6 +2672,8 @@ export function MatrizCapitalView({
   const totalCapital = FILIAIS.reduce((acc, f) => acc + (saldos[f]?.capital_total ?? 0), 0);
   const totalSaldo = FILIAIS.reduce((acc, f) => acc + (saldos[f]?.saldo_livre ?? 0), 0);
   const pendentesCount = emprestimos.filter(e => e.status === 'Pendente').length;
+  const bloqueadasCount = FILIAIS.filter(f => saldos[f]?.bloqueado).length;
+  const ranking = [...FILIAIS].sort((a, b) => (saldos[b]?.saldo_livre ?? 0) - (saldos[a]?.saldo_livre ?? 0));
 
   // Aporte antigo (anterior à migr. 326) não tem conta nenhuma: nunca moveu
   // dinheiro, então apagar a linha basta. Do 326 em diante o aporte é uma
@@ -2817,12 +2694,12 @@ export function MatrizCapitalView({
   const TABS: { id: Tab; label: string; badge?: number }[] = [
     { id: 'geral', label: 'Visão Geral' },
     { id: 'dre', label: 'DRE' },
-    { id: 'prestacao', label: 'Prestação de Contas' },
+    { id: 'prestacao', label: 'Prestação de contas' },
     { id: 'faturamento', label: 'Faturamento' },
     { id: 'emprestimos', label: 'Empréstimos', badge: pendentesCount > 0 ? pendentesCount : undefined },
-    { id: 'lucro', label: 'Distribuição de Lucro' },
+    { id: 'lucro', label: 'Distribuição de lucro' },
     { id: 'aplicacoes', label: 'Aplicações' },
-    { id: 'config', label: 'Config' },
+    { id: 'config', label: 'Configurações' },
   ];
 
   return (
@@ -2831,30 +2708,26 @@ export function MatrizCapitalView({
       transition={{ duration: 0.3 }}
       className="flex flex-col gap-6 pb-16"
     >
-      {/* Header consolidado */}
-      <div className="neu-flat rounded-3xl p-5 border border-accent/20">
-        <div className="flex items-center justify-between">
-          <div>
-            <div className="flex items-center gap-2 mb-1">
-              <Landmark size={14} className="text-accent" />
-              <span className="text-[10px] font-black uppercase tracking-widest text-gray-500">Capital Consolidado</span>
-            </div>
-            <span className="text-4xl font-black text-accent tabular-nums">{BRL(totalCapital)}</span>
-          </div>
-          <div className="text-right">
-            <span className="text-[10px] font-black uppercase tracking-widest text-gray-500 block mb-1">Saldo Livre Total</span>
-            <span className={`text-2xl font-black tabular-nums ${totalSaldo < 0 ? 'text-red-400' : 'text-green-400'}`}>
-              {BRL(totalSaldo)}
-            </span>
-          </div>
-        </div>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight flex items-center gap-2">
+          <Landmark size={26} /> Capital
+        </h2>
         {configAtiva && (
-          <p className="text-xs text-gray-500 mt-2">
-            Período: {dataSimplesBR(configAtiva.data_inicio)}
-            {configAtiva.data_fim ? ` → ${dataSimplesBR(configAtiva.data_fim)}` : ' → sem prazo'}
-            {configAtiva.reserva_min_pct > 0 && ` · Reserva ${configAtiva.reserva_min_pct}%`}
-          </p>
+          <span className="text-xs text-gray-400 px-3 py-1.5 rounded-lg bg-white/5">
+            Período {dataSimplesBR(configAtiva.data_inicio)}
+            {configAtiva.data_fim ? ` a ${dataSimplesBR(configAtiva.data_fim)}` : ', sem prazo'}
+            {configAtiva.reserva_min_pct > 0 && ` · reserva ${configAtiva.reserva_min_pct}%`}
+          </span>
         )}
+      </div>
+
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <CardContador label="Capital consolidado" value={BRL(totalCapital)} tom="dourado" sub="3 unidades operacionais" />
+        <CardContador label="Saldo livre total" value={BRL(totalSaldo)} tom={totalSaldo < 0 ? 'vermelho' : 'verde'} />
+        <CardContador label="Empréstimos pendentes" value={pendentesCount} tom="amarelo"
+          onClick={pendentesCount > 0 ? () => setTab('emprestimos') : undefined} />
+        <CardContador label="Unidades bloqueadas" value={bloqueadasCount} tom="vermelho"
+          sub={bloqueadasCount > 0 ? 'Capital estourado' : 'Nenhuma'} />
       </div>
 
       <PeriodoCapitalAviso
@@ -2863,21 +2736,15 @@ export function MatrizCapitalView({
         podeConfigurar={podeConfigurar(profile)}
       />
 
-      {/* Tabs */}
-      <div className="flex gap-1 p-1 neu-flat rounded-2xl border border-white/5">
+      {/* Abas numa linha só; rolam de lado em tela estreita em vez de quebrar o rótulo. */}
+      <div className="flex gap-1 p-1 neu-pressed rounded-xl border border-white/5 overflow-x-auto main-scrollbar-h self-start max-w-full" role="tablist">
         {TABS.map(t => (
-          <button
-            key={t.id}
-            onClick={() => setTab(t.id)}
-            className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-bold transition-all ${
-              tab === t.id
-                ? 'bg-accent text-white'
-                : 'text-gray-500 hover:text-gray-300'
-            }`}
-          >
+          <button key={t.id} type="button" role="tab" aria-selected={tab === t.id} onClick={() => setTab(t.id)}
+            className={`shrink-0 whitespace-nowrap flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-bold transition-colors ${
+              tab === t.id ? 'bg-accent text-[var(--color-accent-text)]' : 'text-gray-400 hover:text-gray-200'}`}>
             {t.label}
             {t.badge && (
-              <span className="w-4 h-4 rounded-full bg-red-500 text-white text-[10px] font-black flex items-center justify-center">
+              <span className="min-w-5 h-5 px-1 rounded-full bg-red-600 text-white text-[10px] font-black flex items-center justify-center">
                 {t.badge}
               </span>
             )}
@@ -2887,43 +2754,31 @@ export function MatrizCapitalView({
 
       {/* Conteúdo das tabs */}
       {tab === 'geral' && (
+        isLoading ? <LoadingSpinner /> : (
         <div className="flex flex-col gap-4">
-          <RankingCard saldos={saldos} />
-          {isLoading ? (
-            <LoadingSpinner />
-          ) : (
-            <>
-              {/* Holding em faixa própria, antes das operações e fora do grid
-                  de 3: somá-la ao consolidado contaria o mesmo dinheiro duas
-                  vezes assim que o rateio começasse a circular entre as duas
-                  pontas. Quem lê a tela precisa ver que são camadas
-                  diferentes, não quatro lojas. */}
-              <div className="flex items-center gap-2 mt-1">
-                <span className="text-[10px] font-black uppercase tracking-widest text-gray-500">Holding</span>
-                <div className="flex-1 h-px bg-white/5" />
-              </div>
+          {/* Operações em ordem de saúde (saldo livre); a holding vem à parte,
+              porque somá-la ao consolidado contaria o rateio duas vezes. */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 items-stretch">
+            {ranking.map((f, i) => (
               <FilialCapitalCard
-                filial="Matriz" registros={porFilial.Matriz}
-                saldo={saldos.Matriz} profile={profile}
+                key={f} filial={f} registros={porFilial[f]} posicao={i + 1}
+                saldo={saldos[f]} profile={profile}
                 onNovo={setModalFilial} onExcluir={handleExcluir}
               />
+            ))}
+          </div>
 
-              <div className="flex items-center gap-2 mt-2">
-                <span className="text-[10px] font-black uppercase tracking-widest text-gray-500">Operações</span>
-                <div className="flex-1 h-px bg-white/5" />
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                {FILIAIS.map(f => (
-                  <FilialCapitalCard
-                    key={f} filial={f} registros={porFilial[f]}
-                    saldo={saldos[f]} profile={profile}
-                    onNovo={setModalFilial} onExcluir={handleExcluir}
-                  />
-                ))}
-              </div>
-            </>
-          )}
+          <div className="flex items-center gap-2 mt-2">
+            <span className="text-[10px] font-black uppercase tracking-widest text-gray-500">Holding</span>
+            <div className="flex-1 h-px bg-white/5" />
+          </div>
+          <FilialCapitalCard
+            filial="Matriz" registros={porFilial.Matriz}
+            saldo={saldos.Matriz} profile={profile}
+            onNovo={setModalFilial} onExcluir={handleExcluir}
+          />
         </div>
+        )
       )}
 
       {tab === 'dre' && <TabDRE saldos={saldos} semConfig={!configAtiva} />}
@@ -2957,49 +2812,37 @@ export function MatrizCapitalView({
       )}
 
       {tab === 'config' && (
-        <div className="flex flex-col gap-4">
-          <div className="neu-flat rounded-3xl p-5 border border-accent/20">
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-2">
-                <Settings size={14} className="text-accent" />
-                <span className="text-[10px] font-black uppercase tracking-widest text-gray-500">Configuração Ativa</span>
-              </div>
+        <div className="flex flex-col gap-5">
+          <section className="neu-flat rounded-2xl p-5 border border-white/5 flex flex-col gap-4">
+            <div className="flex items-center justify-between gap-3 flex-wrap">
+              <h3 className="text-sm font-bold text-gray-200 flex items-center gap-2">
+                <Settings size={15} className="text-accent" /> Período ativo
+              </h3>
               {podeConfigurar(profile) && (
-                <button
-                  onClick={() => setModalConfig(true)}
-                  className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-xl bg-accent/10 text-accent border border-accent/20 hover:bg-accent/20 transition-colors"
-                >
-                  <Plus size={12} /> Novo Período
-                </button>
+                <NeuButtonAccent onClick={() => setModalConfig(true)}>
+                  <Plus size={14} /> Novo período
+                </NeuButtonAccent>
               )}
             </div>
             {configAtiva ? (
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <span className="text-[10px] uppercase tracking-widest text-gray-500">Início</span>
-                  <p className="text-sm font-bold text-gray-100 mt-0.5">{dataSimplesBR(configAtiva.data_inicio)}</p>
-                </div>
-                <div>
-                  <span className="text-[10px] uppercase tracking-widest text-gray-500">Fim</span>
-                  <p className="text-sm font-bold text-gray-100 mt-0.5">{configAtiva.data_fim ? dataSimplesBR(configAtiva.data_fim) : 'Sem prazo'}</p>
-                </div>
-                <div>
-                  <span className="text-[10px] uppercase tracking-widest text-gray-500">Reserva mínima</span>
-                  <p className="text-sm font-bold text-gray-100 mt-0.5">{configAtiva.reserva_min_pct}%</p>
-                </div>
-                <div>
-                  <span className="text-[10px] uppercase tracking-widest text-gray-500">Juros padrão</span>
-                  <p className="text-sm font-bold text-gray-100 mt-0.5">{qtdBR(configAtiva.taxa_juros_padrao)}%</p>
-                </div>
-                <div>
-                  <span className="text-[10px] uppercase tracking-widest text-gray-500">Parcelamento máximo</span>
-                  <p className="text-sm font-bold text-gray-100 mt-0.5">{configAtiva.max_parcelas ?? 12}x</p>
-                </div>
+              <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+                {[
+                  { rotulo: 'Início', valor: dataSimplesBR(configAtiva.data_inicio) },
+                  { rotulo: 'Fim', valor: configAtiva.data_fim ? dataSimplesBR(configAtiva.data_fim) : 'Sem prazo' },
+                  { rotulo: 'Reserva mínima', valor: `${configAtiva.reserva_min_pct}%` },
+                  { rotulo: 'Juros padrão', valor: `${qtdBR(configAtiva.taxa_juros_padrao)}% a.m.` },
+                  { rotulo: 'Parcelamento máximo', valor: `${configAtiva.max_parcelas ?? 12}x` },
+                ].map(c => (
+                  <div key={c.rotulo} className="rounded-xl bg-white/[0.04] border border-white/5 px-4 py-3">
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500">{c.rotulo}</p>
+                    <p className="text-lg font-black text-gray-100 tabular-nums mt-0.5">{c.valor}</p>
+                  </div>
+                ))}
               </div>
             ) : (
-              <p className="text-sm text-gray-500">Nenhuma configuração definida. O cálculo de saldo usará todos os aportes sem período fixo.</p>
+              <p className="text-sm text-amber-300">Nenhum período definido: o saldo usa todos os aportes, sem janela.</p>
             )}
-          </div>
+          </section>
 
           <EditorBancosInvestimento profile={profile} showToast={showToast} />
         </div>

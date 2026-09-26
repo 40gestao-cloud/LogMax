@@ -323,17 +323,28 @@ export const ExportButton = ({ label, onClick, icon: Icon, variante }: {
 export type TomContador = 'neutro' | 'verde' | 'amarelo' | 'laranja' | 'vermelho' | 'azul' | 'roxo' | 'dourado';
 const TONS_ALERTA = new Set<TomContador>(['amarelo', 'laranja', 'vermelho']);
 
-export const CardContador = ({ label, value, sub, tom = 'neutro' }: {
+export const CardContador = ({ label, value, sub, tom = 'neutro', onClick, ativo = false }: {
   label: string; value: React.ReactNode; sub?: React.ReactNode; tom?: TomContador;
+  /** Com onClick o card vira botão (ex.: abre o detalhe no Dashboard). */
+  onClick?: () => void; ativo?: boolean;
 }) => {
   const zero = value === 0 || value === '0';
   const efetivo: TomContador = zero && TONS_ALERTA.has(tom) ? 'neutro' : tom;
-  return (
-    <div className={`contador contador--${efetivo} rounded-2xl px-4 py-5 flex flex-col items-center justify-center text-center gap-1.5`}>
+  const cls = `contador contador--${efetivo} rounded-2xl px-4 py-5 flex flex-col items-center justify-center text-center gap-1.5`;
+  const miolo = (
+    <>
       <p className="contador-rotulo text-[10px] uppercase tracking-widest font-bold leading-tight">{label}</p>
       <p className="contador-valor text-2xl sm:text-3xl font-black tabular-nums leading-none">{value}</p>
       {sub && <p className="text-[11px] text-gray-400 leading-tight">{sub}</p>}
-    </div>
+    </>
+  );
+  if (!onClick) return <div className={cls}>{miolo}</div>;
+  return (
+    <button type="button" onClick={onClick} aria-expanded={ativo}
+      className={`${cls} transition-transform hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--contador-rotulo)] ${
+        ativo ? 'ring-2 ring-[var(--contador-rotulo)] ring-offset-2 ring-offset-[var(--color-bg-base)]' : ''}`}>
+      {miolo}
+    </button>
   );
 };
 

@@ -100,20 +100,7 @@ export function FilialSelector({ onSelect, onVoltar }: Props) {
       animate={{ opacity: 1 }}
       className="flex-1 overflow-y-auto"
     >
-    <div className="min-h-full flex flex-col items-center justify-center gap-3 sm:gap-5 pt-4 pb-8 sm:pt-6 sm:pb-12 px-4 relative">
-      {/* O fundo era preto chapado e os cards flutuavam nele sem nenhum
-          plano por trás. Dois radiais MUITO fracos (o dourado da holding em
-          cima, um frio embaixo, atrás da fileira) dão profundidade sem sombra
-          e sem sair do flat — nada aqui desenha borda ou brilho de objeto. */}
-      <div
-        aria-hidden
-        className="pointer-events-none absolute inset-0 z-0"
-        style={{
-          background:
-            'radial-gradient(60% 38% at 50% 26%, rgba(212,175,55,0.07) 0%, transparent 70%),' +
-            'radial-gradient(70% 40% at 50% 82%, rgba(120,140,190,0.05) 0%, transparent 72%)',
-        }}
-      />
+    <div className="min-h-full flex flex-col items-center justify-center gap-3 sm:gap-5 py-6 px-4 relative">
 
       {/* Botão Voltar */}
       {onVoltar && (
@@ -144,7 +131,8 @@ export function FilialSelector({ onSelect, onVoltar }: Props) {
           '--fs-glow': 'rgba(212,175,55,0.25)',
         } as React.CSSProperties}
       >
-        <img src="/icon.matriz.png" alt="Matriz" className="w-56 h-32 sm:w-[22rem] sm:h-52 object-contain" />
+        {/* Altura presa à janela: em notebook os cards de baixo quase cortavam. */}
+        <img src="/icon.matriz.png" alt="Matriz" className="w-56 h-32 sm:w-[22rem] sm:h-[min(13rem,20vh)] object-contain" />
         <span className="mt-1 sm:mt-2 text-[10px] sm:text-xs font-semibold uppercase tracking-[0.2em]" style={{ color: 'rgb(226,194,98)' }}>
           Holding · visão consolidada
         </span>
@@ -167,7 +155,7 @@ export function FilialSelector({ onSelect, onVoltar }: Props) {
               transition={{ delay: 0.12 + i * 0.07, type: 'spring', stiffness: 280, damping: 24 }}
               whileHover={{ scale: 1.03, y: -3 }}
               whileTap={{ scale: 0.97 }}
-              className={`group relative flex flex-col items-center rounded-2xl sm:rounded-3xl p-2.5 sm:p-7 text-center overflow-hidden bg-white/3 ${CARD_BASE}`}
+              className={`group relative flex flex-col items-center rounded-2xl sm:rounded-3xl p-2.5 sm:p-5 text-center overflow-hidden bg-white/3 ${CARD_BASE}`}
               style={{
                 '--fs-bd': m.borderIdle,
                 '--fs-bd-hv': m.borderHover,
@@ -178,7 +166,7 @@ export function FilialSelector({ onSelect, onVoltar }: Props) {
               {/* Moldura idêntica nas três — a placa muda de cor porque o fundo
                   vem queimado no PNG (ver comentário em FILIAL_META). */}
               <div
-                className="w-full aspect-square sm:h-auto sm:max-w-56 rounded-xl sm:rounded-2xl flex items-center justify-center overflow-hidden ring-1 ring-white/10"
+                className="w-full aspect-square sm:h-auto sm:max-w-[min(14rem,28vh)] rounded-xl sm:rounded-2xl flex items-center justify-center overflow-hidden ring-1 ring-white/10"
                 style={{ background: m.plate }}
               >
                 {/* A arte é quadrada e preenche a moldura inteira. Escalar

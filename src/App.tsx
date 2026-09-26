@@ -1318,9 +1318,10 @@ function LogMaxAppInner() {
         onAbrirSeletor={clearFilial}
         onSair={handleSignOut}
       >
-      <div className="min-h-screen flex flex-col bg-base">
+      <div className="h-screen flex flex-col relative" style={{ background: '#000' }}>
         {alarmeDaAula}{avisoDeRecarga}
-        <div className="shrink-0 flex justify-end items-center px-6 py-4 border-b border-white/5">
+        {/* Flutua sobre a tela: como faixa, empurrava os cards para baixo. */}
+        <div className="absolute top-0 right-0 z-20 px-6 py-4">
           <button
             onClick={handleSignOut}
             // Discreto de propósito: sair é a ação secundária da tela, e em
@@ -1711,7 +1712,9 @@ function LogMaxAppInner() {
 
       {/* MAIN CONTENT */}
       <main className="flex-1 h-full overflow-y-auto flex flex-col bg-base p-4 sm:p-8 main-scrollbar">
-        <header className="shrink-0 flex justify-between items-center sticky top-0 z-30 bg-base mb-4 sm:mb-8 border-b border-white/5 pb-4">
+        {/* Gruda na borda do <main> e cobre o respiro dele: com top-0 o sticky
+            parava 32px abaixo e o conteúdo rolado aparecia por cima do topbar. */}
+        <header className="shrink-0 flex justify-between items-center sticky -top-4 sm:-top-8 -mt-4 sm:-mt-8 pt-4 sm:pt-8 z-30 bg-base mb-4 sm:mb-8 border-b border-white/5 pb-4">
           <div className="flex items-center gap-3">
             <button onClick={() => setMobileMenuOpen(true)}
               className="lg:hidden neu-button w-9 h-9 rounded-xl flex items-center justify-center text-gray-400 hover:text-accent transition-colors">

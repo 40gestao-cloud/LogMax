@@ -85,9 +85,7 @@ export function ImagemUploader({
             </button>
             <ColarImagem onImagem={receber} disabled={processando} />
           </div>
-          <p className={`text-[10px] mt-1 ${erro ? 'text-red-400' : 'text-gray-600'}`}>
-            {erro ?? 'JPG, PNG ou WEBP — acima de 1 MB o sistema reduz sozinho'}
-          </p>
+          {erro && <p className="text-[10px] mt-1 text-red-400">{erro}</p>}
           <input ref={ref} type="file" accept={IMAGEM_ACCEPT} className="hidden" onChange={handleFile} />
         </div>
       )}

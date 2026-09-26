@@ -230,7 +230,7 @@ const PatrimonioViewInner = ({ filial, showToast }: { filial: FilialOp; showToas
               onClick={e => e.stopPropagation()}>
               <div>
                 <h3 className="text-lg font-bold text-gray-100">Baixar bem</h3>
-                <p className="text-xs text-gray-500 mt-1">{baixaItem.nome} — não apaga a linha, cancela contabilmente. O resultado (ganho ou perda) entra no DRE do mês.</p>
+                <p className="text-xs text-gray-500 mt-1">{baixaItem.nome}</p>
               </div>
               <FormField label="Motivo *">
                 <input className="neu-input py-2 px-3 rounded-xl text-sm" value={baixaMotivo}
@@ -239,7 +239,7 @@ const PatrimonioViewInner = ({ filial, showToast }: { filial: FilialOp; showToas
               <FormField label="Valor de venda (opcional)">
                 <input className="neu-input py-2 px-3 rounded-xl text-sm" type="text" inputMode="numeric" value={baixaValorVenda}
                   onChange={e => setBaixaValorVenda(formatBRL(e.target.value))} onKeyDown={handleMoneyKeyDown}
-                  placeholder="R$ 0,00 — vazio = descarte sem venda" />
+                  placeholder="Vazio = descarte" />
               </FormField>
               <div className="flex gap-3 justify-end mt-2">
                 <button onClick={fecharBaixa} className="neu-button py-2 px-5 rounded-xl text-sm text-gray-400">Cancelar</button>

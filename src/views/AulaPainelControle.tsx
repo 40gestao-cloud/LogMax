@@ -185,11 +185,6 @@ export const AulaPainelControle: React.FC<Props> = ({ showToast, recarregarEm })
             <ClipboardCheck size={14} className="text-accent" />
             <h3 className="text-sm font-bold text-gray-200">Painel de controle</h3>
           </div>
-          <p className="text-[11px] text-gray-500 mt-1 max-w-2xl">
-            Quem realizou cada tarefa da atividade. Você marca — o aluno vê o que
-            foi marcado para ele e não mexe nisso. Não vira nota nem entra no placar
-            da competição.
-          </p>
         </div>
         <button type="button" onClick={() => carregar()} disabled={loading}
           title="Recarregar — use se o realtime cair no meio da aula"
@@ -333,8 +328,7 @@ export const AulaPainelControle: React.FC<Props> = ({ showToast, recarregarEm })
               ))}
               <p className="text-[10px] text-gray-600 mt-1 flex items-start gap-1.5">
                 <AlertCircle size={11} className="shrink-0 mt-0.5" />
-                Clicar no nome do aluno marca ou desmarca a linha inteira dele.
-                A atividade foi enviada em {formatDataHoraBR(atividade.created_at)}.
+                Enviada em {formatDataHoraBR(atividade.created_at)}.
               </p>
             </div>
           )}

@@ -102,55 +102,39 @@ export const MeuCrachaView = ({ profile }: { profile: UserProfile }) => {
   return (
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
       className="flex flex-col h-full gap-6 overflow-y-auto main-scrollbar pb-6">
-      <div className="shrink-0">
+      <div className="flex flex-wrap items-center justify-between gap-3 shrink-0">
         <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight flex items-center gap-2">
           <IdCard size={26} /> Meu Crachá
         </h2>
+        {!carregando && !erro && (
+          <button type="button" onClick={() => window.print()}
+            className="cracha-controles btn-solido btn-solido--cinza">
+            <Printer size={15} /> Imprimir
+          </button>
+        )}
       </div>
 
       {carregando ? <LoadingSpinner /> : erro ? (
-        <div className="neu-flat rounded-3xl p-8 border border-red-500/20 flex items-start gap-3 max-w-xl">
+        <div className="neu-flat rounded-2xl p-6 border border-red-500/20 flex items-start gap-3 max-w-xl">
           <AlertTriangle size={18} className="text-red-400 shrink-0 mt-0.5" />
           <p className="text-sm text-gray-300">{erro}</p>
         </div>
       ) : (
-        <div className="flex flex-col items-center gap-4 shrink-0">
-          <div className="w-full max-w-[320px]">
+        <div className="flex-1 flex flex-col items-center justify-center gap-5 shrink-0 py-2">
+          {/* Aviso antes do cartão: explica por que ele saiu sem QR. */}
+          {(semFuncionario || inativo) && (
+            <div className="w-full max-w-[340px] rounded-xl px-4 py-3 bg-amber-500/10 border border-amber-500/30 flex items-start gap-2.5">
+              <AlertTriangle size={15} className="text-amber-400 shrink-0 mt-0.5" />
+              <p className="text-xs text-amber-100/90 leading-snug">
+                {semFuncionario
+                  ? <>Sem vínculo com o RH: o crachá <b>não registra presença</b>. Peça o vínculo ao professor.</>
+                  : <>Cadastro <b>inativo</b>: o crachá não registra presença. Procure o RH.</>}
+              </p>
+            </div>
+          )}
+          <div className="w-full max-w-[340px]" style={{ maxWidth: 'min(340px, 52vh)' }}>
             <CrachaVirtual pessoa={pessoa ?? pessoaDoPerfil} semQr={semFuncionario || inativo} />
           </div>
-
-          {inativo && !semFuncionario && (
-            <div className="neu-flat rounded-2xl p-4 border border-amber-500/20 flex items-start gap-2.5 max-w-sm">
-              <AlertTriangle size={15} className="text-amber-400 shrink-0 mt-0.5" />
-              <p className="text-[11px] text-gray-400 leading-relaxed">
-                Seu cadastro de funcionário está <span className="text-gray-300 font-semibold">inativo</span>,
-                então este crachá não registra presença. Procure o RH ou o professor.
-              </p>
-            </div>
-          )}
-
-          {semFuncionario && (
-            <div className="neu-flat rounded-2xl p-4 border border-amber-500/20 flex items-start gap-2.5 max-w-sm">
-              <AlertTriangle size={15} className="text-amber-400 shrink-0 mt-0.5" />
-              <p className="text-[11px] text-gray-400 leading-relaxed">
-                Sua conta ainda não está ligada a um cadastro de funcionário, então este crachá
-                identifica você mas <span className="text-gray-300 font-semibold">não registra
-                presença</span>. Peça ao professor para fazer o vínculo em Usuários — feito isso,
-                o QR aparece aqui sozinho.
-              </p>
-            </div>
-          )}
-          <button
-            type="button"
-            onClick={() => window.print()}
-            className="cracha-controles inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-[10px] font-bold uppercase tracking-widest border border-white/15 text-gray-400 hover:text-accent hover:border-accent/40 transition-colors"
-          >
-            <Printer size={12} /> Imprimir
-          </button>
-          <p className="text-[11px] text-gray-600 text-center max-w-sm leading-relaxed">
-            Não precisa imprimir: mostrar a tela do celular basta. O papel serve para o dia
-            em que o celular ficar sem bateria.
-          </p>
         </div>
       )}
     </motion.div>

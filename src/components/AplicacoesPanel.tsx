@@ -4,7 +4,7 @@ import {
   PiggyBank, Plus, X, TrendingUp, Lock, CalendarClock, Landmark, Info,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
-import { NeuButtonAccent } from './ui';
+import { NeuButtonAccent, CardContador } from './ui';
 import { useFetchData } from '../hooks/useSupabaseData';
 import { formatBRL, parseBRL } from '../lib/viewUtils';
 import { projetarResgate, calcularResgate } from '../lib/aplicacoes';
@@ -73,7 +73,7 @@ export function AplicacoesPanel({
   // A tela de cima recarrega saldo/capital: aplicar e resgatar mexem no caixa.
   onMovimentou?: () => void;
 }) {
-  const [modalAplicar, setModalAplicar] = useState(false);
+  const [modalAplicar, setModalAplicar] = useState<string | null>(null);
   const [resgateAlvo, setResgateAlvo] = useState<Aplicacao | null>(null);
 
   const { data: bancosRaw = [] } =
@@ -104,191 +104,187 @@ export function AplicacoesPanel({
 
   const recarregar = () => { reload(); reloadContas(); onMovimentou?.(); };
 
+  const maiorTaxa = bancos.reduce((m, b) => Math.max(m, Number(b.taxa_mensal)), 0);
+
   return (
-    <div className="flex flex-col gap-4">
-      <div className="neu-flat rounded-3xl p-5 border border-accent/20">
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-2">
-            <PiggyBank size={15} className="text-accent" />
-            <span className="text-[10px] font-black uppercase tracking-widest text-gray-500">
-              Aplicações — {filial}
-            </span>
-          </div>
-          <button
-            onClick={() => setModalAplicar(true)}
-            className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-xl bg-accent/10 text-accent border border-accent/20 hover:bg-accent/20 transition-colors"
-          >
-            <Plus size={12} /> Aplicar
-          </button>
-        </div>
+    <div className="flex flex-col gap-5">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h3 className="text-sm font-bold text-gray-200 flex items-center gap-2">
+          <PiggyBank size={16} className="text-accent" /> Aplicações — {filial}
+        </h3>
+        <NeuButtonAccent onClick={() => setModalAplicar(bancos[0]?.id ?? '')}>
+          <Plus size={14} /> Aplicar
+        </NeuButtonAccent>
+      </div>
 
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <span className="text-[10px] uppercase tracking-widest text-gray-500">Aplicado</span>
-            <p className="text-2xl font-black text-accent tabular-nums mt-0.5">{BRL(totalAplicado)}</p>
-          </div>
-          <div>
-            <span className="text-[10px] uppercase tracking-widest text-gray-500">Rendimento acumulado</span>
-            <p className="text-2xl font-black text-green-400 tabular-nums mt-0.5">{BRL(totalRendendo)}</p>
-          </div>
-        </div>
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <CardContador label="Aplicado agora" value={BRL(totalAplicado)} tom="dourado" />
+        <CardContador label="Rendimento acumulado" value={BRL(totalRendendo)} tom="verde" />
+        <CardContador label="Contratos ativos" value={vivas.length} tom="azul" />
+        <CardContador label="Resgatadas" value={resgatadas.length} />
+      </div>
 
-        {/* O fluxo inteiro em quatro passos. Sem isto a tela vira um formulário
-            sem história: o aluno aplica, não vê número nenhum aparecer (o mês
-            não fechou) e conclui que está quebrado. */}
-        <ol className="text-[11px] text-gray-500 mt-4 leading-relaxed flex flex-col gap-1 list-decimal list-inside">
+      {/* O fluxo em quatro passos: sem ele o aluno aplica, não vê rendimento
+          (o mês não fechou) e conclui que está quebrado. */}
+      <details className="-mt-1">
+        <summary className="text-xs font-bold text-gray-400 cursor-pointer hover:text-accent select-none w-fit">Como funciona</summary>
+        <ol className="text-[11px] text-gray-500 mt-2 leading-relaxed flex flex-col gap-1 list-decimal list-inside">
           <li>A Matriz define a taxa e a carência de cada banco.</li>
           <li>A unidade aplica: o valor <strong className="text-gray-400">sai do caixa</strong> e fica preso — não paga fornecedor nem folha.</li>
           <li>A direção fecha o mês; o rendimento só cresce nesses fechamentos.</li>
           <li>No resgate volta o principal + o rendimento, já <strong className="text-gray-400">descontado o IR</strong>, e o rendimento entra como receita financeira.</li>
         </ol>
-      </div>
+      </details>
 
-      {/* A praça: o que cada banco oferece hoje */}
-      <div className="neu-flat rounded-3xl p-5 border border-white/5">
-        <span className="text-[10px] font-black uppercase tracking-widest text-gray-500">
-          Onde aplicar
-        </span>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-3">
-          {bancos.map(b => (
-            <div key={b.id} className="neu-pressed rounded-2xl p-3 flex flex-col gap-1">
-              <div className="flex items-center justify-between gap-2">
-                <span className="text-sm font-bold text-gray-100">{b.nome}</span>
-                <span className="text-sm font-black text-green-400 tabular-nums">
-                  {TAXA(b.taxa_mensal)}% a.m.
-                </span>
-              </div>
-              <div className="flex items-center gap-2 flex-wrap text-[10px] text-gray-500">
-                <span className="px-1.5 py-0.5 rounded-full bg-white/5">{b.produto}</span>
-                {b.pct_cdi != null && <span>{Number(b.pct_cdi).toFixed(0)}% do CDI</span>}
-                {b.carencia_meses > 0
-                  ? <span className="flex items-center gap-0.5 text-amber-400">
-                      <Lock size={9} /> carência {b.carencia_meses}m
-                    </span>
-                  : <span className="text-sky-400">resgate imediato</span>}
-                {b.isento_ir && <span className="text-green-400">isento de IR</span>}
-              </div>
-            </div>
-          ))}
-          {bancos.length === 0 && (
-            <p className="text-sm text-gray-500">
-              Nenhum banco cadastrado. A Matriz define a praça em Capital &gt; Configuração.
-            </p>
-          )}
-        </div>
-      </div>
-
-      {/* Contratos vivos */}
+      {/* Contratos vivos primeiro: é o dinheiro que já está fora do caixa. */}
       {vivas.length > 0 && (
-        <div className="flex flex-col gap-2">
-          <span className="text-[10px] font-black uppercase tracking-widest text-gray-500">
-            Aplicado agora ({vivas.length})
-          </span>
+        <section className="flex flex-col gap-2">
+          <h4 className="text-[10px] font-black uppercase tracking-widest text-gray-500">Aplicado agora</h4>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
           {vivas.map(a => {
             const preso = a.meses_rendidos < a.carencia_meses;
             const r = calcularResgate(
               Number(a.valor_aplicado), Number(a.rendimento_bruto),
               a.meses_rendidos, a.isento_ir,
             );
+            const pctCarencia = a.carencia_meses > 0 ? Math.min(100, (a.meses_rendidos / a.carencia_meses) * 100) : 100;
             return (
-              <div key={a.id} className="neu-flat rounded-2xl p-4 border border-white/5 flex flex-col gap-2">
+              <div key={a.id} className={`neu-flat rounded-2xl p-4 border flex flex-col gap-3 ${preso ? 'border-amber-500/30' : 'border-green-600/40'}`}>
                 <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <p className="text-sm font-bold text-gray-100">{a.banco_nome}</p>
-                    <p className="text-[11px] text-gray-500">
-                      {a.produto} · {TAXA(a.taxa_mensal)}% a.m. ·{' '}
-                      {a.meses_rendidos} mês(es) fechado(s)
-                    </p>
+                  <div className="min-w-0">
+                    <p className="text-sm font-bold text-gray-100 truncate">{a.banco_nome}</p>
+                    <p className="text-[11px] text-gray-500">{a.produto} · {TAXA(a.taxa_mensal)}% a.m.</p>
                   </div>
-                  <div className="text-right">
-                    <p className="text-base font-black text-gray-100 tabular-nums">
-                      {BRL(Number(a.valor_aplicado))}
-                    </p>
-                    <p className="text-[11px] font-bold text-green-400 tabular-nums">
-                      + {BRL(Number(a.rendimento_bruto))}
-                    </p>
+                  <div className="text-right shrink-0">
+                    <p className="text-lg font-black text-gray-100 tabular-nums leading-tight">{BRL(Number(a.valor_aplicado))}</p>
+                    <p className="text-xs font-bold text-green-400 tabular-nums">+ {BRL(Number(a.rendimento_bruto))}</p>
                   </div>
                 </div>
-                {a.meses_rendidos === 0 && (
-                  <p className="text-[10px] text-amber-400 flex items-center gap-1">
-                    <CalendarClock size={10} className="shrink-0" />
-                    Ainda não rendeu: o rendimento aparece quando a direção fechar o mês.
-                  </p>
+
+                {a.carencia_meses > 0 && (
+                  <div>
+                    <div className="flex justify-between text-[11px] text-gray-500 mb-1">
+                      <span>Carência</span>
+                      <span className="tabular-nums">{Math.min(a.meses_rendidos, a.carencia_meses)} de {a.carencia_meses} mês(es)</span>
+                    </div>
+                    <div className="h-1.5 rounded-full bg-white/10 overflow-hidden">
+                      <div className={`h-full rounded-full ${preso ? 'bg-amber-500' : 'bg-green-500'}`} style={{ width: `${pctCarencia}%` }} />
+                    </div>
+                  </div>
                 )}
+
                 <div className="flex items-center justify-between gap-2">
-                  <span className="text-[10px] text-gray-500">
-                    {preso
-                      ? `Preso por mais ${a.carencia_meses - a.meses_rendidos} fechamento(s) de mês`
-                      : a.isento_ir
-                        ? `Resgate livre · isento de IR · volta ${BRL(r.creditado)}`
-                        : `Resgate livre · IR ${PCT(r.irPct)}% · volta ${BRL(r.creditado)}`}
+                  <span className={`text-[11px] ${a.meses_rendidos === 0 ? 'text-amber-400' : 'text-gray-500'}`}>
+                    {a.meses_rendidos === 0
+                      ? 'Rende a partir do primeiro fechamento de mês'
+                      : preso
+                        ? `${a.meses_rendidos} mês(es) rendido(s)`
+                        : `Volta ${BRL(r.creditado)} · ${a.isento_ir ? 'isento de IR' : `IR ${PCT(r.irPct)}%`}`}
                   </span>
-                  {/* O professor destrava a carência (a RPC aceita role='admin'
-                      literal). Para todo mundo o botão fica travado, e o motivo
-                      está escrito ao lado — botão morto sem explicação é o que
-                      faz o aluno achar que o sistema quebrou. */}
-                  <button
-                    onClick={() => setResgateAlvo(a)}
-                    disabled={preso && !ehProfessor}
-                    className={`text-xs px-3 py-1.5 rounded-xl border transition-colors ${
-                      preso && !ehProfessor
-                        ? 'text-gray-600 border-white/5 cursor-not-allowed'
-                        : preso
-                          ? 'bg-amber-500/10 text-amber-300 border-amber-500/30 hover:bg-amber-500/20'
-                          : 'bg-accent/10 text-accent border-accent/20 hover:bg-accent/20'
-                    }`}
-                  >
-                    {preso
-                      ? ehProfessor
-                        ? <span className="flex items-center gap-1"><Lock size={11} /> Resgatar antecipado</span>
-                        : <span className="flex items-center gap-1"><Lock size={11} /> Em carência</span>
-                      : 'Resgatar'}
+                  {/* O professor destrava a carência (a RPC aceita role='admin' literal);
+                      para os demais o botão fica travado e diz por quê. */}
+                  <button onClick={() => setResgateAlvo(a)} disabled={preso && !ehProfessor}
+                    className={`shrink-0 btn-solido !py-1.5 !px-3 !text-[11px] ${
+                      preso && !ehProfessor ? 'btn-solido--cinza opacity-50 cursor-not-allowed'
+                      : preso ? 'btn-solido--laranja' : 'btn-solido--verde'}`}>
+                    {preso ? <><Lock size={12} /> {ehProfessor ? 'Resgatar antecipado' : 'Em carência'}</> : 'Resgatar'}
                   </button>
                 </div>
               </div>
             );
           })}
-        </div>
+          </div>
+        </section>
       )}
+
+      {/* A praça: o que cada banco oferece hoje */}
+      <section className="flex flex-col gap-2">
+        <h4 className="text-[10px] font-black uppercase tracking-widest text-gray-500">Onde aplicar</h4>
+        {bancos.length === 0 ? (
+          <p className="text-sm text-gray-500">Nenhum banco cadastrado. A Matriz define a praça em Capital › Configurações.</p>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
+            {bancos.map(b => {
+              const melhor = Number(b.taxa_mensal) === maiorTaxa && bancos.length > 1;
+              return (
+                <div key={b.id} className={`neu-flat rounded-2xl p-4 border flex flex-col gap-3 ${melhor ? 'border-green-600/50' : 'border-white/5'}`}>
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="text-sm font-bold text-gray-100 truncate">{b.nome}</p>
+                      <p className="text-[11px] text-gray-500">{b.produto}{b.pct_cdi != null && ` · ${Number(b.pct_cdi).toFixed(0)}% do CDI`}</p>
+                    </div>
+                    {melhor && (
+                      <span className="shrink-0 px-2 py-0.5 rounded-md bg-green-600 text-white text-[10px] font-black uppercase tracking-widest">Maior taxa</span>
+                    )}
+                  </div>
+                  <p className="text-2xl font-black text-green-400 tabular-nums leading-none">
+                    {TAXA(b.taxa_mensal)}% <span className="text-xs font-bold text-gray-500">ao mês</span>
+                  </p>
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    {b.carencia_meses > 0
+                      ? <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-amber-500 text-black text-[10px] font-black">
+                          <Lock size={10} /> Carência {b.carencia_meses}m
+                        </span>
+                      : <span className="px-2 py-0.5 rounded-md bg-sky-600 text-white text-[10px] font-black">Resgate imediato</span>}
+                    {b.isento_ir && <span className="px-2 py-0.5 rounded-md bg-green-600 text-white text-[10px] font-black">Isento de IR</span>}
+                  </div>
+                  <button type="button" onClick={() => setModalAplicar(b.id)}
+                    className="mt-auto self-start text-xs font-bold text-accent hover:underline flex items-center gap-1">
+                    <Plus size={12} /> Aplicar aqui
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </section>
 
       {vivas.length === 0 && (
-        <div className="neu-pressed rounded-2xl p-5 text-center">
-          <p className="text-sm text-gray-500">
-            Nada aplicado. Caixa parado não rende — mas dinheiro aplicado não paga conta.
-          </p>
-        </div>
+        <p className="text-sm text-gray-500 text-center py-2">
+          Nada aplicado. Caixa parado não rende — mas dinheiro aplicado não paga conta.
+        </p>
       )}
 
-      {/* Histórico */}
       {resgatadas.length > 0 && (
-        <div className="flex flex-col gap-2">
-          <span className="text-[10px] font-black uppercase tracking-widest text-gray-500">
-            Resgatadas ({resgatadas.length})
-          </span>
-          {resgatadas.map(a => (
-            <div key={a.id} className="neu-flat rounded-2xl p-3 border border-white/5 flex items-center justify-between gap-3 opacity-70">
-              <div>
-                <p className="text-xs font-bold text-gray-300">{a.banco_nome}</p>
-                <p className="text-[10px] text-gray-500">
-                  {BRL(Number(a.valor_aplicado))} por {a.meses_rendidos} mês(es)
-                  {a.ir_retido != null && Number(a.ir_retido) > 0
-                    ? ` · IR R$ ${Number(a.ir_retido).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
-                    : ' · isento de IR'}
-                </p>
-              </div>
-              <p className="text-sm font-bold text-green-400 tabular-nums">
-                {a.valor_resgatado != null ? BRL(Number(a.valor_resgatado)) : '—'}
-              </p>
-            </div>
-          ))}
-        </div>
+        <section className="neu-flat rounded-2xl p-4 border border-white/5 flex flex-col gap-3">
+          <h4 className="text-sm font-bold text-gray-200">Resgatadas</h4>
+          <div className="overflow-x-auto main-scrollbar">
+            <table className="tabela w-full text-left min-w-[520px]">
+              <thead>
+                <tr className="text-[10px] uppercase tracking-widest">
+                  <th className="py-2.5 px-3 font-bold">Banco</th>
+                  <th className="py-2.5 px-3 font-bold text-center">Aplicado</th>
+                  <th className="py-2.5 px-3 font-bold text-center">Meses</th>
+                  <th className="py-2.5 px-3 font-bold text-center">IR</th>
+                  <th className="py-2.5 px-3 font-bold text-center">Resgatado</th>
+                </tr>
+              </thead>
+              <tbody className="text-sm">
+                {resgatadas.map(a => (
+                  <tr key={a.id}>
+                    <td className="py-2.5 px-3 font-semibold text-gray-200">{a.banco_nome}</td>
+                    <td className="py-2.5 px-3 tabular-nums text-gray-300">{BRL(Number(a.valor_aplicado))}</td>
+                    <td className="py-2.5 px-3 tabular-nums text-gray-400">{a.meses_rendidos}</td>
+                    <td className="py-2.5 px-3 tabular-nums text-red-300">
+                      {a.ir_retido != null && Number(a.ir_retido) > 0 ? BRL(Number(a.ir_retido)) : 'isento'}
+                    </td>
+                    <td className="py-2.5 px-3 tabular-nums font-bold text-green-400">
+                      {a.valor_resgatado != null ? BRL(Number(a.valor_resgatado)) : '—'}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
       )}
 
       <AnimatePresence>
-        {modalAplicar && (
+        {modalAplicar !== null && (
           <ModalAplicar
             filial={filial} bancos={bancos} contas={contasDaUnidade} profile={profile}
-            onClose={() => setModalAplicar(false)}
+            bancoInicial={modalAplicar}
+            onClose={() => setModalAplicar(null)}
             onSaved={recarregar} showToast={showToast}
           />
         )}
@@ -306,13 +302,14 @@ export function AplicacoesPanel({
 
 // ── Modal: aplicar ─────────────────────────────────────────────────────────
 function ModalAplicar({
-  filial, bancos, contas, onClose, onSaved, showToast,
+  filial, bancos, contas, bancoInicial, onClose, onSaved, showToast,
 }: {
   filial: string; bancos: BancoInvestimento[]; contas: Conta[];
   profile: UserProfile | null;
+  bancoInicial?: string;
   onClose: () => void; onSaved: () => void; showToast: (m: string, t?: string) => void;
 }) {
-  const [bancoId, setBancoId] = useState(bancos[0]?.id ?? '');
+  const [bancoId, setBancoId] = useState(bancoInicial || bancos[0]?.id || '');
   const [contaId, setContaId] = useState(contas[0]?.id ?? '');
 
   // As duas listas chegam por fetch, e o modal pode abrir antes delas. O
@@ -369,7 +366,7 @@ function ModalAplicar({
       <motion.div
         initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}
         exit={{ opacity: 0, scale: 0.95 }} transition={{ duration: 0.18 }}
-        className="neu-flat rounded-3xl p-6 w-full max-w-md border border-accent/20 flex flex-col gap-4 max-h-[90vh] overflow-y-auto"
+        className="neu-flat rounded-2xl p-6 w-full max-w-md border border-accent/20 flex flex-col gap-4 max-h-[90vh] overflow-y-auto"
         onClick={e => e.stopPropagation()}
       >
         <div className="flex items-center justify-between">
@@ -526,7 +523,7 @@ function ModalResgatar({
       <motion.div
         initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}
         exit={{ opacity: 0, scale: 0.95 }} transition={{ duration: 0.18 }}
-        className="neu-flat rounded-3xl p-6 w-full max-w-sm border border-accent/20 flex flex-col gap-4"
+        className="neu-flat rounded-2xl p-6 w-full max-w-sm border border-accent/20 flex flex-col gap-4"
         onClick={e => e.stopPropagation()}
       >
         <div className="flex items-center justify-between">

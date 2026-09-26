@@ -1514,10 +1514,6 @@ const PDVViewInner = ({ showToast, profile, filialInicial, onVoltar }: {
             ? <><Loader2 size={16} className="animate-spin" /> Abrindo…</>
             : <>Abrir caixa (Enter)</>}
         </button>
-        <p className="text-[10px] text-gray-600 text-center leading-relaxed">
-          O Financeiro é avisado da abertura e confere os valores no fechamento,
-          em <span className="text-gray-500 font-bold">Controle de Caixa</span>.
-        </p>
       </div>
 
       <div className="flex gap-3 flex-wrap justify-center">
@@ -1885,7 +1881,7 @@ const PDVViewInner = ({ showToast, profile, filialInicial, onVoltar }: {
             }`}
             style={{ overscrollBehavior: 'contain' }}>
             {filtered.length === 0 ? (
-              <div className={`${filialMeta.layout === 'tech' ? 'xl:col-span-2' : 'col-span-3'} flex flex-col items-center justify-center py-16 gap-3 text-center`}>
+              <div className={`col-span-full flex flex-col items-center justify-center py-16 gap-3 text-center`}>
                 <div className="w-14 h-14 rounded-2xl flex items-center justify-center"
                   style={{ background: 'rgba(0,0,0,0.04)', border: '1px dashed rgba(0,0,0,0.18)' }}>
                   <Package size={26} strokeWidth={1.5} style={{ color: '#a3a3a3' }} />

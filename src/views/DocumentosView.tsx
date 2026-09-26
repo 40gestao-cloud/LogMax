@@ -302,9 +302,6 @@ function ModalDocumento({
               <div className="neu-pressed rounded-xl px-3 py-2.5 text-sm text-gray-100">
                 Somente {filialDoEmissor || '—'}
               </div>
-              <p className="text-[10px] text-gray-500 mt-1">
-                A equipe da sua unidade. Documento para todas as unidades é da Matriz.
-              </p>
             </>
           ) : (
             <select
@@ -324,10 +321,7 @@ function ModalDocumento({
               <FileText size={14} className="text-accent shrink-0" />
               <span className="truncate">{doc!.arquivo_nome}{doc!.arquivo_tamanho ? ` · ${tamanhoLegivel(doc!.arquivo_tamanho)}` : ''}</span>
             </div>
-            <p className="text-[10px] text-gray-500 mt-1">
-              O arquivo não se troca depois de publicado — quem já confirmou a leitura continuaria
-              confirmado sobre outro conteúdo. Para trocar, exclua e publique de novo.
-            </p>
+            <p className="text-[10px] text-gray-500 mt-1">Publicado não troca de arquivo — exclua e publique de novo.</p>
           </div>
         ) : (
           <div className="flex flex-col gap-1">

@@ -679,7 +679,8 @@ const RecebimentosViewInner = ({ showToast, filial }: { showToast: any; filial: 
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
             <div className="neu-flat rounded-2xl p-6 border border-white/5 flex flex-col gap-4">
               <h3 className="text-sm font-bold text-gray-200">Novo Recebimento</h3>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div className="sm:col-span-2">
                 <FormField label="Pedido *" error={errors.pedido_id}><select className={`neu-input py-2 px-3 rounded-xl text-sm ${errors.pedido_id ? 'border border-red-500/40' : ''}`} value={form.pedido_id} onChange={e => { setForm(f => ({ ...f, pedido_id: e.target.value })); clearError('pedido_id'); }}><option value="">Selecione...</option>{pedidosAtivos.map((p: any) => {
                   const desc = p.item_descricao ?? p.req?.item ?? '';
                   const s = saldos[p.id];
@@ -696,9 +697,8 @@ const RecebimentosViewInner = ({ showToast, filial }: { showToast: any; filial: 
                   const selo = p.servico_id ? ' [serviço]' : '';
                   return <option key={p.id} value={p.id} disabled={esgotado}>{numeroPedido(p)}{selo}{desc ? ` — ${desc}` : ''}{sufSaldo}{esgotado ? (pendenteDeConfirmar ? ' (carga já lançada — falta confirmar abaixo)' : ' (recebido totalmente)') : ''}</option>;
                 })}</select></FormField>
-                {/* A unidade é a do produto do pedido — mercearia recebe 12,5 KG
-                    (migr. 439). `type=number` recusava a vírgula do teclado pt-BR
-                    e devolvia campo vazio. */}
+                </div>
+                {/* A unidade é a do produto do pedido (migr. 439). */}
                 <QuantidadeEmbalagem
                   label="Qtd Recebida"
                   unidade={unidadePedidoSel}
@@ -713,10 +713,6 @@ const RecebimentosViewInner = ({ showToast, filial }: { showToast: any; filial: 
                     max={todayBR()}
                     value={extras.data}
                     onChange={e => setExtras(x => ({ ...x, data: e.target.value }))} />
-                  <p className="text-[10px] text-gray-500 mt-1 leading-relaxed">
-                    Quando a carga chegou de verdade, não quando você está lançando. É esta data
-                    que mede a pontualidade do fornecedor.
-                  </p>
                 </FormField>
                 <FormField label="Nota fiscal — número">
                   <div className="flex gap-2">
@@ -724,19 +720,13 @@ const RecebimentosViewInner = ({ showToast, filial }: { showToast: any; filial: 
                       value={extras.nf_numero}
                       onChange={e => setExtras(x => ({ ...x, nf_numero: e.target.value }))}
                       placeholder="Ex.: 000123456" />
-                    {/* Sequencial, não sorteado — lê o maior número já usado
-                        nesta filial e sugere o próximo. Mesma régua do Gerar
-                        de código em Cadastros > Produtos. */}
+                    {/* Sequencial: o próximo depois do maior número da filial. */}
                     <button type="button"
                       onClick={() => setExtras(x => ({ ...x, nf_numero: proximoNumeroNfDeMaior(resumo.maxNf) }))}
                       className="neu-button py-2 px-3 rounded-xl text-[11px] font-bold text-gray-400 hover:text-accent shrink-0">
                       Gerar
                     </button>
                   </div>
-                  <p className="text-[10px] text-gray-500 mt-1 leading-relaxed">
-                    O documento que veio com a carga. Pode ficar em branco agora, mas sem ele a
-                    entrada não é confirmada — e o financeiro não tem o que conferir contra o pedido.
-                  </p>
                 </FormField>
                 <FormField label="Nota — série">
                   <input className="neu-input py-2 px-3 rounded-xl text-sm"
@@ -905,11 +895,6 @@ const RecebimentosViewInner = ({ showToast, filial }: { showToast: any; filial: 
                                     <Lock size={11} className="text-gray-500 shrink-0" />
                                     {nomeDoServico(item.pedido_id) ?? descricaoDoPedido(item.pedido_id) ?? '—'}
                                   </div>
-                                  <p className="text-[10px] text-gray-500 leading-snug">
-                                    Isto é um <span className="text-gray-300 font-semibold">aceite</span>, não uma entrada:
-                                    você está atestando que o serviço foi executado. Nada entra no estoque —
-                                    serviço não tem saldo. O que a confirmação faz é liberar o pagamento.
-                                  </p>
                                 </div>
                                 ) : produtoDoPedido(item.pedido_id) ? (
                                 <div className="flex flex-col gap-1 flex-1 min-w-0 sm:min-w-[180px]">
@@ -919,10 +904,6 @@ const RecebimentosViewInner = ({ showToast, filial }: { showToast: any; filial: 
                                     {produtos.find((p: any) => p.id === produtoDoPedido(item.pedido_id))?.nome
                                       ?? descricaoDoPedido(item.pedido_id) ?? '—'}
                                   </div>
-                                  <p className="text-[10px] text-gray-500">
-                                    Definido no pedido, herdado da requisição. Chegou outra coisa? Não confirme —
-                                    registre a divergência com Compras.
-                                  </p>
                                 </div>
                                 ) : (
                                 <div className="flex flex-col gap-1 flex-1 min-w-0 sm:min-w-[180px]">
@@ -946,38 +927,9 @@ const RecebimentosViewInner = ({ showToast, filial }: { showToast: any; filial: 
                                     </option>
                                     {produtosOrdenados.map((p: any) => <option key={p.id} value={p.id}>{p.nome} (saldo: {qtdBR(p.estoque ?? 0)} {normalizarUnidade(p.unidade)})</option>)}
                                   </select>
-                                  {/* Catálogo vazio é o estado normal de turma nova: nenhum
-                                      produto cadastrado ainda, e todo pedido é compra eventual.
-                                      A lista abria muda e o conferente ficava clicando no
-                                      <select> sem entender por que não havia opção — o aviso
-                                      abaixo era um parágrafo cinza de rodapé que ninguém lia.
-                                      Sem produto no catálogo não há o que escolher, e a tela
-                                      passa a dizer isso primeiro. */}
-                                  {/* "já aparece lá como sugestão" foi lido como
-                                      "o produto já está cadastrado, é só escolher" —
-                                      e não é: a sugestão é do campo "Item comprado"
-                                      DENTRO do formulário de cadastro, que preenche
-                                      nome, fornecedor e custo. Ainda há uma ficha a
-                                      completar. O texto agora diz o caminho na
-                                      ordem em que se clica. */}
-                                  {catalogoVazio ? (
-                                  <p className="text-[10px] leading-snug text-amber-300/90">
-                                    O catálogo desta unidade ainda está vazio — não há o que listar aqui.
-                                    Vá em <span className="font-semibold">Cadastros &gt; Produtos &gt; Novo</span>,
-                                    escolha “{descricaoDoPedido(item.pedido_id) || 'o item deste pedido'}” no campo
-                                    <span className="font-semibold"> Item comprado</span> (ele traz nome, fornecedor e custo deste pedido),
-                                    complete a ficha e salve — o produto nasce com saldo zero, e é o certo.
-                                    Depois volte nesta linha e clique em Confirmar: é aqui que a quantidade entra no estoque.
+                                  <p className={`text-[10px] ${catalogoVazio ? 'text-amber-300/90' : 'text-gray-500'}`}>
+                                    Não está na lista? Cadastre em <span className="font-semibold">Cadastros &gt; Produtos</span> com esta requisição.
                                   </p>
-                                  ) : (
-                                  <p className="text-[10px] text-gray-500 leading-snug">
-                                    Compra eventual não vem do catálogo, então o produto é escolhido aqui.
-                                    Não está na lista? Cadastre em <span className="text-gray-300 font-semibold">Cadastros &gt; Produtos &gt; Novo</span>,
-                                    escolhendo “{descricaoDoPedido(item.pedido_id) || 'o item deste pedido'}” no campo
-                                    <span className="text-gray-300 font-semibold"> Item comprado</span> — ele já traz fornecedor e custo deste pedido.
-                                    Salve com saldo zero e volte aqui para confirmar a entrada.
-                                  </p>
-                                  )}
                                 </div>
                                 )}
                                 {filialTemValidade && !ehServico(item.pedido_id) && (<>
@@ -1012,13 +964,11 @@ const RecebimentosViewInner = ({ showToast, filial }: { showToast: any; filial: 
                                   </label>
                                   <input id={`receb-validade-${item.id}`} type="date" className="neu-input py-2 px-3 rounded-xl text-xs w-full"
                                     value={confirmValidade} onChange={e => setConfirmValidade(e.target.value)} />
-                                  <span className="text-[10px] text-gray-500 leading-snug">
-                                    {dias !== null && sugerida
-                                      ? <>Calculada: {dias} dia(s) do cadastro a partir de {fmtDataBR(item.data)}. Ajuste se a caixa vier com outra.</>
-                                      : perec
-                                        ? <span className="text-amber-400/90">Perecível sem prazo no cadastro — informe a data à mão.</span>
-                                        : <>Só para perecível.</>}
-                                  </span>
+                                  {dias !== null && sugerida ? (
+                                    <span className="text-[10px] text-gray-500">{dias} dia(s) desde {fmtDataBR(item.data)}</span>
+                                  ) : perec ? (
+                                    <span className="text-[10px] text-amber-400/90">Informe a data</span>
+                                  ) : null}
                                 </div>
                                   );
                                 })()}
@@ -1039,13 +989,7 @@ const RecebimentosViewInner = ({ showToast, filial }: { showToast: any; filial: 
                                       placeholder={'359123456789012\n359123456789013'}
                                       value={confirmImeis}
                                       onChange={e => setConfirmImeis(e.target.value)} />
-                                    {/* O número mora na caixa, e a caixa está
-                                        aqui — por isso o campo continua no
-                                        recebimento. O que não cabe na aula é
-                                        digitar 30 números de 15 dígitos: o botão
-                                        gera a lista inteira do tamanho da carga,
-                                        com TAC do modelo e dígito de Luhn, igual
-                                        ao "Gerar" do EAN em Cadastros. */}
+                                    {/* Gera a lista do tamanho da carga, com TAC do modelo e dígito de Luhn. */}
                                     <button
                                       type="button"
                                       onClick={async () => {
@@ -1059,18 +1003,9 @@ const RecebimentosViewInner = ({ showToast, filial }: { showToast: any; filial: 
                                     >
                                       Gerar {Math.floor(parseQtd(item.qtd_recebida)) || 0} número(s)
                                     </button>
-                                    <span className="text-[10px] text-gray-500 leading-snug">
-                                      Um número por linha. É o que liga o aparelho ao cliente na venda — sem ele,
-                                      garantia e recall não têm resposta. Sem as caixas na mão, use o Gerar: os 8
-                                      primeiros dígitos são do modelo, como no aparelho de verdade.
-                                    </span>
                                   </div>
                                 )}
-                                {/* A nota é o documento da carga, e a doca é quem o tem
-                                    na mão. Valor não aparece aqui de propósito: quem
-                                    confere preço é o financeiro, contra o pedido (migr.
-                                    491) — conferente que enxerga valor é conferente que
-                                    "ajusta" a nota para a carga passar. */}
+                                {/* Sem valor de propósito: quem confere preço é o financeiro (migr. 491). */}
                                 <div className="flex flex-col gap-1 basis-full sm:basis-auto sm:flex-1 sm:min-w-[200px]">
                                   <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Nota fiscal *</span>
                                   <div className="flex gap-2">
@@ -1093,21 +1028,8 @@ const RecebimentosViewInner = ({ showToast, filial }: { showToast: any; filial: 
                                     max={todayBR()}
                                     value={confirmNf.emissao}
                                     onChange={e => setConfirmNf(n => ({ ...n, emissao: e.target.value }))} />
-                                  <p className="text-[10px] text-gray-500 leading-snug">
-                                    {ehServico(item.pedido_id)
-                                      ? <>Serviço também tem nota — sem ela o financeiro não tem o que conferir e a
-                                          conta fica impagável. O valor não é digitado aqui: quem confere quanto está
-                                          sendo cobrado é o financeiro, contra o pedido.</>
-                                      : <>Sem nota a mercadoria não entra. O valor não é digitado aqui — quem
-                                          confere quanto está sendo cobrado é o financeiro, contra o pedido.</>}
-                                  </p>
                                 </div>
-                                {/* Era um <select> com "Concluído" pré-selecionado,
-                                    logo abaixo do saldo que a própria tela imprime:
-                                    a pergunta já estava respondida ali em cima, e a
-                                    resposta errada ou trancava o pagamento para
-                                    sempre ou fechava o pedido com carga por chegar
-                                    (migr. 489). Agora é leitura. */}
+                                {/* Status sai do saldo do pedido, não de escolha (migr. 489). */}
                                 {(() => {
                                   const conf = conferenciaDo(item);
                                   if (!conf.conhecido) {
@@ -1128,16 +1050,7 @@ const RecebimentosViewInner = ({ showToast, filial }: { showToast: any; filial: 
                                             ? 'Concluído — encerrado com falta'
                                             : `Parcial — faltam ${qtdBR(conf.falta)}`}
                                       </div>
-                                      <p className="text-[10px] text-gray-500 leading-snug">
-                                        {conf.fecha
-                                          ? 'A quantidade fechou. O pedido encerra e a conta do fornecedor libera para pagamento.'
-                                          : ehServico(item.pedido_id)
-                                            ? 'Vem do saldo do pedido, não de escolha: o que foi executado fica aceito agora e o contrato continua aberto, esperando o resto.'
-                                            : 'Vem do saldo do pedido, não de escolha: o que chegou entra no estoque agora e o pedido continua em entrega, esperando o resto.'}
-                                      </p>
-                                      {/* A saída para o caso real: o fornecedor avisou
-                                          que não manda o resto. Existe, mas é ato
-                                          deliberado e com motivo — não o default. */}
+                                      {/* Fornecedor avisou que não manda o resto: ato deliberado, com motivo. */}
                                       {!conf.fecha && (
                                         <div className="mt-1.5 flex flex-col gap-1.5">
                                           <label className="flex items-start gap-2 cursor-pointer">
@@ -1153,10 +1066,9 @@ const RecebimentosViewInner = ({ showToast, filial }: { showToast: any; filial: 
                                               <textarea rows={2} className="neu-input py-2 px-3 rounded-xl text-xs w-full resize-none"
                                                 value={motivoEncerramento}
                                                 onChange={e => setMotivoEncerramento(e.target.value)}
-                                                placeholder="O que aconteceu com o que falta? Ex.: fornecedor cancelou o saldo, item descontinuado." />
-                                              <p className="text-[10px] text-amber-300/80 leading-snug">
-                                                O pedido fecha assim mesmo e a conta libera pelo valor cheio do pedido —
-                                                se você pagou por mais do que recebeu, ajuste com o fornecedor.
+                                                placeholder="Motivo. Ex.: fornecedor cancelou o saldo" />
+                                              <p className="text-[10px] text-amber-300/80">
+                                                A conta libera pelo valor cheio do pedido.
                                               </p>
                                             </>
                                           )}
@@ -1222,10 +1134,8 @@ const RecebimentosViewInner = ({ showToast, filial }: { showToast: any; filial: 
                   <X size={14} />
                 </button>
               </div>
-              <p className="text-[11px] text-gray-500 leading-relaxed">
-                Esta entrada foi confirmada sem o número da nota. O estoque já subiu e continua como
-                está — o que falta é o documento, e sem ele o financeiro não consegue conferir o que
-                está sendo cobrado contra o pedido. A conta do fornecedor fica impagável até isso.
+              <p className="text-[11px] text-gray-500">
+                Sem a nota, a conta do fornecedor não pode ser paga.
               </p>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div className="sm:col-span-2">
@@ -1438,11 +1348,6 @@ const ModalDevolucao = ({ item, disponivel, produtoNome, unidade, showToast, onC
             </span>
           </label>
         </div>
-
-        <p className="text-[10px] text-gray-500 leading-snug">
-          Ao confirmar: sai do estoque, a conta a pagar do pedido é abatida pelo valor devolvido
-          (se ainda estiver pendente) e o pedido é encerrado ou reaberto conforme a escolha acima.
-        </p>
 
         <div className="flex gap-3 justify-end pt-1 border-t border-white/5">
           <button onClick={onClose} disabled={saving} className="neu-button py-2 px-5 rounded-xl text-sm text-gray-400">Cancelar</button>

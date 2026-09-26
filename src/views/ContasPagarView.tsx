@@ -523,12 +523,14 @@ const ContasPagarViewInner = ({ showToast, filial }: { showToast: any; filial: F
           <motion.div ref={formEdicaoRef} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="shrink-0">
             <div className="neu-flat rounded-2xl p-6 border border-white/5 flex flex-col gap-4">
               <h3 className="text-sm font-bold text-gray-200">{editItem ? 'Editar Conta' : 'Nova Conta a Pagar'}</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div className="sm:col-span-2">
                 <FormField label="Descrição *" error={errors.descricao}>
                   <input className={`neu-input py-2 px-3 rounded-xl text-sm ${errors.descricao ? 'border border-red-500/40' : ''}`}
                     value={form.descricao} onChange={e => { setForm(f => ({ ...f, descricao: e.target.value })); clearError('descricao'); }}
                     placeholder="Ex: Fornecimento de material" />
                 </FormField>
+                </div>
                 <FormField label="Valor (R$)">
                   <input type="text" inputMode="numeric" className="neu-input py-2 px-3 rounded-xl text-sm tabular-nums"
                     value={extras.valor} onChange={e => setExtras(x => ({ ...x, valor: formatBRL(e.target.value) }))} onKeyDown={handleMoneyKeyDown} placeholder="0,00" />
@@ -549,28 +551,16 @@ const ContasPagarViewInner = ({ showToast, filial }: { showToast: any; filial: F
                   </select>
                 </FormField>
 
-                {/* Migr. 447. O DRE decidia despesa por proxy ("não tem pedido,
-                    logo é despesa") e errava em dois casos: material comprado
-                    por conta avulsa virava despesa aqui e DE NOVO na requisição,
-                    e freezer comprado assim afundava o mês inteiro como se
-                    fosse gasto. Conta de pedido não mostra este campo — ela é
-                    estoque por definição, e o gatilho do banco cobra. */}
+                {/* Migr. 447: conta de pedido é estoque por definição e não mostra o campo. */}
                 {!editItem?.pedido_id && !editItem?.folha_pagamento_id && !editItem?.rescisao_id && (
-                  <FormField label="No que este pagamento vira?">
+                  <FormField label="Natureza">
                     <select className="neu-input py-2 px-3 rounded-xl text-sm"
                       value={extras.natureza}
                       onChange={e => setExtras(x => ({ ...x, natureza: e.target.value }))}>
-                      <option value="despesa">Despesa — consumo do mês (luz, aluguel, serviço)</option>
-                      <option value="estoque">Estoque — vira mercadoria ou material na prateleira</option>
-                      <option value="imobilizado">Imobilizado — bem que fica (freezer, balcão, computador)</option>
+                      <option value="despesa">Despesa (luz, aluguel, serviço)</option>
+                      <option value="estoque">Estoque (mercadoria, material)</option>
+                      <option value="imobilizado">Imobilizado (freezer, balcão)</option>
                     </select>
-                    <p className="text-[10px] text-gray-500 mt-1 leading-snug">
-                      {extras.natureza === 'despesa'
-                        ? 'Entra no DRE no mês do vencimento.'
-                        : extras.natureza === 'estoque'
-                          ? 'Não entra no DRE agora: vira resultado quando o produto for vendido (CMV) ou requisitado pelo setor.'
-                          : 'Não entra no DRE: bem não é gasto. Cadastre o item em Produtos como Patrimônio.'}
-                    </p>
                   </FormField>
                 )}
               </div>
@@ -825,11 +815,9 @@ const ContasPagarViewInner = ({ showToast, filial }: { showToast: any; filial: F
                     return <p className="text-[10px] text-emerald-400/90 mt-1">Bate com o pedido.</p>;
                   }
                   return (
-                    <p className="text-[10px] text-amber-300 mt-1 leading-snug">
-                      Divergência de R$ {Math.abs(dif).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}{' '}
-                      {dif > 0 ? 'a MAIS' : 'a MENOS'} que o pedido. Acontece em compra real — frete
-                      destacado, imposto, reajuste, entrega a menor. Escreva o motivo abaixo: é ele
-                      que fica no documento.
+                    <p className="text-[10px] text-amber-300 mt-1">
+                      R$ {Math.abs(dif).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}{' '}
+                      {dif > 0 ? 'a mais' : 'a menos'} que o pedido — informe o motivo.
                     </p>
                   );
                 })()}
@@ -841,11 +829,6 @@ const ContasPagarViewInner = ({ showToast, filial }: { showToast: any; filial: F
                   onChange={e => setNfObs(e.target.value)}
                   placeholder="Ex.: frete de R$ 50,00 destacado na nota; recebemos 5 de 42 e o saldo foi cancelado." />
               </FormField>
-
-              <p className="text-[11px] text-gray-500 leading-relaxed">
-                Ao conferir, o valor da conta passa a ser o da NOTA — o do pedido era a previsão
-                feita na cotação. Só depois disso o pagamento é liberado.
-              </p>
 
               <div className="flex justify-end gap-2">
                 <button onClick={() => setConferindo(null)} disabled={nfSalvando}

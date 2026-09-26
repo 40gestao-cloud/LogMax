@@ -378,20 +378,15 @@ const FuncionariosViewInner = ({ showToast, filial }: { showToast: any; filial: 
                 )}
               </div>
               <div className="flex items-start gap-3 shrink-0">
-                <div className="flex flex-col items-end gap-1.5">
-                  <button type="button"
-                    onClick={() => window.open(MAXID_URL, '_blank', 'noopener,noreferrer')}
-                    className="neu-button py-2.5 px-5 rounded-xl text-sm font-bold text-accent hover:bg-accent/10 inline-flex items-center gap-3 transition-colors">
-                    <img src="/icon-maxid.png" alt="" className="h-11 w-auto rounded-md" />
-                    Gerar no MaxID <ExternalLink size={13} />
-                  </button>
-                  {/* Dizer o que o botão faz vale mais que o tooltip: em tablet
-                      não há hover, e é justamente ali que a turma preenche. */}
-                  <p className="text-[10px] text-gray-500 leading-relaxed text-right max-w-[15rem]">
-                    Precisa de CPF e celular para preencher? Acesse o MaxID, gere os dados e volte para colar
-                    aqui — abre em outra aba, o que você já digitou continua nesta.
-                  </p>
-                </div>
+                <button type="button"
+                  onClick={() => window.open(MAXID_URL, '_blank', 'noopener,noreferrer')}
+                  className="neu-button py-2.5 px-5 rounded-xl text-sm font-bold text-accent hover:bg-accent/10 inline-flex items-center gap-3 transition-colors">
+                  <img src="/icon-maxid.png" alt="" className="h-11 w-auto rounded-md" />
+                  <span className="flex flex-col items-start leading-tight">
+                    <span className="inline-flex items-center gap-1.5">Gerar no MaxID <ExternalLink size={13} /></span>
+                    <span className="text-[10px] font-normal text-gray-500">CPF e celular · abre em outra aba</span>
+                  </span>
+                </button>
                 <button onClick={closeForm} className="modal-close-btn"><X size={16} /></button>
               </div>
             </div>
@@ -458,17 +453,15 @@ const FuncionariosViewInner = ({ showToast, filial }: { showToast: any; filial: 
                     </option>
                   ))}
                 </select>
-                <p className="text-[11px] text-gray-500">
-                  {usuariosDaUnidade.length === 0
-                    ? `Nenhum usuário cadastrado em ${filial} ainda — cadastre o funcionário pelos campos abaixo.`
-                    : usuariosSemCadastro.length === 0
-                      ? 'Todos os usuários desta unidade já têm cadastro de funcionário. Use os campos abaixo para quem não tem conta.'
-                      : `${usuariosSemCadastro.length} de ${usuariosDaUnidade.length} ainda sem cadastro. Escolher preenche nome, e-mail, cargo e departamento — CPF, admissão e salário continuam com o RH.`}
-                </p>
+                {usuariosSemCadastro.length > 0 && (
+                  <p className="text-[11px] text-gray-500">
+                    {usuariosSemCadastro.length} de {usuariosDaUnidade.length} sem cadastro
+                  </p>
+                )}
               </div>
             )}
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
               <div className="flex flex-col gap-1.5">
                 <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Unidade</label>
                 <div className="neu-pressed rounded-xl px-3 py-2.5 text-sm text-accent font-semibold border border-white/5">{filial}</div>
@@ -517,12 +510,10 @@ const FuncionariosViewInner = ({ showToast, filial }: { showToast: any; filial: 
                     className="neu-input rounded-xl px-3 py-2.5 text-sm" />
                 )}
                 {cargoContradizPapel && (
-                  <p className="text-[10px] text-amber-400/90 flex items-start gap-1.5 leading-relaxed">
+                  <p className="text-[10px] text-amber-400/90 flex items-start gap-1.5">
                     <AlertTriangle size={11} className="shrink-0 mt-[2px]" />
                     <span>
-                      A conta de <span className="font-semibold">{perfilLigado?.nome ?? 'quem está ligado aqui'}</span> é{' '}
-                      <span className="font-semibold">{roleLabel(papelLigado)}</span> em Usuários, e este título diz outra
-                      coisa. É este texto que sai no crachá — quem muda o acesso é o professor, em Usuários.
+                      Em Usuários a conta é <span className="font-semibold">{roleLabel(papelLigado)}</span>.
                     </span>
                   </p>
                 )}

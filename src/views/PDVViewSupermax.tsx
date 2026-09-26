@@ -536,7 +536,7 @@ export const PDVViewSupermax = ({
         flashError(`${added.nome_produto}: estoque ${fmtQtd(added.estoque)}, no carrinho ${fmtQtd(added.qtd)}. O banco recusa a venda assim.`);
       }
     } catch (err: any) {
-      flashError(`addToCart THROW: ${err?.message ?? String(err)}`);
+      flashError(`Não foi possível adicionar o item: ${err?.message ?? String(err)}`);
     }
   }, [flashError]);
 

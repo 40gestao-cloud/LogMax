@@ -213,11 +213,6 @@ export const AulaAtividadesPublicadas: React.FC<Props> = ({ showToast, profile, 
             <ClipboardList size={14} className="text-accent" />
             <h3 className="text-sm font-bold text-gray-200">Atividades publicadas</h3>
           </div>
-          <p className="text-[11px] text-gray-500 mt-1 max-w-2xl">
-            O que a turma está vendo agora, por filial, e quem já abriu o enunciado.
-            A contagem se move sozinha durante a aula. «Ciente» é confirmação de
-            leitura — não é entrega da tarefa.
-          </p>
         </div>
         {/* Seta explícita: `onClick={carregar}` passaria o evento como
             `silencioso` e o clique não mostraria mais o spinner. */}

@@ -449,9 +449,6 @@ Ela volta para 'Pendente' e sai da fila de Compras — o gerente decide de novo 
                         <div className="neu-pressed py-2 px-3 rounded-xl text-sm text-gray-300">
                           {produtosOrdenados.find((p: any) => p.id === produtoSel)?.marca || '—'}
                         </div>
-                        <p className="text-[10px] text-gray-500 mt-1 leading-relaxed">
-                          Item do catálogo: a marca é a do cadastro. Para trocar de marca, troque de produto.
-                        </p>
                       </FormField>
                     ) : (
                       <FormField label="Marca">
@@ -459,9 +456,6 @@ Ela volta para 'Pendente' e sai da fila de Compras — o gerente decide de novo 
                           value={form.marca}
                           onChange={e => setForm(f => ({ ...f, marca: e.target.value }))}
                           placeholder="Marca (opcional)" />
-                        <p className="text-[10px] text-gray-500 mt-1 leading-relaxed">
-                          É o que o comprador leva para a cotação. Em branco significa "qualquer marca".
-                        </p>
                       </FormField>
                     )}
                     {/* Solicitante e setor vêm de quem abriu a requisição

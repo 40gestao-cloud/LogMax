@@ -2481,11 +2481,6 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode, onNavigate }: { s
                       onChange={e => setCorrecaoFonte(e.target.value)}
                       onKeyDown={handleMoneyKeyDown}
                       placeholder="0,00" />
-                    <p className="text-[10px] text-gray-500 mt-1 leading-relaxed">
-                      {embCorrecao
-                        ? `Por 1 ${embCorrecao.nome} de ${qtdBR(embCorrecao.fator)} ${unidadeCorrecao}. O total sai daqui × ${qtdBR(embCorrecao.qtd)}.`
-                        : `O preço de uma ${unidadeCorrecao}. O total sai daqui × ${qtdBR(qtdCorrecao)}.`}
-                    </p>
                   </FormField>
                 )}
                 {embCorrecao && (
@@ -2493,9 +2488,6 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode, onNavigate }: { s
                     <div className="neu-pressed py-2 px-3 rounded-xl text-sm text-gray-300 tabular-nums">
                       {precoUnitario(parseBRL(correcaoForm.valor_total), qtdCorrecao) || '—'}
                     </div>
-                    <p className="text-[10px] text-gray-500 mt-1 leading-relaxed">
-                      Resultado, não campo: o total dividido por {qtdBR(qtdCorrecao)} {unidadeCorrecao}.
-                    </p>
                   </FormField>
                 )}
                 <FormField label="Valor Total (R$)">
@@ -2505,16 +2497,11 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode, onNavigate }: { s
                     onKeyDown={handleMoneyKeyDown}
                     placeholder="0,00" />
                   {temAjusteCorrecao ? (
-                    <p className="text-[10px] text-amber-400 mt-1 leading-relaxed">
-                      Ajustado à mão: a conta dava R$ {formatBRL(totalBaseCorrecao)} ({correcaoForm.valor_fonte} × {qtdBR(fonteCorrecao!.mult)}),
-                      {' '}{ajusteCorrecao > 0 ? 'com R$ ' : 'menos R$ '}{formatBRL(Math.abs(ajusteCorrecao))}{ajusteCorrecao > 0 ? ' a mais' : ''}.
-                      {' '}Na prática o total sai a R$ {precoUnitario(parseBRL(correcaoForm.valor_total), qtdCorrecao)} por {unidadeCorrecao}.
+                    <p className="text-[10px] text-amber-400 mt-1">
+                      Ajustado à mão: a conta dava R$ {formatBRL(totalBaseCorrecao)}
+                      {' '}({ajusteCorrecao > 0 ? '+' : '−'} R$ {formatBRL(Math.abs(ajusteCorrecao))}).
                     </p>
-                  ) : qtdCorrecao > 0 && (
-                    <p className="text-[10px] text-gray-500 mt-1 leading-relaxed">
-                      É este valor que volta ao Financeiro. Frete ou desconto fechado você digita aqui.
-                    </p>
-                  )}
+                  ) : null}
                 </FormField>
                 <FormField label="Prazo de Entrega">
                   <input type="date" className="neu-input py-2 px-3 rounded-xl text-sm"
@@ -2526,9 +2513,6 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode, onNavigate }: { s
                     className="neu-input py-2 px-3 rounded-xl text-sm"
                     value={correcaoForm.validade}
                     onChange={e => setCorrecaoForm(x => ({ ...x, validade: e.target.value }))} />
-                  <p className="text-[10px] text-gray-500 mt-1 leading-relaxed">
-                    Reenviar é revalidar: confirme com o fornecedor até quando o preço vale.
-                  </p>
                 </FormField>
                 {/* Migr. 526: só na eventual. Na reposição o campo nem existe
                     na proposta — a marca é do produto do catálogo. */}

@@ -294,26 +294,18 @@ const CRMViewInner = ({ type, showToast, filial }: {
                 <h3 className="text-sm font-bold text-gray-200">
                   {editItem ? (isClientes ? 'Editar Cliente' : 'Editar Fornecedor') : (isClientes ? 'Novo Cliente' : 'Novo Fornecedor')}
                 </h3>
-                {/* MaxID no alto à direita: é ferramenta do formulário inteiro
-                    (documento e celular saem de lá), não do campo de CPF/CNPJ
-                    sozinho — e ali o aluno o encontra assim que a tela abre.
-                    O PNG tem fundo preto próprio, daí o canto arredondado em
-                    vez de tentar dissolvê-lo no fundo do tema. */}
-                <div className="flex flex-col items-end gap-1.5 shrink-0">
-                  <button type="button"
-                    onClick={() => window.open(MAXID_URL, '_blank', 'noopener,noreferrer')}
-                    className="neu-button py-2.5 px-5 rounded-xl text-sm font-bold text-accent hover:bg-accent/10 inline-flex items-center gap-3 transition-colors">
-                    <img src="/icon-maxid.png" alt="" className="h-11 w-auto rounded-md" />
-                    Gerar no MaxID <ExternalLink size={13} />
-                  </button>
-                  {/* Dizer o que o botão faz vale mais que o tooltip: em tablet
-                      não há hover, e é justamente ali que a turma preenche. */}
-                  <p className="text-[10px] text-gray-500 leading-relaxed text-right max-w-[15rem]">
-                    Precisa de {extras.pessoa_tipo === 'Empresa' ? 'CNPJ' : 'CPF'} e celular para preencher?
-                    Acesse o MaxID, gere os dados e volte para colar aqui — abre em outra aba, o que você já
-                    digitou continua nesta.
-                  </p>
-                </div>
+                {/* MaxID é ferramenta do formulário inteiro (documento e celular saem de lá). */}
+                <button type="button"
+                  onClick={() => window.open(MAXID_URL, '_blank', 'noopener,noreferrer')}
+                  className="neu-button py-2.5 px-5 rounded-xl text-sm font-bold text-accent hover:bg-accent/10 inline-flex items-center gap-3 transition-colors shrink-0">
+                  <img src="/icon-maxid.png" alt="" className="h-11 w-auto rounded-md" />
+                  <span className="flex flex-col items-start leading-tight">
+                    <span className="inline-flex items-center gap-1.5">Gerar no MaxID <ExternalLink size={13} /></span>
+                    <span className="text-[10px] font-normal text-gray-500">
+                      {extras.pessoa_tipo === 'Empresa' ? 'CNPJ' : 'CPF'} e celular · abre em outra aba
+                    </span>
+                  </span>
+                </button>
               </div>
 
               {/* Logo — só fornecedor (migr. 429). O card do cliente cai no
@@ -325,12 +317,8 @@ const CRMViewInner = ({ type, showToast, filial }: {
                       imagemUrl={extras.logo_url} rotulo="logo"
                       onPreview={handleLogoPreview} onClear={handleLogoClear} />
                   </FormField>
-                  <div className="flex items-center gap-3 pt-4">
+                  <div className="pt-4">
                     <LogoCadastro imagemUrl={extras.logo_url} nome={form.nome} size={44} />
-                    <p className="text-[10px] text-gray-500 max-w-[16rem] leading-relaxed">
-                      Sem logo, o card usa as iniciais do nome sobre uma cor fixa — já dá para
-                      distinguir na lista. A logo só melhora o reconhecimento.
-                    </p>
                   </div>
                 </div>
               )}
@@ -353,7 +341,7 @@ const CRMViewInner = ({ type, showToast, filial }: {
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 <FormField label="Nome *" error={errors.nome}>
                   <input className={`neu-input py-2 px-3 rounded-xl text-sm ${errors.nome ? 'border border-red-500/40' : ''}`}
                     value={form.nome}
@@ -387,10 +375,6 @@ const CRMViewInner = ({ type, showToast, filial }: {
                     value={extras.cpf_cnpj}
                     onChange={e => setExtras(x => ({ ...x, cpf_cnpj: extras.pessoa_tipo === 'Empresa' ? formatCNPJ(e.target.value) : formatCPF(e.target.value) }))}
                     placeholder={extras.pessoa_tipo === 'Empresa' ? '00.000.000/0001-00' : '000.000.000-00'} />
-                  <p className="text-[10px] text-gray-500 mt-1 leading-relaxed">
-                    {extras.pessoa_tipo === 'Empresa' ? 'CNPJ' : 'CPF'} de treino com dígito verificador válido —
-                    gere no MaxID (canto superior direito), copie e cole aqui.
-                  </p>
                 </FormField>
 
                 {!isClientes && (
@@ -403,33 +387,22 @@ const CRMViewInner = ({ type, showToast, filial }: {
                 )}
 
                 {isClientes && (
-                  <div>
-                    <FormField label="Limite de crédito (R$)">
-                      <input type="text" inputMode="numeric" className="neu-input py-2 px-3 rounded-xl text-sm tabular-nums"
-                        value={extras.limite_credito}
-                        onChange={e => setExtras(x => ({ ...x, limite_credito: formatBRL(e.target.value) }))}
-                        onKeyDown={handleMoneyKeyDown} placeholder="Em branco = sem limite" />
-                    </FormField>
-                    <span className="text-[10px] text-gray-500 block mt-1">
-                      Teto da venda a prazo (Fiado). Em branco, a casa não definiu limite e o PDV não trava.
-                      Zero significa "este cliente não leva fiado". Título vencido bloqueia a venda a prazo de
-                      qualquer jeito, com ou sem limite.
-                    </span>
-                  </div>
+                  <FormField label="Limite do fiado (R$)">
+                    {/* Vazio = sem limite; zero = não leva fiado. Título vencido bloqueia de qualquer jeito. */}
+                    <input type="text" inputMode="numeric" className="neu-input py-2 px-3 rounded-xl text-sm tabular-nums"
+                      value={extras.limite_credito}
+                      onChange={e => setExtras(x => ({ ...x, limite_credito: formatBRL(e.target.value) }))}
+                      onKeyDown={handleMoneyKeyDown} placeholder="Vazio = sem limite · 0 = sem fiado" />
+                  </FormField>
                 )}
 
                 {!isClientes && (
-                  <div>
-                    <FormField label="Prazo médio de entrega (dias)">
-                      <input className="neu-input py-2 px-3 rounded-xl text-sm" inputMode="numeric"
-                        value={extras.prazo_entrega_dias}
-                        onChange={e => setExtras(x => ({ ...x, prazo_entrega_dias: e.target.value.replace(/\D/g, '').slice(0, 3) }))}
-                        placeholder="Ex: 15" />
-                    </FormField>
-                    <span className="text-[10px] text-gray-500 block mt-1">
-                      Quanto ele costuma levar do pedido à entrega. Compras usa na cotação e para prometer data a quem requisitou.
-                    </span>
-                  </div>
+                  <FormField label="Prazo de entrega (dias)">
+                    <input className="neu-input py-2 px-3 rounded-xl text-sm" inputMode="numeric"
+                      value={extras.prazo_entrega_dias}
+                      onChange={e => setExtras(x => ({ ...x, prazo_entrega_dias: e.target.value.replace(/\D/g, '').slice(0, 3) }))}
+                      placeholder="Ex: 15" />
+                  </FormField>
                 )}
               </div>
 

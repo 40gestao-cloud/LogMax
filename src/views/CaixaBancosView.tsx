@@ -492,10 +492,7 @@ export const CaixaBancosView = ({
                 <h3 className="text-sm font-bold text-gray-200 flex items-center gap-2">
                   <ArrowLeftRight size={14} className="text-accent" /> Transferir entre contas
                 </h3>
-                <p className="text-[11px] text-gray-500 mt-1">
-                  Move dinheiro entre contas da mesma unidade — do banco pro caixa físico, por exemplo.
-                  Para mandar dinheiro de uma unidade pra outra, use aporte ou empréstimo em Capital.
-                </p>
+                <p className="text-[11px] text-gray-500 mt-1">Entre contas da mesma unidade.</p>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -559,11 +556,7 @@ export const CaixaBancosView = ({
           <motion.div ref={formEdicaoRef} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
             <div className="neu-flat rounded-2xl p-6 border border-white/5 flex flex-col gap-4">
               <h3 className="text-sm font-bold text-gray-200">{editItem ? 'Editar Conta' : 'Nova Conta'}</h3>
-              <p className="text-[11px] text-gray-500 leading-snug -mt-2">
-                O saldo não se digita: conta nova nasce em R$ 0,00 e o valor só entra por
-                lançamento — aporte de capital, empréstimo ou conta a receber paga. Sai por
-                conta a pagar paga.
-              </p>
+              <p className="text-[11px] text-gray-500 -mt-2">Conta nova nasce com saldo R$ 0,00.</p>
 
               <div className="flex items-start gap-4 flex-wrap">
                 <BancoThumb url={imagemUrl} size="lg" alt={form.banco || 'Banco'} />
@@ -647,9 +640,7 @@ export const CaixaBancosView = ({
                     <PiggyBank size={14} className="text-yellow-300" />
                     Reserva de emergência
                   </div>
-                  <p className="text-[11px] text-gray-500 leading-snug mt-0.5">
-                    Marca esta conta/caixa como dinheiro guardado. O saldo entra no total "Em Reserva" do resumo e sai do "Disponível pra operar".
-                  </p>
+                  <p className="text-[11px] text-gray-500 mt-0.5">Conta como "Em Reserva", fora do disponível.</p>
                 </div>
               </label>
 
