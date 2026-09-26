@@ -1597,7 +1597,7 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode, onNavigate }: { s
                           <span className="text-accent/70">{numeroCotacao(cot)}</span>
                           {req && <span className="text-gray-600">← {numeroRequisicao(req)}</span>}
                         </span>
-                        <span className="block text-sm font-semibold text-gray-100 leading-snug mt-1 line-clamp-2 break-words" title={req?.item ?? ''}>
+                        <span className="selectable cursor-text block text-sm font-semibold text-gray-100 leading-snug mt-1 line-clamp-2 break-words" title={req?.item ?? ''}>
                           {req?.item ?? '—'}
                           {cot.marca && <span className="text-xs text-gray-500 font-normal"> · {cot.marca}</span>}
                         </span>
@@ -2008,7 +2008,7 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode, onNavigate }: { s
                           <span className="text-accent/70">{numeroCotacao(item)}</span>
                           {item.req && <span className="text-gray-600">← {numeroRequisicao(item.req)}</span>}
                         </span>
-                        <span className="block text-sm font-semibold text-gray-100 leading-snug mt-1 line-clamp-2 break-words" title={item.req?.item ?? ''}>
+                        <span className="selectable cursor-text block text-sm font-semibold text-gray-100 leading-snug mt-1 line-clamp-2 break-words" title={item.req?.item ?? ''}>
                           {item.req?.item ?? '—'}
                           {/* Migr. 526: sem isto, duas propostas de marcas
                               diferentes apareciam como o mesmo item. */}

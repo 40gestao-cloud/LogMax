@@ -513,12 +513,14 @@ body {
   -webkit-touch-callout: none;
 }
 
-/* Reabilita seleção onde faz sentido: campos de entrada e tabelas de relatórios
-   (utilizador pode copiar dados). `.selectable` serve de escape hatch pontual. */
+/* Reabilita seleção só onde é preciso: campos de digitação (sem isto não se
+   edita) e `.selectable`, a exceção pontual. As tabelas saíram da lista em
+   2026-09-26 a pedido do professor — como quase tudo no app é tabela, "só nas
+   tabelas" virava "em todo lugar". Hoje a única exceção é o nome do produto em
+   Cotações, que o aluno copia para pesquisar o preço fora. */
 input,
 textarea,
 [contenteditable="true"],
-table,
 .selectable {
   -webkit-user-select: text;
   user-select: text;
