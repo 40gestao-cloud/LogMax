@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Search, X, Package, Tag, Barcode, Building2, Boxes, AlertCircle, TrendingUp, Lock, Copy, Award, ClipboardList, ArrowUpDown, FilterX } from 'lucide-react';
 import { useFetchData } from '../hooks/useSupabaseData';
 import { supabase } from '../lib/supabase';
+import { TIPOS_PRODUTO, ehVendavel } from '../lib/tipoProduto';
 import { ATRIBUTOS_PRODUTO, rotuloParaCliente } from '../lib/atributosProduto';
 import { calcMarkup, calcMargem, corDoMarkup, fmtPct } from '../lib/precificacao';
 import {
@@ -52,6 +53,10 @@ const formatAtributoValor = (v: any): string => {
 //  - Admin/CEO com filial escolhida no topbar → só produtos daquela filial.
 //  - Gerente/colaborador → travado na própria filial (independente do topbar).
 // A prioridade é: filialAtiva do topbar > profile.filial > 'todas' (só Matriz).
+// Os tipos vendáveis saem da régua (ehVendavel), não de um literal aqui: vão
+// para o servidor como IN, e um tipo novo vendável entra sem mexer nesta tela.
+const TIPOS_VENDAVEIS = TIPOS_PRODUTO.filter(ehVendavel);
+
 const ORDENS = {
   recentes:   { label: 'Mais recentes',  orderBy: 'codigo', ascending: false },
   nome:       { label: 'Nome (A–Z)',     orderBy: 'nome',   ascending: true },
@@ -104,7 +109,7 @@ export const CatalogoProdutosView = ({ showToast, profile }: { showToast: any; p
   // "1–50 de 80" contava linhas que a tela não mostrava. As duas colunas são
   // NOT NULL com default ('estoque_venda', 'Ativo'), então não há legado nulo.
   const filtros = useMemo(() => ({
-    tipo: 'estoque_venda',
+    tipo: TIPOS_VENDAVEIS,
     status: 'Ativo',
     ...(filialFiltro !== 'todas' ? { filial: filialFiltro } : {}),
     ...(categoriaFiltro !== 'todas' ? { categoria: categoriaFiltro } : {}),
@@ -138,7 +143,7 @@ export const CatalogoProdutosView = ({ showToast, profile }: { showToast: any; p
     if (!supabase) return;
     let vivo = true;
     let q = supabase.from('produtos_com_custo').select('categoria')
-      .eq('tipo', 'estoque_venda').eq('status', 'Ativo').not('categoria', 'is', null);
+      .in('tipo', TIPOS_VENDAVEIS).eq('status', 'Ativo').not('categoria', 'is', null);
     if (filialFiltro !== 'todas') q = q.eq('filial', filialFiltro);
     q.then(({ data: rows }) => {
       if (!vivo || !rows) return;
@@ -179,16 +184,10 @@ export const CatalogoProdutosView = ({ showToast, profile }: { showToast: any; p
           <input
             type="text"
             placeholder="Buscar por nome, código, marca, categoria, EAN..."
-            className="neu-input py-2.5 pl-10 pr-9 rounded-xl text-sm w-full"
+            className="neu-input py-2.5 pl-10 pr-4 rounded-xl text-sm w-full"
             value={search}
             onChange={e => setSearch(e.target.value)}
           />
-          {search && (
-            <button type="button" onClick={() => setSearch('')} aria-label="Limpar busca"
-              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-200">
-              <X size={14} />
-            </button>
-          )}
         </div>
         {podeVerTodasFiliais ? (
           <select
