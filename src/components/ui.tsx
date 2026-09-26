@@ -330,11 +330,16 @@ export const CardContador = ({ label, value, sub, tom = 'neutro', onClick, ativo
 }) => {
   const zero = value === 0 || value === '0';
   const efetivo: TomContador = zero && TONS_ALERTA.has(tom) ? 'neutro' : tom;
-  const cls = `contador contador--${efetivo} rounded-2xl px-4 py-5 flex flex-col items-center justify-center text-center gap-1.5`;
+  // O card é container: valor comprido (R$ 106.096,37) encolhe até caber numa
+  // linha só, em vez de estourar a borda ou quebrar o "-" do "R$".
+  const texto = typeof value === 'string' || typeof value === 'number' ? String(value) : '';
+  const fonte = texto.length > 4 ? `min(1.875rem, calc(100cqi / ${(texto.length * 0.64).toFixed(2)}))` : undefined;
+  const cls = `contador contador--${efetivo} @container min-w-0 rounded-2xl px-4 py-5 flex flex-col items-center justify-center text-center gap-1.5`;
   const miolo = (
     <>
       <p className="contador-rotulo text-[10px] uppercase tracking-widest font-bold leading-tight">{label}</p>
-      <p className="contador-valor text-2xl sm:text-3xl font-black tabular-nums leading-none">{value}</p>
+      <p className="contador-valor text-2xl sm:text-3xl font-black tabular-nums leading-none whitespace-nowrap max-w-full"
+        style={fonte ? { fontSize: fonte } : undefined}>{value}</p>
       {sub && <p className="text-[11px] text-gray-400 leading-tight">{sub}</p>}
     </>
   );
