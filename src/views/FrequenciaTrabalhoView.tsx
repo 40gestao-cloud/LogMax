@@ -1006,7 +1006,7 @@ const FrequenciaTrabalhoViewInner = ({ showToast, profile, filial, embedded }: a
                               <span className="text-[11px] font-semibold">Afastamento</span>
                             </div>
                           ) : (
-                            <div className="flex flex-col items-center gap-1.5">
+                            <div className="flex flex-nowrap items-center justify-center gap-1">
                               <div className="flex flex-nowrap items-center justify-center gap-1">
                                 {STATUSES.map(s => {
                                   const sc = STATUS_CONFIG[s];
@@ -1035,15 +1035,21 @@ const FrequenciaTrabalhoViewInner = ({ showToast, profile, filial, embedded }: a
                                   );
                                 })}
                               </div>
-                              {currentStatus === 'Presente com Atraso' && (
-                                <input
-                                  type="time"
-                                  value={currentEntrada}
-                                  onChange={e => setEdit(func.id, { status: currentStatus, justificativa: currentJust, entrada: e.target.value })}
-                                  title={`Horário de entrada — alvo da turma: ${jornada.entrada}`}
-                                  className="neu-input px-2 py-1 rounded-lg text-xs font-mono tabular-nums w-24"
-                                />
-                              )}
+                              {/* Vaga do horário reservada em toda linha: sem ela os
+                                  botões da linha em atraso andavam para o lado e
+                                  saíam da coluna das outras. */}
+                              <span className="w-[5.5rem] ml-1 shrink-0">
+                                {currentStatus === 'Presente com Atraso' && (
+                                  <input
+                                    type="time"
+                                    value={currentEntrada}
+                                    onChange={e => setEdit(func.id, { status: 'Presente com Atraso', justificativa: currentJust, entrada: e.target.value })}
+                                    title={`Horário de entrada — alvo da turma: ${jornada.entrada}`}
+                                    aria-label="Horário de entrada"
+                                    className="neu-input h-9 px-2 rounded-xl text-xs font-bold tabular-nums w-full border border-yellow-400/60"
+                                  />
+                                )}
+                              </span>
                             </div>
                           )}
                         </td>
@@ -1055,15 +1061,11 @@ const FrequenciaTrabalhoViewInner = ({ showToast, profile, filial, embedded }: a
                             const origem = freq.origem === 'totem' ? 'no totem' : freq.origem === 'cracha' ? 'por crachá' : 'manualmente';
                             const hora = freq.entrada ?? (freq.origem === 'totem' ? fmtHorario(freq.created_at) : null);
                             return (
-                              <span className="inline-flex items-center gap-2"
+                              <span className="inline-flex items-stretch h-6 rounded-md overflow-hidden text-[11px] font-bold leading-none"
                                 title={`${STATUS_LABEL[freq.status]} — registrado ${origem}${freq.registrado_por_nome ? ` por ${freq.registrado_por_nome}` : ''}`}>
-                                <span className={`text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded ${REGISTRO_COR[freq.status]}`}>
-                                  {STATUS_LABEL[freq.status]}
-                                </span>
-                                {hora && <span className="text-sm font-semibold text-gray-200 tabular-nums">{hora}</span>}
-                                {freq.origem === 'totem' && (
-                                  <span className="text-[9px] font-bold uppercase tracking-wider text-gray-500">totem</span>
-                                )}
+                                <span className={`px-2 flex items-center ${REGISTRO_COR[freq.status]}`}>{STATUS_LABEL[freq.status]}</span>
+                                {hora && <span className="px-2 flex items-center bg-zinc-800 text-gray-100 tabular-nums">{hora}</span>}
+                                {freq.origem === 'totem' && <span className="px-1.5 flex items-center bg-zinc-700 text-gray-300">totem</span>}
                               </span>
                             );
                           })() : <span className="text-gray-700 text-xs">—</span>}
