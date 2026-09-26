@@ -7,8 +7,13 @@ import { useFilial } from '../contexts/FilialContext';
 import { LoadingSpinner, CardContador } from '../components/ui';
 import { fmtInstrutores } from '../lib/viewUtils';
 
+// Tom do contador a partir da cor do ícone, para o card seguir a mesma cor.
+const tomDaCor = (c: string) =>
+  /blue/.test(c) ? "azul" : /green|emerald/.test(c) ? "verde" : /red/.test(c) ? "vermelho"
+  : /purple|violet/.test(c) ? "roxo" : /orange/.test(c) ? "laranja" : /yellow|amber/.test(c) ? "amarelo" : "dourado";
+
 const PipelineCard = ({ icon: Icon, label, total, breakdown, color }: any) => (
-  <div className="neu-flat rounded-2xl p-5 border border-white/5 flex flex-col gap-3 flex-1 min-w-[130px]">
+  <div className={`contador contador--${tomDaCor(color)} neu-flat rounded-2xl p-5 border border-white/5 flex flex-col gap-3 flex-1 min-w-[130px]`}>
     <div className="flex items-center gap-2">
       <div className={`w-8 h-8 rounded-xl flex items-center justify-center ${color}`}>
         <Icon size={16} />

@@ -1193,13 +1193,13 @@ function FilialCapitalCard({
         </div>
 
         <div className="grid grid-cols-2 gap-3">
-          <div>
+          <div className="contador contador--azul rounded-xl p-3">
             <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500">Capital total</p>
             <p className="text-2xl font-black tabular-nums text-gray-100 mt-0.5">
               {saldo ? BRL(saldo.capital_total) : ultimo ? BRL(ultimo.valor) : '—'}
             </p>
           </div>
-          <div className="text-right">
+          <div className={`contador ${bloqueado ? "contador--vermelho" : "contador--verde"} rounded-xl p-3 text-right`}>
             <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500">Saldo livre</p>
             <p className={`text-2xl font-black tabular-nums mt-0.5 ${bloqueado ? 'text-red-400' : 'text-green-400'}`}>
               {saldo ? BRL(saldo.saldo_livre) : '—'}

@@ -654,7 +654,7 @@ const ContasPagarViewInner = ({ showToast, filial }: { showToast: any; filial: F
                               if (pend.acao === 'esperar') {
                                 return (
                                   <span title={pend.aviso}
-                                    className="py-1.5 px-3 rounded-lg text-xs font-bold text-gray-500 border border-white/5 flex items-center gap-1 cursor-help">
+                                    className="aviso-neutro py-1.5 px-3 rounded-lg text-xs font-bold text-gray-500 border border-white/5 flex items-center gap-1 cursor-help">
                                     <Clock size={11} /> Aguardando o Estoque
                                   </span>
                                 );

@@ -131,13 +131,13 @@ const PatrimonioViewInner = ({ filial, showToast }: { filial: FilialOp; showToas
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 shrink-0">
-        <div className="neu-flat rounded-2xl p-5 border border-white/5">
+        <div className="contador contador--azul neu-flat rounded-2xl p-5 border border-white/5">
           <p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-1.5 flex items-center gap-1.5">
             <Package size={11} /> Itens
           </p>
           <p className="text-2xl font-black text-gray-100">{totalCount ?? data.length}</p>
         </div>
-        <div className="neu-flat rounded-2xl p-5 border border-white/5">
+        <div className="contador contador--dourado neu-flat rounded-2xl p-5 border border-white/5">
           <p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-1.5 flex items-center gap-1.5">
             <Tag size={11} /> Valor de Aquisição (página)
           </p>

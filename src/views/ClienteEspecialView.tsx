@@ -227,7 +227,7 @@ export const ClienteEspecialView = ({ showToast, profile }: { showToast: any; pr
             decisão que ninguém sabia que era sua. */}
         {!isLoading && aguardandoCliente.length > 0 && (
           <div className="flex flex-wrap items-center gap-3 shrink-0">
-            <div className="neu-pressed rounded-2xl px-4 py-3 flex items-baseline gap-2">
+            <div className="contador contador--dourado neu-pressed rounded-2xl px-4 py-3 flex items-baseline gap-2">
               <span className="text-2xl font-black text-accent tabular-nums">{visiveis.length}</span>
               <span className="text-[10px] text-gray-500 uppercase tracking-widest">
                 proposta(s) esperando você

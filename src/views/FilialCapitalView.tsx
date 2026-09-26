@@ -410,13 +410,13 @@ export function FilialCapitalView({
             </div>
 
             <div className="grid grid-cols-2 gap-4 mb-4">
-              <div>
+              <div className="contador contador--azul rounded-xl p-3">
                 <span className="text-[10px] uppercase tracking-widest text-gray-500">Capital Total</span>
                 <p className="text-2xl font-black text-accent tabular-nums mt-0.5">
                   {saldo ? BRL(saldo.capital_total) : '—'}
                 </p>
               </div>
-              <div>
+              <div className={`contador ${saldo?.bloqueado ? "contador--vermelho" : "contador--verde"} rounded-xl p-3`}>
                 <span className="text-[10px] uppercase tracking-widest text-gray-500">Saldo Livre</span>
                 <p className={`text-2xl font-black tabular-nums mt-0.5 ${saldo?.bloqueado ? 'text-red-400' : 'text-green-400'}`}>
                   {saldo ? BRL(saldo.saldo_livre) : '—'}

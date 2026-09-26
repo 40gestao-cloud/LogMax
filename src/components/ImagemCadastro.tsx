@@ -127,9 +127,10 @@ export function LogoCadastro({ imagemUrl, nome, size = 40, formato, ajuste = 'co
     <div
       style={{
         ...base, background: `${cor}22`, border: `1px solid ${cor}55`, color: cor,
+        ["--cor" as string]: cor,
         fontSize: Math.round(size * 0.36),
       }}
-      className="flex items-center justify-center shrink-0 font-black tracking-tight select-none"
+      className="iniciais-cadastro flex items-center justify-center shrink-0 font-black tracking-tight select-none"
       title={nome ?? undefined}
     >
       {iniciaisDoNome(nome)}

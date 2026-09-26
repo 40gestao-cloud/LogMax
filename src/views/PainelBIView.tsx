@@ -338,7 +338,7 @@ export const PainelBIView = ({ showToast, profile }: any) => {
             {kpis.map((k, i) => (
               <div
                 key={k.label}
-                className={`relative overflow-hidden rounded-2xl p-5 border transition-colors ${
+                className={`contador ${i === 0 ? 'contador--dourado' : 'contador--azul'} relative overflow-hidden rounded-2xl p-5 border transition-colors ${
                   i === 0
                     ? 'border-accent/25 bg-gradient-to-br from-accent/[0.06] to-transparent'
                     : 'neu-flat border-white/5'
