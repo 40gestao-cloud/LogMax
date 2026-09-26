@@ -516,8 +516,9 @@ body {
 /* Reabilita seleção só onde é preciso: campos de digitação (sem isto não se
    edita) e `.selectable`, a exceção pontual. As tabelas saíram da lista em
    2026-09-26 a pedido do professor — como quase tudo no app é tabela, "só nas
-   tabelas" virava "em todo lugar". Hoje a única exceção é o nome do produto em
-   Cotações, que o aluno copia para pesquisar o preço fora. */
+   tabelas" virava "em todo lugar". Hoje a única exceção é o nome do produto da
+   requisição escolhida no formulário de Nova Cotação, que o aluno copia para
+   pesquisar o preço fora. */
 input,
 textarea,
 [contenteditable="true"],

@@ -1,7 +1,7 @@
 import { CondicaoCompra } from '../components/CondicaoCompra';
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Plus, Save, Check, X, ShoppingBag, MessageSquare, Send, Loader2, Search, GitCompare, Award, RotateCcw, Ban, CornerUpLeft, Pencil, AlertTriangle } from 'lucide-react';
+import { Plus, Save, Check, X, ShoppingBag, MessageSquare, Send, Loader2, Search, GitCompare, Award, RotateCcw, Ban, CornerUpLeft, Pencil, AlertTriangle, Copy } from 'lucide-react';
 import { HistoricoOperacoes } from '../components/HistoricoOperacoes';
 import { useFetchData, dbInsert, dbUpdate } from '../hooks/useSupabaseData';
 import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent, StatusBadge, Pagination, SelecioneUnidade, FilaDeTrabalho, TextoModal, AbaComContador } from '../components/ui';
@@ -1597,7 +1597,7 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode, onNavigate }: { s
                           <span className="text-accent/70">{numeroCotacao(cot)}</span>
                           {req && <span className="text-gray-600">← {numeroRequisicao(req)}</span>}
                         </span>
-                        <span className="selectable cursor-text block text-sm font-semibold text-gray-100 leading-snug mt-1 line-clamp-2 break-words" title={req?.item ?? ''}>
+                        <span className="block text-sm font-semibold text-gray-100 leading-snug mt-1 line-clamp-2 break-words" title={req?.item ?? ''}>
                           {req?.item ?? '—'}
                           {cot.marca && <span className="text-xs text-gray-500 font-normal"> · {cot.marca}</span>}
                         </span>
@@ -1730,6 +1730,33 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode, onNavigate }: { s
                           </optgroup>
                         )}
                       </select>
+                      {/* A lista suspensa não deixa selecionar texto: o nome do
+                          produto escolhido aparece aqui, copiável, para o aluno
+                          pesquisar o preço fora sem redigitar. É a única
+                          exceção à trava de seleção do app (index.css). */}
+                      {(() => {
+                        const reqSel = requisicoes.find((r: any) => r.id === form.requisicao_id);
+                        if (!reqSel?.item) return null;
+                        return (
+                          <div className="mt-1.5 flex items-center gap-2 neu-pressed rounded-lg pl-3 pr-1.5 py-1.5 border border-white/5">
+                            <span className="selectable cursor-text text-xs font-semibold text-gray-100 flex-1 min-w-0 truncate" title={reqSel.item}>
+                              {reqSel.item}
+                            </span>
+                            <button type="button" title="Copiar nome do produto" aria-label="Copiar nome do produto"
+                              className="action-btn-neutral shrink-0"
+                              onClick={async () => {
+                                try {
+                                  await navigator.clipboard.writeText(reqSel.item);
+                                  showToast('Nome copiado — cole na pesquisa.', 'success', true);
+                                } catch {
+                                  showToast('Não foi possível copiar. Selecione o nome e use Ctrl+C.', 'error', true);
+                                }
+                              }}>
+                              <Copy size={12} />
+                            </button>
+                          </div>
+                        );
+                      })()}
                     </FormField>
                     <FormField label="Fornecedor PJ" error={errors.fornecedor_id}>
                       <select className={`neu-input py-2 px-3 rounded-xl text-sm ${errors.fornecedor_id ? 'border border-red-500/40' : ''}`}
@@ -2008,7 +2035,7 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode, onNavigate }: { s
                           <span className="text-accent/70">{numeroCotacao(item)}</span>
                           {item.req && <span className="text-gray-600">← {numeroRequisicao(item.req)}</span>}
                         </span>
-                        <span className="selectable cursor-text block text-sm font-semibold text-gray-100 leading-snug mt-1 line-clamp-2 break-words" title={item.req?.item ?? ''}>
+                        <span className="block text-sm font-semibold text-gray-100 leading-snug mt-1 line-clamp-2 break-words" title={item.req?.item ?? ''}>
                           {item.req?.item ?? '—'}
                           {/* Migr. 526: sem isto, duas propostas de marcas
                               diferentes apareciam como o mesmo item. */}
