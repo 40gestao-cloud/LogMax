@@ -3,8 +3,9 @@ import type { FilialOp } from '../components/FilialSelector';
 import { useFilial } from '../contexts/FilialContext';
 import { motion, AnimatePresence } from 'motion/react';
 import {
-  CheckCircle2, XCircle, Clock, X, User, Search, Save, Loader2, MessageSquarePlus, Building2, FileCheck, Lock,
+  CheckCircle2, XCircle, Clock, X, User, Search, Save, Loader2, MessageSquarePlus, Building2, FileCheck, Lock, Trash2, Eraser,
 } from 'lucide-react';
+import { useConfirm } from '../contexts/ConfirmContext';
 import { useFetchData } from '../hooks/useSupabaseData';
 import { PONTO_JORNADA_HORAS } from '../lib/pontoHorarios';
 import { useJornadaTurma, usePontoCorteTurma } from '../hooks/useJornadaTurma';
@@ -41,6 +42,14 @@ const STATUS_BTN_CLASS: Record<StatusFreq, string> = {
   'Falta': 'freq-status-btn--falta',
   'Presente com Atraso': 'freq-status-btn--atraso',
   'Justificado': 'freq-status-btn--justificada',
+};
+
+/** Cor cheia do selo na coluna Registro — a mesma dos botões e dos contadores. */
+const REGISTRO_COR: Record<StatusFreq, string> = {
+  'Presente': 'bg-green-600 text-white',
+  'Falta': 'bg-red-600 text-white',
+  'Presente com Atraso': 'bg-yellow-400 text-black',
+  'Justificado': 'bg-blue-600 text-white',
 };
 
 /** Os quatro que se lançam à mão. */
@@ -337,6 +346,12 @@ const FrequenciaTrabalhoViewInner = ({ showToast, profile, filial, embedded }: a
   const [justModal, setJustModal] = useState<{ func: Funcionario; texto: string } | null>(null);
 
   const canEdit = hasSetor(profile, 'rh') || profile?.role === 'admin' || profile?.role === 'ceo' || profile?.role === 'gerente' || isConselheiro(profile);
+  // Excluir registro é do professor, e só dele (migr. 635 — a RPC e a policy
+  // de DELETE conferem o mesmo `role = 'admin'` literal). Caso típico: lançou
+  // presença num dia sem aula, e o dia passaria a contar como letivo.
+  const ehProfessor = profile?.role === 'admin';
+  const confirm = useConfirm();
+  const [removendo, setRemovendo] = useState<Record<string, boolean>>({});
 
   // No modo filial: filtra pela filial ativa.
   // No modo Matriz (filial===null): filtra pelo filialFiltro local (null = todas).
@@ -460,6 +475,24 @@ const FrequenciaTrabalhoViewInner = ({ showToast, profile, filial, embedded }: a
       setSaving(prev => ({ ...prev, [key]: false }));
     }
   }, [edits, canEdit, gravarLinha, reload, showToast]);
+
+  // ── Excluir registro (professor) ──────────────────────────────────────
+  const removerRegistro = useCallback(async (func: Funcionario, freq: Frequencia) => {
+    if (!supabase || !ehProfessor) return;
+    const ok = await confirm({
+      message: `Excluir o registro de ${func.nome} em ${fmtData(freq.data)} (${STATUS_LABEL[freq.status]})? O dia deixa de contar na frequência.`,
+      confirmLabel: 'Excluir',
+      danger: true,
+    });
+    if (!ok) return;
+    setRemovendo(prev => ({ ...prev, [func.id]: true }));
+    const { error } = await supabase.rpc('remover_ponto', { p_ponto_id: freq.id });
+    setRemovendo(prev => ({ ...prev, [func.id]: false }));
+    if (error) { showToast(error.message, 'error', true); return; }
+    setEdits(prev => { const n = { ...prev }; delete n[func.id]; return n; });
+    await reload({ silent: true });
+    showToast(`Registro de ${func.nome} excluído.`, 'success');
+  }, [ehProfessor, confirm, reload, showToast]);
 
   // ── Lançamento em lote ────────────────────────────────────────────────
   //
@@ -847,6 +880,47 @@ const FrequenciaTrabalhoViewInner = ({ showToast, profile, filial, embedded }: a
               <span className="ml-1 min-w-[1.5rem] px-1.5 py-0.5 rounded-md bg-black/20 text-[11px] font-black tabular-nums">{pendentesDeSalvar.length}</span>
             )}
           </button>
+
+          {ehProfessor && (() => {
+            // Dia sem aula lançado por engano: apaga todos os registros do dia
+            // que podem sair (turma anterior e afastamento ficam).
+            const removiveis = filteredFuncs
+              .map((f: Funcionario) => ({ f, freq: getFreq(f.id, dataSelecionada) }))
+              .filter(x => x.freq && !x.freq.bloqueado && !x.freq.turma_anterior) as { f: Funcionario; freq: Frequencia }[];
+            return (
+              <button
+                type="button"
+                disabled={!removiveis.length || salvandoLote}
+                onClick={async () => {
+                  const ok = await confirm({
+                    message: `Excluir os ${removiveis.length} registro(s) de ${fmtData(dataSelecionada)}? Use quando não houve aula — o dia deixa de contar na frequência de todos.`,
+                    confirmLabel: 'Excluir todos',
+                    danger: true,
+                  });
+                  if (!ok || !supabase) return;
+                  setSalvandoLote(true);
+                  let falhas = 0;
+                  for (const { freq } of removiveis) {
+                    const { error } = await supabase.rpc('remover_ponto', { p_ponto_id: freq.id });
+                    if (error) falhas++;
+                  }
+                  setSalvandoLote(false);
+                  setEdits({});
+                  await reload({ silent: true });
+                  showToast(falhas
+                    ? `${removiveis.length - falhas} excluído(s), ${falhas} recusado(s).`
+                    : `${removiveis.length} registro(s) de ${fmtData(dataSelecionada)} excluído(s).`, falhas ? 'error' : 'success', !!falhas);
+                }}
+                title="Exclui os registros deste dia — para dia sem aula lançado por engano"
+                className="btn-solido btn-solido--vermelho !py-2.5 !px-4 !text-xs ml-auto"
+              >
+                <Eraser size={15} /> Limpar dia
+                {removiveis.length > 0 && (
+                  <span className="ml-1 min-w-[1.5rem] px-1.5 py-0.5 rounded-md bg-black/25 text-[11px] font-black tabular-nums">{removiveis.length}</span>
+                )}
+              </button>
+            );
+          })()}
         </div>
       )}
 
@@ -973,22 +1047,22 @@ const FrequenciaTrabalhoViewInner = ({ showToast, profile, filial, embedded }: a
                         </td>
                         <td className="py-3 px-3 text-center">
                           {freq ? (() => {
-                            const cfg = STATUS_CONFIG[freq.status];
-                            const Ic = cfg.icon;
+                            // Selo sólido na cor da situação + horário. Origem e
+                            // autor ficam na dica: "manual" em toda linha era
+                            // ruído, já que sem totem quase tudo é manual.
+                            const origem = freq.origem === 'totem' ? 'no totem' : freq.origem === 'cracha' ? 'por crachá' : 'manualmente';
+                            const hora = freq.entrada ?? (freq.origem === 'totem' ? fmtHorario(freq.created_at) : null);
                             return (
-                              <div className="flex flex-col items-center gap-0.5">
-                                <div className={`flex items-center gap-1 ${cfg.color}`}>
-                                  <Ic size={13} />
-                                  <span className="text-[11px] font-semibold">{STATUS_LABEL[freq.status]}</span>
-                                </div>
-                                {/* Marcação do totem é o colaborador no horário;
-                                    manual é alguém afirmando por ele. A diferença
-                                    importa para conferir, então fica visível. */}
-                                <span className="text-[10px] font-mono text-gray-500 tabular-nums">
-                                  {freq.entrada ?? fmtHorario(freq.created_at)}
-                                  {freq.origem === 'manual' ? ' · manual' : freq.origem === 'totem' ? ' · totem' : ''}
+                              <span className="inline-flex items-center gap-2"
+                                title={`${STATUS_LABEL[freq.status]} — registrado ${origem}${freq.registrado_por_nome ? ` por ${freq.registrado_por_nome}` : ''}`}>
+                                <span className={`text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded ${REGISTRO_COR[freq.status]}`}>
+                                  {STATUS_LABEL[freq.status]}
                                 </span>
-                              </div>
+                                {hora && <span className="text-sm font-semibold text-gray-200 tabular-nums">{hora}</span>}
+                                {freq.origem === 'totem' && (
+                                  <span className="text-[9px] font-bold uppercase tracking-wider text-gray-500">totem</span>
+                                )}
+                              </span>
                             );
                           })() : <span className="text-gray-700 text-xs">—</span>}
                         </td>
@@ -1016,6 +1090,18 @@ const FrequenciaTrabalhoViewInner = ({ showToast, profile, filial, embedded }: a
                             >
                               {isSaving ? <Loader2 size={15} className="animate-spin" /> : <Save size={15} />}
                             </button>
+                            {ehProfessor && freq && !bloqueado && (
+                              <button
+                                type="button"
+                                onClick={() => removerRegistro(func, freq)}
+                                disabled={removendo[func.id] || salvandoLote}
+                                aria-label="Excluir registro"
+                                title="Excluir registro deste dia"
+                                className="action-btn-delete"
+                              >
+                                {removendo[func.id] ? <Loader2 size={12} className="animate-spin" /> : <Trash2 size={12} />}
+                              </button>
+                            )}
                           </div>
                         </td>
                       </tr>

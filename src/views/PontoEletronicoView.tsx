@@ -5,7 +5,8 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Clock, Trash2, ClipboardList, ListChecks, FileDown } from 'lucide-react';
 import { FrequenciaTrabalhoView } from './FrequenciaTrabalhoView';
 import { FrequenciaRelatorioTab } from './FrequenciaRelatorioTab';
-import { useFetchData, dbDelete } from '../hooks/useSupabaseData';
+import { useFetchData } from '../hooks/useSupabaseData';
+import { supabase } from '../lib/supabase';
 import { LoadingSpinner, EmptyState, FilialBadge, CardContador, type TomContador, corDoStatus } from '../components/ui';
 import type { UserProfile } from '../hooks/useUserProfile';
 import { hasSetor, isConselheiro } from '../lib/rbac';
@@ -80,7 +81,9 @@ const PontoEletronicoViewInner = ({ showToast, profile, filial }: { showToast: a
   const handleExcluirManual = async (id: string) => {
     setExcluindoManualId(id);
     try {
-      await dbDelete('/api/pontoeletronicoview', id);
+      // RPC em vez de DELETE direto: recusa turma anterior e afastamento (migr. 635).
+      const { error } = await supabase!.rpc('remover_ponto', { p_ponto_id: id });
+      if (error) throw error;
       setData((prev: any[]) => prev.filter(p => p.id !== id));
       showToast('Registro manual removido.', 'success');
     } catch (err: any) {
