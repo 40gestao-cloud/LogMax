@@ -10,6 +10,7 @@ import { supabase } from '../lib/supabase';
 import { todayBR, dataSimplesBR } from '../lib/dates';
 import { formatBRL, parseBRL, handleMoneyKeyDown } from '../lib/viewUtils';
 import { planoDeParcelas } from '../lib/parcelamento';
+import { SelectBusca } from './SelectBusca';
 
 const brl = (v: number) => `R$ ${formatBRL(v)}`;
 const rotulo = 'text-[10px] uppercase tracking-widest font-bold text-gray-500';
@@ -222,10 +223,13 @@ export function ModalVenderBem({ bem, onClose, onVendido, showToast }: {
       </div>
       <label className="flex flex-col gap-1">
         <span className={rotulo}>Comprador</span>
-        <select className={campo} value={clienteId} onChange={e => setClienteId(e.target.value)}>
-          <option value="">Não informado</option>
-          {clientes.map(c => <option key={c.id} value={c.id}>{c.nome}</option>)}
-        </select>
+        <SelectBusca
+          value={clienteId}
+          onChange={setClienteId}
+          placeholder="Não informado"
+          permitirVazio="Não informado"
+          opcoes={clientes.map(c => ({ value: c.id, label: c.nome }))}
+        />
       </label>
       {total > 0 && <CondicaoPagamento total={total} cond={cond} setCond={setCond} />}
       <p className="text-[11px] text-gray-500">O bem sai do Patrimônio; o ganho ou a perda entra no DRE do mês.</p>

@@ -9,6 +9,9 @@ import { LoadingSpinner, EmptyState, NeuButtonAccent, CardContador, corDoStatus 
 import { useConfirm } from '../contexts/ConfirmContext';
 import type { UserProfile } from '../hooks/useUserProfile';
 import { isConselheiro } from '../lib/rbac';
+import { SelectBusca } from '../components/SelectBusca';
+import { opcaoFuncionario } from '../lib/opcoesSelect';
+import { dataSimplesBR } from '../lib/dates';
 
 const statusCls = (s: string) => corDoStatus(s);
 
@@ -161,28 +164,22 @@ const FeriasViewInner = ({ showToast, profile, filial }: { showToast: any; profi
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
               <div className="flex flex-col gap-1.5">
                 <label htmlFor="ferias-funcionario" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Funcionário *</label>
-                <select id="ferias-funcionario" value={form.funcionario_id} onChange={e => setForm((p: any) => ({ ...p, funcionario_id: e.target.value }))} className="neu-input rounded-xl px-3 py-2.5 text-sm">
-                  <option value="">Selecionar...</option>
-                  {funcSemFerias.length > 0 && (
-                    <optgroup label={`Sem férias em aberto (${funcSemFerias.length})`}>
-                      {funcSemFerias.map((f: any) => (
-                        <option key={f.id} value={f.id}>{f.nome}</option>
-                      ))}
-                    </optgroup>
-                  )}
-                  {funcComFerias.length > 0 && (
-                    <optgroup label={`Já com férias em aberto (${funcComFerias.length})`}>
-                      {funcComFerias.map((f: any) => {
-                        const ff = feriasEmAberto.get(f.id);
-                        return (
-                          <option key={f.id} value={f.id}>
-                            {f.nome} — {ff.status} · {ff.data_inicio}{ff.data_fim ? ` a ${ff.data_fim}` : ''}
-                          </option>
-                        );
-                      })}
-                    </optgroup>
-                  )}
-                </select>
+                <SelectBusca
+                  id="ferias-funcionario"
+                  value={form.funcionario_id}
+                  onChange={v => setForm((p: any) => ({ ...p, funcionario_id: v }))}
+                  placeholder="Escolha o funcionário"
+                  grupos={[
+                    { label: 'Sem férias em aberto', opcoes: funcSemFerias.map((f: any) => opcaoFuncionario(f)) },
+                    { label: 'Já com férias em aberto', opcoes: funcComFerias.map((f: any) => {
+                      const ff = feriasEmAberto.get(f.id);
+                      return opcaoFuncionario(f, {
+                        sub: `${dataSimplesBR(ff.data_inicio)}${ff.data_fim ? ` a ${dataSimplesBR(ff.data_fim)}` : ''}`,
+                        tag: { texto: ff.status, tom: 'azul' as const },
+                      });
+                    }) },
+                  ].filter(g => g.opcoes.length > 0)}
+                />
               </div>
               {[
                 { label: 'Data Início *', k: 'data_inicio', type: 'date' },

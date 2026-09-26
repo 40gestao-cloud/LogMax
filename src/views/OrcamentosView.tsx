@@ -10,7 +10,6 @@ import { useTravaAtualizacao } from '../hooks/useTravaAtualizacao';
 import { ehVendavel } from '../lib/tipoProduto';
 import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent, StatusBadge, Pagination, ExportButton, TextoModal } from '../components/ui';
 import { useFormValidation, formatBRL, parseBRL, exportToPDFAgrupado, exportToExcelAgrupado, handleMoneyKeyDown } from '../lib/viewUtils';
-import { groupCadastrosParaSelect } from '../lib/cadastrosSelect';
 import {
   calcularCondicao, parcelasMaximas, rotuloCondicao, vencimentosPrevistos,
   type FormaPagamento,
@@ -22,6 +21,9 @@ import { useConfirm } from '../contexts/ConfirmContext';
 import type { FilialOp } from '../components/FilialSelector';
 import { useFilial } from '../contexts/FilialContext';
 import { notificarSetor } from '../lib/notificar';
+import { SelectBusca } from '../components/SelectBusca';
+import { gruposDeCadastro } from '../lib/cadastrosSelect';
+import { opcaoProduto } from '../lib/opcoesSelect';
 
 
 interface ItemOrcamento {
@@ -668,18 +670,12 @@ const OrcamentosViewInner = ({
               <h3 className="text-sm font-bold text-gray-200">{editItem ? 'Editar Proposta' : 'Nova Proposta'}</h3>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <FormField label="Cliente *" error={errors.cliente_id}>
-                  <select
-                    className={`neu-input py-2 px-3 rounded-xl text-sm ${errors.cliente_id ? 'border border-red-500/40' : ''}`}
+                  <SelectBusca
                     value={form.cliente_id}
-                    onChange={e => { setForm(f => ({ ...f, cliente_id: e.target.value })); clearError('cliente_id'); }}
-                  >
-                    <option value="">Selecione...</option>
-                    {groupCadastrosParaSelect(clientes).map(g => (
-                      <optgroup key={g.label} label={g.label}>
-                        {g.items.map((c: any) => <option key={c.id} value={c.id}>{c.nome}</option>)}
-                      </optgroup>
-                    ))}
-                  </select>
+                    onChange={v => { setForm(f => ({ ...f, cliente_id: v })); clearError('cliente_id'); }}
+                    placeholder="Escolha o cliente"
+                    grupos={gruposDeCadastro(clientes)}
+                  />
                 </FormField>
                 <FormField label="Validade (dias) *">
                   <input
@@ -799,16 +795,17 @@ const OrcamentosViewInner = ({
                   <div className="flex flex-col gap-2">
                     {itens.map((it, idx) => (
                       <div key={idx} className="grid grid-cols-12 gap-2 items-center neu-pressed rounded-xl p-3">
-                        <select
-                          className="neu-input py-1.5 px-2 rounded-lg text-xs col-span-5"
+                        <SelectBusca
+                          compacto
+                          className="col-span-5"
                           value={it.produto_id}
-                          onChange={e => escolherProduto(idx, e.target.value)}
-                        >
-                          <option value="">Produto...</option>
-                          {produtosFiltrados.map((p: any) => (
-                            <option key={p.id} value={p.id}>{p.nome}{p.codigo ? ` (${p.codigo})` : ''}</option>
-                          ))}
-                        </select>
+                          onChange={v => escolherProduto(idx, v)}
+                          placeholder="Produto"
+                          opcoes={produtosFiltrados.map((p: any) => ({
+                            ...opcaoProduto(p, { saldo: true }),
+                            tag: p.preco != null ? { texto: `R$ ${formatBRL(Number(p.preco))}`, tom: 'cinza' as const } : null,
+                          }))}
+                        />
                         <div className="col-span-2">
                           <input
                             type="number"

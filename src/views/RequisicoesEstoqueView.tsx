@@ -13,6 +13,8 @@ import { useFormValidation } from '../lib/viewUtils';
 import { useConfirm } from '../contexts/ConfirmContext';
 import { FiltroSolicitante, chaveSolicitante } from '../components/FiltroSolicitante';
 import { ExcluirAdmin } from '../components/ExcluirAdmin';
+import { SelectBusca } from '../components/SelectBusca';
+import { opcaoProduto } from '../lib/opcoesSelect';
 
 const RequisicoesEstoqueViewInner = ({ showToast, profile, filial }: { showToast: any; profile: any; filial: FilialOp }) => {
   const { data, setData, isLoading } = useFetchData<any>('/api/requisicoesestoqueview', { filial }, true);
@@ -97,10 +99,12 @@ const RequisicoesEstoqueViewInner = ({ showToast, profile, filial }: { showToast
               <h3 className="text-sm font-bold text-gray-200">Editar Requisição</h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <FormField label="Produto *" error={errors.produto_id}>
-                  <select className={`neu-input py-2 px-3 rounded-xl text-sm ${errors.produto_id ? 'border border-red-500/40' : ''}`} value={form.produto_id} onChange={e => { setForm(f => ({ ...f, produto_id: e.target.value })); clearError('produto_id'); }}>
-                    <option value="">Selecione...</option>
-                    {produtos.map((p: any) => <option key={p.id} value={p.id}>{p.nome}</option>)}
-                  </select>
+                  <SelectBusca
+                    value={form.produto_id}
+                    onChange={v => { setForm(f => ({ ...f, produto_id: v })); clearError('produto_id'); }}
+                    placeholder="Escolha o produto"
+                    opcoes={produtos.map((p: any) => opcaoProduto(p))}
+                  />
                 </FormField>
                 <FormField label="Solicitante">
                   <div className="neu-pressed py-2 px-3 rounded-xl text-sm text-gray-300">

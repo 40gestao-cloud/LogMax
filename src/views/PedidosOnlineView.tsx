@@ -11,6 +11,7 @@ import { useConfirm } from '../contexts/ConfirmContext';
 import { usePrompt } from '../contexts/PromptContext';
 import { groupCadastrosParaSelect } from '../lib/cadastrosSelect';
 import { formatBRL, parseBRL } from '../lib/viewUtils';
+import { SelectBusca } from '../components/SelectBusca';
 
 // Fila da loja pública. O pedido chega de fora sem virar venda — quem vende é
 // o aluno, aqui, e a venda nasce por `criar_venda_pdv` como qualquer outra
@@ -842,17 +843,20 @@ const PedidosOnlineInner = ({ showToast, profile, filial }: { showToast: any; pr
                 <label htmlFor="po-cli" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">
                   {EXIGE_CLIENTE.includes(forma) ? 'Cliente *' : 'Cliente (opcional)'}
                 </label>
-                <select id="po-cli" value={clienteId} onChange={e => setClienteId(e.target.value)}
-                  className="neu-input rounded-xl px-3 py-2.5 text-sm">
-                  <option value="">
-                    {EXIGE_CLIENTE.includes(forma) ? 'Escolha o cliente…' : 'Sem cliente cadastrado'}
-                  </option>
-                  {clientesOpts.map((g: any) => (
-                    <optgroup key={g.label} label={g.label}>
-                      {g.items.map((c: any) => <option key={c.id} value={c.id}>{c.nome}</option>)}
-                    </optgroup>
-                  ))}
-                </select>
+                <SelectBusca
+                  id="po-cli"
+                  value={clienteId}
+                  onChange={v => setClienteId(v)}
+                  placeholder={EXIGE_CLIENTE.includes(forma) ? 'Escolha o cliente' : 'Sem cliente cadastrado'}
+                  permitirVazio={EXIGE_CLIENTE.includes(forma) ? undefined : 'Sem cliente cadastrado'}
+                  grupos={clientesOpts.map((g: any) => ({
+                    label: g.label,
+                    opcoes: g.items.map((c: any) => ({
+                      value: String(c.id), label: c.nome ?? '—',
+                      sub: [c.cnpj || c.cpf, c.cidade].filter(Boolean).join(' · ') || null,
+                    })),
+                  }))}
+                />
               </div>
 
               <p className="text-[11px] text-gray-500 leading-relaxed mb-5">

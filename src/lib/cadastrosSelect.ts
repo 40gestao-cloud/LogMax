@@ -54,3 +54,29 @@ export function groupCadastrosParaSelect<T extends Cadastro>(rows: T[]): Cadastr
 
   return groups.map(({ label, items }) => ({ label, items }));
 }
+
+// Mesmos grupos, já no formato do SelectBusca (lista de escolha rica). `sub`
+// é a segunda linha da opção (documento, cidade…); `extra` deixa quem chama
+// pôr selo ou travar uma opção.
+import type { SelectBuscaGrupo, SelectBuscaOpcao } from '../components/SelectBusca';
+
+export function gruposDeCadastro<T extends Cadastro>(
+  rows: T[],
+  extra?: (r: T) => Partial<SelectBuscaOpcao>,
+): SelectBuscaGrupo[] {
+  return groupCadastrosParaSelect(rows).map(g => ({
+    label: g.label,
+    opcoes: g.items.map(r => ({
+      value: String(r.id),
+      label: r.nome ?? '—',
+      sub: documentoDe(r),
+      ...(extra ? extra(r) : {}),
+    })),
+  }));
+}
+
+function documentoDe(r: any): string | null {
+  const doc = r.cnpj || r.cpf || r.documento || r.cpf_cnpj;
+  const cidade = r.cidade;
+  return [doc, cidade].filter(Boolean).join(' · ') || null;
+}

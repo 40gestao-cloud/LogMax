@@ -26,6 +26,8 @@ import type { UserProfile } from '../hooks/useUserProfile';
 import { isConselheiro, hasAnySetor } from '../lib/rbac';
 import { useConfirm } from '../contexts/ConfirmContext';
 import { semelhancaDeItem } from '../lib/similaridadeItem';
+import { SelectBusca } from '../components/SelectBusca';
+import { opcaoProduto } from '../lib/opcoesSelect';
 
 // Requisição de compra pela área que precisa do item (migr. 283).
 //
@@ -915,25 +917,18 @@ const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: 
               {tipo === 'estoque' ? (
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <FormField label="Produto *" error={erros.produto_id}>
-                    <select
-                      className={`neu-input py-2 px-3 rounded-xl text-sm ${erros.produto_id ? 'border border-red-500/40' : ''}`}
+                    <SelectBusca
                       value={estoqueForm.produto_id}
-                      onChange={e => { setEstoqueForm(f => ({ ...f, produto_id: e.target.value })); setErros({}); }}
-                    >
-                      <option value="">Selecione o produto em estoque…</option>
-                      {([
+                      onChange={v => { setEstoqueForm(f => ({ ...f, produto_id: v })); setErros({}); }}
+                      placeholder="Escolha o produto em estoque"
+                      grupos={([
                         { label: 'Uso e consumo', lista: produtosEmEstoque.filter((p: any) => !ehVendavel(p.tipo)) },
                         { label: 'Mercadoria da loja (consumo próprio)', lista: produtosEmEstoque.filter((p: any) => ehVendavel(p.tipo)) },
-                      ]).filter(g => g.lista.length > 0).map(g => (
-                        <optgroup key={g.label} label={g.label}>
-                          {g.lista.map((p: any) => (
-                            <option key={p.id} value={p.id}>
-                              {p.nome}{p.codigo ? ` (${p.codigo})` : ''} — saldo {qtdBR(p.estoque ?? 0)} {normalizarUnidade(p.unidade)}
-                            </option>
-                          ))}
-                        </optgroup>
-                      ))}
-                    </select>
+                      ]).filter(g => g.lista.length > 0).map(g => ({
+                        label: g.label,
+                        opcoes: g.lista.map((p: any) => opcaoProduto(p, { saldo: true })),
+                      }))}
+                    />
                   </FormField>
 
                   {/* A unidade é a do produto escolhido, não uma escolha à

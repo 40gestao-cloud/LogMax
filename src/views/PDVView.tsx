@@ -19,7 +19,6 @@ import { todayBR } from '../lib/dates';
 import { playBeep, playKaching, playPlim } from '../utils/audioUtils';
 import { FILIAL_COLOR } from '../lib/filiais';
 import type { Produto, Cliente } from '../types/domain';
-import { groupCadastrosParaSelect } from '../lib/cadastrosSelect';
 import { consultarCreditoCliente, bloqueioFiado, type CreditoCliente } from '../lib/credito';
 import { downloadCatalogoEan13Pdf } from '../lib/barcode';
 import { rotuloVariante } from '../lib/atributosProduto';
@@ -35,6 +34,8 @@ import { podeAlternarFilial, podeDevolver, formasDaUnidade, rotuloFiado } from '
 import { montarVendaPdv } from '../lib/pdv/venda';
 import { cancelarAguardandoAntigas, inserirPixPendente, inserirCartaoPendente, cancelarCobranca } from '../lib/pdv/cobranca';
 import { usePagamentoPendente } from '../hooks/usePagamentoPendente';
+import { SelectBusca } from '../components/SelectBusca';
+import { gruposDeCadastro } from '../lib/cadastrosSelect';
 
 // Unidades operacionais do PDV. Matriz é administrativa, não vende — fica fora.
 // Cada filial tem caixa próprio em `controle_caixa`; PDV só opera com o caixa
@@ -2376,18 +2377,13 @@ const PDVViewInner = ({ showToast, profile, filialInicial, onVoltar }: {
                 <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
                   <div className="flex items-center gap-2 p-2 rounded-xl mt-1" style={{ background: 'color-mix(in srgb, var(--color-accent) 6%, transparent)', border: '1px solid color-mix(in srgb, var(--color-accent) 15%, transparent)' }}>
                     <User size={12} className="text-accent shrink-0" />
-                    <select
+                    <SelectBusca
                       value={clienteId}
-                      onChange={e => setClienteId(e.target.value)}
-                      className="neu-input py-1.5 px-2 rounded-lg text-xs flex-1 bg-transparent border-none outline-none"
-                    >
-                      <option value="">Selecione o cliente *</option>
-                      {groupCadastrosParaSelect(clientes).map(g => (
-                        <optgroup key={g.label} label={g.label}>
-                          {g.items.map((c: any) => <option key={c.id} value={c.id}>{c.nome}</option>)}
-                        </optgroup>
-                      ))}
-                    </select>
+                      onChange={v => setClienteId(v)}
+                      placeholder="Escolha o cliente *"
+                      className="flex-1 min-w-0"
+                      grupos={gruposDeCadastro(clientes)}
+                    />
                   </div>
                   {/* Situação de crédito (migr. 416). Aparece só quando há algo
                       a dizer: sem limite cadastrado e sem dívida, não há painel

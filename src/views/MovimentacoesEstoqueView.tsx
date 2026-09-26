@@ -12,6 +12,8 @@ import { useFormValidation, idsDeProdutosPorTermo } from '../lib/viewUtils';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import { useConfirm } from '../contexts/ConfirmContext';
 import type { UserProfile } from '../hooks/useUserProfile';
+import { SelectBusca } from '../components/SelectBusca';
+import { opcaoProduto } from '../lib/opcoesSelect';
 
 const MovimentacoesEstoqueViewInner = ({ showToast, filial, profile }: { showToast: any; filial: FilialOp; profile?: UserProfile | null }) => {
   const confirm = useConfirm();
@@ -159,11 +161,12 @@ const MovimentacoesEstoqueViewInner = ({ showToast, filial, profile }: { showToa
               <h3 className="text-sm font-bold text-gray-200">Nova Movimentação</h3>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <FormField label="Produto *" error={errors.produto_id}>
-                  <select className={`neu-input py-2 px-3 rounded-xl text-sm ${errors.produto_id ? 'border border-red-500/40' : ''}`}
-                    value={form.produto_id} onChange={e => { setForm(f => ({ ...f, produto_id: e.target.value })); clearError('produto_id'); }}>
-                    <option value="">Selecione...</option>
-                    {produtos.map((p: any) => <option key={p.id} value={p.id}>{p.nome}</option>)}
-                  </select>
+                  <SelectBusca
+                    value={form.produto_id}
+                    onChange={v => { setForm(ff => ({ ...ff, produto_id: v })); clearError('produto_id'); }}
+                    placeholder="Escolha o produto"
+                    opcoes={produtos.map((p: any) => opcaoProduto(p, { saldo: true }))}
+                  />
                 </FormField>
                 <FormField label="Tipo *" error={errors.tipo}>
                   <select className={`neu-input py-2 px-3 rounded-xl text-sm ${errors.tipo ? 'border border-red-500/40' : ''}`}

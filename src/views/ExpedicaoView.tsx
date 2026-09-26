@@ -12,6 +12,8 @@ import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent, StatusBadge, Pa
 import { useFormValidation, idsDeProdutosPorTermo } from '../lib/viewUtils';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import { useConfirm } from '../contexts/ConfirmContext';
+import { SelectBusca } from '../components/SelectBusca';
+import { opcaoProduto } from '../lib/opcoesSelect';
 
 const ExpedicaoViewInner = ({ showToast, filial }: { showToast: any; filial: FilialOp }) => {
   const [page, setPage] = useState(0);
@@ -147,22 +149,28 @@ const ExpedicaoViewInner = ({ showToast, filial }: { showToast: any; filial: Fil
             <div className="neu-flat rounded-2xl p-6 border border-white/5 flex flex-col gap-4">
               <h3 className="text-sm font-bold text-gray-200">Nova Expedição</h3>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <FormField label="Produto *" error={errors.produto_id}><select className={`neu-input py-2 px-3 rounded-xl text-sm ${errors.produto_id ? 'border border-red-500/40' : ''}`} value={form.produto_id} onChange={e => { setForm(f => ({ ...f, produto_id: e.target.value })); clearError('produto_id'); }}><option value="">Selecione...</option>{produtos.map((p: any) => <option key={p.id} value={p.id}>{p.nome}</option>)}</select></FormField>
-                <FormField label="Requisição (opcional)"><select className="neu-input py-2 px-3 rounded-xl text-sm" value={extras.requisicao_id} onChange={e => setExtras(x => ({ ...x, requisicao_id: e.target.value }))}><option value="">Nenhuma</option>
-                  {requisicoesParaExpedir.pendentes.length > 0 && (
-                    <optgroup label={`Ainda sem expedição (${requisicoesParaExpedir.pendentes.length})`}>
-                      {requisicoesParaExpedir.pendentes.map((r: any) => <option key={r.id} value={r.id}>{r.solicitante} — {r.destino}</option>)}
-                    </optgroup>
-                  )}
-                  {requisicoesParaExpedir.expedidas.length > 0 && (
-                    <optgroup label={`Já expedidas (${requisicoesParaExpedir.expedidas.length})`}>
-                      {requisicoesParaExpedir.expedidas.map((r: any) => {
-                        const n = requisicoesExpedidas.get(r.id) ?? 0;
-                        return <option key={r.id} value={r.id}>{r.solicitante} — {r.destino} · {n} expediç{n === 1 ? 'ão' : 'ões'}</option>;
-                      })}
-                    </optgroup>
-                  )}
-                </select></FormField>
+                <FormField label="Produto *" error={errors.produto_id}><SelectBusca
+                  value={form.produto_id}
+                  onChange={v => { setForm(ff => ({ ...ff, produto_id: v })); clearError('produto_id'); }}
+                  placeholder="Escolha o produto"
+                  opcoes={produtos.map((p: any) => opcaoProduto(p, { saldo: true }))}
+                /></FormField>
+                <FormField label="Requisição (opcional)"><SelectBusca
+                  value={extras.requisicao_id}
+                  onChange={v => setExtras(x => ({ ...x, requisicao_id: v }))}
+                  placeholder="Nenhuma"
+                  permitirVazio="Nenhuma"
+                  grupos={[
+                    { label: 'Ainda sem expedição', opcoes: requisicoesParaExpedir.pendentes.map((r: any) => ({
+                      value: String(r.id), label: r.solicitante ?? '—', sub: r.destino ?? null,
+                    })) },
+                    { label: 'Já expedidas', opcoes: requisicoesParaExpedir.expedidas.map((r: any) => {
+                      const n = requisicoesExpedidas.get(r.id) ?? 0;
+                      return { value: String(r.id), label: r.solicitante ?? '—', sub: r.destino ?? null,
+                        tag: { texto: `${n} expediç${n === 1 ? 'ão' : 'ões'}`, tom: 'azul' as const } };
+                    }) },
+                  ].filter(g => g.opcoes.length > 0)}
+                /></FormField>
                 <FormField label="Qtd Expedida"><input type="number" className="neu-input py-2 px-3 rounded-xl text-sm" value={extras.qtd_expedida} onChange={e => setExtras(x => ({ ...x, qtd_expedida: e.target.value }))} placeholder="0" /></FormField>
                 <FormField label="Data Expedição"><input type="date" className="neu-input py-2 px-3 rounded-xl text-sm" value={extras.data_expedicao} onChange={e => setExtras(x => ({ ...x, data_expedicao: e.target.value }))} /></FormField>
               </div>

@@ -13,6 +13,7 @@ import { exportToPDF, exportToExcel, formatCPF, formatPhone, formatBRL, parseBRL
 import { uploadFotoDeFuncionario, validarFotoPerfil, PERFIL_FOTO_ACCEPT } from '../lib/perfilFoto';
 import { roleLabel } from '../lib/rbac';
 import { setorLabel } from '../lib/setores';
+import { SelectBusca } from '../components/SelectBusca';
 
 const MASK_FOR: Record<string, (v: string) => string> = {
   cpf:      formatCPF,
@@ -428,11 +429,11 @@ const FuncionariosViewInner = ({ showToast, filial }: { showToast: any; filial: 
                 <label htmlFor="func-usuario" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">
                   Trazer de Usuários ({filial}) — opcional
                 </label>
-                <select
+                <SelectBusca
                   id="func-usuario"
                   value={usuarioSel}
-                  onChange={e => {
-                    const escolhido = usuariosDaUnidade.find((u: any) => u.id === e.target.value);
+                  onChange={v => {
+                    const escolhido = usuariosDaUnidade.find((u: any) => u.id === v);
                     if (escolhido) { openNewFromUser(escolhido); return; }
                     // "Do zero" desfaz só o VÍNCULO. O texto já digitado fica:
                     // apagar o que o RH escreveu por causa de uma troca de
@@ -440,19 +441,16 @@ const FuncionariosViewInner = ({ showToast, filial }: { showToast: any; filial: 
                     setUsuarioSel('');
                     setForm((p: any) => ({ ...p, user_profile_id: null }));
                   }}
-                  className="neu-input rounded-xl px-3 py-2.5 text-sm"
-                >
-                  <option value="">Cadastrar do zero (sem conta de usuário)</option>
-                  {usuariosDaUnidade.map((u: any) => (
-                    <option key={u.id} value={u.id} disabled={u.jaCadastrado}>
-                      {u.nome || '(sem nome)'}
-                      {u.email ? ` — ${u.email}` : ''}
-                      {u.cargoTexto ? ` · ${u.cargoTexto}` : ''}
-                      {u.deptoTexto ? ` · ${u.deptoTexto}` : ''}
-                      {u.jaCadastrado ? ' (já cadastrado)' : ''}
-                    </option>
-                  ))}
-                </select>
+                  placeholder="Cadastrar do zero (sem conta de usuário)"
+                  permitirVazio="Cadastrar do zero (sem conta de usuário)"
+                  opcoes={usuariosDaUnidade.map((u: any) => ({
+                    value: String(u.id),
+                    label: u.nome || '(sem nome)',
+                    sub: [u.email, u.cargoTexto, u.deptoTexto].filter(Boolean).join(' · ') || null,
+                    tag: u.jaCadastrado ? { texto: 'Já cadastrado', tom: 'verde' as const } : null,
+                    disabled: !!u.jaCadastrado,
+                  }))}
+                />
                 {usuariosSemCadastro.length > 0 && (
                   <p className="text-[11px] text-gray-500">
                     {usuariosSemCadastro.length} de {usuariosDaUnidade.length} sem cadastro

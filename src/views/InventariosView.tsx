@@ -12,6 +12,8 @@ import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent, StatusBadge, Pa
 import { useFormValidation, idsDeProdutosPorTermo } from '../lib/viewUtils';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import { useConfirm } from '../contexts/ConfirmContext';
+import { SelectBusca } from '../components/SelectBusca';
+import { opcaoProduto } from '../lib/opcoesSelect';
 
 const InventariosViewInner = ({ showToast, filial }: { showToast: any; filial: FilialOp }) => {
   const [page, setPage] = useState(0);
@@ -156,18 +158,18 @@ const InventariosViewInner = ({ showToast, filial }: { showToast: any; filial: F
             <div className="neu-flat rounded-2xl p-6 border border-white/5 flex flex-col gap-4">
               <h3 className="text-sm font-bold text-gray-200">Nova Contagem</h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <FormField label="Produto *" error={errors.produto_id}><select className={`neu-input py-2 px-3 rounded-xl text-sm ${errors.produto_id ? 'border border-red-500/40' : ''}`} value={form.produto_id} onChange={e => { setForm(f => ({ ...f, produto_id: e.target.value })); clearError('produto_id'); }}><option value="">Selecione...</option>
-                  {produtosParaContar.livres.length > 0 && (
-                    <optgroup label={`Sem contagem aberta (${produtosParaContar.livres.length})`}>
-                      {produtosParaContar.livres.map((p: any) => <option key={p.id} value={p.id}>{p.nome}</option>)}
-                    </optgroup>
-                  )}
-                  {produtosParaContar.emContagem.length > 0 && (
-                    <optgroup label={`Já em contagem — feche o inventário antes (${produtosParaContar.emContagem.length})`}>
-                      {produtosParaContar.emContagem.map((p: any) => <option key={p.id} value={p.id} disabled>{p.nome}</option>)}
-                    </optgroup>
-                  )}
-                </select></FormField>
+                <FormField label="Produto *" error={errors.produto_id}><SelectBusca
+                  value={form.produto_id}
+                  onChange={v => { setForm(ff => ({ ...ff, produto_id: v })); clearError('produto_id'); }}
+                  placeholder="Escolha o produto"
+                  grupos={[
+                    { label: 'Sem contagem aberta', opcoes: produtosParaContar.livres.map((p: any) => opcaoProduto(p, { saldo: true })) },
+                    { label: 'Já em contagem — feche o inventário antes', opcoes: produtosParaContar.emContagem.map((p: any) => ({
+                      ...opcaoProduto(p), disabled: true,
+                      tag: { texto: 'Em contagem', tom: 'amarelo' as const },
+                    })) },
+                  ].filter(g => g.opcoes.length > 0)}
+                /></FormField>
                 <FormField label="Qtd Contada *"><input type="number" min="0" className="neu-input py-2 px-3 rounded-xl text-sm" value={extras.qtd_contada} onChange={e => setExtras(x => ({ ...x, qtd_contada: e.target.value }))} placeholder="0" /></FormField>
                 {form.produto_id && (
                   <div className="neu-pressed rounded-xl px-3 py-2 self-end">

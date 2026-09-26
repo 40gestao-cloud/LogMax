@@ -14,6 +14,8 @@ import { LoadingSpinner, EmptyState, NeuButtonAccent, corDoStatus } from '../com
 import { hasSetor } from '../lib/rbac';
 import { useConfirm } from '../contexts/ConfirmContext';
 import type { UserProfile } from '../hooks/useUserProfile';
+import { SelectBusca } from '../components/SelectBusca';
+import { opcaoFuncionario } from '../lib/opcoesSelect';
 
 /**
  * Tela de Desligamento (migrs. 306/307).
@@ -374,18 +376,12 @@ const DesligamentosViewInner = ({ showToast, profile, filial }: {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label className="text-[10px] font-bold uppercase tracking-widest text-gray-500 block mb-1.5">Colaborador</label>
-              <select
+              <SelectBusca
                 value={form.funcionario_id}
-                onChange={e => setForm(f => ({ ...f, funcionario_id: e.target.value }))}
-                className="neu-input w-full px-3 py-2.5 rounded-xl text-sm"
-              >
-                <option value="">Selecione…</option>
-                {ativos.map((f: any) => (
-                  <option key={f.id} value={f.id}>
-                    {f.nome}{f.cargo ? ` — ${f.cargo}` : ''}
-                  </option>
-                ))}
-              </select>
+                onChange={v => setForm(f => ({ ...f, funcionario_id: v }))}
+                placeholder="Escolha o colaborador"
+                opcoes={ativos.map((f: any) => opcaoFuncionario(f))}
+              />
             </div>
 
             <div>

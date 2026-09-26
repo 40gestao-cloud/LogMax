@@ -25,6 +25,8 @@ import { supabase } from '../lib/supabase';
 import { todayBR } from '../lib/dates';
 import { useConfirm } from '../contexts/ConfirmContext';
 import { HistoricoOperacoes } from '../components/HistoricoOperacoes';
+import { SelectBusca } from '../components/SelectBusca';
+import { opcaoProduto } from '../lib/opcoesSelect';
 import {
   LoadingSpinner, EmptyState, FormField, NeuButtonAccent,
   Pagination, SelecioneUnidade, FilaDeTrabalho,
@@ -244,21 +246,18 @@ const ValidadesViewInner = ({ showToast, filial }: { showToast: any; filial: Fil
               <h3 className="text-sm font-bold text-gray-200">Novo lote</h3>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 <FormField label="Produto *">
-                  <select className="neu-input py-2 px-3 rounded-xl text-sm" value={form.produto_id}
-                    onChange={e => {
+                  <SelectBusca
+                    value={form.produto_id}
+                    onChange={v => {
                       // A ficha sugere hoje + validade_dias (migr. 360); continua editável.
-                      const prod = produtos.find((p: any) => p.id === e.target.value);
+                      const prod = produtos.find((p: any) => p.id === v);
                       const sugerida = prod ? vencimentoPrevisto(prod, hoje) : null;
-                      setForm(f => ({
-                        ...f,
-                        produto_id: e.target.value,
-                        vencimento: sugerida ?? f.vencimento,
-                      }));
-                    }}>
-                    <option value="">Selecione...</option>
-                    {[...produtos].sort((a: any, b: any) => String(a.nome).localeCompare(String(b.nome), 'pt-BR'))
-                      .map((p: any) => <option key={p.id} value={p.id}>{p.nome} (saldo {qtdBR(p.estoque ?? 0)} {normalizarUnidade(p.unidade)})</option>)}
-                  </select>
+                      setForm(ff => ({ ...ff, produto_id: v, vencimento: sugerida ?? ff.vencimento }));
+                    }}
+                    placeholder="Escolha o produto"
+                    opcoes={[...produtos].sort((a: any, b: any) => String(a.nome).localeCompare(String(b.nome), 'pt-BR'))
+                      .map((p: any) => opcaoProduto(p, { saldo: true }))}
+                  />
                 </FormField>
                 <FormField label="Lote">
                   <input className="neu-input py-2 px-3 rounded-xl text-sm" value={form.lote}

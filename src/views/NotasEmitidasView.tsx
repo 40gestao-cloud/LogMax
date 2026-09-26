@@ -8,10 +8,11 @@ import { supabase } from '../lib/supabase';
 import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent, StatusBadge } from '../components/ui';
 import { HistoricoOperacoes } from '../components/HistoricoOperacoes';
 import { useFormValidation, formatBRL, parseBRL, handleMoneyKeyDown, gerarNotaEmitidaPDF } from '../lib/viewUtils';
-import { groupCadastrosParaSelect } from '../lib/cadastrosSelect';
 import { hasSetor } from '../lib/rbac';
 import { todayBR } from '../lib/dates';
 import type { UserProfile } from '../hooks/useUserProfile';
+import { SelectBusca } from '../components/SelectBusca';
+import { gruposDeCadastro } from '../lib/cadastrosSelect';
 
 type NotaEmitida = {
   id: string;
@@ -223,16 +224,13 @@ const NotasEmitidasViewInner = ({ showToast, filial, profile }: {
                   </select>
                 </FormField>
                 <FormField label="Cliente">
-                  <select className="neu-input py-2 px-3 rounded-xl text-sm"
+                  <SelectBusca
                     value={extras.cliente_id}
-                    onChange={e => setExtras(x => ({ ...x, cliente_id: e.target.value }))}>
-                    <option value="">Consumidor final</option>
-                    {groupCadastrosParaSelect(clientes).map(g => (
-                      <optgroup key={g.label} label={g.label}>
-                        {g.items.map((c: any) => <option key={c.id} value={c.id}>{c.nome}</option>)}
-                      </optgroup>
-                    ))}
-                  </select>
+                    onChange={v => setExtras(x => ({ ...x, cliente_id: v }))}
+                    placeholder="Consumidor final"
+                    permitirVazio="Consumidor final"
+                    grupos={gruposDeCadastro(clientes)}
+                  />
                 </FormField>
                 <FormField label="Valor Total (R$) *">
                   <input type="text" inputMode="numeric"

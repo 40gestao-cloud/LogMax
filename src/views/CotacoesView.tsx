@@ -27,6 +27,7 @@ import { useReservaTrabalho } from '../hooks/useReservaTrabalho';
 import type { FilialOp } from '../components/FilialSelector';
 import { useFilial } from '../contexts/FilialContext';
 import { pedirCadastroDaCotacao } from '../lib/cadastroDaCotacao';
+import { SelectBusca, type SelectBuscaGrupo } from '../components/SelectBusca';
 
 // Status considerados "propostas vivas" para contagem de concorrentes.
 // Cancelado/Negado são histórico — aparecem na comparação mas não contam.
@@ -1708,28 +1709,29 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode, onNavigate }: { s
                   )}
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                     <FormField label="Requisição *" error={errors.requisicao_id}>
-                      <select className={`neu-input py-2 px-3 rounded-xl text-sm ${errors.requisicao_id ? 'border border-red-500/40' : ''}`}
-                        {...selReq.handlers}
-                        value={form.requisicao_id} onChange={e => { selReq.soltar(); setForm(f => ({ ...f, requisicao_id: e.target.value })); clearError('requisicao_id'); }}>
-                        <option value="">Selecione...</option>
-                        {selReq.opcoes.pendentes.length > 0 && (
-                          <optgroup label={`Ainda sem cotação (${selReq.opcoes.pendentes.length})`}>
-                            {selReq.opcoes.pendentes.map(({ r }) => (
-                              <option key={r.id} value={r.id}>{r.item} ({rotuloQtdReq(r)})</option>
-                            ))}
-                          </optgroup>
-                        )}
-                        {selReq.opcoes.cotadas.length > 0 && (
-                          <optgroup label={`Já cotadas (${selReq.opcoes.cotadas.length})`}>
-                            {selReq.opcoes.cotadas.map(({ r, vivas, aprovada }) => (
-                              <option key={r.id} value={r.id} disabled={aprovada}>
-                                {r.item} ({rotuloQtdReq(r)}) — {vivas} proposta{vivas === 1 ? '' : 's'}
-                                {aprovada ? ' · aprovada, gere o pedido' : ''}
-                              </option>
-                            ))}
-                          </optgroup>
-                        )}
-                      </select>
+                      <SelectBusca
+                        value={form.requisicao_id}
+                        error={undefined}
+                        placeholder="Escolha a requisição"
+                        onAbrir={selReq.handlers.onMouseDown}
+                        onFechar={selReq.soltar}
+                        onChange={v => { selReq.soltar(); setForm(f => ({ ...f, requisicao_id: v })); clearError('requisicao_id'); }}
+                        grupos={[
+                          { label: 'Ainda sem cotação', opcoes: selReq.opcoes.pendentes.map(({ r }) => ({
+                            value: r.id, label: r.item ?? '—', sub: rotuloQtdReq(r), hint: numeroRequisicao(r),
+                          })) },
+                          // Aprovada num grupo só dela: o motivo é o do grupo, e
+                          // repetir a frase em cada linha virava ruído.
+                          { label: 'Já cotadas — pode cotar de novo', opcoes: selReq.opcoes.cotadas.filter(x => !x.aprovada).map(({ r, vivas }) => ({
+                            value: r.id, label: r.item ?? '—', sub: rotuloQtdReq(r), hint: numeroRequisicao(r),
+                            tag: { texto: `${vivas} proposta${vivas === 1 ? '' : 's'}`, tom: 'azul' as const },
+                          })) },
+                          { label: 'Aprovadas — gere o pedido', opcoes: selReq.opcoes.cotadas.filter(x => x.aprovada).map(({ r }) => ({
+                            value: r.id, label: r.item ?? '—', sub: rotuloQtdReq(r), hint: numeroRequisicao(r),
+                            tag: { texto: 'Aprovada', tom: 'verde' as const }, disabled: true,
+                          })) },
+                        ].filter(g => g.opcoes.length > 0)}
+                      />
                       {/* A lista suspensa não deixa selecionar texto: o nome do
                           produto escolhido aparece aqui, copiável, para o aluno
                           pesquisar o preço fora sem redigitar. É a única
@@ -1759,66 +1761,64 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode, onNavigate }: { s
                       })()}
                     </FormField>
                     <FormField label="Fornecedor PJ" error={errors.fornecedor_id}>
-                      <select className={`neu-input py-2 px-3 rounded-xl text-sm ${errors.fornecedor_id ? 'border border-red-500/40' : ''}`}
-                        {...selPJ.handlers}
+                      <SelectBusca
                         value={form.fornecedor_tipo === 'Empresa' ? form.fornecedor_id : ''}
-                        onChange={e => { selPJ.soltar(); setForm(f => ({ ...f, fornecedor_id: e.target.value, fornecedor_tipo: e.target.value ? 'Empresa' : '' })); clearError('fornecedor_id'); }}>
-                        <option value="">Selecione um fornecedor PJ...</option>
-                        {selPJ.opcoes.grupos.map(g => (
-                          <optgroup key={g.label} label={g.label}>
-                            {g.items.map((f: any) => {
-                              // Duas travas diferentes, e a ordem importa: a
-                              // proposta que já existe é definitiva (o banco
-                              // recusa, migr. 538); a reserva é transitória
-                              // (passa em 3 min, migr. 537).
-                              const jaCotado = selPJ.opcoes.jaCotados.get(f.id);
-                              const res = selPJ.opcoes.reservas[f.id];
-                              const travado = !!res && res.usuario_id !== profile.id;
-                              const rotulo = jaCotado
-                                ? `✓ ${f.nome} — já cotado nesta requisição (${jaCotado})`
-                                : travado
-                                  ? `🔒 ${f.nome} — ${res.usuario_nome} está cotando`
-                                  : f.nome;
-                              return (
-                                <option key={f.id} value={f.id} disabled={!!jaCotado || travado}>
-                                  {rotulo}
-                                </option>
-                              );
-                            })}
-                          </optgroup>
-                        ))}
-                      </select>
+                        placeholder="Escolha o fornecedor PJ"
+                        onAbrir={selPJ.handlers.onMouseDown}
+                        onFechar={selPJ.soltar}
+                        onChange={v => { selPJ.soltar(); setForm(f => ({ ...f, fornecedor_id: v, fornecedor_tipo: v ? 'Empresa' : '' })); clearError('fornecedor_id'); }}
+                        grupos={selPJ.opcoes.grupos.map((g): SelectBuscaGrupo => ({
+                          label: g.label,
+                          opcoes: g.items.map((f: any) => {
+                            // Duas travas diferentes, e a ordem importa: a
+                            // proposta que já existe é definitiva (o banco
+                            // recusa, migr. 538); a reserva é transitória
+                            // (passa em 3 min, migr. 537).
+                            const jaCotado = selPJ.opcoes.jaCotados.get(f.id);
+                            const res = selPJ.opcoes.reservas[f.id];
+                            const travado = !!res && res.usuario_id !== profile.id;
+                            return {
+                              value: f.id, label: f.nome ?? '—',
+                              sub: [f.cnpj || f.cpf, f.cidade].filter(Boolean).join(' · ') || null,
+                              tag: jaCotado ? { texto: 'Já cotado', tom: 'verde' as const }
+                                : travado ? { texto: 'Em uso', tom: 'amarelo' as const } : null,
+                              disabled: !!jaCotado || travado,
+                              motivo: jaCotado ? `Já tem proposta nesta requisição (${jaCotado})`
+                                : travado ? `${res.usuario_nome} está cotando com este fornecedor` : null,
+                            };
+                          }),
+                        }))}
+                      />
                     </FormField>
                     <FormField label="Fornecedor PF" error={errors.fornecedor_id}>
-                      <select className={`neu-input py-2 px-3 rounded-xl text-sm ${errors.fornecedor_id ? 'border border-red-500/40' : ''}`}
-                        {...selPF.handlers}
+                      <SelectBusca
                         value={form.fornecedor_tipo === 'Pessoa Física' ? form.fornecedor_id : ''}
-                        onChange={e => { selPF.soltar(); setForm(f => ({ ...f, fornecedor_id: e.target.value, fornecedor_tipo: e.target.value ? 'Pessoa Física' : '' })); clearError('fornecedor_id'); }}>
-                        <option value="">Selecione um fornecedor PF...</option>
-                        {selPF.opcoes.grupos.map(g => (
-                          <optgroup key={g.label} label={g.label}>
-                            {g.items.map((f: any) => {
-                              // Duas travas diferentes, e a ordem importa: a
-                              // proposta que já existe é definitiva (o banco
-                              // recusa, migr. 538); a reserva é transitória
-                              // (passa em 3 min, migr. 537).
-                              const jaCotado = selPF.opcoes.jaCotados.get(f.id);
-                              const res = selPF.opcoes.reservas[f.id];
-                              const travado = !!res && res.usuario_id !== profile.id;
-                              const rotulo = jaCotado
-                                ? `✓ ${f.nome} — já cotado nesta requisição (${jaCotado})`
-                                : travado
-                                  ? `🔒 ${f.nome} — ${res.usuario_nome} está cotando`
-                                  : f.nome;
-                              return (
-                                <option key={f.id} value={f.id} disabled={!!jaCotado || travado}>
-                                  {rotulo}
-                                </option>
-                              );
-                            })}
-                          </optgroup>
-                        ))}
-                      </select>
+                        placeholder="Escolha o fornecedor PF"
+                        onAbrir={selPF.handlers.onMouseDown}
+                        onFechar={selPF.soltar}
+                        onChange={v => { selPF.soltar(); setForm(f => ({ ...f, fornecedor_id: v, fornecedor_tipo: v ? 'Pessoa Física' : '' })); clearError('fornecedor_id'); }}
+                        grupos={selPF.opcoes.grupos.map((g): SelectBuscaGrupo => ({
+                          label: g.label,
+                          opcoes: g.items.map((f: any) => {
+                            // Duas travas diferentes, e a ordem importa: a
+                            // proposta que já existe é definitiva (o banco
+                            // recusa, migr. 538); a reserva é transitória
+                            // (passa em 3 min, migr. 537).
+                            const jaCotado = selPF.opcoes.jaCotados.get(f.id);
+                            const res = selPF.opcoes.reservas[f.id];
+                            const travado = !!res && res.usuario_id !== profile.id;
+                            return {
+                              value: f.id, label: f.nome ?? '—',
+                              sub: [f.cnpj || f.cpf, f.cidade].filter(Boolean).join(' · ') || null,
+                              tag: jaCotado ? { texto: 'Já cotado', tom: 'verde' as const }
+                                : travado ? { texto: 'Em uso', tom: 'amarelo' as const } : null,
+                              disabled: !!jaCotado || travado,
+                              motivo: jaCotado ? `Já tem proposta nesta requisição (${jaCotado})`
+                                : travado ? `${res.usuario_nome} está cotando com este fornecedor` : null,
+                            };
+                          }),
+                        }))}
+                      />
                     </FormField>
                     {/* Atalho permanente: a lista pode ter fornecedor e ainda
                         assim faltar justo o que o aluno precisa cotar, e o

@@ -14,6 +14,8 @@ import type { UserProfile } from '../hooks/useUserProfile';
 import type { FilialOp } from '../components/FilialSelector';
 import { useConfirm } from '../contexts/ConfirmContext';
 import { useFilial } from '../contexts/FilialContext';
+import { SelectBusca } from '../components/SelectBusca';
+import { opcaoBanco } from '../lib/opcoesSelect';
 
 // Títulos que ainda cabem num repasse. Mesma régua da tela de Contas a Receber.
 const RECEBIVEL = ['Aberto', 'Atrasado', 'Parcial'];
@@ -215,13 +217,12 @@ const ConciliacaoMaquininhaViewInner = ({
               </select>
             </FormField>
             <FormField label="Caiu na conta *">
-              <select className="neu-input py-2 px-3 rounded-xl text-sm"
-                value={bancoId} onChange={e => setBancoId(e.target.value)}>
-                <option value="">Selecione...</option>
-                {bancosAtivos.map((b: any) => (
-                  <option key={b.id} value={b.id}>{b.banco} — {b.conta}</option>
-                ))}
-              </select>
+              <SelectBusca
+                value={bancoId}
+                onChange={setBancoId}
+                placeholder="Escolha a conta"
+                opcoes={bancosAtivos.map((b: any) => opcaoBanco(b))}
+              />
             </FormField>
             <FormField label="Data do repasse *">
               <input type="date" className="neu-input py-2 px-3 rounded-xl text-sm"

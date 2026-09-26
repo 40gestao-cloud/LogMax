@@ -292,18 +292,19 @@ export function SecaoIdentificacao({
           )}
           {/* Opcional desde a migr. 488: é sugestão para a cotação. */}
           <FormField label="Fornecedor habitual">
-            <select className="neu-input py-2 px-3 rounded-xl text-sm"
+            <SelectBusca
               value={extras.fornecedor_id}
-              onChange={e => {
-                const id = e.target.value;
+              onChange={id => {
                 const nome = fornecedoresOrdenados.find((f: any) => f.id === id)?.nome ?? '';
                 setExtras(x => ({ ...x, fornecedor_id: id, fornecedor: nome }));
-              }}>
-              <option value="">— Ainda não sei —</option>
-              {fornecedoresOrdenados.map((f: any) => (
-                <option key={f.id} value={f.id}>{f.nome}</option>
-              ))}
-            </select>
+              }}
+              placeholder="— Ainda não sei —"
+              permitirVazio="— Ainda não sei —"
+              opcoes={fornecedoresOrdenados.map((f: any) => ({
+                value: String(f.id), label: f.nome ?? '—',
+                sub: [f.cnpj || f.cpf, f.cidade].filter(Boolean).join(' · ') || null,
+              }))}
+            />
           </FormField>
         </div>
 

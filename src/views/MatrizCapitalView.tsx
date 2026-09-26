@@ -18,6 +18,8 @@ import type { UserProfile } from '../hooks/useUserProfile';
 import { bancoDaUnidade } from '../lib/filiais';
 import { useConfirm } from '../contexts/ConfirmContext';
 import { formatBRL, parseBRL, qtdBR } from '../lib/viewUtils';
+import { SelectBusca } from '../components/SelectBusca';
+import { opcaoBanco } from '../lib/opcoesSelect';
 
 // ── Tipos ──────────────────────────────────────────────────────────────────
 type CapitalRow = {
@@ -278,17 +280,12 @@ function ModalCapital({
         {!isCapitalProprio && (
           <div className="flex flex-col gap-1">
             <label className="text-[10px] font-black uppercase tracking-widest text-gray-500">Sai da conta (Matriz) *</label>
-            <select
-              value={origemId} onChange={e => setOrigemId(e.target.value)}
-              className="neu-pressed rounded-xl px-3 py-2.5 text-sm text-gray-100 bg-transparent outline-none"
-            >
-              <option value="">Selecione...</option>
-              {contasMatriz.map(b => (
-                <option key={b.id} value={b.id}>
-                  {b.banco} — {b.conta} · saldo {BRL(Number(b.saldo ?? 0))}
-                </option>
-              ))}
-            </select>
+            <SelectBusca
+              value={origemId}
+              onChange={setOrigemId}
+              placeholder="Escolha a conta"
+              opcoes={contasMatriz.map(b => opcaoBanco(b, { saldo: true }))}
+            />
             {contasMatriz.length === 0 && (
               <span className="text-[10px] text-yellow-400">
                 A Matriz não tem caixa/banco ativo. Cadastre um em Caixa / Bancos e registre o capital próprio antes de aportar.
@@ -306,15 +303,12 @@ function ModalCapital({
           <label className="text-[10px] font-black uppercase tracking-widest text-gray-500">
             Entra na conta ({filial}) *
           </label>
-          <select
-            value={destinoId} onChange={e => setDestinoId(e.target.value)}
-            className="neu-pressed rounded-xl px-3 py-2.5 text-sm text-gray-100 bg-transparent outline-none"
-          >
-            <option value="">Selecione...</option>
-            {contasDestino.map(b => (
-              <option key={b.id} value={b.id}>{b.banco} — {b.conta} ({b.tipo})</option>
-            ))}
-          </select>
+          <SelectBusca
+              value={destinoId}
+              onChange={setDestinoId}
+              placeholder="Escolha a conta"
+              opcoes={contasDestino.map(b => opcaoBanco(b, { saldo: false }))}
+            />
           {contasDestino.length === 0 && (
             <span className="text-[10px] text-yellow-400">
               {filial} não tem caixa/banco ativo. Cadastre um em Caixa / Bancos antes.
@@ -444,17 +438,12 @@ function ModalAprovarEmprestimo({
         <div className="flex flex-col gap-3">
           <div className="flex flex-col gap-1">
             <label className="text-[10px] font-black uppercase tracking-widest text-gray-500">Sai da conta (Matriz) *</label>
-            <select
-              value={origemId} onChange={e => setOrigemId(e.target.value)}
-              className="neu-pressed rounded-xl px-3 py-2.5 text-sm text-gray-100 bg-transparent outline-none"
-            >
-              <option value="">Selecione...</option>
-              {contasMatriz.map(b => (
-                <option key={b.id} value={b.id}>
-                  {b.banco} — {b.conta} · saldo {BRL(Number(b.saldo ?? 0))}
-                </option>
-              ))}
-            </select>
+            <SelectBusca
+              value={origemId}
+              onChange={setOrigemId}
+              placeholder="Escolha a conta"
+              opcoes={contasMatriz.map(b => opcaoBanco(b, { saldo: true }))}
+            />
             {contasMatriz.length === 0 && (
               <span className="text-[10px] text-yellow-400">
                 A Matriz não tem caixa/banco ativo. Cadastre um em Caixa / Bancos antes de aprovar.
@@ -471,15 +460,12 @@ function ModalAprovarEmprestimo({
             <label className="text-[10px] font-black uppercase tracking-widest text-gray-500">
               Entra na conta * <span className="text-gray-600 normal-case tracking-normal">— conta de {emp.filial} que recebe o valor</span>
             </label>
-            <select
-              value={bancoId} onChange={e => setBancoId(e.target.value)}
-              className="neu-pressed rounded-xl px-3 py-2.5 text-sm text-gray-100 bg-transparent outline-none"
-            >
-              <option value="">Selecione...</option>
-              {bancosDaFilial.map(b => (
-                <option key={b.id} value={b.id}>{b.banco} — {b.conta} ({b.tipo})</option>
-              ))}
-            </select>
+            <SelectBusca
+              value={bancoId}
+              onChange={setBancoId}
+              placeholder="Escolha a conta"
+              opcoes={bancosDaFilial.map(b => opcaoBanco(b, { saldo: false }))}
+            />
             {bancosDaFilial.length === 0 && (
               <span className="text-[10px] text-yellow-400">
                 {emp.filial} não tem caixa/banco ativo. Cadastre um em Caixa / Bancos antes de aprovar.
@@ -882,17 +868,12 @@ function ModalApagarEmprestimo({
           <label className="text-[10px] font-black uppercase tracking-widest text-gray-500">
             Conta da Matriz que recebe de volta
           </label>
-          <select
-            value={origemId} onChange={e => setOrigemId(e.target.value)}
-            className="neu-pressed rounded-xl px-3 py-2.5 text-sm text-gray-100 bg-transparent outline-none"
-          >
-            <option value="">Selecione a conta…</option>
-            {bancosMatriz.map(b => (
-              <option key={b.id} value={b.id}>
-                {b.banco} — {b.conta} ({BRL(Number(b.saldo ?? 0))})
-              </option>
-            ))}
-          </select>
+          <SelectBusca
+              value={origemId}
+              onChange={setOrigemId}
+              placeholder="Escolha a conta"
+              opcoes={bancosMatriz.map(b => opcaoBanco(b, { saldo: true }))}
+            />
           {!emp.banco_origem_id && (
             <span className="text-[10px] text-gray-500">
               Este empréstimo é anterior ao registro da conta de origem, então ela precisa ser informada.
@@ -1101,17 +1082,12 @@ function ModalEditarEmprestimo({
 
           <div className="flex flex-col gap-1">
             <label className="text-[10px] font-black uppercase tracking-widest text-gray-500">Sai da conta (Matriz) *</label>
-            <select
-              value={origemId} onChange={e => setOrigemId(e.target.value)}
-              className="neu-pressed rounded-xl px-3 py-2.5 text-sm text-gray-100 bg-transparent outline-none"
-            >
-              <option value="">Selecione...</option>
-              {contasMatriz.map(b => (
-                <option key={b.id} value={b.id}>
-                  {b.banco} — {b.conta} · saldo {BRL(Number(b.saldo ?? 0))}
-                </option>
-              ))}
-            </select>
+            <SelectBusca
+              value={origemId}
+              onChange={setOrigemId}
+              placeholder="Escolha a conta"
+              opcoes={contasMatriz.map(b => opcaoBanco(b, { saldo: true }))}
+            />
             {!emp.banco_origem_id && (
               <span className="text-[10px] text-gray-500">
                 Este empréstimo é anterior ao registro da conta de origem, então ela precisa ser informada.
@@ -1129,15 +1105,12 @@ function ModalEditarEmprestimo({
             <label className="text-[10px] font-black uppercase tracking-widest text-gray-500">
               Entra na conta * <span className="text-gray-600 normal-case tracking-normal">— conta de {emp.filial}</span>
             </label>
-            <select
-              value={destinoId} onChange={e => setDestinoId(e.target.value)}
-              className="neu-pressed rounded-xl px-3 py-2.5 text-sm text-gray-100 bg-transparent outline-none"
-            >
-              <option value="">Selecione...</option>
-              {contasFilial.map(b => (
-                <option key={b.id} value={b.id}>{b.banco} — {b.conta} ({b.tipo})</option>
-              ))}
-            </select>
+            <SelectBusca
+              value={destinoId}
+              onChange={setDestinoId}
+              placeholder="Escolha a conta"
+              opcoes={contasFilial.map(b => opcaoBanco(b, { saldo: false }))}
+            />
           </div>
 
           {valorNum > 0 && (
@@ -1677,17 +1650,12 @@ function ModalAplicarCapital({
 
           <div className="flex flex-col gap-1">
             <label className="text-[10px] font-black uppercase tracking-widest text-gray-500">Sai da conta (Matriz) *</label>
-            <select
-              value={origemId} onChange={e => setOrigemId(e.target.value)}
-              className="neu-pressed rounded-xl px-3 py-2.5 text-sm text-gray-100 bg-transparent outline-none"
-            >
-              <option value="">Selecione...</option>
-              {contasMatriz.map(b => (
-                <option key={b.id} value={b.id}>
-                  {b.banco} — {b.conta} · saldo {BRL(Number(b.saldo ?? 0))}
-                </option>
-              ))}
-            </select>
+            <SelectBusca
+              value={origemId}
+              onChange={setOrigemId}
+              placeholder="Escolha a conta"
+              opcoes={contasMatriz.map(b => opcaoBanco(b, { saldo: true }))}
+            />
             {contasMatriz.length === 0 && (
               <span className="text-[10px] text-yellow-400">
                 A Matriz não tem caixa/banco ativo. Cadastre um em Caixa / Bancos antes de aplicar.
@@ -1704,15 +1672,12 @@ function ModalAplicarCapital({
             <label className="text-[10px] font-black uppercase tracking-widest text-gray-500">
               Entra na conta * <span className="text-gray-600 normal-case tracking-normal">— conta de {filial}</span>
             </label>
-            <select
-              value={destinoId} onChange={e => setDestinoId(e.target.value)}
-              className="neu-pressed rounded-xl px-3 py-2.5 text-sm text-gray-100 bg-transparent outline-none"
-            >
-              <option value="">Selecione...</option>
-              {contasFilial.map(b => (
-                <option key={b.id} value={b.id}>{b.banco} — {b.conta} ({b.tipo})</option>
-              ))}
-            </select>
+            <SelectBusca
+              value={destinoId}
+              onChange={setDestinoId}
+              placeholder="Escolha a conta"
+              opcoes={contasFilial.map(b => opcaoBanco(b, { saldo: false }))}
+            />
             {contasFilial.length === 0 && (
               <span className="text-[10px] text-yellow-400">
                 {filial} não tem caixa/banco ativo. Cadastre um em Caixa / Bancos antes de aplicar.
@@ -1958,17 +1923,12 @@ function ModalDistribuirLucro({
             <label className="text-[10px] font-black uppercase tracking-widest text-gray-500">
               Sai da conta ({filial}) *
             </label>
-            <select
-              value={origemId} onChange={e => setOrigemId(e.target.value)}
-              className="neu-pressed rounded-xl px-3 py-2.5 text-sm text-gray-100 bg-transparent outline-none"
-            >
-              <option value="">Selecione...</option>
-              {contasFilial.map(b => (
-                <option key={b.id} value={b.id}>
-                  {b.banco} — {b.conta} · saldo {BRL(Number(b.saldo ?? 0))}
-                </option>
-              ))}
-            </select>
+            <SelectBusca
+              value={origemId}
+              onChange={setOrigemId}
+              placeholder="Escolha a conta"
+              opcoes={contasFilial.map(b => opcaoBanco(b, { saldo: true }))}
+            />
             {semCaixa && (
               <span className="text-[10px] text-red-400">
                 A conta tem {BRL(saldoOrigem)}. O lucro existe no resultado, mas o dinheiro não está aqui.
@@ -1978,15 +1938,12 @@ function ModalDistribuirLucro({
 
           <div className="flex flex-col gap-1">
             <label className="text-[10px] font-black uppercase tracking-widest text-gray-500">Entra na conta (Matriz) *</label>
-            <select
-              value={destinoId} onChange={e => setDestinoId(e.target.value)}
-              className="neu-pressed rounded-xl px-3 py-2.5 text-sm text-gray-100 bg-transparent outline-none"
-            >
-              <option value="">Selecione...</option>
-              {contasMatriz.map(b => (
-                <option key={b.id} value={b.id}>{b.banco} — {b.conta} ({b.tipo})</option>
-              ))}
-            </select>
+            <SelectBusca
+              value={destinoId}
+              onChange={setDestinoId}
+              placeholder="Escolha a conta"
+              opcoes={contasMatriz.map(b => opcaoBanco(b, { saldo: false }))}
+            />
           </div>
 
           <div className="flex flex-col gap-1">

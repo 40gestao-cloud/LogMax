@@ -19,6 +19,8 @@ import { supabase } from '../lib/supabase';
 import { useFilial } from '../contexts/FilialContext';
 import { bancoDaUnidade } from '../lib/filiais';
 import type { UserProfile } from '../hooks/useUserProfile';
+import { SelectBusca } from '../components/SelectBusca';
+import { opcaoBanco } from '../lib/opcoesSelect';
 
 const ENDPOINT = '/api/caixabancosview';
 const TIPOS = ['Conta Corrente', 'Conta Poupança', 'Caixa', 'Investimento'];
@@ -497,26 +499,21 @@ export const CaixaBancosView = ({
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <FormField label="Sai de *">
-                  <select className="neu-input py-2 px-3 rounded-xl text-sm"
+                  <SelectBusca
                     value={transfOrigem}
-                    onChange={e => { setTransfOrigem(e.target.value); setTransfDestino(''); }}>
-                    <option value="">Selecione...</option>
-                    {contasTransferiveis.map((b: any) => (
-                      <option key={b.id} value={b.id}>
-                        {(b.banco ?? b.conta)}{matrizMode ? ` (${b.filial ?? 'Global'})` : ''} · {fmtBRL(Number(b.saldo ?? 0))}
-                      </option>
-                    ))}
-                  </select>
+                    onChange={v => { setTransfOrigem(v); setTransfDestino(''); }}
+                    placeholder="Escolha a conta de origem"
+                    opcoes={contasTransferiveis.map((b: any) => opcaoBanco(b, { saldo: true, filial: matrizMode }))}
+                  />
                 </FormField>
                 <FormField label="Entra em *">
-                  <select className="neu-input py-2 px-3 rounded-xl text-sm"
-                    value={transfDestino} onChange={e => setTransfDestino(e.target.value)}
-                    disabled={!transfOrigem}>
-                    <option value="">{transfOrigem ? 'Selecione...' : 'Escolha a origem primeiro'}</option>
-                    {destinosPossiveis.map((b: any) => (
-                      <option key={b.id} value={b.id}>{b.banco ?? b.conta} — {b.conta}</option>
-                    ))}
-                  </select>
+                  <SelectBusca
+                    value={transfDestino}
+                    onChange={setTransfDestino}
+                    disabled={!transfOrigem}
+                    placeholder={transfOrigem ? 'Escolha o destino' : 'Escolha a origem primeiro'}
+                    opcoes={destinosPossiveis.map((b: any) => opcaoBanco(b, { filial: matrizMode }))}
+                  />
                   {!!transfOrigem && destinosPossiveis.length === 0 && (
                     <span className="text-[10px] text-yellow-400 mt-1">
                       Esta unidade só tem uma conta ativa. Cadastre outra para poder remanejar.

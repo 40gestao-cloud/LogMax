@@ -10,13 +10,15 @@ import { useFetchData, dbInsert, dbUpdate, dbDelete } from '../hooks/useSupabase
 import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent, StatusBadge, FilialBadge, Pagination } from '../components/ui';
 import { useFormValidation, formatBRL, parseBRL, handleMoneyKeyDown, exportToExcel, drawPdfHeader } from '../lib/viewUtils';
 import { GOLD, BLACK, GRAY_INK, GOLD_TINT } from '../lib/pdfPalette';
-import { groupCadastrosParaSelect } from '../lib/cadastrosSelect';
 import { FILIAL_DEFAULT, bancoDaUnidade } from '../lib/filiais';
 import { supabase } from '../lib/supabase';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import { calcularJuros, fetchJurosConfig, type JurosConfig } from '../lib/juros';
 import { periodoRangeBR } from '../lib/dates';
 import { useConfirm } from '../contexts/ConfirmContext';
+import { SelectBusca } from '../components/SelectBusca';
+import { gruposDeCadastro } from '../lib/cadastrosSelect';
+import { opcaoBanco } from '../lib/opcoesSelect';
 
 // Quanto ainda se cobra deste título. Conta com baixa parcial (migr. 422) já
 // teve parte do principal recebida; o `valor` da linha continua sendo o do
@@ -405,15 +407,13 @@ const ContasReceberViewInner = ({ showToast, filial }: { showToast: any; filial:
                     value={extras.vencimento} onChange={e => setExtras(x => ({ ...x, vencimento: e.target.value }))} />
                 </FormField>
                 <FormField label="Cliente">
-                  <select className="neu-input py-2 px-3 rounded-xl text-sm"
-                    value={extras.cliente_id} onChange={e => setExtras(x => ({ ...x, cliente_id: e.target.value }))}>
-                    <option value="">Nenhum</option>
-                    {groupCadastrosParaSelect(clientes).map(g => (
-                      <optgroup key={g.label} label={g.label}>
-                        {g.items.map((c: any) => <option key={c.id} value={c.id}>{c.nome}</option>)}
-                      </optgroup>
-                    ))}
-                  </select>
+                  <SelectBusca
+                    value={extras.cliente_id}
+                    onChange={v => setExtras(x => ({ ...x, cliente_id: v }))}
+                    placeholder="Nenhum"
+                    permitirVazio="Nenhum"
+                    grupos={gruposDeCadastro(clientes)}
+                  />
                 </FormField>
               </div>
               <div className="flex gap-3 justify-end">
@@ -545,14 +545,13 @@ const ContasReceberViewInner = ({ showToast, filial }: { showToast: any; filial:
                                 </div>
                                 <div className="flex flex-col gap-1 flex-1 min-w-0 sm:min-w-[220px]">
                                   <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest flex items-center gap-1.5"><Landmark size={11} /> Conta bancária de crédito *</label>
-                                  <select className="neu-input py-2 px-3 rounded-xl text-xs w-full" value={recBankId} onChange={e => setRecBankId(e.target.value)}>
-                                    <option value="">Selecione...</option>
-                                    {bancosAtivos.map((b: any) => (
-                                      <option key={b.id} value={b.id}>
-                                        {(b.banco ?? b.conta ?? '—')} — saldo R$ {Number(b.saldo ?? 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                                      </option>
-                                    ))}
-                                  </select>
+                                  <SelectBusca
+                                    compacto
+                                    value={recBankId}
+                                    onChange={setRecBankId}
+                                    placeholder="Escolha a conta"
+                                    opcoes={bancosAtivos.map((b: any) => opcaoBanco(b, { saldo: true }))}
+                                  />
                                   {bancosAtivos.length === 0 && (
                                     <span className="text-[10px] text-yellow-400 mt-1">Nenhum caixa/banco ativo em {filial}. Cadastre em Financeiro → Caixa / Bancos.</span>
                                   )}

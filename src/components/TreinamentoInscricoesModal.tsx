@@ -3,6 +3,7 @@ import { motion } from 'motion/react';
 import { X, UserPlus, UserMinus, Check, Loader2, Award, CheckCircle2, Trash2 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useConfirm } from '../contexts/ConfirmContext';
+import { SelectBusca } from './SelectBusca';
 
 type Treinamento = {
   id: string;
@@ -274,18 +275,14 @@ export const TreinamentoInscricoesModal: React.FC<{
         <div className="neu-pressed rounded-xl p-3 mb-3 shrink-0">
           <div className="flex items-center gap-2">
             <UserPlus size={12} className="text-accent shrink-0" />
-            <select
+            <SelectBusca
+              compacto
+              className="flex-1"
               value={adicionando}
-              onChange={e => setAdicionando(e.target.value)}
-              className="neu-input flex-1 rounded-lg px-3 py-2 text-xs"
-            >
-              <option value="">Selecione um colaborador pra inscrever…</option>
-              {disponiveis.map(f => (
-                <option key={f.id} value={f.id}>
-                  {f.nome}{f.cargo ? ` · ${f.cargo}` : ''}
-                </option>
-              ))}
-            </select>
+              onChange={setAdicionando}
+              placeholder="Escolha um colaborador para inscrever"
+              opcoes={disponiveis.map(f => ({ value: String(f.id), label: f.nome, sub: (f as any).cargo ?? null }))}
+            />
             <button onClick={handleAdd} disabled={!adicionando || savingAdd}
               className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-accent border border-accent/30 rounded-lg px-3 py-2 hover:bg-accent/10 disabled:opacity-40 shrink-0">
               {savingAdd ? <Loader2 size={10} className="animate-spin" /> : <Check size={10} />}

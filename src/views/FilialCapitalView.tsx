@@ -16,6 +16,8 @@ import { useFilial } from '../contexts/FilialContext';
 import { dataSimplesBR, todayBR } from '../lib/dates';
 import { bancoDaUnidade } from '../lib/filiais';
 import { hasSetor } from '../lib/rbac';
+import { SelectBusca } from '../components/SelectBusca';
+import { opcaoBanco } from '../lib/opcoesSelect';
 
 // ── Tipos ──────────────────────────────────────────────────────────
 type SaldoFilial = {
@@ -689,17 +691,13 @@ export function FilialCapitalView({
                           <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest flex items-center gap-1.5">
                             <Landmark size={11} /> Conta bancária de débito *
                           </label>
-                          <select
-                            className="neu-input py-2 px-3 rounded-xl text-xs w-full"
-                            value={antecipaBankId} onChange={e => setAntecipaBankId(e.target.value)}
-                          >
-                            <option value="">Selecione...</option>
-                            {bancosAtivos.map((b: any) => (
-                              <option key={b.id} value={b.id}>
-                                {(b.banco ?? b.conta ?? '—')} — saldo {BRL(Number(b.saldo ?? 0))}
-                              </option>
-                            ))}
-                          </select>
+                          <SelectBusca
+                            compacto
+                            value={antecipaBankId}
+                            onChange={setAntecipaBankId}
+                            placeholder="Escolha a conta"
+                            opcoes={bancosAtivos.map((b: any) => opcaoBanco(b, { saldo: true }))}
+                          />
                           {bancosAtivos.length === 0 && (
                             <span className="text-[10px] text-yellow-400 mt-1">Nenhum caixa/banco ativo em {filial}.</span>
                           )}

@@ -10,6 +10,9 @@ import { LoadingSpinner, EmptyState, NeuButtonAccent, CardContador, type TomCont
 import { hasSetor } from '../lib/rbac';
 import { useConfirm } from '../contexts/ConfirmContext';
 import { usePontoCorteTurma } from '../hooks/useJornadaTurma';
+import { SelectBusca } from '../components/SelectBusca';
+import { opcaoFuncionario } from '../lib/opcoesSelect';
+import { dataSimplesBR } from '../lib/dates';
 
 const TIPOS = [
   'Atestado médico',
@@ -314,29 +317,22 @@ const AfastamentosViewInner = ({ showToast, profile, filial }: { showToast: any;
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               <div className="flex flex-col gap-1.5 lg:col-span-2">
                 <label htmlFor="afast-func" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Colaborador *</label>
-                <select id="afast-func" value={form.funcionario_id}
-                  onChange={e => setForm(f => ({ ...f, funcionario_id: e.target.value }))}
-                  className="neu-input rounded-xl px-3 py-2.5 text-sm">
-                  <option value="">Selecione...</option>
-                  {colaboradoresParaAfastar.livres.length > 0 && (
-                    <optgroup label={`Trabalhando (${colaboradoresParaAfastar.livres.length})`}>
-                      {colaboradoresParaAfastar.livres.map((f: any) => <option key={f.id} value={f.id}>{f.nome}</option>)}
-                    </optgroup>
-                  )}
-                  {colaboradoresParaAfastar.afastados.length > 0 && (
-                    <optgroup label={`Já com afastamento em aberto (${colaboradoresParaAfastar.afastados.length})`}>
-                      {colaboradoresParaAfastar.afastados.map((f: any) => {
-                        const a = afastamentoVigente.get(f.id)!;
-                        return (
-                          <option key={f.id} value={f.id}>
-                            {f.nome} — {a.tipo} até {a.data_fim}
-                            {a.status === 'Pendente' ? ' (aguardando decisão)' : ''}
-                          </option>
-                        );
-                      })}
-                    </optgroup>
-                  )}
-                </select>
+                <SelectBusca
+                  id="afast-func"
+                  value={form.funcionario_id}
+                  onChange={v => setForm(f => ({ ...f, funcionario_id: v }))}
+                  placeholder="Escolha o colaborador"
+                  grupos={[
+                    { label: 'Trabalhando', opcoes: colaboradoresParaAfastar.livres.map((f: any) => opcaoFuncionario(f)) },
+                    { label: 'Já com afastamento em aberto', opcoes: colaboradoresParaAfastar.afastados.map((f: any) => {
+                      const a = afastamentoVigente.get(f.id)!;
+                      return opcaoFuncionario(f, {
+                        sub: `${a.tipo} até ${dataSimplesBR(a.data_fim)}`,
+                        tag: a.status === 'Pendente' ? { texto: 'Aguardando decisão', tom: 'amarelo' as const } : { texto: 'Afastado', tom: 'roxo' as const },
+                      });
+                    }) },
+                  ].filter(g => g.opcoes.length > 0)}
+                />
               </div>
               <div className="flex flex-col gap-1.5">
                 <label htmlFor="afast-tipo" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Tipo *</label>

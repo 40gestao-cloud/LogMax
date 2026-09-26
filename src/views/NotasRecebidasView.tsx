@@ -8,9 +8,10 @@ import { HistoricoOperacoes } from '../components/HistoricoOperacoes';
 import { useFetchData, dbInsert, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
 import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent, StatusBadge } from '../components/ui';
 import { useFormValidation, formatBRL, parseBRL, handleMoneyKeyDown } from '../lib/viewUtils';
-import { groupCadastrosParaSelect } from '../lib/cadastrosSelect';
 import { useConfirm } from '../contexts/ConfirmContext';
 import { supabase } from '../lib/supabase';
+import { SelectBusca } from '../components/SelectBusca';
+import { gruposDeCadastro } from '../lib/cadastrosSelect';
 import {
   NOTA_ANEXO_ACCEPT, NOTA_ANEXO_MAX_LABEL,
   uploadAnexoNota, removerAnexoNota, validarAnexoNota, formatarTamanhoAnexo,
@@ -249,16 +250,13 @@ const NotasRecebidasViewInner = ({ showToast, filial }: any) => {
                   </select>
                 </FormField>
                 <FormField label="Fornecedor">
-                  <select className="neu-input py-2 px-3 rounded-xl text-sm"
+                  <SelectBusca
                     value={extras.fornecedor_id}
-                    onChange={e => setExtras(x => ({ ...x, fornecedor_id: e.target.value }))}>
-                    <option value="">Nenhum</option>
-                    {groupCadastrosParaSelect(fornecedores).map(g => (
-                      <optgroup key={g.label} label={g.label}>
-                        {g.items.map((f: any) => <option key={f.id} value={f.id}>{f.nome}</option>)}
-                      </optgroup>
-                    ))}
-                  </select>
+                    onChange={v => setExtras(x => ({ ...x, fornecedor_id: v }))}
+                    placeholder="Nenhum"
+                    permitirVazio="Nenhum"
+                    grupos={gruposDeCadastro(fornecedores)}
+                  />
                 </FormField>
 
                 <FormField label="Valor Total (R$)">
@@ -288,38 +286,29 @@ const NotasRecebidasViewInner = ({ showToast, filial }: any) => {
                     placeholder="Ex: 2 arcondicionados split 12000 BTU + instalação" />
                 </FormField>
                 <FormField label="Conta a Pagar (opcional)">
-                  <select className="neu-input py-2 px-3 rounded-xl text-sm"
+                  <SelectBusca
                     value={extras.conta_pagar_id}
-                    onChange={e => setExtras(x => ({ ...x, conta_pagar_id: e.target.value }))}>
-                    <option value="">Não amarrar</option>
-                    {/* A conta que já tem nota amarrada continuava na lista sem
-                        nenhum sinal — dava para amarrar a mesma despesa duas
-                        vezes e ninguém percebia. Vai para o 2º grupo,
-                        desabilitada, exceto a da própria nota em edição. */}
-                    {(() => {
+                    onChange={v => setExtras(x => ({ ...x, conta_pagar_id: v }))}
+                    placeholder="Não amarrar"
+                    permitirVazio="Não amarrar"
+                    grupos={(() => {
+                      // A conta que já tem nota amarrada continuava na lista sem
+                      // nenhum sinal — dava para amarrar a mesma despesa duas
+                      // vezes. Vai para o 2º grupo, indisponível, exceto a da
+                      // própria nota em edição.
                       const livres = contasPagar.filter((c: any) => !contasComNota.has(c.id) || c.id === extras.conta_pagar_id);
                       const usadas = contasPagar.filter((c: any) => contasComNota.has(c.id) && c.id !== extras.conta_pagar_id);
-                      const rotulo = (c: any) => `${(c.descricao ?? '—').slice(0, 60)} · R$ ${formatBRL(Number(c.valor ?? 0))}`;
-                      return (
-                        <>
-                          {livres.length > 0 && (
-                            <optgroup label={`Sem nota vinculada (${livres.length})`}>
-                              {livres.slice(0, 200).map((c: any) => (
-                                <option key={c.id} value={c.id}>{rotulo(c)}</option>
-                              ))}
-                            </optgroup>
-                          )}
-                          {usadas.length > 0 && (
-                            <optgroup label={`Já vinculadas a outra nota (${usadas.length})`}>
-                              {usadas.slice(0, 200).map((c: any) => (
-                                <option key={c.id} value={c.id} disabled>{rotulo(c)}</option>
-                              ))}
-                            </optgroup>
-                          )}
-                        </>
-                      );
+                      const op = (c: any) => ({
+                        value: String(c.id), label: c.descricao ?? '—',
+                        sub: [c.vencimento ? String(c.vencimento).slice(0, 10).split('-').reverse().join('/') : null, c.status].filter(Boolean).join(' · ') || null,
+                        tag: { texto: `R$ ${formatBRL(Number(c.valor ?? 0))}`, tom: 'cinza' as const },
+                      });
+                      return [
+                        { label: 'Sem nota vinculada', opcoes: livres.slice(0, 200).map(op) },
+                        { label: 'Já vinculadas a outra nota', opcoes: usadas.slice(0, 200).map(c => ({ ...op(c), disabled: true })) },
+                      ].filter(g => g.opcoes.length > 0);
                     })()}
-                  </select>
+                  />
                 </FormField>
                 <FormField label="Origem do valor">
                   <label className="flex items-center gap-2 h-full pt-1 cursor-pointer">

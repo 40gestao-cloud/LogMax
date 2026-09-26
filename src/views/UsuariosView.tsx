@@ -14,6 +14,8 @@ import { exportToExcel, drawPdfHeader } from '../lib/viewUtils';
 import { GOLD, BLACK, GRAY_INK, GOLD_TINT } from '../lib/pdfPalette';
 import { useFilial } from '../contexts/FilialContext';
 import { ROLE_LABEL } from '../lib/rbac';
+import { SelectBusca } from '../components/SelectBusca';
+import { opcaoFuncionario } from '../lib/opcoesSelect';
 
 const SETOR_LABEL: Record<string, string> = {
   all:        'Global',
@@ -1106,16 +1108,15 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
                       </td>
                       <td className="py-3 px-4">
                         {isAdmin ? (
-                          <select
+                          <SelectBusca
+                            compacto
+                            className="max-w-[200px]"
                             value={u.funcionario_id ?? ''}
-                            onChange={e => handleLinkFuncionario(u.id, e.target.value)}
-                            className="neu-input rounded-lg px-2 py-1.5 text-xs w-full max-w-[160px]"
-                          >
-                            <option value="">Sem vínculo</option>
-                            {funcionarios.filter((f: any) => f.filial === u.filial).map((f: any) => (
-                              <option key={f.id} value={f.id}>{f.nome}</option>
-                            ))}
-                          </select>
+                            onChange={v => handleLinkFuncionario(u.id, v)}
+                            placeholder="Sem vínculo"
+                            permitirVazio="Sem vínculo"
+                            opcoes={funcionarios.filter((f: any) => f.filial === u.filial).map((f: any) => opcaoFuncionario(f))}
+                          />
                         ) : (
                           <span className="text-xs text-gray-400">
                             {funcionarios.find((f: any) => f.id === u.funcionario_id)?.nome ?? 'Sem vínculo'}

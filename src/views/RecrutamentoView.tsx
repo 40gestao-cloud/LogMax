@@ -15,6 +15,8 @@ import { formatBRL, parseBRL } from '../lib/viewUtils';
 import { todayBR } from '../lib/dates';
 import { useConfirm } from '../contexts/ConfirmContext';
 import type { UserProfile } from '../hooks/useUserProfile';
+import { SelectBusca } from '../components/SelectBusca';
+import { opcaoFuncionario } from '../lib/opcoesSelect';
 
 /**
  * Recrutamento & Seleção (migração 311, Fase 1).
@@ -977,22 +979,21 @@ const RecrutamentoInner = ({ showToast, profile, filial }: {
                                   </p>
                                 )}
                                 <div className="flex flex-wrap gap-3">
-                                  <select value={cf.funcionario_id ?? ''}
-                                    onChange={e => setCandForm(p => ({ ...p, [v.id]: { ...cf, funcionario_id: e.target.value } }))}
-                                    className="neu-input rounded-xl px-3 py-2 text-sm flex-1 min-w-[220px]">
-                                    <option value="">Selecionar funcionário...</option>
-                                    {elegiveis.map((f: any) => {
+                                  <SelectBusca
+                                    value={cf.funcionario_id ?? ''}
+                                    onChange={val => setCandForm(p => ({ ...p, [v.id]: { ...cf, funcionario_id: val } }))}
+                                    placeholder="Escolha o funcionário"
+                                    className="flex-1 min-w-[220px]"
+                                    opcoes={elegiveis.map((f: any) => {
                                       const d = desempenho[f.id];
-                                      const nota = d?.media != null ? `★ ${Number(d.media).toFixed(1)}` : 'sem avaliação';
-                                      return (
-                                        <option key={f.id} value={f.id} disabled={!atende(f)}>
-                                          {f.nome} — {f.cargo || 'sem cargo'}
-                                          {v.escopo === 'Interfilial' ? ` (${f.filial})` : ''} · {nota}
-                                          {!atende(f) ? ' — não atende' : ''}
-                                        </option>
-                                      );
+                                      return opcaoFuncionario(f, {
+                                        sub: [f.cargo || 'sem cargo', v.escopo === 'Interfilial' ? f.filial : null].filter(Boolean).join(' · '),
+                                        tag: d?.media != null ? { texto: `★ ${Number(d.media).toFixed(1)}`, tom: 'dourado' as const } : { texto: 'Sem avaliação', tom: 'cinza' as const },
+                                        disabled: !atende(f),
+                                        motivo: !atende(f) ? 'Não atende aos requisitos da vaga' : null,
+                                      });
                                     })}
-                                  </select>
+                                  />
                                   <NeuButtonAccent onClick={() => handleInscreverInterno(v.id, cf.funcionario_id)}
                                     isLoading={acaoId === v.id} disabled={!cf.funcionario_id}>Inscrever</NeuButtonAccent>
                                 </div>

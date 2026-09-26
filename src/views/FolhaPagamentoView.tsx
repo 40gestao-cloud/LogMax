@@ -15,6 +15,8 @@ import { useJornadaTurma, usePontoCorteTurma } from '../hooks/useJornadaTurma';
 import type { UserProfile } from '../hooks/useUserProfile';
 import { useConfirm } from '../contexts/ConfirmContext';
 import type { FolhaPagamento, Funcionario } from '../types/domain';
+import { SelectBusca } from '../components/SelectBusca';
+import { opcaoFuncionario } from '../lib/opcoesSelect';
 
 type RecalcBreakdown = {
   valor_hora: number;
@@ -672,28 +674,22 @@ const FolhaPagamentoViewInner = ({ showToast, profile, filial }: { showToast: an
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               <div className="flex flex-col gap-1.5">
                 <label htmlFor="folha-funcionario" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Funcionário *</label>
-                <select id="folha-funcionario" value={form.funcionario_id} onChange={e => handleFuncionarioChange(e.target.value)} className="neu-input rounded-xl px-3 py-2.5 text-sm">
-                  <option value="">Selecionar...</option>
-                  {funcSemFolhaNoMes.length > 0 && (
-                    <optgroup label={`Sem folha em ${mesDoForm} (${funcSemFolhaNoMes.length})`}>
-                      {funcSemFolhaNoMes.map((f: any) => (
-                        <option key={f.id} value={f.id}>{f.nome}</option>
-                      ))}
-                    </optgroup>
-                  )}
-                  {funcComFolhaNoMes.length > 0 && (
-                    <optgroup label={`Já com folha em ${mesDoForm} (${funcComFolhaNoMes.length})`}>
-                      {funcComFolhaNoMes.map((f: any) => {
-                        const fp = folhaDoMesPorFunc.get(f.id)!;
-                        return (
-                          <option key={f.id} value={f.id} disabled>
-                            {f.nome} — folha {fp.status ?? 'lançada'}
-                          </option>
-                        );
-                      })}
-                    </optgroup>
-                  )}
-                </select>
+                <SelectBusca
+                  id="folha-funcionario"
+                  value={form.funcionario_id}
+                  onChange={v => handleFuncionarioChange(v)}
+                  placeholder="Escolha o funcionário"
+                  grupos={[
+                    { label: `Sem folha em ${mesDoForm}`, opcoes: funcSemFolhaNoMes.map((f: any) => opcaoFuncionario(f)) },
+                    { label: `Já com folha em ${mesDoForm}`, opcoes: funcComFolhaNoMes.map((f: any) => {
+                      const fp = folhaDoMesPorFunc.get(f.id)!;
+                      return opcaoFuncionario(f, {
+                        disabled: true,
+                        tag: { texto: fp.status ?? 'Lançada', tom: 'verde' as const },
+                      });
+                    }) },
+                  ].filter(g => g.opcoes.length > 0)}
+                />
               </div>
               {/* Campos de R$ usam text + formatBRL/parseBRL, não type="number" —
                   é o padrão de moeda desta base, e o número cru aceitava ponto

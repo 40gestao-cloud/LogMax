@@ -21,6 +21,8 @@ import { isConselheiro } from '../lib/rbac';
 import { formatDataHoraBR, diasDesde, dataSimplesBR } from '../lib/dates';
 import { FiltroSolicitante } from '../components/FiltroSolicitante';
 import { MenuMais, ItemMenu, CABECALHO_TABELA } from '../components/MenuMais';
+import { SelectBusca } from '../components/SelectBusca';
+import { opcaoProduto } from '../lib/opcoesSelect';
 
 // Sentinel pra opção "Outro (digitar)" — usado quando o item solicitado
 // não existe no catálogo (compra eventual, serviço, item novo).
@@ -414,19 +416,15 @@ Ela volta para 'Pendente' e sai da fila de Compras — o gerente decide de novo 
                 <>
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                     <FormField label="Item solicitado *" error={errors.item}>
-                      <select
-                        className={`neu-input py-2 px-3 rounded-xl text-sm ${errors.item ? 'border border-red-500/40' : ''}`}
+                      <SelectBusca
                         value={produtoSel}
-                        onChange={e => handleProdutoChange(e.target.value)}
-                      >
-                        <option value="">Selecione um produto...</option>
-                        {produtosOrdenados.map((p: any) => (
-                          <option key={p.id} value={p.id}>
-                            {p.nome}{p.marca ? ` — ${p.marca}` : ''}{p.codigo ? ` (${p.codigo})` : ''}
-                          </option>
-                        ))}
-                        <option value={ITEM_OUTRO}>Outro (digitar manualmente)</option>
-                      </select>
+                        onChange={v => handleProdutoChange(v)}
+                        placeholder="Escolha o produto"
+                        grupos={[
+                          { label: 'Catálogo', opcoes: produtosOrdenados.map((p: any) => opcaoProduto(p)) },
+                          { label: 'Fora do catálogo', opcoes: [{ value: ITEM_OUTRO, label: 'Outro — digitar manualmente' }] },
+                        ]}
+                      />
                       {produtoSel === ITEM_OUTRO && (
                         <input
                           className={`neu-input py-2 px-3 rounded-xl text-sm mt-2 ${errors.item ? 'border border-red-500/40' : ''}`}

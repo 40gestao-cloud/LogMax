@@ -19,6 +19,8 @@ import { gerarImeis } from '../lib/imei';
 import { proximoNumeroNfDeMaior } from '../lib/notaFiscal';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import { useConfirm } from '../contexts/ConfirmContext';
+import { SelectBusca } from '../components/SelectBusca';
+import { opcaoProduto } from '../lib/opcoesSelect';
 
 // Saldo por pedido vem da view v_pedido_saldo (migr. 202) — soma qtd_recebida
 // de recebimentos ativos e devolve quanto ainda cabe. Bloqueia recebimento
@@ -681,22 +683,30 @@ const RecebimentosViewInner = ({ showToast, filial }: { showToast: any; filial: 
               <h3 className="text-sm font-bold text-gray-200">Novo Recebimento</h3>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 <div className="sm:col-span-2">
-                <FormField label="Pedido *" error={errors.pedido_id}><select className={`neu-input py-2 px-3 rounded-xl text-sm ${errors.pedido_id ? 'border border-red-500/40' : ''}`} value={form.pedido_id} onChange={e => { setForm(f => ({ ...f, pedido_id: e.target.value })); clearError('pedido_id'); }}><option value="">Selecione...</option>{pedidosAtivos.map((p: any) => {
-                  const desc = p.item_descricao ?? p.req?.item ?? '';
-                  const s = saldos[p.id];
-                  const sufSaldo = s ? ` — falta ${qtdBR(s.qtd_saldo)}/${qtdBR(s.qtd_pedida)}` : '';
-                  const esgotado = s && s.qtd_saldo <= 0.0005;
-                  // Esgotado sem dizer por quê fazia o aluno reler a lista à
-                  // procura da linha que sumiu. A carga inteira já foi lançada:
-                  // o que falta é confirmar a entrada na tabela abaixo, e é
-                  // isso que a opção cinza passa a dizer.
-                  const pendenteDeConfirmar = esgotado && resumo.pedidosAConfirmar.has(String(p.id));
-                  // Serviço na mesma lista, marcado (migr. 499): quem abre esta
-                  // tela procura "o que chegou", e contratação não chega em
-                  // caixa. O selo evita o susto de não achar a dedetização.
-                  const selo = p.servico_id ? ' [serviço]' : '';
-                  return <option key={p.id} value={p.id} disabled={esgotado}>{numeroPedido(p)}{selo}{desc ? ` — ${desc}` : ''}{sufSaldo}{esgotado ? (pendenteDeConfirmar ? ' (carga já lançada — falta confirmar abaixo)' : ' (recebido totalmente)') : ''}</option>;
-                })}</select></FormField>
+                <FormField label="Pedido *" error={errors.pedido_id}><SelectBusca
+                  value={form.pedido_id}
+                  onChange={v => { setForm(ff => ({ ...ff, pedido_id: v })); clearError('pedido_id'); }}
+                  placeholder="Escolha o pedido"
+                  opcoes={pedidosAtivos.map((p: any) => {
+                    const desc = p.item_descricao ?? p.req?.item ?? '';
+                    const s = saldos[p.id];
+                    const esgotado = !!s && s.qtd_saldo <= 0.0005;
+                    // Esgotado sem dizer por quê fazia o aluno reler a lista à
+                    // procura da linha que sumiu. A carga inteira já foi lançada:
+                    // o que falta é confirmar a entrada na tabela abaixo.
+                    const pendenteDeConfirmar = esgotado && resumo.pedidosAConfirmar.has(String(p.id));
+                    return {
+                      value: String(p.id),
+                      label: desc || numeroPedido(p),
+                      sub: [numeroPedido(p), s ? `falta ${qtdBR(s.qtd_saldo)} de ${qtdBR(s.qtd_pedida)}` : null].filter(Boolean).join(' · '),
+                      // Serviço na mesma lista, marcado (migr. 499): contratação
+                      // não chega em caixa, mas quem procura a dedetização acha.
+                      tag: p.servico_id ? { texto: 'Serviço', tom: 'roxo' as const } : null,
+                      disabled: esgotado,
+                      motivo: esgotado ? (pendenteDeConfirmar ? 'Carga já lançada — falta confirmar abaixo' : 'Recebido totalmente') : null,
+                    };
+                  })}
+                /></FormField>
                 </div>
                 {/* A unidade é a do produto do pedido (migr. 439). */}
                 <QuantidadeEmbalagem
@@ -908,25 +918,21 @@ const RecebimentosViewInner = ({ showToast, filial }: { showToast: any; filial: 
                                 ) : (
                                 <div className="flex flex-col gap-1 flex-1 min-w-0 sm:min-w-[180px]">
                                   <label htmlFor={`receb-produto-${item.id}`} className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Produto recebido *</label>
-                                  <select
+                                  <SelectBusca
                                     id={`receb-produto-${item.id}`}
-                                    className="neu-input py-2 px-3 rounded-xl text-xs w-full"
                                     value={confirmProduto}
-                                    onChange={e => {
-                                      setConfirmProduto(e.target.value);
+                                    onChange={v => {
+                                      setConfirmProduto(v);
                                       // Compra eventual: a ficha só é conhecida
                                       // depois de o produto ser escolhido, então
                                       // a data prevista é calculada aqui.
-                                      const prod = produtos.find((x: any) => x.id === e.target.value);
+                                      const prod = produtos.find((x: any) => x.id === v);
                                       setConfirmValidade(
                                         (prod ? vencimentoPrevisto(prod, item.data ?? todayBR()) : null) ?? '');
                                     }}
-                                  >
-                                    <option value="">
-                                      {catalogoVazio ? 'Nenhum produto cadastrado nesta unidade' : 'Selecione o produto...'}
-                                    </option>
-                                    {produtosOrdenados.map((p: any) => <option key={p.id} value={p.id}>{p.nome} (saldo: {qtdBR(p.estoque ?? 0)} {normalizarUnidade(p.unidade)})</option>)}
-                                  </select>
+                                    placeholder={catalogoVazio ? 'Nenhum produto cadastrado nesta unidade' : 'Escolha o produto'}
+                                    opcoes={produtosOrdenados.map((p: any) => opcaoProduto(p, { saldo: true }))}
+                                  />
                                   <p className={`text-[10px] ${catalogoVazio ? 'text-amber-300/90' : 'text-gray-500'}`}>
                                     Não está na lista? Cadastre em <span className="font-semibold">Cadastros &gt; Produtos</span> com esta requisição.
                                   </p>

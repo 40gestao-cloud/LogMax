@@ -9,6 +9,8 @@ import { useFetchData } from '../hooks/useSupabaseData';
 import { formatBRL, parseBRL } from '../lib/viewUtils';
 import { projetarResgate, calcularResgate } from '../lib/aplicacoes';
 import type { UserProfile } from '../hooks/useUserProfile';
+import { SelectBusca } from './SelectBusca';
+import { opcaoBanco } from '../lib/opcoesSelect';
 
 // Painel de aplicações da migr. 604, compartilhado pela Matriz e pela filial:
 // a holding aplica o capital próprio exatamente como a loja aplica o caixa
@@ -376,33 +378,27 @@ function ModalAplicar({
 
         <div className="flex flex-col gap-1">
           <label className="text-[10px] font-black uppercase tracking-widest text-gray-500">Banco *</label>
-          <select
-            value={bancoId} onChange={e => setBancoId(e.target.value)}
-            className="neu-pressed rounded-xl px-3 py-2.5 text-sm text-gray-100 bg-transparent outline-none"
-          >
-            {bancos.map(b => (
-              <option key={b.id} value={b.id} className="bg-gray-900">
-                {b.nome} — {b.produto} · {TAXA(b.taxa_mensal)}% a.m.
-                {b.carencia_meses > 0 ? ` · carência ${b.carencia_meses}m` : ''}
-                {b.isento_ir ? ' · isento' : ''}
-              </option>
-            ))}
-          </select>
+          <SelectBusca
+            value={bancoId}
+            onChange={setBancoId}
+            placeholder="Escolha o banco"
+            opcoes={bancos.map(b => ({
+              value: String(b.id),
+              label: b.nome,
+              sub: [b.produto, b.carencia_meses > 0 ? `carência ${b.carencia_meses} meses` : null, b.isento_ir ? 'isento de IR' : null].filter(Boolean).join(' · '),
+              tag: { texto: `${TAXA(b.taxa_mensal)}% a.m.`, tom: 'verde' as const },
+            }))}
+          />
         </div>
 
         <div className="flex flex-col gap-1">
           <label className="text-[10px] font-black uppercase tracking-widest text-gray-500">Sai da conta *</label>
-          <select
-            value={contaId} onChange={e => setContaId(e.target.value)}
-            className="neu-pressed rounded-xl px-3 py-2.5 text-sm text-gray-100 bg-transparent outline-none"
-          >
-            <option value="" className="bg-gray-900">Selecione…</option>
-            {contas.map(c => (
-              <option key={c.id} value={c.id} className="bg-gray-900">
-                {c.banco} — {c.conta} ({BRL(Number(c.saldo ?? 0))})
-              </option>
-            ))}
-          </select>
+          <SelectBusca
+            value={contaId}
+            onChange={setContaId}
+            placeholder="Escolha a conta"
+            opcoes={contas.map(c => opcaoBanco(c, { saldo: true }))}
+          />
           {contas.length === 0 && (
             <p className="text-[11px] text-amber-400 mt-1">
               Esta unidade não tem conta ativa. Cadastre uma em Caixa / Bancos.
@@ -557,14 +553,12 @@ function ModalResgatar({
 
         <div className="flex flex-col gap-1">
           <label className="text-[10px] font-black uppercase tracking-widest text-gray-500">Conta de destino</label>
-          <select
-            value={contaId} onChange={e => setContaId(e.target.value)}
-            className="neu-pressed rounded-xl px-3 py-2.5 text-sm text-gray-100 bg-transparent outline-none"
-          >
-            {contas.map(c => (
-              <option key={c.id} value={c.id} className="bg-gray-900">{c.banco} — {c.conta}</option>
-            ))}
-          </select>
+          <SelectBusca
+            value={contaId}
+            onChange={setContaId}
+            placeholder="Escolha a conta"
+            opcoes={contas.map(c => opcaoBanco(c))}
+          />
         </div>
 
         <div className="neu-pressed rounded-xl p-3 flex items-start gap-2 text-[11px] text-gray-400">

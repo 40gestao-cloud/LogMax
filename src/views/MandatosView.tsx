@@ -5,6 +5,8 @@ import { EmptyState, LoadingSpinner, StatusBadge, FilialBadge } from '../compone
 import { isConselho } from '../lib/rbac';
 import { todayBR } from '../lib/dates';
 import type { UserProfile } from '../hooks/useUserProfile';
+import { SelectBusca } from '../components/SelectBusca';
+import { dataSimplesBR } from '../lib/dates';
 
 // Nomeação com mandato (migração 383) — o cargo ganha origem, prazo e desfecho.
 //
@@ -238,30 +240,25 @@ export function MandatosView({
               {nomeando === unidade && (
                 <div className="grid sm:grid-cols-2 gap-3 bg-black/20 rounded-xl p-3">
                   <Campo rotulo="Pessoa">
-                    <select value={form.user_profile_id}
-                      onChange={e => setForm(f => ({ ...f, user_profile_id: e.target.value }))}
-                      className="neu-input w-full px-3 py-2 rounded-xl text-sm">
-                      <option value="">Selecione…</option>
-                      {pessoasLivres.length > 0 && (
-                        <optgroup label={`Sem mandato vigente (${pessoasLivres.length})`}>
-                          {pessoasLivres.map(p => (
-                            <option key={p.id} value={p.id}>{p.nome} — {p.role}{p.filial ? ` · ${p.filial}` : ''}</option>
-                          ))}
-                        </optgroup>
-                      )}
-                      {pessoasComMandato.length > 0 && (
-                        <optgroup label={`Já com mandato vigente — encerre antes (${pessoasComMandato.length})`}>
-                          {pessoasComMandato.map(p => {
-                            const md = mandatoVigentePorPessoa.get(p.id)!;
-                            return (
-                              <option key={p.id} value={p.id} disabled>
-                                {p.nome} — {md.cargo}{md.filial ? ` · ${md.filial}` : ''} até {md.data_fim}
-                              </option>
-                            );
-                          })}
-                        </optgroup>
-                      )}
-                    </select>
+                    <SelectBusca
+                      value={form.user_profile_id}
+                      onChange={v => setForm(f => ({ ...f, user_profile_id: v }))}
+                      placeholder="Escolha a pessoa"
+                      grupos={[
+                        { label: 'Sem mandato vigente', opcoes: pessoasLivres.map(p => ({
+                          value: String(p.id), label: p.nome, sub: [p.role, p.filial].filter(Boolean).join(' · ') || null,
+                        })) },
+                        { label: 'Já com mandato vigente — encerre antes', opcoes: pessoasComMandato.map(p => {
+                          const md = mandatoVigentePorPessoa.get(p.id)!;
+                          return {
+                            value: String(p.id), label: p.nome,
+                            sub: `${md.cargo}${md.filial ? ` · ${md.filial}` : ''} até ${dataSimplesBR(md.data_fim)}`,
+                            tag: { texto: 'Com mandato', tom: 'roxo' as const },
+                            disabled: true,
+                          };
+                        }) },
+                      ].filter(g => g.opcoes.length > 0)}
+                    />
                   </Campo>
                   <Campo rotulo="Cargo">
                     <input value={form.cargo} onChange={e => setForm(f => ({ ...f, cargo: e.target.value }))}
