@@ -64,17 +64,17 @@ export function JornadaTurmaFaixa({ profile, showToast }: { profile: UserProfile
             <h3 className="text-sm font-bold text-gray-200">Jornada da turma</h3>
           </div>
           {pendente ? (
-            <span className="flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide border border-amber-500/40 bg-amber-500/10 text-amber-300">
+            <span className="flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide border border-[#ca8a04] bg-[#eab308] text-[#0a0a0a]">
               <AlertTriangle size={10} /> Configuração pendente
             </span>
           ) : (
-            <span className="flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide border border-emerald-500/40 bg-emerald-500/10 text-emerald-300">
+            <span className="flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide border border-[#15803d] bg-[#16a34a] text-white">
               <CheckCircle2 size={10} /> Configurada
             </span>
           )}
           {podeConfigurar && (
             <button onClick={() => setAberto(true)}
-              className="ml-auto flex items-center gap-1.5 text-xs font-bold px-4 py-2 rounded-xl neu-button text-accent hover:ring-1 hover:ring-accent/40">
+              className="ml-auto btn-solido btn-solido--dourado !py-2 !text-xs">
               <Settings2 size={13} /> Configurar
             </button>
           )}
@@ -91,7 +91,7 @@ export function JornadaTurmaFaixa({ profile, showToast }: { profile: UserProfile
                   <div key={d}
                     className={`text-center text-[11px] font-bold py-1.5 rounded-lg border ${
                       tem
-                        ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                        ? 'bg-[#16a34a] text-white border-[#15803d]'
                         : 'border-white/15 text-gray-500'
                     }`}>
                     {DIAS_CURTO[d]}
