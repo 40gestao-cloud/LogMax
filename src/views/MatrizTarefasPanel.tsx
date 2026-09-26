@@ -8,7 +8,7 @@ import {
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { assinarRealtime } from '../lib/realtimeAgrupado';
-import { LoadingSpinner, EmptyState } from '../components/ui';
+import { LoadingSpinner, EmptyState, CardContador, FilialBadge, NeuButtonAccent } from '../components/ui';
 import { useConfirm } from '../contexts/ConfirmContext';
 import { todayBR } from '../lib/dates';
 import type { UserProfile } from '../hooks/useUserProfile';
@@ -28,6 +28,8 @@ type TipoConfig = {
   iconBg: string;
   iconRing: string;
   iconColor: string;
+  // Ladrilho do ícone em cor cheia (landing e cabeçalho do tipo).
+  solido: string;
   novoLabel: string;
 };
 
@@ -38,6 +40,7 @@ const TIPOS: TipoConfig[] = [
     hint: 'Criar pauta de apresentação, selecionar participantes e nota 0-10 do conselho.',
     icon: Presentation,
     glow: 'bg-amber-500/25', iconBg: 'bg-amber-500/10', iconRing: 'ring-amber-500/25', iconColor: 'text-amber-300',
+    solido: 'bg-amber-500 text-black',
     novoLabel: 'Nova apresentação',
   },
   {
@@ -46,6 +49,7 @@ const TIPOS: TipoConfig[] = [
     hint: 'Criar atividade de Desenvolvimento com IA, participantes por filial, nota 0-10 do conselho.',
     icon: Cpu,
     glow: 'bg-orange-500/25', iconBg: 'bg-orange-500/10', iconRing: 'ring-orange-500/25', iconColor: 'text-orange-400',
+    solido: 'bg-orange-600 text-white',
     novoLabel: 'Nova atividade de Desenvolvimento com IA',
   },
   {
@@ -54,6 +58,7 @@ const TIPOS: TipoConfig[] = [
     hint: 'Criar atividade de RH, definir participantes por filial e nota 0-10 do conselho.',
     icon: UserCircle,
     glow: 'bg-sky-500/25', iconBg: 'bg-sky-500/10', iconRing: 'ring-sky-500/25', iconColor: 'text-sky-400',
+    solido: 'bg-sky-600 text-white',
     novoLabel: 'Nova atividade de Recursos Humanos',
   },
   {
@@ -62,6 +67,7 @@ const TIPOS: TipoConfig[] = [
     hint: 'Criar atividade Financeira, participantes por filial e nota 0-10 do conselho.',
     icon: DollarSign,
     glow: 'bg-rose-500/25', iconBg: 'bg-rose-500/10', iconRing: 'ring-rose-500/25', iconColor: 'text-rose-400',
+    solido: 'bg-rose-600 text-white',
     novoLabel: 'Nova atividade de Financeiro',
   },
   {
@@ -70,6 +76,7 @@ const TIPOS: TipoConfig[] = [
     hint: 'Criar atividade de Logística, participantes por filial e nota 0-10 do conselho.',
     icon: Package,
     glow: 'bg-emerald-500/25', iconBg: 'bg-emerald-500/10', iconRing: 'ring-emerald-500/25', iconColor: 'text-emerald-400',
+    solido: 'bg-emerald-600 text-white',
     novoLabel: 'Nova atividade de Logística',
   },
   {
@@ -78,6 +85,7 @@ const TIPOS: TipoConfig[] = [
     hint: 'Criar atividade de Marketing, participantes por filial e nota 0-10 do conselho.',
     icon: Megaphone,
     glow: 'bg-pink-500/25', iconBg: 'bg-pink-500/10', iconRing: 'ring-pink-500/25', iconColor: 'text-pink-400',
+    solido: 'bg-pink-600 text-white',
     novoLabel: 'Nova atividade de Marketing',
   },
   {
@@ -86,6 +94,7 @@ const TIPOS: TipoConfig[] = [
     hint: 'Criar atividade, definir participantes por filial e nota 0-10 do conselho.',
     icon: Handshake,
     glow: 'bg-blue-500/25', iconBg: 'bg-blue-500/10', iconRing: 'ring-blue-500/25', iconColor: 'text-blue-400',
+    solido: 'bg-blue-600 text-white',
     novoLabel: 'Nova atividade de Vendas e Atendimento',
   },
 ];
@@ -202,6 +211,7 @@ function LandingTipos({ onSelect, competicao, extras, minhaId, podeAvaliar }: {
   // número truncado, porque o voto fica selado até a tarefa encerrar.
   const [progresso, setProgresso] = useState<{ avaliador_id: string; nome: string; role: string; notas_dadas: number }[]>([]);
   const [totalParticipantesAbertos, setTotalParticipantesAbertos] = useState(0);
+  const [porStatus, setPorStatus] = useState({ rascunho: 0, aberta: 0, encerrada: 0 });
 
   useEffect(() => {
     (async () => {
@@ -219,6 +229,9 @@ function LandingTipos({ onSelect, competicao, extras, minhaId, podeAvaliar }: {
       const porTipo = zerado();
       (Object.keys(porTipo) as TipoTarefa[]).forEach(k => { porTipo[k] = contagens[k] ?? 0; });
       setContadores(porTipo);
+      const st = { rascunho: 0, aberta: 0, encerrada: 0 };
+      (tarefas ?? []).forEach((t: any) => { if (t.status in st) st[t.status as keyof typeof st] += 1; });
+      setPorStatus(st);
 
       // Pendência só conta tarefa liberada: rascunho ainda não aceita nota.
       const abertas = (tarefas ?? []).filter((t: any) => t.status === 'aberta');
@@ -283,126 +296,102 @@ function LandingTipos({ onSelect, competicao, extras, minhaId, podeAvaliar }: {
   }, [competicao.id, minhaId, podeAvaliar]);
 
   const totalPendente = (Object.values(pendentes) as number[]).reduce((s, n) => s + n, 0);
+  const totalTarefas = (Object.values(contadores) as number[]).reduce((s, n) => s + n, 0);
 
   return (
-    <div className="flex flex-col gap-6">
-    {podeAvaliar && !loading && (
-      <div className={`neu-flat rounded-2xl border px-5 py-3 flex items-center gap-3 ${
-        totalPendente > 0 ? 'border-amber-500/30' : 'border-emerald-500/30'
-      }`}>
-        {totalPendente > 0
-          ? <Star size={16} className="text-amber-400 shrink-0" />
-          : <Check size={16} className="text-emerald-400 shrink-0" />}
-        <p className="text-sm text-gray-200">
-          {totalPendente > 0 ? (
-            <>Faltam <span className="font-black text-amber-300">{totalPendente}</span> participante{totalPendente === 1 ? '' : 's'} pra você avaliar em tarefas abertas.</>
-          ) : (
-            <>Você avaliou todos os participantes das tarefas abertas.</>
-          )}
-        </p>
+    <div className="flex flex-col gap-5">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <CardContador label="Tarefas" value={loading ? '…' : totalTarefas} tom="dourado" />
+        <CardContador label="Em avaliação" value={loading ? '…' : porStatus.aberta} tom="verde" />
+        <CardContador label="Participantes" value={loading ? '…' : totalParticipantesAbertos} tom="azul" />
+        {podeAvaliar ? (
+          <CardContador label="Sem sua nota" value={loading ? '…' : totalPendente} tom="amarelo" />
+        ) : (
+          <CardContador label="Encerradas" value={loading ? '…' : porStatus.encerrada} tom="neutro" />
+        )}
       </div>
-    )}
 
-    {!loading && progresso.length > 0 && totalParticipantesAbertos > 0 && (
-      <div className="neu-flat rounded-2xl border border-white/5 px-5 py-4 flex flex-col gap-3">
-        <div className="flex items-center gap-2">
-          <Users size={14} className="text-accent" />
-          <h4 className="text-sm font-bold text-gray-200">Progresso do conselho</h4>
-          <span className="text-[10px] uppercase tracking-widest font-bold text-gray-500">
-            {totalParticipantesAbertos} participante{totalParticipantesAbertos === 1 ? '' : 's'} avaliáveis
-          </span>
+      {/* Só a CONTAGEM de notas por avaliador — o valor segue selado até a
+          tarefa encerrar (RPC progresso_avaliacao_matriz, migr. 345). */}
+      {!loading && progresso.length > 0 && totalParticipantesAbertos > 0 && (
+        <div className="neu-flat rounded-2xl border border-white/5 p-4 flex flex-col gap-3">
+          <h4 className="text-sm font-bold text-gray-200 flex items-center gap-2"
+            title="Quantidade de notas dadas. O valor de cada nota segue selado até a tarefa encerrar.">
+            <Users size={14} className="text-accent" /> Progresso do conselho
+          </h4>
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-x-6 gap-y-3">
+            {progresso.map(p => {
+              const pct = Math.min(100, Math.round((p.notas_dadas / totalParticipantesAbertos) * 100));
+              const completo = p.notas_dadas >= totalParticipantesAbertos;
+              return (
+                <div key={p.avaliador_id} className="flex flex-col gap-1.5">
+                  <div className="flex items-center gap-2 text-xs">
+                    <span className="text-gray-200 flex-1 truncate">{p.nome ?? 'Conselheiro'}</span>
+                    <span className={`font-black tabular-nums ${completo ? 'text-green-400' : 'text-amber-400'}`}>
+                      {p.notas_dadas}/{totalParticipantesAbertos}
+                    </span>
+                  </div>
+                  <div className="h-2 rounded-full bg-white/5 overflow-hidden">
+                    <div className={`h-full rounded-full transition-all ${completo ? 'bg-green-500' : 'bg-amber-500'}`}
+                      style={{ width: `${pct}%` }} />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
-          {progresso.map(p => {
-            const pct = Math.min(100, Math.round((p.notas_dadas / totalParticipantesAbertos) * 100));
-            const completo = p.notas_dadas >= totalParticipantesAbertos;
+      )}
+
+      <div className="flex flex-col gap-3">
+        <SecaoTitulo>Tarefas por área</SecaoTitulo>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-3">
+          {TIPOS.map(t => {
+            const Icon = t.icon;
+            const n = contadores[t.id];
+            const falta = podeAvaliar ? pendentes[t.id] : 0;
             return (
-              <div key={p.avaliador_id} className="neu-pressed rounded-xl px-3 py-2 flex flex-col gap-1.5">
-                <div className="flex items-center gap-2">
-                  <span className="text-xs text-gray-200 flex-1 truncate">{p.nome ?? 'Conselheiro'}</span>
-                  <span className={`text-[11px] font-mono font-black tabular-nums ${completo ? 'text-emerald-300' : 'text-amber-300'}`}>
-                    {p.notas_dadas}/{totalParticipantesAbertos}
+              <button
+                key={t.id}
+                onClick={() => onSelect(t.id)}
+                className={`group neu-flat rounded-2xl p-4 text-left border transition-colors flex items-center gap-3 ${
+                  falta > 0 ? 'border-amber-500/40 hover:border-amber-400' : 'border-white/5 hover:border-accent/40'}`}
+              >
+                <span className={`w-11 h-11 shrink-0 rounded-xl flex items-center justify-center ${t.solido} ${n === 0 ? 'opacity-50' : ''}`}>
+                  <Icon size={20} strokeWidth={1.8} />
+                </span>
+                <span className="flex-1 min-w-0 flex flex-col gap-0.5">
+                  <span className="text-sm font-black text-gray-100 leading-tight truncate">{t.label}</span>
+                  <span className="text-[11px] text-gray-500 tabular-nums flex items-center gap-1.5">
+                    {loading ? <Loader2 size={11} className="animate-spin" /> : (n === 0 ? 'Nenhuma tarefa' : `${n} tarefa${n === 1 ? '' : 's'}`)}
+                    {!loading && falta > 0 && (
+                      <span className="text-[10px] font-black px-1.5 py-0.5 rounded bg-yellow-400 text-black">{falta} sem sua nota</span>
+                    )}
                   </span>
-                </div>
-                <div className="h-1.5 rounded-full bg-white/5 overflow-hidden">
-                  <div
-                    className={`h-full rounded-full transition-all ${completo ? 'bg-emerald-400/70' : 'bg-amber-400/70'}`}
-                    style={{ width: `${pct}%` }}
-                  />
-                </div>
-              </div>
+                </span>
+                <ChevronRight size={16} className="shrink-0 text-gray-600 group-hover:text-accent transition-colors" />
+              </button>
             );
           })}
         </div>
-        <p className="text-[10px] text-gray-500 leading-snug">
-          Só a quantidade de notas dadas — o valor de cada nota segue selado até a tarefa encerrar.
-        </p>
       </div>
-    )}
 
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-      {TIPOS.map((t, idx) => {
-        const Icon = t.icon;
-        // Sobrando 1 card na última linha (7 tipos em 3 colunas), ele desce
-        // pra coluna do meio — fica embaixo de Logística em vez de pendurado
-        // na esquerda. Em 2 colunas o fluxo natural já alinha.
-        const centralizaSozinho = TIPOS.length % 3 === 1 && idx === TIPOS.length - 1;
-        return (
-          <button
-            key={t.id}
-            onClick={() => onSelect(t.id)}
-            className={`relative neu-flat rounded-2xl p-5 text-left overflow-hidden group hover:border-accent/40 hover:ring-1 hover:ring-accent/25 transition-all flex flex-col gap-4 ${
-              centralizaSozinho ? 'lg:col-start-2' : ''
-            }`}
-          >
-            <div className={`pointer-events-none absolute -top-16 -right-16 w-40 h-40 rounded-full blur-3xl opacity-50 ${t.glow}`} />
-
-            <div className="relative flex items-start justify-between gap-2">
-              <div className={`w-11 h-11 rounded-xl flex items-center justify-center ring-1 ${t.iconBg} ${t.iconRing}`}>
-                <Icon size={20} strokeWidth={1.8} className={t.iconColor} />
-              </div>
-              <ChevronRight size={16} className="text-gray-600 group-hover:text-accent transition-colors" />
-            </div>
-
-            <div className="relative">
-              <h3 className="text-base font-black text-gray-100 tracking-tight">{t.label}</h3>
-              <p className="text-[11px] text-gray-400 mt-1 leading-snug">{t.hint}</p>
-            </div>
-
-            <div className="relative flex items-center gap-2 flex-wrap text-[10px] uppercase tracking-widest font-bold pt-3 border-t border-white/5">
-              {loading ? (
-                <Loader2 size={11} className="animate-spin text-gray-500" />
-              ) : (
-                <>
-                  <span className="text-gray-400 tabular-nums">
-                    {contadores[t.id]} tarefa{contadores[t.id] === 1 ? '' : 's'} nesta competição
-                  </span>
-                  {podeAvaliar && pendentes[t.id] > 0 && (
-                    <span className="px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-300 border border-amber-500/30 tabular-nums">
-                      {pendentes[t.id]} sem sua nota
-                    </span>
-                  )}
-                </>
-              )}
-            </div>
-          </button>
-        );
-      })}
-    </div>
-
-    {/* Painéis que não são tarefa — faixa separada pra não competir com os
-        cards de tipo, que é onde o avaliador entra no dia a dia. */}
-    {extras && (
-      <div className="flex flex-col gap-3">
-        <div className="flex items-center gap-3">
-          <span className="text-[10px] uppercase tracking-widest font-bold text-gray-500 shrink-0">
-            Painéis consolidados
-          </span>
-          <span className="h-px flex-1 bg-white/10" />
+      {/* Painéis que não são tarefa — faixa separada pra não competir com os
+          cards de tipo, que é onde o avaliador entra no dia a dia. */}
+      {extras && (
+        <div className="flex flex-col gap-3">
+          <SecaoTitulo>Painéis consolidados</SecaoTitulo>
+          {extras}
         </div>
-        {extras}
-      </div>
-    )}
+      )}
+    </div>
+  );
+}
+
+function SecaoTitulo({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="flex items-center gap-3">
+      <span className="text-[10px] uppercase tracking-widest font-bold text-gray-500 shrink-0">{children}</span>
+      <span className="h-px flex-1 bg-white/10" />
     </div>
   );
 }
@@ -639,27 +628,25 @@ function PainelTipoTarefa({ tipoConfig, competicao, profile, podeAvaliar, ehAval
   return (
     <section className="flex flex-col gap-4 min-w-0">
       <div className="flex items-center justify-between gap-3 flex-wrap">
-        <div className="flex items-center gap-3">
-          <button onClick={onVoltar}
-            className="shrink-0 flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest px-2.5 py-1 rounded-lg neu-button text-gray-300 hover:text-accent">
-            <ArrowLeft size={12} /> Voltar
+        <div className="flex items-center gap-3 min-w-0">
+          <button onClick={onVoltar} title="Voltar às áreas"
+            className="shrink-0 w-9 h-9 rounded-xl neu-button flex items-center justify-center text-gray-400 hover:text-accent">
+            <ArrowLeft size={16} />
           </button>
-          <div className="w-10 h-10 rounded-xl bg-accent/15 flex items-center justify-center ring-1 ring-accent/25">
-            <Icon size={18} className="text-accent" />
-          </div>
-          <div>
-            <h3 className="text-lg font-bold text-gray-100">{tipoConfig.label}</h3>
-            <span className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">
+          <span className={`w-11 h-11 shrink-0 rounded-xl flex items-center justify-center ${tipoConfig.solido}`}>
+            <Icon size={20} />
+          </span>
+          <div className="min-w-0">
+            <h3 className="text-xl font-black text-gray-100 leading-tight">{tipoConfig.label}</h3>
+            <span className="text-xs text-gray-500">
               {tarefas.length} tarefa{tarefas.length === 1 ? '' : 's'}
             </span>
           </div>
         </div>
         {podeCriar && (
-          <button
-            onClick={() => setModalOpen(true)}
-            className="flex items-center gap-2 text-xs font-bold px-3 py-2 rounded-lg neu-button text-accent hover:ring-1 hover:ring-accent/40">
-            <Plus size={14} /> {tipoConfig.novoLabel}
-          </button>
+          <NeuButtonAccent variant="" onClick={() => setModalOpen(true)} title={tipoConfig.novoLabel}>
+            <Plus size={14} /> Nova tarefa
+          </NeuButtonAccent>
         )}
       </div>
 
@@ -801,104 +788,92 @@ function TarefaCard({ tarefa, tipoConfig, participantes, avalsPorParticipante, s
   // a grade de participantes pra fora da tela quando havia várias tarefas.
   const [expandido, setExpandido] = useState(false);
 
+  const status = encerrada
+    ? { label: 'Encerrada', cls: 'bg-zinc-600 text-white', icon: <Lock size={10} /> }
+    : rascunho
+      ? { label: 'Notas bloqueadas', cls: 'bg-yellow-400 text-black', icon: <Lock size={10} /> }
+      : { label: 'Em avaliação', cls: 'bg-green-600 text-white', icon: <Unlock size={10} /> };
+
   return (
-    <div className={`neu-flat rounded-2xl border p-4 flex flex-col gap-3 ${encerrada ? 'border-gray-500/25 opacity-95' : 'border-accent/10'}`}>
-      <div className="flex items-start justify-between gap-3 flex-wrap">
-        <div className="flex flex-col gap-1 min-w-0">
-          <span className="text-[11px] uppercase tracking-widest text-gray-500 font-bold flex items-center gap-2 flex-wrap">
-            {new Date(tarefa.data + 'T00:00:00').toLocaleDateString('pt-BR')} · {participantes.length} participante{participantes.length === 1 ? '' : 's'}
-            <span className={`text-[10px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full flex items-center gap-1 ${
-              encerrada
-                ? 'bg-gray-500/20 text-gray-300 ring-1 ring-gray-500/30'
-                : rascunho
-                  ? 'bg-amber-500/15 text-amber-300 ring-1 ring-amber-500/30'
-                  : 'bg-emerald-500/15 text-emerald-300 ring-1 ring-emerald-500/30'
-            }`}>
-              {encerrada
-                ? <><Lock size={9} /> Encerrada</>
-                : rascunho
-                  ? <><Lock size={9} /> Notas bloqueadas</>
-                  : <><Unlock size={9} /> Em avaliação</>}
-            </span>
-          </span>
-          {tarefa.descricao ? (
-            <button
-              type="button"
-              onClick={() => setExpandido(v => !v)}
-              title={expandido ? 'Recolher descrição' : 'Clique para ler a descrição inteira'}
-              className="group text-left flex flex-col gap-1 min-w-0"
-            >
-              <h4 className="text-lg font-black text-gray-100 flex items-center gap-1.5">
-                {tarefa.nome}
-                <ChevronDown
-                  size={14}
-                  className={`shrink-0 text-gray-500 group-hover:text-accent transition-all ${expandido ? 'rotate-180 text-accent' : ''}`}
-                />
-              </h4>
-              <p className={`text-[13px] text-gray-400 leading-snug whitespace-pre-wrap ${expandido ? '' : 'line-clamp-2'}`}>
-                {tarefa.descricao}
-              </p>
-            </button>
-          ) : (
-            <h4 className="text-lg font-black text-gray-100">{tarefa.nome}</h4>
+    <div className={`neu-flat rounded-2xl border overflow-hidden flex flex-col ${encerrada ? 'border-white/5' : 'border-white/10'}`}>
+      <div className="p-4 flex flex-col gap-3">
+        <div className="flex items-start justify-between gap-3 flex-wrap">
+          <div className="flex flex-col gap-1.5 min-w-0 flex-1">
+            <div className="flex items-center gap-2 flex-wrap text-xs text-gray-500">
+              <span className={`text-[10px] font-black uppercase tracking-widest px-2 py-0.5 rounded flex items-center gap-1 ${status.cls}`}>
+                {status.icon} {status.label}
+              </span>
+              <span className="tabular-nums">{new Date(tarefa.data + 'T00:00:00').toLocaleDateString('pt-BR')}</span>
+              <span>· {participantes.length} participante{participantes.length === 1 ? '' : 's'}</span>
+            </div>
+            <h4 className="text-lg font-black text-gray-100 leading-snug">{tarefa.nome}</h4>
+          </div>
+          {(podeGerenciar || souCriador) && (
+            <div className="flex items-center gap-1.5 flex-wrap">
+              {/* Liberar exige competição em andamento (migr. 348): fora dela
+                  a tarefa abriria pra um conselho que não consegue votar. */}
+              {rascunho && emAndamento && (
+                <button onClick={onLiberar} className="btn-solido btn-solido--verde" title="Liberar para o conselho dar nota — avisa no sino">
+                  <Unlock size={13} /> Permitir notas
+                </button>
+              )}
+              {!encerrada && podeGerenciar && (
+                <button onClick={onBriefingIa} className="btn-solido btn-solido--roxo" title="MaxAI sugere sub-tarefas nos outros tipos para apoiar esta">
+                  <Sparkles size={13} /> MaxAI
+                </button>
+              )}
+              {/* Encerrar/reabrir seguem admin/CEO: encerrar é o gesto que
+                  revela o voto selado — quem avalia não controla isso. */}
+              {!encerrada && podeGerenciar && (
+                <button onClick={onEncerrar} className="btn-solido btn-solido--amarelo" title="Encerrar e revelar as notas">
+                  <Lock size={13} /> Encerrar
+                </button>
+              )}
+              {encerrada && podeGerenciar && (
+                <button onClick={onReabrir} className="btn-solido btn-solido--amarelo" title="Reabrir tarefa">
+                  <Unlock size={13} /> Reabrir
+                </button>
+              )}
+              {!encerrada && (
+                <button onClick={onEditar} className="action-btn-edit" title="Editar tarefa">
+                  <Pencil size={12} />
+                </button>
+              )}
+              {(podeGerenciar || rascunho) && (
+                <button onClick={onRemover} className="action-btn-delete" title="Remover tarefa">
+                  <Trash2 size={12} />
+                </button>
+              )}
+            </div>
           )}
         </div>
-        {(podeGerenciar || souCriador) && (
-          <div className="flex items-center gap-1.5 flex-wrap">
-            {/* Liberar exige competição em andamento (migr. 348): fora dela
-                a tarefa abriria pra um conselho que não consegue votar. */}
-            {rascunho && emAndamento && (
-              <button onClick={onLiberar} className="btn-shimmer btn-shimmer--glass-green" title="Liberar a tarefa para o conselho dar nota — dispara aviso no sino">
-                <Unlock size={11} /> Permitir notas
-              </button>
-            )}
-            {!encerrada && (
-              <>
-                {podeGerenciar && (
-                  <button onClick={onBriefingIa} className="btn-shimmer btn-shimmer--glass-purple" title="MaxAI Briefing — IA sugere sub-tarefas nos outros tipos pra apoiar esta tarefa">
-                    <Sparkles size={11} /> MaxAI Briefing
-                  </button>
-                )}
-                <button onClick={onEditar} className="btn-shimmer btn-shimmer--glass-blue" title="Editar tarefa">
-                  <Pencil size={11} /> Editar
-                </button>
-                {/* Encerrar/reabrir seguem admin/CEO: encerrar é o gesto que
-                    revela o voto selado — quem avalia não controla isso. */}
-                {podeGerenciar && (
-                  <button onClick={onEncerrar} className="btn-shimmer btn-shimmer--glass-yellow" title="Encerrar tarefa">
-                    <Lock size={11} /> Encerrar
-                  </button>
-                )}
-              </>
-            )}
-            {encerrada && podeGerenciar && (
-              <button onClick={onReabrir} className="btn-shimmer btn-shimmer--glass-yellow" title="Reabrir tarefa">
-                <Unlock size={11} /> Reabrir
-              </button>
-            )}
-            {(podeGerenciar || rascunho) && (
-              <button onClick={onRemover} className="btn-shimmer btn-shimmer--glass-red" title="Remover tarefa">
-                <Trash2 size={11} /> Remover
-              </button>
-            )}
-          </div>
+        {/* Descrição em 2 linhas até o clique: pauta longa empurrava a grade
+            de participantes pra fora da tela quando havia várias tarefas. */}
+        {tarefa.descricao && (
+          <button type="button" onClick={() => setExpandido(v => !v)}
+            title={expandido ? 'Recolher' : 'Ler a descrição inteira'}
+            className="group text-left flex items-start gap-1.5">
+            <p className={`text-[13px] text-gray-400 leading-relaxed whitespace-pre-wrap flex-1 ${expandido ? '' : 'line-clamp-2'}`}>
+              {tarefa.descricao}
+            </p>
+            <ChevronDown size={14} className={`shrink-0 mt-0.5 text-gray-500 group-hover:text-accent transition-transform ${expandido ? 'rotate-180 text-accent' : ''}`} />
+          </button>
         )}
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 md:grid-cols-3 border-t border-white/5 md:divide-x divide-white/5">
         {CENTRAL_OP_FILIAIS.map(f => {
           const lista = porFilial[f];
-          const tone = CENTRAL_FILIAL_TONE[f];
           return (
-            <div key={f} className="neu-pressed rounded-xl p-3 flex flex-col gap-2">
-              <div className="flex items-center gap-2">
-                <span className={`text-[11px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full ${tone}`}>{f}</span>
-                <span className="text-[11px] font-mono text-gray-500">{lista.length}</span>
+            <div key={f} className="p-3 flex flex-col gap-1.5 border-b md:border-b-0 border-white/5 last:border-b-0">
+              <div className="flex items-center justify-between gap-2 pb-1">
+                <FilialBadge filial={f} />
+                <span className="text-xs text-gray-500 tabular-nums">{lista.length}</span>
               </div>
               {lista.length === 0 ? (
-                <span className="text-xs text-gray-500 italic">Sem participantes</span>
+                <span className="text-xs text-gray-600 py-1.5">Sem participantes</span>
               ) : (
-                <div className="flex flex-col gap-1.5">
+                <div className="flex flex-col">
                   {lista.map(p => (
                     <ParticipanteRow
                       key={p.id}
@@ -948,9 +923,8 @@ function ParticipanteRow({ participante, avals, minhaId, desligado, podeAvaliar,
     <button
       onClick={onAbrir}
       disabled={submitting}
-      className="w-full flex items-center gap-2 py-1.5 border-b border-white/5 last:border-b-0 text-left group disabled:opacity-60"
+      className="w-full flex items-center gap-2 px-2 py-2 -mx-2 rounded-lg hover:bg-white/5 text-left group disabled:opacity-60"
     >
-      <Users size={13} className="text-gray-500 shrink-0" />
       <span className={`text-sm flex-1 truncate transition-colors ${
         desligado ? 'text-gray-500 line-through' : 'text-gray-200 group-hover:text-white'
       }`}>
@@ -960,7 +934,7 @@ function ParticipanteRow({ participante, avals, minhaId, desligado, podeAvaliar,
       {desligado && (
         <span
           title="Desligado depois de entrar nesta tarefa — não recebe mais nota e as notas dele saíram do placar da filial."
-          className="text-[9px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded-full border border-red-500/30 bg-red-500/10 text-red-400 shrink-0"
+          className="text-[9px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded bg-red-600 text-white shrink-0"
         >
           Desligado
         </span>
@@ -975,8 +949,8 @@ function ParticipanteRow({ participante, avals, minhaId, desligado, podeAvaliar,
       {minha?.comentario && <MessageSquare size={13} className="text-accent shrink-0" />}
 
       {minha?.nota != null && (
-        <span className="text-[10px] uppercase tracking-widest font-bold px-1.5 py-0.5 rounded bg-accent/15 text-accent tabular-nums shrink-0">
-          sua {Number(minha.nota).toFixed(1)}
+        <span className="text-[10px] font-black px-1.5 py-0.5 rounded btn-solido--dourado tabular-nums shrink-0" title="Sua nota">
+          {Number(minha.nota).toFixed(1)}
         </span>
       )}
 

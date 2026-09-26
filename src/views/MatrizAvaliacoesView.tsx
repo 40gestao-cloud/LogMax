@@ -31,10 +31,19 @@ type Competicao = {
 
 const fmtDataBR = (iso: string) => iso ? iso.split('-').reverse().join('/') : '';
 
+// Cor cheia, mesma régua do StatusBadge.
 const STATUS_COMPETICAO: Record<string, { label: string; classe: string }> = {
-  em_andamento:            { label: 'Em andamento', classe: 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300' },
-  aguardando_encerramento: { label: 'Em votação',   classe: 'border-amber-500/30 bg-amber-500/10 text-amber-300' },
-  encerrada:               { label: 'Encerrada',    classe: 'border-gray-500/30 bg-gray-500/10 text-gray-400' },
+  em_andamento:            { label: 'Em andamento', classe: 'bg-green-600 text-white' },
+  aguardando_encerramento: { label: 'Em votação',   classe: 'bg-yellow-400 text-black' },
+  encerrada:               { label: 'Encerrada',    classe: 'bg-zinc-600 text-white' },
+};
+
+// Dias corridos até o fim, no fuso da operação (datas são 'YYYY-MM-DD').
+const diasAte = (fim: string) => {
+  const hoje = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Rio_Branco' }));
+  hoje.setHours(0, 0, 0, 0);
+  const [a, m, d] = fim.split('-').map(Number);
+  return Math.round((new Date(a, m - 1, d).getTime() - hoje.getTime()) / 86400_000);
 };
 
 // Central de Avaliação — Competição: hoje é só o painel de Tarefas da Matriz.
@@ -115,34 +124,41 @@ export function MatrizAvaliacoesView({ profile, showToast }: { profile: UserProf
   // Landing: uma competição por card. Clicar abre tudo dela.
   if (!competicao) {
     return (
-      <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col gap-6 pb-8">
-        <div>
-          <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Central de Avaliação — Matriz</h2>
-        </div>
+      <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col gap-5 pb-8">
+        <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Competições do Conselho</h2>
 
         {competicoes.length === 0 ? (
-          <EmptyState message="🏆 Nenhuma competição ainda — abra uma em Matriz → Competição para começar a cadastrar tarefas." />
+          <EmptyState message="Nenhuma competição ainda — abra uma em Matriz → Competição." />
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 items-start">
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 items-start">
             {competicoes.map(c => {
               const meta = STATUS_COMPETICAO[c.status] ?? STATUS_COMPETICAO.encerrada;
+              const restam = diasAte(c.data_fim);
               return (
                 <button
                   key={c.id}
                   type="button"
                   onClick={() => setSelecionadaId(c.id)}
-                  className="neu-flat rounded-2xl border border-white/5 hover:border-accent/40 transition-colors p-4 text-left flex flex-col gap-2"
+                  className="group neu-flat rounded-2xl border border-white/5 hover:border-accent/40 transition-colors p-5 text-left flex flex-col gap-4"
                 >
                   <div className="flex items-center justify-between gap-2">
-                    <Trophy size={14} className="text-amber-300 shrink-0" />
-                    <span className={`text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full border ${meta.classe}`}>
+                    <span className="w-11 h-11 rounded-xl bg-amber-500 text-black flex items-center justify-center">
+                      <Trophy size={20} />
+                    </span>
+                    <span className={`text-[10px] font-black uppercase tracking-widest px-2 py-1 rounded ${meta.classe}`}>
                       {meta.label}
                     </span>
                   </div>
-                  <h3 className="text-sm font-black text-gray-100 leading-tight">{c.nome}</h3>
-                  <p className="text-[11px] text-gray-500">
-                    {fmtDataBR(c.data_inicio)} → {fmtDataBR(c.data_fim)}
-                  </p>
+                  <h3 className="text-base font-black text-gray-100 leading-snug">{c.nome}</h3>
+                  <div className="flex items-center justify-between gap-2 pt-3 border-t border-white/5 text-xs">
+                    <span className="text-gray-400 tabular-nums">{fmtDataBR(c.data_inicio)} → {fmtDataBR(c.data_fim)}</span>
+                    <span className="flex items-center gap-2">
+                      {c.status === 'em_andamento' && restam >= 0 && (
+                        <span className="font-bold text-accent tabular-nums">{restam === 0 ? 'último dia' : `${restam} dias`}</span>
+                      )}
+                      <ChevronRight size={16} className="text-gray-600 group-hover:text-accent transition-colors" />
+                    </span>
+                  </div>
                 </button>
               );
             })}
@@ -158,6 +174,9 @@ export function MatrizAvaliacoesView({ profile, showToast }: { profile: UserProf
   // leitura em vez de oferecer botão que só devolve erro.
   const emAndamento = competicao.status === 'em_andamento';
   const podeAvaliar = ehAvaliador && emAndamento;
+
+  const statusMeta = STATUS_COMPETICAO[competicao.status] ?? STATUS_COMPETICAO.encerrada;
+  const restam = diasAte(competicao.data_fim);
 
   const nomeArquivo = `central-avaliacao-${competicao.nome.trim().replace(/[^a-zA-Z0-9]+/g, '-')}`;
 
@@ -189,84 +208,45 @@ export function MatrizAvaliacoesView({ profile, showToast }: { profile: UserProf
 
   return (
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col gap-6 pb-8">
-      <div className="neu-flat rounded-2xl border border-accent/20 p-4 sm:p-5">
-        <div className="flex items-start justify-between gap-3 flex-wrap">
-          <div className="flex flex-col gap-1 min-w-0">
-            {/* Sem isto a competição aberta vira beco: a aba entra na lista e
-                não haveria como voltar a ela sem trocar de tela. */}
-            <button
-              type="button"
-              onClick={() => { setSelecionadaId(null); setSecao(null); }}
-              className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-gray-500 hover:text-accent transition-colors self-start"
-            >
-              <ArrowLeft size={11} /> Todas as competições
-            </button>
-            <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight truncate">Central de Avaliação — Matriz</h2>
-            <div className="flex items-center gap-2 text-xs text-gray-400 flex-wrap">
-              <Trophy size={12} className="text-amber-400" />
-              <span className="font-mono font-bold text-gray-200">{competicao.nome}</span>
-              <span className="text-gray-500">·</span>
-              <span className="font-mono">{competicao.data_inicio} → {competicao.data_fim}</span>
-            </div>
-          </div>
-          <div className="flex items-center gap-2 flex-wrap shrink-0">
-            <button
-              onClick={baixarPDF}
-              disabled={exportando !== null}
-              className="btn-solido btn-solido--vermelho"
-              title="Baixar consolidado em PDF"
-            >
-              {exportando === 'pdf' ? <Loader2 size={12} className="animate-spin" /> : <FileDown size={12} />}
-              PDF
-            </button>
-            <button
-              onClick={enviarMaxShow}
-              disabled={exportando !== null}
-              className="flex items-center gap-1.5 text-[11px] font-bold px-3 py-1.5 rounded-lg neu-button text-accent hover:ring-1 hover:ring-accent/40 transition-all disabled:opacity-50"
-              title="Enviar consolidado ao Max Show pra apresentar"
-            >
-              {exportando === 'maxshow' ? <Loader2 size={12} className="animate-spin" /> : <Presentation size={12} />}
-              Max Show
-            </button>
-            <button
-              onClick={baixarExcel}
-              disabled={exportando !== null}
-              className="btn-solido btn-solido--verde"
-              title="Baixar consolidado em Excel"
-            >
-              {exportando === 'excel' ? <Loader2 size={12} className="animate-spin" /> : <FileSpreadsheet size={12} />}
-              Excel
-            </button>
-            {!podeAvaliar && (
-              <span className="text-[10px] font-bold uppercase tracking-widest px-2.5 py-1 rounded-lg bg-gray-500/15 text-gray-400 border border-gray-500/30">
-                Modo leitura
+      <div className="flex items-start justify-between gap-3 flex-wrap">
+        <div className="flex flex-col gap-2 min-w-0">
+          {/* Sem isto a competição aberta vira beco: a aba entra na lista e
+              não haveria como voltar a ela sem trocar de tela. */}
+          <button
+            type="button"
+            onClick={() => { setSelecionadaId(null); setSecao(null); }}
+            className="flex items-center gap-1.5 text-xs font-bold text-gray-500 hover:text-accent transition-colors self-start"
+          >
+            <ArrowLeft size={13} /> Competições
+          </button>
+          <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">{competicao.nome}</h2>
+          <div className="flex items-center gap-2 flex-wrap text-xs text-gray-400">
+            <span className={`text-[10px] font-black uppercase tracking-widest px-2 py-1 rounded ${statusMeta.classe}`}>
+              {statusMeta.label}
+            </span>
+            <span className="tabular-nums">{fmtDataBR(competicao.data_inicio)} → {fmtDataBR(competicao.data_fim)}</span>
+            {emAndamento && restam >= 0 && (
+              <span className="font-bold text-accent">· {restam === 0 ? 'último dia' : `faltam ${restam} dias`}</span>
+            )}
+            {!emAndamento && (
+              <span className="flex items-center gap-1 text-amber-400 font-bold">
+                <Lock size={12} /> {competicao.status === 'encerrada' ? 'Encerrada — só consulta e exportação' : 'Fechada para notas — aguarda o voto de encerramento'}
               </span>
             )}
           </div>
         </div>
-      </div>
-
-      {!emAndamento && (
-        <div className="neu-flat rounded-2xl border border-amber-500/30 px-5 py-3 flex items-start gap-3">
-          <Lock size={15} className="text-amber-400 shrink-0 mt-0.5" />
-          <p className="text-xs text-gray-300 leading-snug">
-            {competicao.status === 'encerrada' ? (
-              <>
-                <b className="text-amber-300">Competição encerrada.</b> "{competicao.nome}" já teve a
-                vencedora declarada. A tela fica em leitura: as tarefas, as notas e quem fez o quê
-                continuam aqui para consulta e exportação. Abrir uma competição nova traz a tela de volta
-                para ela.
-              </>
-            ) : (
-              <>
-                <b className="text-amber-300">Competição fechada para notas.</b> "{competicao.nome}" saiu de
-                "em andamento" e agora aguarda o voto de encerramento do conselho — nenhuma nota, tarefa nova
-                ou liberação é aceita. Consulta e exportação seguem liberadas.
-              </>
-            )}
-          </p>
+        <div className="flex items-center gap-2 flex-wrap shrink-0">
+          <button onClick={baixarPDF} disabled={exportando !== null} className="btn-solido btn-solido--vermelho" title="Baixar consolidado em PDF">
+            {exportando === 'pdf' ? <Loader2 size={13} className="animate-spin" /> : <FileDown size={13} />} PDF
+          </button>
+          <button onClick={baixarExcel} disabled={exportando !== null} className="btn-solido btn-solido--verde" title="Baixar consolidado em Excel">
+            {exportando === 'excel' ? <Loader2 size={13} className="animate-spin" /> : <FileSpreadsheet size={13} />} Excel
+          </button>
+          <button onClick={enviarMaxShow} disabled={exportando !== null} className="btn-solido btn-solido--roxo" title="Enviar consolidado ao Max Show">
+            {exportando === 'maxshow' ? <Loader2 size={13} className="animate-spin" /> : <Presentation size={13} />} Max Show
+          </button>
         </div>
-      )}
+      </div>
 
       {secao === null && (
         <MatrizTarefasPanel
@@ -281,24 +261,18 @@ export function MatrizAvaliacoesView({ profile, showToast }: { profile: UserProf
               <CardSecao
                 icon={Building2}
                 titulo="Avaliação das Filiais"
-                hint="Frequência medida pelo ponto + nota de Planejamento e Organização, com o histórico por avaliador."
+                hint="Frequência do ponto + Planejamento e Organização"
                 selo="Alimenta o placar"
+                cor="bg-sky-600"
                 onClick={() => setSecao('filiais')}
-                tone="bg-sky-500/15 ring-sky-500/40 text-sky-300"
-                borda="border-sky-500/30 hover:border-sky-400/60"
-                seloTone="bg-sky-500/15 text-sky-300 border-sky-500/30"
-                glow="bg-sky-500/25"
               />
               <CardSecao
                 icon={Users}
                 titulo="Visão do Ciclo"
-                hint="Consolidado por pessoa: todas as notas que cada participante recebeu na competição."
-                selo="Somente leitura"
+                hint="Todas as notas de cada participante"
+                selo="Leitura"
+                cor="bg-violet-600"
                 onClick={() => setSecao('ciclo')}
-                tone="bg-violet-500/15 ring-violet-500/40 text-violet-300"
-                borda="border-violet-500/30 hover:border-violet-400/60"
-                seloTone="bg-violet-500/15 text-violet-300 border-violet-500/30"
-                glow="bg-violet-500/25"
               />
             </div>
           }
@@ -308,9 +282,9 @@ export function MatrizAvaliacoesView({ profile, showToast }: { profile: UserProf
       {secao !== null && (
         <button
           onClick={() => setSecao(null)}
-          className="self-start flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest px-3 py-2 rounded-lg neu-button text-gray-400 hover:text-white transition-colors"
+          className="self-start flex items-center gap-1.5 text-xs font-bold text-gray-500 hover:text-accent transition-colors"
         >
-          <ArrowLeft size={12} /> Voltar à Central
+          <ArrowLeft size={13} /> Voltar às tarefas
         </button>
       )}
 
@@ -339,39 +313,30 @@ export function MatrizAvaliacoesView({ profile, showToast }: { profile: UserProf
 
 // Card da landing pras seções que não são tarefa. Mesmo desenho dos cards
 // de tipo em MatrizTarefasPanel pra landing ficar coesa.
-function CardSecao({ icon: Icon, titulo, hint, selo, onClick, tone, borda, seloTone, glow }: {
+function CardSecao({ icon: Icon, titulo, hint, selo, cor, onClick }: {
   icon: React.ComponentType<{ size?: number; strokeWidth?: number; className?: string }>;
   titulo: string;
   hint: string;
   selo: string;
+  cor: string;
   onClick: () => void;
-  tone: string;
-  borda: string;
-  seloTone: string;
-  glow: string;
 }) {
   return (
     <button
       onClick={onClick}
-      className={`relative neu-flat rounded-2xl p-5 text-left overflow-hidden group border transition-all flex items-center gap-4 ${borda}`}
+      className="neu-flat rounded-2xl p-4 text-left group border border-white/5 hover:border-accent/40 transition-colors flex items-center gap-4"
     >
-      <div className={`pointer-events-none absolute -top-20 -left-10 w-48 h-48 rounded-full blur-3xl opacity-60 ${glow}`} />
-
-      <div className={`relative w-14 h-14 shrink-0 rounded-2xl flex items-center justify-center ring-1 ${tone}`}>
-        <Icon size={26} strokeWidth={1.7} />
+      <div className={`w-12 h-12 shrink-0 rounded-xl flex items-center justify-center text-white ${cor}`}>
+        <Icon size={22} strokeWidth={1.8} />
       </div>
-
-      <div className="relative min-w-0 flex-1">
+      <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2 flex-wrap">
           <h3 className="text-base font-black text-gray-100 tracking-tight">{titulo}</h3>
-          <span className={`text-[9px] uppercase tracking-widest font-bold px-2 py-0.5 rounded-full border ${seloTone}`}>
-            {selo}
-          </span>
+          <span className="text-[9px] uppercase tracking-widest font-bold px-1.5 py-0.5 rounded bg-zinc-700 text-gray-200">{selo}</span>
         </div>
-        <p className="text-[11px] text-gray-400 mt-1 leading-snug">{hint}</p>
+        <p className="text-xs text-gray-500 mt-0.5 truncate">{hint}</p>
       </div>
-
-      <ChevronRight size={18} className="relative shrink-0 text-gray-600 group-hover:text-accent group-hover:translate-x-0.5 transition-all" />
+      <ChevronRight size={18} className="shrink-0 text-gray-600 group-hover:text-accent group-hover:translate-x-0.5 transition-all" />
     </button>
   );
 }

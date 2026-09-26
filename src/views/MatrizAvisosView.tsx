@@ -7,10 +7,10 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { motion } from 'motion/react';
 import {
-  Megaphone, Plus, X, Loader2, Trash2, Clock, Check, Users, AlertCircle,
+  Megaphone, Plus, X, Loader2, Trash2, Clock, Check, AlertCircle, ChevronDown, Building2,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
-import { LoadingSpinner, EmptyState, FilialBadge } from '../components/ui';
+import { LoadingSpinner, EmptyState, FilialBadge, CardContador, NeuButtonAccent } from '../components/ui';
 import { useConfirm } from '../contexts/ConfirmContext';
 import { formatDataHoraBR } from '../lib/dates';
 import { avisoAlcanca, type AvisoMatriz } from '../hooks/useAvisosMatriz';
@@ -39,6 +39,10 @@ export function MatrizAvisosView({ profile, showToast }: { profile: UserProfile;
   const [destinatarios, setDestinatarios] = useState<Destinatario[]>([]);
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
+  const [filtro, setFiltro] = useState<'vigentes' | 'expirados' | 'todos'>('todos');
+  // Lista de nomes recolhida por padrão: com a turma inteira no alvo, os chips
+  // de quem confirmou empurravam o próximo aviso para fora da tela.
+  const [abertoId, setAbertoId] = useState<string | null>(null);
   const confirm = useConfirm();
 
   const carregar = useCallback(async () => {
@@ -97,97 +101,119 @@ export function MatrizAvisosView({ profile, showToast }: { profile: UserProfile;
     return { aviso, alvo, confirmaram, pendentes, expirado };
   }), [avisos, ciencias, destinatarios]);
 
+  const resumo = useMemo(() => ({
+    vigentes: linhas.filter(l => !l.expirado).length,
+    expirados: linhas.filter(l => l.expirado).length,
+    pendentes: linhas.filter(l => !l.expirado).reduce((n, l) => n + l.pendentes.length, 0),
+  }), [linhas]);
+  const visiveis = linhas.filter(l => filtro === 'todos' || (filtro === 'vigentes' ? !l.expirado : l.expirado));
+
   if (loading) return <div className="flex items-center justify-center py-24"><LoadingSpinner /></div>;
 
   return (
-    <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col gap-4 pb-8">
-      <div className="neu-flat rounded-2xl border border-amber-500/20 p-4 sm:p-5 flex items-start justify-between gap-3 flex-wrap">
-        <div className="min-w-0">
-          <div className="flex items-center gap-2">
-            <Megaphone size={16} className="text-amber-300" />
-            <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Avisos da Matriz</h2>
-          </div>
-        </div>
-        <button
-          onClick={() => setModalOpen(true)}
-          className="shrink-0 flex items-center gap-2 text-xs font-bold px-3 py-2 rounded-lg neu-button text-accent hover:ring-1 hover:ring-accent/40"
-        >
-          <Plus size={14} /> Novo Aviso
-        </button>
+    <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col gap-5 pb-8">
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Avisos da Matriz</h2>
+        <NeuButtonAccent variant="" onClick={() => setModalOpen(true)}>
+          <Plus size={14} /> Novo aviso
+        </NeuButtonAccent>
       </div>
 
-      {linhas.length === 0 ? (
-        <EmptyState message="Nenhum aviso publicado. Use o botão acima para enviar o primeiro." />
+      <div className="grid grid-cols-3 gap-4">
+        <CardContador label="Vigentes" value={resumo.vigentes} tom="verde"
+          onClick={() => setFiltro(f => f === 'vigentes' ? 'todos' : 'vigentes')} ativo={filtro === 'vigentes'} />
+        <CardContador label="Sem ciência" value={resumo.pendentes} tom="amarelo"
+          onClick={() => setFiltro('vigentes')} />
+        <CardContador label="Expirados" value={resumo.expirados} tom="neutro"
+          onClick={() => setFiltro(f => f === 'expirados' ? 'todos' : 'expirados')} ativo={filtro === 'expirados'} />
+      </div>
+
+      {visiveis.length === 0 ? (
+        <EmptyState message={linhas.length === 0
+          ? 'Nenhum aviso publicado ainda.'
+          : filtro === 'vigentes' ? 'Nenhum aviso vigente.' : 'Nenhum aviso expirado.'} />
       ) : (
-        <div className="flex flex-col gap-3">
-          {linhas.map(({ aviso, alvo, confirmaram, pendentes, expirado }) => (
-            <div key={aviso.id}
-              className={`neu-flat rounded-2xl border p-4 flex flex-col gap-3 ${expirado ? 'border-gray-500/25 opacity-90' : 'border-amber-500/20'}`}>
-              <div className="flex items-start justify-between gap-3 flex-wrap">
-                <div className="min-w-0 flex flex-col gap-1">
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 items-start">
+          {visiveis.map(({ aviso, alvo, confirmaram, pendentes, expirado }) => {
+            const pct = alvo.length > 0 ? Math.round((confirmaram.length / alvo.length) * 100) : 0;
+            const completo = alvo.length > 0 && pendentes.length === 0;
+            const aberto = abertoId === aviso.id;
+            return (
+              <div key={aviso.id}
+                className={`neu-flat rounded-2xl border flex flex-col overflow-hidden ${expirado ? 'border-white/5 opacity-80' : 'border-white/10'}`}>
+                <div className="p-4 flex flex-col gap-2.5">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <span className={`text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full flex items-center gap-1 ${
-                      expirado
-                        ? 'bg-gray-500/20 text-gray-300 ring-1 ring-gray-500/30'
-                        : 'bg-emerald-500/15 text-emerald-300 ring-1 ring-emerald-500/30'
-                    }`}>
-                      <Clock size={9} /> {expirado ? 'Expirado' : 'Vigente'}
-                    </span>
-                    <span className="text-[10px] uppercase tracking-widest text-gray-500 font-bold">
-                      {PUBLICO_LABEL[aviso.publico] ?? aviso.publico}
+                    <span className={`text-[10px] font-black uppercase tracking-widest px-2 py-0.5 rounded flex items-center gap-1 ${
+                      expirado ? 'bg-zinc-600 text-white' : 'bg-green-600 text-white'}`}>
+                      <Clock size={10} /> {expirado ? 'Expirado' : 'Vigente'}
                     </span>
                     {aviso.filiais.length === 0
-                      ? <span className="text-[10px] uppercase tracking-widest text-gray-500 font-bold">· Todas as filiais</span>
+                      ? <span className="text-[11px] text-gray-400 flex items-center gap-1"><Building2 size={11} /> Todas as unidades</span>
                       : aviso.filiais.map(f => <FilialBadge key={f} filial={f} />)}
+                    <span className="text-[11px] text-gray-500">· {PUBLICO_LABEL[aviso.publico] ?? aviso.publico}</span>
+                    <button onClick={() => remover(aviso)} className="action-btn-delete ml-auto" title="Remover aviso">
+                      <Trash2 size={12} />
+                    </button>
                   </div>
-                  <h3 className="text-base font-black text-gray-100">{aviso.titulo}</h3>
-                  <p className="text-xs text-gray-300 whitespace-pre-wrap leading-snug">{aviso.descricao}</p>
-                  <p className="text-[10px] text-gray-500 mt-0.5">
-                    Por {aviso.nome_criador ?? '—'} · válido até {formatDataHoraBR(aviso.expira_em)}
+                  <h3 className="text-base font-black text-gray-100 leading-snug">{aviso.titulo}</h3>
+                  <p className="text-sm text-gray-400 whitespace-pre-wrap leading-relaxed">{aviso.descricao}</p>
+                  <p className="text-[11px] text-gray-500">
+                    {aviso.nome_criador ?? '—'} · até {formatDataHoraBR(aviso.expira_em)}
                   </p>
                 </div>
-                <button onClick={() => remover(aviso)}
-                  className="btn-shimmer btn-shimmer--glass-red shrink-0" title="Remover aviso">
-                  <Trash2 size={11} /> Remover
-                </button>
-              </div>
 
-              <div className="neu-pressed rounded-xl p-3 flex flex-col gap-2">
-                <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest">
-                  <Users size={11} className="text-gray-500" />
-                  <span className="text-gray-400">
-                    {confirmaram.length} de {alvo.length} confirmaram
-                  </span>
-                </div>
-                {confirmaram.length > 0 && (
-                  <div className="flex flex-wrap gap-1.5">
-                    {confirmaram.map(c => (
-                      <span key={c.user_id}
-                        className="text-[11px] px-2 py-1 rounded-lg bg-emerald-500/10 border border-emerald-500/25 text-emerald-200 flex items-center gap-1.5">
-                        <Check size={10} /> {c.nome_snapshot ?? '—'}
-                        <span className="text-gray-500">{formatDataHoraBR(c.ciente_em)}</span>
+                {/* Ciência: barra sempre à vista, nomes sob demanda. */}
+                <button type="button" onClick={() => setAbertoId(aberto ? null : aviso.id)}
+                  disabled={alvo.length === 0}
+                  className="px-4 py-3 border-t border-white/5 flex items-center gap-3 text-left hover:bg-white/[0.03] disabled:hover:bg-transparent">
+                  <div className="flex-1 flex flex-col gap-1.5">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-gray-400">
+                        {alvo.length === 0 ? 'Ninguém no alvo — confira unidade e público' : 'Ciência'}
                       </span>
-                    ))}
+                      {alvo.length > 0 && (
+                        <span className={`font-black tabular-nums ${completo ? 'text-green-400' : 'text-amber-400'}`}>
+                          {confirmaram.length}/{alvo.length}
+                        </span>
+                      )}
+                    </div>
+                    {alvo.length > 0 && (
+                      <div className="h-2 rounded-full bg-white/5 overflow-hidden">
+                        <div className={`h-full rounded-full ${completo ? 'bg-green-500' : 'bg-amber-500'}`} style={{ width: `${pct}%` }} />
+                      </div>
+                    )}
                   </div>
-                )}
-                {pendentes.length > 0 && (
-                  <div className="flex flex-wrap gap-1.5">
-                    {pendentes.map(p => (
-                      <span key={p.id}
-                        className="text-[11px] px-2 py-1 rounded-lg bg-white/5 border border-white/10 text-gray-400 flex items-center gap-1.5">
-                        <AlertCircle size={10} className="text-amber-400" /> {p.nome}
-                      </span>
-                    ))}
+                  {alvo.length > 0 && (
+                    <ChevronDown size={15} className={`shrink-0 text-gray-500 transition-transform ${aberto ? 'rotate-180 text-accent' : ''}`} />
+                  )}
+                </button>
+
+                {aberto && (
+                  <div className="px-4 pb-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="flex flex-col gap-1.5">
+                      <span className="text-[10px] font-bold uppercase tracking-widest text-green-400">Confirmaram · {confirmaram.length}</span>
+                      {confirmaram.length === 0 ? <span className="text-xs text-gray-600">Ninguém ainda</span> : confirmaram.map(c => (
+                        <span key={c.user_id} className="text-xs text-gray-200 flex items-center gap-1.5" title={formatDataHoraBR(c.ciente_em)}>
+                          <Check size={11} className="text-green-400 shrink-0" />
+                          <span className="truncate">{c.nome_snapshot ?? '—'}</span>
+                        </span>
+                      ))}
+                    </div>
+                    <div className="flex flex-col gap-1.5">
+                      <span className="text-[10px] font-bold uppercase tracking-widest text-amber-400">Faltam · {pendentes.length}</span>
+                      {pendentes.length === 0 ? <span className="text-xs text-gray-600">Todos cientes</span> : pendentes.map(p => (
+                        <span key={p.id} className="text-xs text-gray-400 flex items-center gap-1.5">
+                          <AlertCircle size={11} className="text-amber-400 shrink-0" />
+                          <span className="truncate">{p.nome}</span>
+                          {p.filial && <span className="text-[10px] text-gray-600">{p.filial}</span>}
+                        </span>
+                      ))}
+                    </div>
                   </div>
-                )}
-                {alvo.length === 0 && (
-                  <span className="text-[11px] text-gray-500 italic">
-                    Nenhum usuário se encaixa neste alvo — confira filial e público.
-                  </span>
                 )}
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
 
@@ -292,15 +318,14 @@ function ModalNovoAviso({ profile: _profile, onClose, onCriado, showToast }: {
                 const marcada = filiais.includes(f);
                 return (
                   <button key={f} type="button" onClick={() => toggleFilial(f)}
-                    className={`text-[11px] font-bold px-2.5 py-1.5 rounded-lg transition-all ${
-                      marcada ? 'neu-button text-accent ring-1 ring-accent/40' : 'neu-pressed text-gray-400 hover:text-gray-200'
+                    className={`text-[11px] font-bold px-2.5 py-1.5 rounded-lg transition-colors ${
+                      marcada ? 'btn-solido--dourado' : 'neu-pressed text-gray-400 hover:text-gray-200'
                     }`}>
                     {f}
                   </button>
                 );
               })}
             </div>
-            <p className="text-[10px] text-gray-500">Nenhuma marcada envia para as três.</p>
           </div>
 
           <div className="flex flex-col gap-1">
@@ -337,19 +362,14 @@ function ModalNovoAviso({ profile: _profile, onClose, onCriado, showToast }: {
               </button>
             ))}
           </div>
-          <p className="text-[10px] text-gray-500">
-            Horário do Acre. Depois disso o aviso some da tela de quem não confirmou.
-          </p>
         </div>
 
         <div className="flex items-center justify-end gap-2 pt-2 border-t border-white/5">
-          <button onClick={onClose} disabled={saving}
-            className="text-xs font-bold px-3 py-2 rounded-lg neu-button text-gray-400 hover:text-gray-200">
+          <button onClick={onClose} disabled={saving} className="btn-solido btn-solido--preto">
             Cancelar
           </button>
-          <button onClick={publicar} disabled={saving || !titulo.trim() || !descricao.trim()}
-            className="text-xs font-bold px-4 py-2 rounded-lg neu-button text-accent ring-1 ring-accent/40 hover:ring-accent flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
-            {saving && <Loader2 size={12} className="animate-spin" />}
+          <button onClick={publicar} disabled={saving || !titulo.trim() || !descricao.trim()} className="btn-solido btn-solido--dourado">
+            {saving ? <Loader2 size={13} className="animate-spin" /> : <Megaphone size={13} />}
             Publicar aviso
           </button>
         </div>
