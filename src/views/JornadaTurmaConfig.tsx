@@ -56,7 +56,7 @@ export function JornadaTurmaFaixa({ profile, showToast }: { profile: UserProfile
 
   return (
     <>
-      <div className="neu-flat rounded-3xl border border-white/5 p-4 flex flex-col gap-3 shrink-0">
+      <div className="neu-flat rounded-3xl border border-accent/30 p-4 flex flex-col gap-3 shrink-0">
         {/* Cabeçalho */}
         <div className="flex items-center gap-3 flex-wrap">
           <div className="flex items-center gap-2">
@@ -92,7 +92,7 @@ export function JornadaTurmaFaixa({ profile, showToast }: { profile: UserProfile
                     className={`text-center text-[11px] font-bold py-1.5 rounded-lg border ${
                       tem
                         ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
-                        : 'border-white/5 text-gray-600'
+                        : 'border-white/15 text-gray-500'
                     }`}>
                     {DIAS_CURTO[d]}
                   </div>
@@ -109,10 +109,15 @@ export function JornadaTurmaFaixa({ profile, showToast }: { profile: UserProfile
           <div className="neu-pressed rounded-2xl p-3 flex flex-col gap-2">
             <span className="text-[10px] uppercase tracking-widest font-bold text-gray-500">Horários</span>
             <div className="grid grid-cols-3 gap-2">
-              {([['Entrada', jornada.entrada], ['Retorno', jornada.retorno], ['Saída', jornada.saida]] as const).map(([rotulo, valor]) => (
-                <div key={rotulo} className="rounded-lg border border-white/5 py-1 flex flex-col items-center">
-                  <span className="text-base font-black font-mono tabular-nums text-gray-100 leading-tight">{valor}</span>
-                  <span className="text-[9px] uppercase tracking-widest font-bold text-gray-500">{rotulo}</span>
+              {([
+                // Mesmas cores sólidas do design system (.btn-solido--verde/amarelo/vermelho).
+                ['Entrada', jornada.entrada, 'bg-[#16a34a] border-[#15803d]', 'text-white'],
+                ['Retorno', jornada.retorno, 'bg-[#eab308] border-[#ca8a04]', 'text-[#0a0a0a]'],
+                ['Saída',   jornada.saida,   'bg-[#dc2626] border-[#b91c1c]', 'text-white'],
+              ] as const).map(([rotulo, valor, caixa, texto]) => (
+                <div key={rotulo} className={`rounded-lg border py-1 flex flex-col items-center ${caixa}`}>
+                  <span className={`text-base font-black font-mono tabular-nums leading-tight ${texto}`}>{valor}</span>
+                  <span className={`text-[9px] uppercase tracking-widest font-bold ${texto} opacity-80`}>{rotulo}</span>
                 </div>
               ))}
             </div>

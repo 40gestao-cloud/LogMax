@@ -4,7 +4,6 @@ import { useFilial } from '../contexts/FilialContext';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   CheckCircle2, XCircle, Clock, X, User, Search, Save, Loader2, MessageSquarePlus, Building2, FileCheck, Lock, Trash2, Eraser,
-  AlertTriangle,
 } from 'lucide-react';
 import { useConfirm } from '../contexts/ConfirmContext';
 import { useFetchData } from '../hooks/useSupabaseData';
@@ -631,7 +630,6 @@ const FrequenciaTrabalhoViewInner = ({ showToast, profile, filial, embedded }: a
 
   // Dias com aula da turma no período (configurados no Registro de Ponto).
   const diasLetivos = useDiasLetivos(diasPeriodo[0], diasPeriodo[diasPeriodo.length - 1], jornada);
-  const diaSemAula = filtro === 'dia' && diasLetivos !== null && !diasLetivos.has(dataSelecionada);
 
   // Dias cobrados: os dias de aula da turma já passados ou hoje. Sem os dias
   // definidos, cai no seg–sex de antes.
@@ -779,17 +777,6 @@ const FrequenciaTrabalhoViewInner = ({ showToast, profile, filial, embedded }: a
           )}
         </div>
       </div>
-
-      {/* Lançar em dia sem aula faz o dia contar como letivo para a turma toda. */}
-      {diaSemAula && (
-        <div className="flex items-start gap-2 rounded-2xl border border-amber-500/30 bg-amber-500/5 px-4 py-3 text-xs text-amber-200 shrink-0">
-          <AlertTriangle size={14} className="text-amber-400 shrink-0 mt-0.5" />
-          <span>
-            <b>{fmtData(dataSelecionada)} não é dia de aula desta turma.</b> Confira a data antes de lançar — se houve
-            reposição, a Matriz cadastra como aula extra em Sessões Gerais › Recursos Humanos › Registro de Ponto.
-          </span>
-        </div>
-      )}
 
       {/* Resumo cards */}
       {filtro === 'dia' && (
