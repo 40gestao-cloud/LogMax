@@ -1,8 +1,8 @@
 import { useRolarAteFormulario } from '../hooks/useRolarAteFormulario';
 import { MenuMais, ItemMenu } from '../components/MenuMais';
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Search, Edit2, Trash2, MapPin, Building2, Plus, Save, FileDown, Sheet, Phone, User, ImagePlus, X as XIcon, Loader2, Ruler, Clock, Calendar, Car, Users2, Wallet, Package } from 'lucide-react';
+import { Search, Edit2, Trash2, MapPin, Building2, Plus, Save, FileDown, Sheet, Phone, User, ImagePlus, X as XIcon, Loader2, Ruler, Clock, Calendar, Car, Users2, Wallet, Package, HandCoins, Undo2 } from 'lucide-react';
 import { HistoricoOperacoes } from '../components/HistoricoOperacoes';
 import { useFetchData, dbInsert, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
 import { supabase } from '../lib/supabase';
@@ -14,6 +14,8 @@ import { FILIAIS_HOLDING, type FilialHolding } from '../lib/filiais';
 import { useUserProfile } from '../hooks/useUserProfile';
 import { isConselheiro } from '../lib/rbac';
 import { useFilial } from '../contexts/FilialContext';
+import { ModalLancarInvestimento, ModalVenderBem } from '../components/MontagemFinanceiro';
+import { todayBR } from '../lib/dates';
 
 // Equipamentos & mobiliário por nicho — cada unidade tem sua grade completa,
 // curada pra realidade do negócio. Padrão herdado do PDV (atributos jsonb).
@@ -115,6 +117,36 @@ function FilialThumb({ url, size = 'md', alt }: { url?: string | null; size?: 'x
   );
 }
 
+// Situação de um item de investimento, lida do Financeiro (migr. 634). A tela
+// de Filiais não escreve nada em conta: ela MOSTRA o que Contas a Pagar e a
+// Receber dizem — é esse o sentido da sincronia.
+type Situacao = { rotulo: string; cls: string; detalhe?: string };
+const COR = {
+  verde: 'bg-green-600 text-white', azul: 'bg-blue-600 text-white', amarelo: 'bg-yellow-400 text-black',
+  vermelho: 'bg-red-600 text-white', roxo: 'bg-purple-600 text-white', cinza: 'bg-zinc-600 text-white',
+};
+const pagoDe = (c: any) => c.status === 'Pago' ? Number(c.valor) : Number(c.valor_pago ?? 0);
+
+function situacaoDoItem(it: any, contas: any[], bem: any | null, receber: any[], hoje: string): Situacao {
+  if (bem?.patrimonio_baixado_em) {
+    if (!bem.patrimonio_valor_venda) return { rotulo: 'Baixado', cls: COR.cinza };
+    const recebidas = receber.filter(r => r.status === 'Pago').length;
+    return { rotulo: 'Vendido', cls: COR.roxo,
+      detalhe: receber.length > 1 ? `${recebidas}/${receber.length} recebidas` : recebidas ? 'recebido' : 'a receber' };
+  }
+  if (contas.length === 0) {
+    // Conta existe mas a RLS não deixa ler (aluno fora do financeiro): diz
+    // que foi lançado, sem inventar se está pago.
+    return it.conta_pagar_id ? { rotulo: 'Lançado', cls: COR.azul } : { rotulo: 'Planejado', cls: COR.cinza };
+  }
+  const pagas = contas.filter(c => c.status === 'Pago').length;
+  const forma = contas.length > 1 ? `${pagas}/${contas.length} pagas` : 'à vista';
+  if (pagas === contas.length) return { rotulo: 'Pago', cls: COR.verde, detalhe: contas.length > 1 ? `${contas.length}x` : 'à vista' };
+  if (contas.some(c => c.status !== 'Pago' && c.vencimento && c.vencimento < hoje)) return { rotulo: 'Vencido', cls: COR.vermelho, detalhe: forma };
+  if (pagas > 0 || contas.some(c => c.status === 'Parcial')) return { rotulo: 'Pagando', cls: COR.azul, detalhe: forma };
+  return { rotulo: 'A pagar', cls: COR.amarelo, detalhe: forma };
+}
+
 export const FiliaisView = ({ showToast }: any) => {
   const { data, setData, isLoading } = useFetchData<any>('/api/filiaisview');
   const confirm = useConfirm();
@@ -191,6 +223,46 @@ export const FiliaisView = ({ showToast }: any) => {
     [item.nome, item.cnpj, item.cidade, item.celular, item.endereco, item.representante]
       .some((v: any) => v?.toLowerCase().includes(search.toLowerCase()))
   );
+
+  // Investimento das filiais na tela + o que o Financeiro diz de cada item.
+  const [inv, setInv] = useState<{ itens: any[]; contas: any[]; bens: any[]; receber: any[] }>({ itens: [], contas: [], bens: [], receber: [] });
+  const [versaoInv, setVersaoInv] = useState(0);
+  const idsVisiveis = escopadoPorFilial.map((f: any) => f.id).join(',');
+  useEffect(() => {
+    if (!supabase || !idsVisiveis) return;
+    let vivo = true;
+    (async () => {
+      const ids = idsVisiveis.split(',');
+      const { data: its } = await supabase!.from('filial_investimentos')
+        .select('id,filial_id,rotulo,categoria,quantidade,preco_unitario,valor_total,conta_pagar_id,produto_patrimonio_id')
+        .in('filial_id', ids).eq('ativo', true).order('categoria').order('rotulo');
+      const itens = its ?? [];
+      const itemIds = itens.map((i: any) => i.id);
+      const prodIds = itens.map((i: any) => i.produto_patrimonio_id).filter(Boolean);
+      const vazio = Promise.resolve({ data: [] as any[] });
+      const [{ data: contas }, { data: bens }, { data: receber }] = await Promise.all([
+        itemIds.length ? supabase!.from('contas_pagar').select('id,filial_investimento_id,valor,valor_pago,status,vencimento,ativo')
+          .in('filial_investimento_id', itemIds).neq('status', 'Cancelado') : vazio,
+        prodIds.length ? supabase!.from('produtos').select('id,nome,filial,status,patrimonio_baixado_em,patrimonio_valor_venda').in('id', prodIds) : vazio,
+        prodIds.length ? supabase!.from('contas_receber').select('id,produto_patrimonio_id,valor,valor_pago,status,vencimento')
+          .in('produto_patrimonio_id', prodIds).neq('status', 'Cancelado') : vazio,
+      ]);
+      if (vivo) setInv({ itens, contas: (contas ?? []).filter((c: any) => c.ativo !== false), bens: bens ?? [], receber: receber ?? [] });
+    })();
+    return () => { vivo = false; };
+  }, [idsVisiveis, versaoInv]);
+  const atualizarInv = () => { setVersaoInv(v => v + 1); reloadItens(); };
+
+  const [lancando, setLancando] = useState<any | null>(null);
+  const [vendendo, setVendendo] = useState<any | null>(null);
+  const desfazerLancamento = async (it: any) => {
+    if (!supabase) return;
+    if (!await confirm(`Desfazer o lançamento de "${it.rotulo}"? As contas a pagar são CANCELADAS (não apagadas) e o bem sai do Patrimônio.`)) return;
+    const { error } = await supabase.rpc('desvincular_investimento_conta', { p_item_id: it.id });
+    if (error) { showToast(error.message, 'error', true); return; }
+    showToast('Lançamento desfeito.', 'success', true);
+    atualizarInv();
+  };
 
   const exportCols = ['Nome', 'CNPJ', 'Cidade/UF', 'Celular', 'Representante', 'Status'];
   const exportRows = () => filtered.map((d: any) => [d.nome ?? '', d.cnpj ?? '', d.cidade ?? '', d.celular ?? '', d.representante ?? '', d.status ?? '']);
@@ -478,43 +550,6 @@ export const FiliaisView = ({ showToast }: any) => {
     }
   };
 
-  // Fase 3: "Gerar contas a pagar" — nunca automático, é botão explícito.
-  const [gerarAberto, setGerarAberto] = useState(false);
-  const [gerando, setGerando]         = useState(false);
-  const [gerarForm, setGerarForm] = useState({
-    dataVencimento: '', diaAluguel: '10', parcelasAluguel: '1', naturezaOutro: 'despesa',
-  });
-  const itensPendentes = (itens ?? []).filter((i: any) => !i.conta_pagar_id && Number(i.valor_total) > 0);
-  const temPendenteAluguel = itensPendentes.some((i: any) => i.categoria === 'aluguel');
-  const temPendenteOutro   = itensPendentes.some((i: any) => i.categoria === 'outro');
-
-  const handleGerarContas = async () => {
-    if (!editItem?.id || !supabase) return;
-    if (!gerarForm.dataVencimento) {
-      showToast('Informe a data de vencimento.', 'error', true);
-      return;
-    }
-    setGerando(true);
-    try {
-      const { data: res, error } = await supabase.rpc('gerar_contas_da_montagem', {
-        p_filial_id:              editItem.id,
-        p_data_vencimento:        gerarForm.dataVencimento,
-        p_dia_vencimento_aluguel: temPendenteAluguel ? Number(gerarForm.diaAluguel) || null : null,
-        p_parcelas_aluguel:       Number(gerarForm.parcelasAluguel) || 1,
-        p_natureza_outro:         gerarForm.naturezaOutro,
-      });
-      if (error) throw new Error(error.message);
-      const r = (res ?? {}) as any;
-      showToast(`${r.itens_gerados ?? 0} conta(s) gerada(s), ${r.itens_pulados ?? 0} já existente(s)/vazio(s).`, 'success', true);
-      reloadItens();
-      setGerarAberto(false);
-    } catch (err: any) {
-      showToast(`Erro ao gerar contas: ${err?.message ?? 'verifique o console'}`, 'error', true);
-    } finally {
-      setGerando(false);
-    }
-  };
-
   const handleDesvincular = async (item: any) => {
     if (!supabase) return;
     if (!await confirm(`Desvincular "${item.rotulo}"? A conta gerada é CANCELADA (não apagada).`)) return;
@@ -796,60 +831,7 @@ export const FiliaisView = ({ showToast }: any) => {
                       )}
                     </div>
 
-                    {itensPendentes.length > 0 && (
-                      <div className="mt-3">
-                        {!gerarAberto ? (
-                          <button type="button" onClick={() => setGerarAberto(true)}
-                            className="neu-button py-2 px-4 rounded-xl text-xs text-accent font-bold flex items-center gap-1.5">
-                            <Wallet size={12} /> Gerar contas a pagar ({itensPendentes.length} pendente{itensPendentes.length > 1 ? 's' : ''})
-                          </button>
-                        ) : (
-                          <div className="neu-pressed rounded-xl p-4 flex flex-col gap-3 border border-accent/20">
-                            <p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">
-                              Gerar {itensPendentes.length} conta(s) a pagar
-                            </p>
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                              <FormField label="Vencimento (equipamento/outro)">
-                                <input className="neu-input py-2 px-3 rounded-xl text-sm" type="date"
-                                  value={gerarForm.dataVencimento}
-                                  onChange={e => setGerarForm(f => ({ ...f, dataVencimento: e.target.value }))} />
-                              </FormField>
-                              {temPendenteAluguel && (
-                                <>
-                                  <FormField label="Dia do vencimento do aluguel">
-                                    <input className="neu-input py-2 px-3 rounded-xl text-sm" type="number" min="1" max="28"
-                                      value={gerarForm.diaAluguel}
-                                      onChange={e => setGerarForm(f => ({ ...f, diaAluguel: e.target.value }))} />
-                                  </FormField>
-                                  <FormField label="Parcelas do aluguel">
-                                    <input className="neu-input py-2 px-3 rounded-xl text-sm" type="number" min="1"
-                                      value={gerarForm.parcelasAluguel}
-                                      onChange={e => setGerarForm(f => ({ ...f, parcelasAluguel: e.target.value }))} />
-                                  </FormField>
-                                </>
-                              )}
-                              {temPendenteOutro && (
-                                <FormField label='Natureza dos itens "Outro"'>
-                                  <select className="neu-input py-2 px-3 rounded-xl text-sm" value={gerarForm.naturezaOutro}
-                                    onChange={e => setGerarForm(f => ({ ...f, naturezaOutro: e.target.value }))}>
-                                    <option value="despesa">Despesa</option>
-                                    <option value="imobilizado">Imobilizado (bem)</option>
-                                    <option value="estoque">Estoque</option>
-                                  </select>
-                                </FormField>
-                              )}
-                            </div>
-                            <div className="flex gap-2 justify-end">
-                              <button type="button" onClick={() => setGerarAberto(false)}
-                                className="neu-button py-2 px-4 rounded-xl text-xs text-gray-400">Cancelar</button>
-                              <NeuButtonAccent onClick={handleGerarContas} isLoading={gerando}>
-                                Gerar
-                              </NeuButtonAccent>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    )}
+                    <p className="text-[11px] text-gray-500 mt-3">Para lançar em Contas a Pagar, use o botão "Lançar" de cada item na ficha da filial.</p>
                   </>
                 )}
 
@@ -898,10 +880,6 @@ export const FiliaisView = ({ showToast }: any) => {
         <div className={`grid gap-5 pb-6 ${filtered.length > 1 ? 'grid-cols-1 2xl:grid-cols-2' : 'grid-cols-1'}`}>
           {filtered.map((item: any, i: number) => {
             const d = item.detalhes ?? {};
-            const nichoItem = detectarNicho(d.nicho, item.nome);
-            const equipamentos = (nichoItem ? CAMPOS_NICHO[nichoItem] : [])
-              .map(([k, l]) => [l, d[k]] as const)
-              .filter(([, v]) => typeof v === 'number' && v > 0);
             const brl = (v: any) => `R$ ${formatBRL(v)}`;
             // Ficha do espaço: só o que foi preenchido vira ladrilho.
             const espaco = [
@@ -911,12 +889,6 @@ export const FiliaisView = ({ showToast }: any) => {
               d.capacidade != null && { icon: Users2, rotulo: 'Capacidade', valor: String(d.capacidade) },
               d.dataInauguracao && { icon: Calendar, rotulo: 'Inauguração', valor: new Date(d.dataInauguracao + 'T00:00:00').toLocaleDateString('pt-BR') },
             ].filter(Boolean) as { icon: any; rotulo: string; valor: string; sub?: string | null }[];
-            const financeiro = [
-              d.valorAluguel != null && { rotulo: 'Aluguel / mês', valor: d.valorAluguel },
-              d.folhaPagamento != null && { rotulo: 'Folha de pagamento', valor: d.folhaPagamento },
-              d.investimentoInicial != null && { rotulo: 'Investimento inicial', valor: d.investimentoInicial },
-              d.valorTotalEquipamentos != null && { rotulo: 'Equipamentos', valor: d.valorTotalEquipamentos },
-            ].filter(Boolean) as { rotulo: string; valor: number }[];
             return (
               <motion.div key={item.id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: i * 0.05 }}
@@ -981,54 +953,110 @@ export const FiliaisView = ({ showToast }: any) => {
                   </div>
                 )}
 
-                {/* Financeiro + equipamentos */}
-                <div className={`p-5 grid gap-5 ${financeiro.length > 0 && equipamentos.length > 0 ? 'grid-cols-1 lg:grid-cols-2' : 'grid-cols-1'}`}>
-                  {(financeiro.length > 0 || d.valorTotalInvestido != null) && (
-                    <div className="flex flex-col gap-3">
-                      <span className="text-[10px] uppercase tracking-widest font-bold text-gray-500 flex items-center gap-1.5">
-                        <Wallet size={11} /> Financeiro
-                      </span>
-                      <div className="grid grid-cols-2 gap-2">
-                        {financeiro.map(f => (
-                          <div key={f.rotulo} className="neu-pressed rounded-xl px-3 py-2.5 flex flex-col gap-0.5">
-                            <span className="text-[10px] text-gray-500">{f.rotulo}</span>
-                            <span className="text-sm font-black text-gray-100 tabular-nums">{brl(f.valor)}</span>
+                {/* Investimento: cada item com a situação que o Financeiro devolve */}
+                {(() => {
+                  const hoje = todayBR();
+                  const itensF = inv.itens.filter((x: any) => x.filial_id === item.id);
+                  const linhas = itensF.map((x: any) => {
+                    const contas = inv.contas.filter((c: any) => c.filial_investimento_id === x.id);
+                    const bem = inv.bens.find((b: any) => b.id === x.produto_patrimonio_id) ?? null;
+                    const receber = inv.receber.filter((r: any) => r.produto_patrimonio_id === x.produto_patrimonio_id);
+                    return { x, contas, bem, receber, sit: situacaoDoItem(x, contas, bem, receber, hoje) };
+                  });
+                  const planejado = linhas.filter(l => l.sit.rotulo === 'Planejado').reduce((s, l) => s + Number(l.x.valor_total ?? 0), 0);
+                  const lancado = linhas.flatMap(l => l.contas).reduce((s, c: any) => s + Number(c.valor), 0);
+                  const pago = linhas.flatMap(l => l.contas).reduce((s, c: any) => s + pagoDe(c), 0);
+                  const vendas = linhas.flatMap(l => l.receber).reduce((s, r: any) => s + Number(r.valor), 0);
+                  const podeMexer = canEditRow(item);
+                  return (
+                    <div className="p-5 flex flex-col gap-4">
+                      <div className="flex items-center justify-between gap-3 flex-wrap">
+                        <span className="text-[10px] uppercase tracking-widest font-bold text-gray-500 flex items-center gap-1.5">
+                          <Wallet size={11} /> Investimento
+                        </span>
+                        <span className="text-[11px] text-gray-500 flex items-center gap-3 flex-wrap">
+                          {d.folhaPagamento != null && <span>Folha/mês <b className="text-gray-300">{brl(d.folhaPagamento)}</b></span>}
+                          {d.investimentoInicial != null && <span>Aporte inicial <b className="text-gray-300">{brl(d.investimentoInicial)}</b></span>}
+                        </span>
+                      </div>
+
+                      <div className={`grid grid-cols-2 gap-2 ${vendas > 0 ? 'lg:grid-cols-4' : 'lg:grid-cols-3'}`}>
+                        {[
+                          { r: 'Planejado', v: planejado, c: 'text-gray-200' },
+                          { r: 'Lançado', v: lancado, c: 'text-amber-400' },
+                          { r: 'Pago', v: pago, c: 'text-green-400' },
+                          ...(vendas > 0 ? [{ r: 'Vendas de bens', v: vendas, c: 'text-purple-400' }] : []),
+                        ].map(t => (
+                          <div key={t.r} className="neu-pressed rounded-xl px-3 py-2.5 flex flex-col gap-0.5">
+                            <span className="text-[10px] text-gray-500">{t.r}</span>
+                            <span className={`text-base font-black tabular-nums ${t.c}`}>{brl(t.v)}</span>
                           </div>
                         ))}
                       </div>
-                      {d.valorTotalInvestido != null && (
-                        <div className="rounded-xl px-4 py-3 flex items-center justify-between border border-accent/30"
-                          style={{ background: 'color-mix(in srgb, var(--color-accent) 8%, transparent)' }}>
-                          <span className="text-xs font-bold uppercase tracking-widest text-gray-300">Total investido</span>
-                          <span className="text-xl font-black text-accent tabular-nums">{brl(d.valorTotalInvestido)}</span>
+
+                      {linhas.length === 0 ? (
+                        <span className="text-xs text-gray-600">Nenhum item de investimento — adicione pelo botão de editar.</span>
+                      ) : (
+                        <div className="rounded-xl border border-white/5 divide-y divide-white/5 overflow-hidden">
+                          {linhas.map(({ x, contas, bem, sit }) => {
+                            const bemAtivo = bem && !bem.patrimonio_baixado_em;
+                            const algoPago = contas.some((c: any) => c.status === 'Pago' || c.status === 'Parcial');
+                            return (
+                              <div key={x.id} className="px-3 py-2.5 flex items-center gap-3 flex-wrap sm:flex-nowrap">
+                                <div className="min-w-0 flex-1">
+                                  <div className="text-sm text-gray-200 truncate">{x.rotulo}</div>
+                                  <div className="text-[11px] text-gray-500 tabular-nums">
+                                    {x.categoria === 'aluguel' ? 'Aluguel · por mês' : `${Number(x.quantidade)} × ${brl(x.preco_unitario)}`}
+                                  </div>
+                                </div>
+                                <span className="text-sm font-black text-gray-100 tabular-nums shrink-0">{brl(x.valor_total ?? 0)}</span>
+                                <span className="shrink-0 flex flex-col items-end gap-0.5 min-w-[5.5rem]">
+                                  <span className={`text-[10px] font-black uppercase tracking-widest px-2 py-0.5 rounded ${sit.cls}`}>{sit.rotulo}</span>
+                                  {sit.detalhe && <span className="text-[10px] text-gray-500">{sit.detalhe}</span>}
+                                </span>
+                                {podeMexer && (
+                                  <span className="shrink-0 flex items-center gap-1.5 w-full sm:w-auto justify-end">
+                                    {sit.rotulo === 'Planejado' && (
+                                      <button onClick={() => setLancando(x)} disabled={!(Number(x.valor_total) > 0)}
+                                        title={Number(x.valor_total) > 0 ? 'Lançar em Contas a Pagar' : 'Informe o preço antes de lançar'}
+                                        className="btn-solido btn-solido--preto">
+                                        <Wallet size={13} className="text-accent" /> Lançar
+                                      </button>
+                                    )}
+                                    {bemAtivo && (
+                                      <button onClick={() => setVendendo({ id: bem.id, nome: bem.nome, filial: bem.filial, custo: x.valor_total })}
+                                        className="btn-solido btn-solido--roxo" title="Vender o bem e lançar em Contas a Receber">
+                                        <HandCoins size={13} /> Vender
+                                      </button>
+                                    )}
+                                    {x.conta_pagar_id && !algoPago && !bem?.patrimonio_baixado_em && (
+                                      <button onClick={() => desfazerLancamento(x)} className="action-btn-neutral" title="Desfazer lançamento (cancela as contas)">
+                                        <Undo2 size={12} />
+                                      </button>
+                                    )}
+                                  </span>
+                                )}
+                              </div>
+                            );
+                          })}
                         </div>
                       )}
                     </div>
-                  )}
-                  {equipamentos.length > 0 && (
-                    <div className="flex flex-col gap-3">
-                      <span className="text-[10px] uppercase tracking-widest font-bold text-gray-500 flex items-center gap-1.5">
-                        <Package size={11} /> Equipamentos e mobiliário
-                      </span>
-                      <div className="flex flex-wrap gap-1.5">
-                        {equipamentos.map(([label, v]) => (
-                          <span key={label} className="neu-pressed rounded-lg pl-1 pr-2.5 py-1 text-xs text-gray-300 flex items-center gap-2">
-                            <span className="min-w-[1.75rem] text-center rounded-md bg-accent/15 text-accent font-black tabular-nums px-1.5 py-0.5">{v}</span>
-                            {label}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                  {financeiro.length === 0 && d.valorTotalInvestido == null && equipamentos.length === 0 && (
-                    <span className="text-xs text-gray-600">Sem dados de investimento ou equipamentos.</span>
-                  )}
-                </div>
+                  );
+                })()}
               </motion.div>
             );
           })}
         </div>
       )}
+      <AnimatePresence>
+        {lancando && (
+          <ModalLancarInvestimento item={lancando} onClose={() => setLancando(null)} onLancado={atualizarInv} showToast={showToast} />
+        )}
+        {vendendo && (
+          <ModalVenderBem bem={vendendo} onClose={() => setVendendo(null)} onVendido={atualizarInv} showToast={showToast} />
+        )}
+      </AnimatePresence>
     </motion.div>
   );
 };

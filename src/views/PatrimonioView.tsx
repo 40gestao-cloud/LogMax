@@ -7,7 +7,8 @@ import { useFetchData } from '../hooks/useSupabaseData';
 import { supabase } from '../lib/supabase';
 import { LoadingSpinner, EmptyState, ExportButton, FilialBadge, StatusBadge, Pagination, ProdutoThumb, FormField, NeuButtonAccent } from '../components/ui';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
-import { exportToPDF, exportToExcel, formatBRL, handleMoneyKeyDown, parseBRL } from '../lib/viewUtils';
+import { exportToPDF, exportToExcel, formatBRL } from '../lib/viewUtils';
+import { ModalVenderBem } from '../components/MontagemFinanceiro';
 
 const fmtBRL = (v: number) => `R$ ${formatBRL(v)}`;
 
@@ -76,15 +77,16 @@ const PatrimonioViewInner = ({ filial, showToast }: { filial: FilialOp; showToas
   const handleExportPDF = () => exportToPDF('Controle de Patrimônio', exportCols, exportRows(), 'logmax-patrimonio');
   const handleExportExcel = () => exportToExcel('Patrimônio', exportCols, exportRows(), 'logmax-patrimonio');
 
-  // Migr. 511 — baixa (venda/descarte) de bem. Não apaga a linha; o RPC
-  // cancela contabilmente e o resultado (ganho/perda) aparece no DRE do mês.
+  // Baixa sem venda (quebrou, obsoleto, doado). Venda tem gesto próprio desde
+  // a migr. 634 — `vender_patrimonio` baixa E lança Contas a Receber; o campo
+  // "valor de venda" aqui só registrava o número, sem dinheiro a entrar.
   const [baixaItem, setBaixaItem]           = useState<any | null>(null);
   const [baixaMotivo, setBaixaMotivo]       = useState('');
-  const [baixaValorVenda, setBaixaValorVenda] = useState('');
   const [baixando, setBaixando]             = useState(false);
+  const [vendendo, setVendendo]             = useState<any | null>(null);
 
-  const abrirBaixa = (p: any) => { setBaixaItem(p); setBaixaMotivo(''); setBaixaValorVenda(''); };
-  const fecharBaixa = () => { setBaixaItem(null); setBaixaMotivo(''); setBaixaValorVenda(''); };
+  const abrirBaixa = (p: any) => { setBaixaItem(p); setBaixaMotivo(''); };
+  const fecharBaixa = () => { setBaixaItem(null); setBaixaMotivo(''); };
 
   const confirmarBaixa = async () => {
     if (!baixaItem || !supabase) return;
@@ -94,7 +96,7 @@ const PatrimonioViewInner = ({ filial, showToast }: { filial: FilialOp; showToas
       const { error } = await supabase.rpc('dar_baixa_patrimonio', {
         p_produto_id:  baixaItem.id,
         p_motivo:      baixaMotivo.trim(),
-        p_valor_venda: baixaValorVenda ? parseBRL(baixaValorVenda) : null,
+        p_valor_venda: null,
       });
       if (error) throw new Error(error.message);
       showToast('Bem baixado.', 'success', true);
@@ -198,9 +200,15 @@ const PatrimonioViewInner = ({ filial, showToast }: { filial: FilialOp; showToas
                       <td className="py-3 px-4 text-center hidden sm:table-cell"><StatusBadge status={p.status ?? 'Ativo'} /></td>
                       <td className="py-3 px-4 text-right">
                         {!baixado && (
-                          <button onClick={() => abrirBaixa(p)} className="neu-button py-1.5 px-3 rounded-lg text-[11px] text-gray-400 hover:text-red-400">
-                            Baixar
-                          </button>
+                          <span className="inline-flex items-center gap-1.5">
+                            <button onClick={() => setVendendo({ id: p.id, nome: p.nome, filial: p.filial, custo: p.preco_custo })}
+                              className="btn-solido btn-solido--roxo" title="Vender e lançar em Contas a Receber">
+                              Vender
+                            </button>
+                            <button onClick={() => abrirBaixa(p)} className="btn-solido btn-solido--preto" title="Baixar sem venda (descarte)">
+                              Baixar
+                            </button>
+                          </span>
                         )}
                       </td>
                     </motion.tr>
@@ -229,17 +237,12 @@ const PatrimonioViewInner = ({ filial, showToast }: { filial: FilialOp; showToas
               className="neu-flat rounded-2xl p-6 w-full max-w-md flex flex-col gap-4 border border-white/10"
               onClick={e => e.stopPropagation()}>
               <div>
-                <h3 className="text-lg font-bold text-gray-100">Baixar bem</h3>
+                <h3 className="text-lg font-bold text-gray-100">Baixar bem (sem venda)</h3>
                 <p className="text-xs text-gray-500 mt-1">{baixaItem.nome}</p>
               </div>
               <FormField label="Motivo *">
                 <input className="neu-input py-2 px-3 rounded-xl text-sm" value={baixaMotivo}
-                  onChange={e => setBaixaMotivo(e.target.value)} placeholder="Ex: vendido, quebrou, obsoleto..." />
-              </FormField>
-              <FormField label="Valor de venda (opcional)">
-                <input className="neu-input py-2 px-3 rounded-xl text-sm" type="text" inputMode="numeric" value={baixaValorVenda}
-                  onChange={e => setBaixaValorVenda(formatBRL(e.target.value))} onKeyDown={handleMoneyKeyDown}
-                  placeholder="Vazio = descarte" />
+                  onChange={e => setBaixaMotivo(e.target.value)} placeholder="Ex: quebrou, obsoleto, doado..." />
               </FormField>
               <div className="flex gap-3 justify-end mt-2">
                 <button onClick={fecharBaixa} className="neu-button py-2 px-5 rounded-xl text-sm text-gray-400">Cancelar</button>
@@ -247,6 +250,9 @@ const PatrimonioViewInner = ({ filial, showToast }: { filial: FilialOp; showToas
               </div>
             </motion.div>
           </motion.div>
+        )}
+        {vendendo && (
+          <ModalVenderBem bem={vendendo} onClose={() => setVendendo(null)} onVendido={reload} showToast={showToast} />
         )}
       </AnimatePresence>
     </motion.div>

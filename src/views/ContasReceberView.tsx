@@ -446,6 +446,12 @@ const ContasReceberViewInner = ({ showToast, filial }: { showToast: any; filial:
                       <motion.tr initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} className="border-b border-white/5 hover:bg-white/5 transition-colors group">
                         <td className="py-3 px-4 text-sm font-semibold text-gray-200">
                           {item.descricao}
+                          {item.origem === 'venda_patrimonio' && (
+                            <span className="ml-2 px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider bg-violet-500/15 text-violet-400 align-middle"
+                              title="Origem: venda de bem do Patrimônio (migr. 634). O ganho ou a perda já entrou no DRE pela baixa — este valor é só o dinheiro a receber.">
+                              Venda de bem
+                            </span>
+                          )}
                           <span className="md:hidden block text-[10px] text-gray-500 mt-0.5">{item.cliente?.nome ?? '—'}</span>
                         </td>
                         <td className="py-3 px-4 text-xs text-gray-400 hidden md:table-cell">{item.cliente?.nome ?? '—'}</td>
