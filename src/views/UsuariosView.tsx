@@ -2,7 +2,7 @@ import { MenuMais, ItemMenu } from '../components/MenuMais';
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { todayBR } from '../lib/dates';
 import { motion, AnimatePresence } from 'motion/react';
-import { Plus, Users, X, Eye, EyeOff, Shield, User, Trash2, Pencil, FileDown, FileSpreadsheet, AlertTriangle, Camera, KeyRound, Copy, Building2, ChevronRight, CalendarDays } from 'lucide-react';
+import { Plus, Users, X, Eye, EyeOff, Shield, User, Trash2, Pencil, FileDown, FileSpreadsheet, AlertTriangle, Camera, KeyRound, Copy, Building2, ChevronRight, CalendarDays, UserPlus, Link2, Briefcase, Check, Lock, Layers, ShieldCheck, type LucideIcon } from 'lucide-react';
 import { uploadFotoPerfil, validarFotoPerfil, PERFIL_FOTO_ACCEPT } from '../lib/perfilFoto';
 import { supabase } from '../lib/supabase';
 import { freshToken } from '../lib/authFetch';
@@ -61,18 +61,13 @@ const setorParaRole = (role: string, setor: string): string => {
 };
 
 
-// Classes CSS dedicadas (.role-badge--* / .setor-badge--* em index.css).
+// Classes CSS dedicadas (.role-badge--* em index.css).
 // Antes Tailwind bg-X-900/30 + text-X-400 — mesmo hue no bg e no texto
 // ("marketing rosa com rosa", eye blend). Agora texto bem mais claro
 // (-200/-300) em dark, e tom escuro saturado em fundo claro pra modo claro.
 const roleCls = (r: string) => {
   const known = ['admin', 'ceo', 'gerente', 'colaborador', 'conselheiro'];
   return `role-badge--${known.includes(r) ? r : 'colaborador'}`;
-};
-
-const setorCls = (s: string) => {
-  const known = ['logistica', 'vendas', 'financeiro', 'rh', 'marketing', 'ti', 'compras', 'gerencia'];
-  return `setor-badge--${known.includes(s) ? s : 'default'}`;
 };
 
 // Filiais que gerentes podem atribuir — Matriz é exclusiva de admin/CEO.
@@ -94,6 +89,115 @@ const filialLabel = (f?: string | null) => f || 'Sem alocação';
 const filiaisParaRole = (role: string): readonly string[] =>
   role === 'colaborador' || role === 'gerente' ? FILIAIS_GERENTE : (FILIAIS_HOLDING as readonly string[]);
 
+const SecaoForm = ({ icon: Icon, titulo, dica, children }: { icon: LucideIcon; titulo: string; dica?: string; children: React.ReactNode }) => (
+  <section className="flex flex-col gap-3">
+    <div className="flex items-center gap-2 pb-2 border-b border-white/5">
+      <Icon size={14} className="text-accent shrink-0" />
+      <h4 className="text-[11px] font-bold text-gray-300 uppercase tracking-widest">{titulo}</h4>
+      {dica && <span className="text-[10px] text-gray-600 truncate hidden sm:inline">· {dica}</span>}
+    </div>
+    {children}
+  </section>
+);
+
+const CampoForm = ({ id, label, children }: { id: string; label: string; children: React.ReactNode }) => (
+  <div className="flex flex-col gap-1.5">
+    <label htmlFor={id} className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">{label}</label>
+    {children}
+  </div>
+);
+
+const SETORES_EXTRAS_DISPONIVEIS = ['logistica', 'vendas', 'financeiro', 'rh', 'marketing', 'ti', 'gerencia'];
+
+// Selo sólido da coluna Setor — mesmas cores dos botões de setores extras.
+const SELO_SETOR: Record<string, string> = {
+  all:        'bg-slate-600 text-white',
+  logistica:  'bg-emerald-800 text-white',
+  vendas:     'bg-blue-800 text-white',
+  financeiro: 'bg-red-600 text-white',
+  rh:         'bg-yellow-300 text-black',
+  marketing:  'bg-pink-600 text-white',
+  ti:         'bg-purple-600 text-white',
+  gerencia:   'bg-[#E0A417] text-black',
+};
+
+// Classes escritas por extenso: o Tailwind não gera classe montada em runtime.
+const COR_SETOR: Record<string, { ativo: string; caixa: string }> = {
+  logistica:  { ativo: 'border-emerald-500/50 bg-emerald-500/10 text-emerald-500', caixa: 'border-emerald-500/60' },
+  vendas:     { ativo: 'border-blue-500/50 bg-blue-500/10 text-blue-500',          caixa: 'border-blue-500/60' },
+  financeiro: { ativo: 'border-red-500/50 bg-red-500/10 text-red-500',             caixa: 'border-red-500/60' },
+  rh:         { ativo: 'border-yellow-200/60 bg-yellow-200/10 text-yellow-200',    caixa: 'border-yellow-200/60' },
+  marketing:  { ativo: 'border-pink-500/50 bg-pink-500/10 text-pink-500',          caixa: 'border-pink-500/60' },
+  ti:         { ativo: 'border-purple-500/50 bg-purple-500/10 text-purple-500',    caixa: 'border-purple-500/60' },
+  // Dourado fixo: o accent muda com o tema e já foi laranja.
+  gerencia:   { ativo: 'border-[#D49A10]/60 bg-[#D49A10]/15 text-[#E0A417]',     caixa: 'border-[#D49A10]/70' },
+};
+
+// Grade de setores extras. O setor principal aparece travado, para o professor
+// ver o conjunto inteiro de acessos num lugar só.
+const SetoresExtras = ({ setor, value, onChange }: { setor: string; value: string[]; onChange: (v: string[]) => void }) => {
+  // O backend preenche os seis setores quando o principal é Gerência.
+  if (setor === 'gerencia') {
+    return (
+      <p className="text-xs text-gray-400 neu-pressed rounded-xl px-3 py-2.5">
+        Gerência já abre todos os setores. Não há extras a escolher.
+      </p>
+    );
+  }
+  const selecionados = value.filter(s => s !== setor);
+  const alternar = (s: string) =>
+    onChange(selecionados.includes(s) ? selecionados.filter(x => x !== s) : [...selecionados, s]);
+  return (
+    <div className="flex flex-col gap-2">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+        {SETORES_EXTRAS_DISPONIVEIS.map(s => {
+          const principal = s === setor;
+          const ativo = principal || selecionados.includes(s);
+          return (
+            <button key={s} type="button" disabled={principal} aria-pressed={ativo}
+              onClick={() => alternar(s)}
+              title={principal ? 'Setor principal' : undefined}
+              className={`flex items-center gap-2 px-3 py-2 rounded-xl border text-left transition-all
+                ${ativo ? COR_SETOR[s].ativo : 'neu-button border-white/5 text-gray-500 hover:text-gray-200'}
+                ${principal ? 'cursor-default' : ''}`}>
+              <span className={`w-4 h-4 rounded-md border flex items-center justify-center shrink-0
+                ${ativo ? 'border-current bg-current/20' : COR_SETOR[s].caixa}`}>
+                {principal ? <Lock size={9} /> : ativo && <Check size={11} strokeWidth={3} />}
+              </span>
+              <span className="text-[11px] font-bold uppercase tracking-wide truncate">{SETOR_LABEL[s]}</span>
+            </button>
+          );
+        })}
+      </div>
+      <div className="flex items-center justify-between text-[10px] text-gray-600">
+        <span>
+          {selecionados.length === 0
+            ? 'Só o setor principal.'
+            : `Principal + ${selecionados.length} extra${selecionados.length > 1 ? 's' : ''}.`}
+        </span>
+        {selecionados.length > 0 && (
+          <button type="button" onClick={() => onChange([])} className="hover:text-gray-300 uppercase tracking-widest font-bold">
+            Limpar
+          </button>
+        )}
+      </div>
+    </div>
+  );
+};
+
+const Alternador = ({ titulo, descricao, ligado, onChange }: { titulo: string; descricao: string; ligado: boolean; onChange: () => void }) => (
+  <div className="flex items-start justify-between gap-3 neu-pressed rounded-xl px-4 py-3">
+    <div className="flex-1 min-w-0">
+      <p className="text-xs font-semibold text-gray-200">{titulo}</p>
+      <p className="text-[11px] text-gray-500 mt-0.5 leading-relaxed">{descricao}</p>
+    </div>
+    <button type="button" onClick={onChange} aria-pressed={ligado} aria-label={titulo}
+      className={`relative shrink-0 w-11 h-6 rounded-full transition-colors ${ligado ? 'bg-accent' : 'bg-gray-700'}`}>
+      <span className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${ligado ? 'translate-x-5' : 'translate-x-0'}`} />
+    </button>
+  </div>
+);
+
 export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast: any; profile: UserProfile }) => {
   // Modo filial (filialAtiva setado — inclui gerente/colaborador, sempre
   // travados na própria unidade) só mostra Admin/CEO/Conselheiro (globais)
@@ -106,7 +210,7 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
   // modo Matriz (filialAtiva null, exclusivo dos globais) busca todos.
   const isGlobalCaller = callerProfile.role === 'admin' || callerProfile.role === 'ceo' || callerProfile.role === 'conselheiro' || (callerProfile.role === 'gerente' && callerProfile.is_conselheiro === true);
   const funcionariosFilter = filialAtiva ? { filial: filialAtiva } : (isGlobalCaller ? undefined : { filial: callerProfile.filial });
-  const { data: funcionarios } = useFetchData<any>('/api/funcionariosview', funcionariosFilter);
+  const { data: funcionarios, reload: recarregarFuncionarios } = useFetchData<any>('/api/funcionariosview', funcionariosFilter);
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -136,12 +240,9 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
     // uma sentada só, distribuir nas unidades é outra. Escolher unidade na
     // criação obrigava a decidir cedo e reorganizar depois.
     filial: (isGerente && !isGlobal ? callerProfile.filial : SEM_ALOCACAO) as string,
+    funcionario_id: '',
   }), [isGerente, isGlobal, callerProfile.setor, callerProfile.filial]);
 
-  // Setores válidos para extras (mesma lista do backend; sem 'all').
-  const SETORES_EXTRAS_DISPONIVEIS: string[] = [
-    'logistica', 'vendas', 'financeiro', 'rh', 'marketing', 'ti', 'gerencia',
-  ];
 
   const [form, setForm] = useState<any>(emptyForm);
   // Corrige filial quando role muda para não-global: Matriz deixa de ser
@@ -569,15 +670,56 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
   const totalGerentes     = filteredUsers.filter(u => u.role === 'gerente').length;
   const totalColaboradores = filteredUsers.filter(u => u.role === 'colaborador').length;
 
-  const handleLinkFuncionario = async (userId: string, funcionarioId: string) => {
-    if (!supabase) return;
-    try {
-      await supabase.from('user_profiles').update({ funcionario_id: funcionarioId || null }).eq('id', userId);
-      setUsers(prev => prev.map(u => u.id === userId ? { ...u, funcionario_id: funcionarioId || null } : u));
-      showToast(funcionarioId ? 'Funcionário vinculado!' : 'Vínculo removido.', 'success');
-    } catch {
-      showToast('Erro ao vincular funcionário.', 'error');
+  // O vínculo mora nos dois lados (migr. 561): o perfil aponta o funcionário
+  // ou o funcionário aponta o perfil.
+  const vinculoDe = (u: UserProfile): string =>
+    u.funcionario_id ?? funcionarios.find((f: any) => f.user_profile_id === u.id)?.id ?? '';
+
+  // Funcionário ativo que ainda não tem conta — o que se pode vincular.
+  // `manter` devolve à lista o vínculo atual de quem está sendo editado.
+  const funcionariosLivres = (filial: string, manter = '') => {
+    const ocupados = new Set(users.map(vinculoDe).filter(Boolean));
+    return funcionarios.filter((f: any) =>
+      f.id === manter
+      || (f.status === 'Ativo' && !f.user_profile_id && !ocupados.has(f.id)
+          && (filial === SEM_ALOCACAO || f.filial === filial)));
+  };
+
+  const gravarVinculo = async (userId: string, funcionarioId: string): Promise<boolean> => {
+    if (!supabase) return false;
+    const { error } = await supabase.from('user_profiles').update({ funcionario_id: funcionarioId || null }).eq('id', userId);
+    if (error) return false;
+    // Lado espelho: solta a ficha antiga e amarra a nova.
+    let solta = supabase.from('funcionarios').update({ user_profile_id: null }).eq('user_profile_id', userId);
+    if (funcionarioId) solta = solta.neq('id', funcionarioId);
+    await solta;
+    if (funcionarioId) {
+      await supabase.from('funcionarios').update({ user_profile_id: userId }).eq('id', funcionarioId).is('user_profile_id', null);
     }
+    setUsers(prev => prev.map(u => u.id === userId ? { ...u, funcionario_id: funcionarioId || null } : u));
+    recarregarFuncionarios();
+    return true;
+  };
+
+  const fecharNovo = () => {
+    setShowForm(false);
+    setForm(emptyForm);
+    setShowPass(false);
+    setFormPhotoFile(null);
+    if (formPhotoPreview) URL.revokeObjectURL(formPhotoPreview);
+    setFormPhotoPreview(null);
+  };
+
+  // Escolher o funcionário adianta o resto: nome, e-mail e unidade vêm da ficha.
+  const escolherFuncionario = (id: string) => {
+    const f: any = funcionarios.find((x: any) => x.id === id);
+    setForm((p: any) => ({
+      ...p,
+      funcionario_id: id,
+      nome: p.nome || f?.nome || '',
+      email: p.email || f?.email || '',
+      filial: f && filiaisParaRole(p.role).includes(f.filial) ? f.filial : p.filial,
+    }));
   };
 
   const handleDelete = async (userId: string) => {
@@ -616,8 +758,12 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
       // Cargo de escopo global é 'all' por definição — força antes de enviar,
       // pela mesma régua do select (`roleEscopoGlobal`). Gerente não envia
       // setores_extras (backend bloqueia).
-      const cleanExtras = (form.setores_extras ?? []).filter((s: string) => s !== form.setor);
-      const basePayload = isGlobal ? { ...form, setores_extras: cleanExtras } : form;
+      const { funcionario_id, ...campos } = form;
+      const cleanExtras = (campos.setores_extras ?? []).filter((s: string) => s !== campos.setor);
+      const basePayload = {
+        ...(isGlobal ? { ...campos, setores_extras: cleanExtras } : campos),
+        funcionarioId: funcionario_id || null,
+      };
       const payload = roleEscopoGlobal(basePayload.role)
         ? { ...basePayload, setor: 'all', setores_extras: [] }
         : basePayload;
@@ -644,12 +790,9 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
         const { data } = await supabase.from('user_profiles').select('*').order('nome', { ascending: true });
         setUsers(data ?? []);
       }
-      setForm(emptyForm);
-      if (formPhotoPreview) URL.revokeObjectURL(formPhotoPreview);
-      setFormPhotoFile(null);
-      setFormPhotoPreview(null);
-      setShowForm(false);
-      showToast('Usuário criado com sucesso.', 'success');
+      if (funcionario_id) recarregarFuncionarios();
+      fecharNovo();
+      showToast(funcionario_id ? 'Usuário criado e vinculado ao RH.' : 'Usuário criado com sucesso.', 'success');
     } catch {
       showToast('Erro de conexão. Tente novamente.', 'error');
     } finally {
@@ -684,6 +827,7 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
       // Default true preserva comportamento atual quando coluna ainda é nula em registros antigos.
       pode_acessar_usuarios: u.pode_acessar_usuarios !== false,
       is_conselheiro: u.is_conselheiro === true,
+      funcionario_id: vinculoDe(u),
     });
     setEditShowPass(false);
   };
@@ -750,6 +894,13 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
         setSenhas(prev => ({ ...prev, [editingUser.id]: payload.password }));
       }
 
+      // O vínculo não passa pelo /api/users: o gatilho da migr. 561 deixa o
+      // professor gravar `funcionario_id` direto.
+      if (isAdmin && editForm.funcionario_id !== vinculoDe(editingUser)
+          && !(await gravarVinculo(editingUser.id, editForm.funcionario_id))) {
+        showToast('Dados salvos, mas o vínculo com o RH não foi gravado.', 'error');
+      }
+
       // Atualiza estado local
       setUsers(prev => prev.map(u => {
         if (u.id !== editingUser.id) return u;
@@ -786,7 +937,6 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
       ? ['conselheiro', 'gerente', 'colaborador']
       : ['colaborador'];
 
-  const isCeoRole = form.role === 'ceo';
 
   return (
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col h-full gap-6 overflow-y-auto main-scrollbar pb-6">
@@ -839,7 +989,7 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
           )}
           {isAdmin && (
             <button onClick={handleExportCredenciais} disabled={exportingCred || usuariosParaExport.length === 0}
-              className="neu-button px-3 py-2.5 rounded-xl text-xs font-bold uppercase tracking-widest text-gray-300 hover:text-red-400 flex items-center gap-2 disabled:opacity-40"
+              className="btn-credenciais neu-button px-3 py-2.5 rounded-xl text-xs font-bold uppercase tracking-widest text-gray-300 hover:text-red-400 flex items-center gap-2 disabled:opacity-40"
               title="Baixar e-mails e senhas em PDF — documento confidencial, entregue em mãos">
               <KeyRound size={14} />{exportingCred ? 'Gerando...' : 'Credenciais'}
             </button>
@@ -852,8 +1002,8 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
             </button>
           )}
           {isAdmin && (
-            <NeuButtonAccent onClick={() => setShowForm(v => !v)}>
-              <Plus size={14} />{showForm ? 'Cancelar' : 'Novo Usuário'}
+            <NeuButtonAccent onClick={() => setShowForm(true)}>
+              <Plus size={14} />Novo Usuário
             </NeuButtonAccent>
           )}
         </div>
@@ -872,140 +1022,173 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
 
       <AnimatePresence>
         {showForm && isAdmin && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            className="neu-flat rounded-3xl p-6 border border-white/5 shrink-0">
-            <div className="flex items-center justify-between mb-5">
-              <h3 className="text-sm font-bold text-gray-300">Novo Usuário</h3>
-              <button onClick={() => { setShowForm(false); setFormPhotoFile(null); if (formPhotoPreview) URL.revokeObjectURL(formPhotoPreview); setFormPhotoPreview(null); }} className="w-7 h-7 neu-button rounded-lg flex items-center justify-center text-gray-500 hover:text-white"><X size={14} /></button>
-            </div>
-            {/* Foto */}
-            <div className="flex items-center gap-4 mb-5">
-              <button type="button" onClick={() => formPhotoInputRef.current?.click()}
-                className="relative w-16 h-16 rounded-full neu-button overflow-hidden flex items-center justify-center text-gray-500 hover:text-accent transition-colors shrink-0"
-                title="Adicionar foto (opcional)">
-                {formPhotoPreview
-                  ? <img src={formPhotoPreview} alt="preview" className="w-full h-full object-cover" />
-                  : <Camera size={22} />}
-              </button>
-              <div>
-                <p className="text-xs text-gray-300 font-semibold">Foto do usuário <span className="text-gray-600 font-normal">(opcional)</span></p>
-                <p className="text-[10px] text-gray-600 mt-0.5">JPG, PNG ou WEBP · máx 150 KB</p>
-                {formPhotoPreview && (
-                  <button type="button" onClick={() => { setFormPhotoFile(null); if (formPhotoPreview) URL.revokeObjectURL(formPhotoPreview); setFormPhotoPreview(null); }}
-                    className="text-[10px] text-red-500 hover:text-red-400 mt-1">Remover</button>
-                )}
-              </div>
-              <input ref={formPhotoInputRef} type="file" accept={PERFIL_FOTO_ACCEPT} className="hidden"
-                onChange={e => {
-                  const f = e.target.files?.[0]; e.target.value = '';
-                  if (!f) return;
-                  const val = validarFotoPerfil(f);
-                  if (!val.ok) { showToast(val.motivo, 'error'); return; }
-                  setFormPhotoFile(f);
-                  if (formPhotoPreview) URL.revokeObjectURL(formPhotoPreview);
-                  setFormPhotoPreview(URL.createObjectURL(f));
-                }} />
-            </div>
+          <motion.div
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4"
+            onClick={() => !saving && fecharNovo()}>
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 10 }}
+              onClick={e => e.stopPropagation()}
+              className="neu-flat rounded-3xl border border-white/10 w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden">
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {[
-                { label: 'Nome *', k: 'nome', type: 'text' },
-                { label: 'E-mail *', k: 'email', type: 'email' },
-              ].map(({ label, k, type }) => (
-                <div key={k} className="flex flex-col gap-1.5">
-                  <label htmlFor={`user-${k}`} className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">{label}</label>
-                  <input id={`user-${k}`} type={type} value={form[k]} onChange={e => setForm((p: any) => ({ ...p, [k]: e.target.value }))}
-                    className={`neu-input rounded-xl px-3 py-2.5 text-sm `} />
+              <div className="flex items-center justify-between gap-3 px-6 pt-6 pb-4 border-b border-white/5 shrink-0">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="w-10 h-10 neu-pressed rounded-xl flex items-center justify-center shrink-0">
+                    <UserPlus size={18} className="text-accent" />
+                  </div>
+                  <div className="min-w-0">
+                    <h3 className="text-base font-bold text-gray-200">Novo Usuário</h3>
+                    <p className="text-[11px] text-gray-500">Login no LogMax, com ou sem ficha no RH.</p>
+                  </div>
                 </div>
-              ))}
-
-              {/* Senha com olho */}
-              <div className="flex flex-col gap-1.5">
-                <label htmlFor="user-password" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Senha *</label>
-                <div className="relative">
-                  <input id="user-password" type={showPass ? 'text' : 'password'} value={form.password}
-                    onChange={e => setForm((p: any) => ({ ...p, password: e.target.value }))}
-                    className="neu-input rounded-xl px-3 py-2.5 pr-10 text-sm w-full" />
-                  <button type="button" onClick={() => setShowPass(v => !v)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300">
-                    {showPass ? <EyeOff size={14} /> : <Eye size={14} />}
-                  </button>
-                </div>
+                <button onClick={fecharNovo} className="modal-close-btn"><X size={16} /></button>
               </div>
 
-              {/* Setor */}
-              <div className="flex flex-col gap-1.5">
-                <label htmlFor="user-setor" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Setor</label>
-                <select id="user-setor" value={form.setor} onChange={e => setForm((p: any) => ({ ...p, setor: e.target.value }))}
-                  className="neu-input rounded-xl px-3 py-2.5 text-sm disabled:opacity-50">
-                  {setorOptions.map(s => <option key={s} value={s}>{SETOR_LABEL[s]}</option>)}
-                </select>
-              </div>
+              <div className="px-6 py-5 overflow-y-auto main-scrollbar flex-1 min-h-0 flex flex-col gap-6">
 
-              {/* Cargo */}
-              <div className="flex flex-col gap-1.5">
-                <label htmlFor="user-role" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Cargo</label>
-                <select id="user-role" value={form.role} onChange={e => setForm((p: any) => ({ ...p, role: e.target.value }))}
-                  disabled={!isGlobal} className="neu-input rounded-xl px-3 py-2.5 text-sm disabled:opacity-50">
-                  {roleOptions.map(r => <option key={r} value={r}>{ROLE_LABEL[r]}</option>)}
-                </select>
-              </div>
+                <SecaoForm icon={Link2} titulo="Vínculo com o RH"
+                  dica="Escolha o funcionário para trazer nome, e-mail e unidade da ficha.">
+                  <SelectBusca
+                    value={form.funcionario_id}
+                    onChange={v => v ? escolherFuncionario(v) : setForm((p: any) => ({ ...p, funcionario_id: '' }))}
+                    placeholder="Sem vínculo — conta avulsa"
+                    permitirVazio="Sem vínculo"
+                    opcoes={funcionariosLivres(form.filial).map((f: any) => opcaoFuncionario(f))}
+                  />
+                  {funcionariosLivres(form.filial).length === 0 && (
+                    <p className="text-[10px] text-gray-600 mt-1.5">
+                      Nenhum funcionário ativo sem conta{form.filial ? ` na ${form.filial}` : ''}.
+                    </p>
+                  )}
+                </SecaoForm>
 
-              {/* Filial / Unidade — colaborador/gerente não podem atribuir Matriz
-                  (FilialContext bloqueia login com Matriz para não-globais).
-                  Gerente não-global fica travado na própria filial — não cobre
-                  outras unidades (regra de negócio). */}
-              <div className="flex flex-col gap-1.5">
-                <label htmlFor="user-filial" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Filial / Unidade</label>
-                <select id="user-filial" value={form.filial} onChange={e => setForm((p: any) => ({ ...p, filial: e.target.value }))}
-                  disabled={isGerente && !isGlobal}
-                  className="neu-input rounded-xl px-3 py-2.5 text-sm disabled:opacity-50">
-                  {/* Gerente não deixa conta em aberto — o backend recusa. */}
-                  {isGlobal && <option value={SEM_ALOCACAO}>Sem alocação (definir depois)</option>}
-                  {(isGerente && !isGlobal ? [callerProfile.filial] : filiaisParaRole(form.role)).map(f => <option key={f} value={f}>{f}</option>)}
-                </select>
-                {form.filial === SEM_ALOCACAO && (
-                  <p className="text-[10px] text-gray-600 leading-relaxed">
-                    A conta é criada e fica aguardando: até você escolher a unidade, o aluno vê
-                    "Filial não configurada" ao entrar.
-                  </p>
-                )}
-              </div>
-            </div>
+                <SecaoForm icon={User} titulo="Identificação">
+                  <div className="flex flex-col sm:flex-row gap-4">
+                    <div className="flex sm:flex-col items-center gap-3 sm:gap-1.5 shrink-0">
+                      <button type="button" onClick={() => formPhotoInputRef.current?.click()}
+                        className="relative w-20 h-20 rounded-full neu-button overflow-hidden flex items-center justify-center text-gray-500 hover:text-accent transition-colors"
+                        title="Adicionar foto (opcional)">
+                        {formPhotoPreview
+                          ? <img src={formPhotoPreview} alt="Prévia da foto" className="w-full h-full object-cover" />
+                          : <Camera size={22} />}
+                      </button>
+                      <div className="sm:text-center">
+                        <p className="text-[10px] text-gray-600">JPG, PNG ou WEBP<br className="hidden sm:block" /> · máx 150 KB</p>
+                        {formPhotoPreview && (
+                          <button type="button" onClick={() => { setFormPhotoFile(null); URL.revokeObjectURL(formPhotoPreview); setFormPhotoPreview(null); }}
+                            className="text-[10px] text-red-500 hover:text-red-400">Remover</button>
+                        )}
+                      </div>
+                      <input ref={formPhotoInputRef} type="file" accept={PERFIL_FOTO_ACCEPT} className="hidden"
+                        onChange={e => {
+                          const f = e.target.files?.[0]; e.target.value = '';
+                          if (!f) return;
+                          const val = validarFotoPerfil(f);
+                          if (!val.ok) { showToast(val.motivo, 'error'); return; }
+                          setFormPhotoFile(f);
+                          if (formPhotoPreview) URL.revokeObjectURL(formPhotoPreview);
+                          setFormPhotoPreview(URL.createObjectURL(f));
+                        }} />
+                    </div>
+                    <div className="flex-1 grid grid-cols-1 gap-4">
+                      <CampoForm id="user-nome" label="Nome completo *">
+                        <input id="user-nome" type="text" value={form.nome} autoComplete="off"
+                          onChange={e => setForm((p: any) => ({ ...p, nome: e.target.value }))}
+                          className="neu-input rounded-xl px-3 py-2.5 text-sm" />
+                      </CampoForm>
+                      <CampoForm id="user-email" label="E-mail de login *">
+                        <input id="user-email" type="email" value={form.email} autoComplete="off"
+                          onChange={e => setForm((p: any) => ({ ...p, email: e.target.value }))}
+                          className="neu-input rounded-xl px-3 py-2.5 text-sm" />
+                      </CampoForm>
+                    </div>
+                  </div>
+                </SecaoForm>
 
-            {/* Setores extras — só admin/CEO, escondido para CEO target (global). */}
-            {isGlobal && form.role !== 'ceo' && form.role !== 'conselheiro' && (
-              <div className="mt-4 flex flex-col gap-1.5">
-                <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">
-                  Setores Extras <span className="text-gray-600 normal-case tracking-normal font-normal">(acesso adicional, mantém o cargo)</span>
-                </label>
-                <div className="flex flex-wrap gap-2 pt-1">
-                  {SETORES_EXTRAS_DISPONIVEIS
-                    .filter(s => s !== form.setor)
-                    .map(s => {
-                      const active = (form.setores_extras ?? []).includes(s);
-                      return (
-                        <button key={s} type="button"
-                          onClick={() => setForm((p: any) => ({
-                            ...p,
-                            setores_extras: active
-                              ? p.setores_extras.filter((x: string) => x !== s)
-                              : [...(p.setores_extras ?? []), s],
-                          }))}
-                          className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest border transition-all ${active ? `${setorCls(s)} border-current/30` : 'neu-button border-white/5 text-gray-600 hover:text-gray-300'}`}>
-                          {SETOR_LABEL[s]}
+                <SecaoForm icon={KeyRound} titulo="Senha de acesso"
+                  dica="Fica guardada no cofre e sai no PDF de credenciais.">
+                  <div className="flex gap-2">
+                    <div className="relative flex-1">
+                      <input id="user-password" aria-label="Senha" type={showPass ? 'text' : 'password'} value={form.password}
+                        autoComplete="new-password" placeholder="Mínimo 6 caracteres"
+                        onChange={e => setForm((p: any) => ({ ...p, password: e.target.value }))}
+                        className="neu-input rounded-xl px-3 py-2.5 pr-16 text-sm w-full font-mono" />
+                      <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-2">
+                        {form.password && showPass && (
+                          <button type="button" onClick={() => copiarSenha(form.password)} title="Copiar senha"
+                            className="text-gray-500 hover:text-accent"><Copy size={13} /></button>
+                        )}
+                        <button type="button" onClick={() => setShowPass(v => !v)} title={showPass ? 'Ocultar' : 'Mostrar'}
+                          className="text-gray-500 hover:text-gray-300">
+                          {showPass ? <EyeOff size={14} /> : <Eye size={14} />}
                         </button>
-                      );
-                    })}
-                </div>
-              </div>
-            )}
+                      </div>
+                    </div>
+                  </div>
+                </SecaoForm>
 
-            <div className="flex justify-end mt-5">
-              <NeuButtonAccent onClick={handleSave} disabled={saving}>
-                {saving ? 'Criando...' : 'Criar Usuário'}
-              </NeuButtonAccent>
-            </div>
+                <SecaoForm icon={Briefcase} titulo="Cargo e lotação">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    <CampoForm id="user-role" label="Cargo">
+                      <select id="user-role" value={form.role} onChange={e => setForm((p: any) => ({ ...p, role: e.target.value }))}
+                        disabled={!isGlobal} className="neu-input rounded-xl px-3 py-2.5 text-sm disabled:opacity-50">
+                        {roleOptions.map(r => <option key={r} value={r}>{ROLE_LABEL[r]}</option>)}
+                      </select>
+                    </CampoForm>
+                    <CampoForm id="user-setor" label="Setor">
+                      <select id="user-setor" value={form.setor} onChange={e => setForm((p: any) => ({ ...p, setor: e.target.value }))}
+                        disabled={roleEscopoGlobal(form.role)}
+                        className="neu-input rounded-xl px-3 py-2.5 text-sm disabled:opacity-50">
+                        {setorOptions.map(s => <option key={s} value={s}>{SETOR_LABEL[s]}</option>)}
+                        {roleEscopoGlobal(form.role) && <option value="all">{SETOR_LABEL.all}</option>}
+                      </select>
+                    </CampoForm>
+                    {/* Colaborador/gerente não vão para a Matriz (o FilialContext
+                        barra o login); gerente não-global fica na própria unidade. */}
+                    <CampoForm id="user-filial" label="Unidade">
+                      <select id="user-filial" value={form.filial}
+                        onChange={e => {
+                          const filial = e.target.value;
+                          setForm((p: any) => {
+                            const f: any = funcionarios.find((x: any) => x.id === p.funcionario_id);
+                            const desfaz = f && filial !== SEM_ALOCACAO && f.filial !== filial;
+                            return { ...p, filial, funcionario_id: desfaz ? '' : p.funcionario_id };
+                          });
+                        }}
+                        disabled={isGerente && !isGlobal}
+                        className="neu-input rounded-xl px-3 py-2.5 text-sm disabled:opacity-50">
+                        {isGlobal && <option value={SEM_ALOCACAO}>Sem alocação</option>}
+                        {(isGerente && !isGlobal ? [callerProfile.filial] : filiaisParaRole(form.role)).map(f => <option key={f} value={f}>{f}</option>)}
+                      </select>
+                    </CampoForm>
+                  </div>
+                  {form.filial === SEM_ALOCACAO && (
+                    <p className="text-[10px] text-amber-400/80 leading-relaxed mt-2">
+                      Sem unidade, o aluno vê "Filial não configurada" ao entrar até você alocá-lo.
+                    </p>
+                  )}
+                </SecaoForm>
+
+                {isGlobal && !roleEscopoGlobal(form.role) && (
+                  <SecaoForm icon={Layers} titulo="Acesso a outros setores" dica="Somam ao setor principal, sem mudar o cargo.">
+                    <SetoresExtras setor={form.setor} value={form.setores_extras ?? []}
+                      onChange={v => setForm((p: any) => ({ ...p, setores_extras: v }))} />
+                  </SecaoForm>
+                )}
+              </div>
+
+              <div className="flex items-center justify-end gap-2 px-6 py-4 border-t border-white/5 shrink-0">
+                <button onClick={fecharNovo} disabled={saving}
+                  className="px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-widest neu-button text-gray-400 hover:text-gray-200 disabled:opacity-50">
+                  Cancelar
+                </button>
+                <NeuButtonAccent onClick={handleSave} disabled={saving || !form.nome || !form.email || form.password.length < 6}>
+                  {saving ? 'Criando...' : 'Criar Usuário'}
+                </NeuButtonAccent>
+              </div>
+            </motion.div>
           </motion.div>
         )}
       </AnimatePresence>
@@ -1027,7 +1210,6 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
                   <th className="pb-4 font-bold px-4 text-center">Setor</th>
                   <th className="pb-4 font-bold px-4 text-center">Cargo</th>
                   <th className="pb-4 font-bold px-4 text-center">Filial</th>
-                  <th className="pb-4 font-bold px-4 min-w-[10rem]">Vínculo RH</th>
                   <th className="pb-4 px-4">Ações</th>
                 </tr>
               </thead>
@@ -1054,12 +1236,12 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
                         </div>
                       </td>
                       <td className="py-3 px-4 text-sm font-semibold text-gray-200">{u.nome}</td>
-                      <td className="py-3 px-4 text-xs text-gray-300 select-all">{u.email}</td>
+                      <td className="col-email py-3 px-4 text-xs text-gray-300 select-all">{u.email}</td>
                       {isAdmin && (
                         <td className="py-3 px-4">
                           {senhas[u.id] ? (
                             <div className="flex items-center gap-1.5">
-                              <span className={`inline-block font-semibold text-gray-100 select-all min-w-[5.5rem] ${
+                              <span className={`col-senha inline-block font-semibold text-gray-100 select-all min-w-[5.5rem] ${
                                 senhaVisivel[u.id] ? 'text-sm' : 'text-lg leading-none tracking-wider'}`}>
                                 {senhaVisivel[u.id] ? senhas[u.id] : '••••••••'}
                               </span>
@@ -1077,7 +1259,7 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
                               )}
                             </div>
                           ) : (
-                            <span className="inline-block min-w-[5.5rem] text-xs text-gray-600" title="Senha definida antes do cofre existir — o hash do Auth não pode ser lido de volta. Use Redefinir senha.">
+                            <span className="col-senha inline-block min-w-[5.5rem] text-xs text-gray-600" title="Senha definida antes do cofre existir — o hash do Auth não pode ser lido de volta. Use Redefinir senha.">
                               não registrada
                             </span>
                           )}
@@ -1085,7 +1267,7 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
                       )}
                       <td className="py-3 px-4 text-center">
                         <div className="flex flex-wrap gap-1 justify-center">
-                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide border ${u.setor === 'all' ? 'setor-badge--global' : `border-current/25 ${setorCls(u.setor)}`}`}>
+                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide ${SELO_SETOR[u.setor] ?? 'bg-gray-600 text-white'}`}>
                             {SETOR_LABEL[u.setor] ?? u.setor}
                           </span>
                         </div>
@@ -1105,23 +1287,6 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
                               Sem alocação
                             </span>
                           )}
-                      </td>
-                      <td className="py-3 px-4">
-                        {isAdmin ? (
-                          <SelectBusca
-                            compacto
-                            className="max-w-[200px]"
-                            value={u.funcionario_id ?? ''}
-                            onChange={v => handleLinkFuncionario(u.id, v)}
-                            placeholder="Sem vínculo"
-                            permitirVazio="Sem vínculo"
-                            opcoes={funcionarios.filter((f: any) => f.filial === u.filial).map((f: any) => opcaoFuncionario(f))}
-                          />
-                        ) : (
-                          <span className="text-xs text-gray-400">
-                            {funcionarios.find((f: any) => f.id === u.funcionario_id)?.nome ?? 'Sem vínculo'}
-                          </span>
-                        )}
                       </td>
                       <td className="py-3 px-4 text-right">
                         {confirmReset === u.id ? (
@@ -1224,7 +1389,7 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
           </div>
           <div className="flex flex-wrap gap-2">
             <button onClick={() => { setResetConfirm(''); setResetOpen(true); }}
-              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold uppercase tracking-widest
+              className="btn-apagar-tudo inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold uppercase tracking-widest
                          bg-red-500/10 text-red-400 border border-red-500/30
                          hover:bg-red-500/20 hover:text-red-300 transition-colors">
               <Trash2 size={13} /> Apagar tudo (manter usuários)
@@ -1233,7 +1398,7 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
                 holding, e dar a mesma cor às duas faria a diferença sumir
                 justamente onde ela importa. */}
             <button onClick={abrirResetFilial}
-              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold uppercase tracking-widest
+              className="btn-zerar-unidade inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold uppercase tracking-widest
                          bg-amber-500/10 text-amber-400 border border-amber-500/30
                          hover:bg-amber-500/20 hover:text-amber-300 transition-colors">
               <Building2 size={13} /> Zerar uma unidade
@@ -1527,193 +1692,159 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
           <motion.div
             initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
             className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4"
-            onClick={closeEdit}>
+            onClick={() => !editSaving && closeEdit()}>
             <motion.div
               initial={{ opacity: 0, scale: 0.95, y: 10 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 10 }}
               onClick={e => e.stopPropagation()}
-              className="neu-flat rounded-3xl p-6 border border-white/10 w-full max-w-2xl max-h-[90vh] overflow-y-auto main-scrollbar">
-              <div className="flex items-center justify-between mb-5">
-                <h3 className="text-sm font-bold text-gray-300">
-                  Editar Usuário <span className="text-accent">— {editingUser.nome}</span>
-                </h3>
-                <button onClick={closeEdit}
-                  className="modal-close-btn">
-                  <X size={16} />
-                </button>
-              </div>
+              className="neu-flat rounded-3xl border border-white/10 w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden">
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="flex flex-col gap-1.5">
-                  <label htmlFor="user-edit-nome" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Nome *</label>
-                  <input id="user-edit-nome" type="text" value={editForm.nome}
-                    onChange={e => setEditForm((p: any) => ({ ...p, nome: e.target.value }))}
-                    className="neu-input rounded-xl px-3 py-2.5 text-sm" />
-                </div>
-
-                <div className="flex flex-col gap-1.5">
-                  <label htmlFor="user-edit-email" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">E-mail *</label>
-                  <input id="user-edit-email" type="email" value={editForm.email}
-                    onChange={e => setEditForm((p: any) => ({ ...p, email: e.target.value }))}
-                    className="neu-input rounded-xl px-3 py-2.5 text-sm" />
-                </div>
-
-                {/* Nova senha (opcional) — trocar a de OUTRA pessoa é só do
-                    admin; a própria, qualquer um. Gerente e CEO são alunos, e
-                    definir a senha de um colega é entrar na conta dele. O
-                    backend recusa igual, este `&&` só evita o campo morto. */}
-                {(isAdmin || editingUser.id === callerProfile.id) && (
-                <div className="flex flex-col gap-1.5">
-                  <label htmlFor="user-edit-password" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Nova Senha (opcional)</label>
-                  <div className="relative">
-                    <input id="user-edit-password" type={editShowPass ? 'text' : 'password'} value={editForm.password}
-                      placeholder="Deixe em branco para manter"
-                      onChange={e => setEditForm((p: any) => ({ ...p, password: e.target.value }))}
-                      className="neu-input rounded-xl px-3 py-2.5 pr-10 text-sm w-full" />
-                    <button type="button" onClick={() => setEditShowPass(v => !v)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300">
-                      {editShowPass ? <EyeOff size={14} /> : <Eye size={14} />}
-                    </button>
+              <div className="flex items-center justify-between gap-3 px-6 pt-6 pb-4 border-b border-white/5 shrink-0">
+                <div className="flex items-center gap-3 min-w-0">
+                  {editingUser.foto_url
+                    ? <img src={editingUser.foto_url} alt="" className="w-10 h-10 rounded-full object-cover shrink-0" />
+                    : <div className="w-10 h-10 rounded-full bg-gray-700 flex items-center justify-center text-sm font-bold text-gray-300 shrink-0">{(editingUser.nome?.[0] ?? '?').toUpperCase()}</div>}
+                  <div className="min-w-0">
+                    <h3 className="text-base font-bold text-gray-200 truncate">Editar Usuário <span className="text-accent">— {editingUser.nome}</span></h3>
+                    <div className="flex items-center gap-1.5 mt-0.5">
+                      <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wide border border-current/25 ${roleCls(editingUser.role)}`}>
+                        {ROLE_LABEL[editingUser.role] ?? editingUser.role}
+                      </span>
+                      <span className="text-[10px] text-gray-500">{filialLabel(editingUser.filial)}</span>
+                    </div>
                   </div>
                 </div>
+                <button onClick={closeEdit} className="modal-close-btn"><X size={16} /></button>
+              </div>
+
+              <div className="px-6 py-5 overflow-y-auto main-scrollbar flex-1 min-h-0 flex flex-col gap-6">
+
+                <SecaoForm icon={User} titulo="Identificação">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <CampoForm id="user-edit-nome" label="Nome completo *">
+                      <input id="user-edit-nome" type="text" value={editForm.nome}
+                        onChange={e => setEditForm((p: any) => ({ ...p, nome: e.target.value }))}
+                        className="neu-input rounded-xl px-3 py-2.5 text-sm" />
+                    </CampoForm>
+                    <CampoForm id="user-edit-email" label="E-mail de login *">
+                      <input id="user-edit-email" type="email" value={editForm.email}
+                        onChange={e => setEditForm((p: any) => ({ ...p, email: e.target.value }))}
+                        className="neu-input rounded-xl px-3 py-2.5 text-sm" />
+                    </CampoForm>
+                  </div>
+                </SecaoForm>
+
+                {/* Trocar a senha de OUTRA pessoa é só do admin; a própria,
+                    qualquer um. O backend recusa igual. */}
+                {(isAdmin || editingUser.id === callerProfile.id) && (
+                  <SecaoForm icon={KeyRound} titulo="Senha de acesso" dica="Deixe em branco para manter a atual.">
+                    <div className="flex gap-2">
+                      <div className="relative flex-1">
+                        <input id="user-edit-password" aria-label="Nova senha" type={editShowPass ? 'text' : 'password'} value={editForm.password}
+                          autoComplete="new-password" placeholder="Nova senha (opcional)"
+                          onChange={e => setEditForm((p: any) => ({ ...p, password: e.target.value }))}
+                          className="neu-input rounded-xl px-3 py-2.5 pr-16 text-sm w-full font-mono" />
+                        <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-2">
+                          {editForm.password && editShowPass && (
+                            <button type="button" onClick={() => copiarSenha(editForm.password)} title="Copiar senha"
+                              className="text-gray-500 hover:text-accent"><Copy size={13} /></button>
+                          )}
+                          <button type="button" onClick={() => setEditShowPass(v => !v)} title={editShowPass ? 'Ocultar' : 'Mostrar'}
+                            className="text-gray-500 hover:text-gray-300">
+                            {editShowPass ? <EyeOff size={14} /> : <Eye size={14} />}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </SecaoForm>
                 )}
 
-                {/* Setor — admin/CEO/gerente podem alterar (gerente só em colaboradores) */}
-                <div className="flex flex-col gap-1.5">
-                  <label htmlFor="user-edit-setor" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Setor</label>
-                  <select id="user-edit-setor" value={editForm.setor}
-                    onChange={e => setEditForm((p: any) => ({ ...p, setor: e.target.value }))}
-                    disabled={roleEscopoGlobal(editForm.role)}
-                    className="neu-input rounded-xl px-3 py-2.5 text-sm disabled:opacity-50">
-                    {SETORES_SELECIONAVEIS.map(s => (
-                      <option key={s} value={s}>{SETOR_LABEL[s]}</option>
-                    ))}
-                    {roleEscopoGlobal(editForm.role) && <option value="all">{SETOR_LABEL.all}</option>}
-                  </select>
-                </div>
+                <SecaoForm icon={Briefcase} titulo="Cargo e lotação">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    <CampoForm id="user-edit-role" label="Cargo">
+                      <select id="user-edit-role" value={editForm.role}
+                        onChange={e => setEditForm((p: any) => ({ ...p, role: e.target.value }))}
+                        disabled={!isGlobal}
+                        className="neu-input rounded-xl px-3 py-2.5 text-sm disabled:opacity-50">
+                        {roleOptions.map(r => <option key={r} value={r}>{ROLE_LABEL[r]}</option>)}
+                        {/* Cargo fora do conjunto editável continua visível, como leitura. */}
+                        {!roleOptions.includes(editForm.role) && (
+                          <option value={editForm.role}>{ROLE_LABEL[editForm.role] ?? editForm.role}</option>
+                        )}
+                      </select>
+                    </CampoForm>
+                    <CampoForm id="user-edit-setor" label="Setor">
+                      <select id="user-edit-setor" value={editForm.setor}
+                        onChange={e => setEditForm((p: any) => ({ ...p, setor: e.target.value }))}
+                        disabled={roleEscopoGlobal(editForm.role)}
+                        className="neu-input rounded-xl px-3 py-2.5 text-sm disabled:opacity-50">
+                        {SETORES_SELECIONAVEIS.map(s => <option key={s} value={s}>{SETOR_LABEL[s]}</option>)}
+                        {roleEscopoGlobal(editForm.role) && <option value="all">{SETOR_LABEL.all}</option>}
+                      </select>
+                    </CampoForm>
+                    {/* Colaborador/gerente não vão para a Matriz (o FilialContext
+                        barra o login); gerente não-global fica na própria unidade. */}
+                    <CampoForm id="user-edit-filial" label="Unidade">
+                      <select id="user-edit-filial" value={editForm.filial}
+                        onChange={e => setEditForm((p: any) => ({ ...p, filial: e.target.value }))}
+                        disabled={isGerente && !isGlobal}
+                        className="neu-input rounded-xl px-3 py-2.5 text-sm disabled:opacity-50">
+                        {isGlobal && <option value={SEM_ALOCACAO}>Sem alocação</option>}
+                        {(isGerente && !isGlobal ? [callerProfile.filial] : filiaisParaRole(editForm.role)).map(f => (
+                          <option key={f} value={f}>{f}</option>
+                        ))}
+                      </select>
+                    </CampoForm>
+                  </div>
+                  {editForm.filial === SEM_ALOCACAO && (
+                    <p className="text-[10px] text-amber-400/80 leading-relaxed">
+                      Sem unidade, o aluno vê "Filial não configurada" ao entrar até você alocá-lo.
+                    </p>
+                  )}
+                </SecaoForm>
 
-                {/* Cargo — só admin/CEO podem alterar; CEO não pode promover a admin/CEO */}
-                <div className="flex flex-col gap-1.5">
-                  <label htmlFor="user-edit-role" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Cargo</label>
-                  <select id="user-edit-role" value={editForm.role}
-                    onChange={e => setEditForm((p: any) => ({ ...p, role: e.target.value }))}
-                    disabled={!isGlobal}
-                    className="neu-input rounded-xl px-3 py-2.5 text-sm disabled:opacity-50">
-                    {(isAdmin
-                      ? ['ceo', 'conselheiro', 'gerente', 'colaborador']
-                      : isCEO
-                        ? ['conselheiro', 'gerente', 'colaborador']
-                        : ['colaborador']
-                    ).map(r => <option key={r} value={r}>{ROLE_LABEL[r]}</option>)}
-                    {/* Se o cargo atual não estiver no conjunto editável, mantém visível como leitura */}
-                    {!(isAdmin
-                      ? ['ceo', 'conselheiro', 'gerente', 'colaborador']
-                      : isCEO
-                        ? ['conselheiro', 'gerente', 'colaborador']
-                        : ['colaborador']
-                    ).includes(editForm.role) && (
-                      <option value={editForm.role}>{ROLE_LABEL[editForm.role] ?? editForm.role}</option>
-                    )}
-                  </select>
-                </div>
+                {isGlobal && !roleEscopoGlobal(editForm.role) && (
+                  <SecaoForm icon={Layers} titulo="Acesso a outros setores" dica="Somam ao setor principal, sem mudar o cargo.">
+                    <SetoresExtras setor={editForm.setor} value={editForm.setores_extras ?? []}
+                      onChange={v => setEditForm((p: any) => ({ ...p, setores_extras: v }))} />
+                  </SecaoForm>
+                )}
 
-                {/* Filial — colaborador/gerente não podem ser Matriz
-                    (FilialContext bloqueia login com Matriz para não-globais).
-                    Gerente não-global só edita/mantém a própria filial. */}
-                <div className="flex flex-col gap-1.5">
-                  <label htmlFor="user-edit-filial" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Filial / Unidade</label>
-                  <select id="user-edit-filial" value={editForm.filial}
-                    onChange={e => setEditForm((p: any) => ({ ...p, filial: e.target.value }))}
-                    disabled={isGerente && !isGlobal}
-                    className="neu-input rounded-xl px-3 py-2.5 text-sm disabled:opacity-50">
-                    {isGlobal && <option value={SEM_ALOCACAO}>Sem alocação (definir depois)</option>}
-                    {(isGerente && !isGlobal ? [callerProfile.filial] : filiaisParaRole(editForm.role)).map(f => (
-                      <option key={f} value={f}>{f}</option>
-                    ))}
-                  </select>
-                </div>
+                {isGlobal && editForm.role === 'gerente' && (
+                  <SecaoForm icon={ShieldCheck} titulo="Permissões do gerente">
+                    <div className="flex flex-col gap-2">
+                      <Alternador titulo="Acesso de Conselheiro"
+                        descricao="Visão global, igual a Admin/CEO, sem mudar de cargo."
+                        ligado={!!editForm.is_conselheiro}
+                        onChange={() => setEditForm((p: any) => ({ ...p, is_conselheiro: !p.is_conselheiro }))} />
+                      <Alternador titulo="Módulo Usuários na sidebar"
+                        descricao="Desligado, o item Usuários some do menu deste gerente."
+                        ligado={!!editForm.pode_acessar_usuarios}
+                        onChange={() => setEditForm((p: any) => ({ ...p, pode_acessar_usuarios: !p.pode_acessar_usuarios }))} />
+                    </div>
+                  </SecaoForm>
+                )}
+
+                {isAdmin && (
+                  <SecaoForm icon={Link2} titulo="Vínculo com o RH" dica="Ficha de funcionário ligada a esta conta.">
+                    <SelectBusca
+                      value={editForm.funcionario_id}
+                      onChange={v => setEditForm((p: any) => ({ ...p, funcionario_id: v }))}
+                      placeholder="Sem vínculo"
+                      permitirVazio="Sem vínculo"
+                      opcoes={funcionariosLivres(editForm.filial, vinculoDe(editingUser)).map((f: any) => opcaoFuncionario(f))}
+                    />
+                  </SecaoForm>
+                )}
               </div>
 
-              {/* Toggle Conselheiro — acesso global para gerentes. Só admin/CEO podem alterar. */}
-              {isGlobal && editForm.role === 'gerente' && (
-                <div className="mt-4 neu-flat rounded-2xl p-4 border border-white/5">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="flex-1 min-w-0">
-                      <p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-1">
-                        Acesso de Conselheiro
-                      </p>
-                      <p className="text-xs text-gray-400">
-                        Quando ativado, este gerente tem visão global (igual a Admin/CEO) sem mudar de cargo.
-                      </p>
-                    </div>
-                    <button type="button"
-                      onClick={() => setEditForm((p: any) => ({ ...p, is_conselheiro: !p.is_conselheiro }))}
-                      className={`relative shrink-0 w-12 h-6 rounded-full transition-colors ${editForm.is_conselheiro ? 'bg-accent' : 'bg-gray-700'}`}
-                      title={editForm.is_conselheiro ? 'Conselheiro ativado' : 'Conselheiro desativado'}
-                      aria-pressed={editForm.is_conselheiro}>
-                      <span className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${editForm.is_conselheiro ? 'translate-x-6' : 'translate-x-0'}`} />
-                    </button>
-                  </div>
-                </div>
-              )}
-              {/* Toggle de acesso ao módulo Usuários — só admin/CEO, só em gerentes. */}
-              {isGlobal && editForm.role === 'gerente' && (
-                <div className="mt-4 neu-flat rounded-2xl p-4 border border-white/5">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="flex-1 min-w-0">
-                      <p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-1">
-                        Acesso ao módulo Usuários
-                      </p>
-                      <p className="text-xs text-gray-400">
-                        Quando desativado, este gerente perde o item "Usuários" na sidebar e não pode criar, editar ou excluir colaboradores.
-                      </p>
-                    </div>
-                    <button type="button"
-                      onClick={() => setEditForm((p: any) => ({ ...p, pode_acessar_usuarios: !p.pode_acessar_usuarios }))}
-                      className={`relative shrink-0 w-12 h-6 rounded-full transition-colors ${editForm.pode_acessar_usuarios ? 'bg-accent' : 'bg-gray-700'}`}
-                      title={editForm.pode_acessar_usuarios ? 'Acesso habilitado' : 'Acesso desabilitado'}
-                      aria-pressed={editForm.pode_acessar_usuarios}>
-                      <span className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${editForm.pode_acessar_usuarios ? 'translate-x-6' : 'translate-x-0'}`} />
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              {/* Setores extras — admin/CEO, exceto quando target é CEO (global). */}
-              {isGlobal && editForm.role !== 'ceo' && editForm.role !== 'conselheiro' && (
-                <div className="mt-4 flex flex-col gap-1.5">
-                  <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">
-                    Setores Extras <span className="text-gray-600 normal-case tracking-normal font-normal">(acesso adicional, mantém o cargo)</span>
-                  </label>
-                  <div className="flex flex-wrap gap-2 pt-1">
-                    {SETORES_EXTRAS_DISPONIVEIS
-                      .filter(s => s !== editForm.setor)
-                      .map(s => {
-                        const active = (editForm.setores_extras ?? []).includes(s);
-                        return (
-                          <button key={s} type="button"
-                            onClick={() => setEditForm((p: any) => ({
-                              ...p,
-                              setores_extras: active
-                                ? p.setores_extras.filter((x: string) => x !== s)
-                                : [...(p.setores_extras ?? []), s],
-                            }))}
-                            className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest border transition-all ${active ? `${setorCls(s)} border-current/30` : 'neu-button border-white/5 text-gray-600 hover:text-gray-300'}`}>
-                            {SETOR_LABEL[s]}
-                          </button>
-                        );
-                      })}
-                  </div>
-                </div>
-              )}
-
-              <div className="flex justify-end gap-2 mt-6">
-                <button onClick={closeEdit}
-                  className="px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-widest neu-button text-gray-400 hover:text-gray-200">
+              <div className="flex items-center justify-end gap-2 px-6 py-4 border-t border-white/5 shrink-0">
+                <button onClick={closeEdit} disabled={editSaving}
+                  className="px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-widest neu-button text-gray-400 hover:text-gray-200 disabled:opacity-50">
                   Cancelar
                 </button>
-                <NeuButtonAccent onClick={handleSaveEdit} disabled={editSaving}>
+                <NeuButtonAccent onClick={handleSaveEdit} disabled={editSaving || !editForm.nome || !editForm.email}>
                   {editSaving ? 'Salvando...' : 'Salvar Alterações'}
                 </NeuButtonAccent>
               </div>

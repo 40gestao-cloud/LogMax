@@ -266,7 +266,7 @@ async function handleCreate(
     return res.status(403).json({ error: 'Acesso ao módulo Usuários foi desabilitado pelo administrador.' });
   }
 
-  const { email, password, nome, role, filial, setores_extras } = req.body ?? {};
+  const { email, password, nome, role, filial, setores_extras, funcionarioId } = req.body ?? {};
   let { setor } = req.body ?? {};
 
   let extras: string[] = [];
@@ -349,6 +349,27 @@ async function handleCreate(
     return res.status(400).json({ error: 'CEO e Conselheiro são cargos da Matriz — quem julga a competição não pode estar em uma das unidades disputando.' });
   }
 
+  // Vínculo com o cadastro do RH, opcional. Conferido ANTES de criar a conta
+  // no Auth: recusar depois deixaria login criado sem o vínculo pedido.
+  let funcVinculo: string | null = null;
+  if (funcionarioId !== undefined && funcionarioId !== null && funcionarioId !== '') {
+    if (typeof funcionarioId !== 'string') return res.status(400).json({ error: 'Funcionário inválido.' });
+    const { data: func, indisponivel } = await lerLinha<any>(log, 'funcionario:create', () => admin
+      .from('funcionarios').select('id, filial, user_profile_id').eq('id', funcionarioId).single());
+    if (indisponivel) return res.status(503).json({ error: MSG_CONEXAO });
+    if (!func) return res.status(404).json({ error: 'Funcionário não encontrado.' });
+    // O vínculo mora nos dois lados (migr. 561) — confere os dois.
+    const { count } = await admin.from('user_profiles')
+      .select('id', { count: 'exact', head: true }).eq('funcionario_id', funcionarioId);
+    if (func.user_profile_id || (count ?? 0) > 0) {
+      return res.status(400).json({ error: 'Este funcionário já está vinculado a outra conta.' });
+    }
+    if (!semAlocacao && func.filial !== filialInformada) {
+      return res.status(400).json({ error: `O funcionário é da ${func.filial}; a conta precisa ser da mesma unidade.` });
+    }
+    funcVinculo = func.id;
+  }
+
   // Sem retentativa aqui, de propósito: repetir um POST que pode ter dado
   // certo do outro lado é como se fabrica conta duplicada. A recuperação é
   // olhar o que ficou (`contaOrfaDoEmail`) em vez de mandar de novo às cegas.
@@ -390,6 +411,7 @@ async function handleCreate(
   // Explícito nos dois casos: omitir a coluna cairia no DEFAULT 'Matriz' da
   // migr. 017, e "ainda não alocado" viraria "lotado na holding".
   profilePayload.filial = semAlocacao ? null : filialInformada;
+  if (funcVinculo) profilePayload.funcionario_id = funcVinculo;
   const { error: profileErr } = await admin.from('user_profiles').insert(profilePayload);
   if (profileErr) {
     log.error('profile.insert_failed', profileErr, {
@@ -406,7 +428,13 @@ async function handleCreate(
 
   await anotarSenha(admin, newUser.id, password, callerId, log);
 
-  log.info('user.created', { user_id: newUser.id, role, setor, caller_id: callerId });
+  if (funcVinculo) {
+    const { error: vincErr } = await admin.from('funcionarios')
+      .update({ user_profile_id: newUser.id }).eq('id', funcVinculo).is('user_profile_id', null);
+    if (vincErr) log.warn('funcionario.vinculo_reverso_failed', { user_id: newUser.id, funcionario_id: funcVinculo, error: vincErr.message });
+  }
+
+  log.info('user.created', { user_id: newUser.id, role, setor, funcionario_id: funcVinculo, caller_id: callerId });
   return res.status(200).json({ success: true, userId: newUser.id });
 }
 
