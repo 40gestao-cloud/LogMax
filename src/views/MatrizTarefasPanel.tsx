@@ -1121,14 +1121,16 @@ function ModalAvaliarParticipante({ participante, tarefa, avals, minhaId, podeAv
           </div>
           <div className="shrink-0 text-right">
             {revelado ? (
-              <>
-                <div className={`text-3xl font-black tabular-nums leading-none ${media !== null ? 'text-amber-400' : 'text-gray-700'}`}>
-                  {media !== null ? media.toFixed(1) : '—'}
-                </div>
-                <div className="text-[10px] uppercase tracking-widest font-bold text-gray-500 mt-1">
-                  {notas.length > 0 ? `${notas.length} nota${notas.length === 1 ? '' : 's'}` : 'sem nota'}
-                </div>
-              </>
+              media !== null ? (
+                <>
+                  <div className="text-3xl font-black tabular-nums leading-none text-amber-400">{media.toFixed(1)}</div>
+                  <div className="text-[10px] uppercase tracking-widest font-bold text-gray-500 mt-1">
+                    {notas.length} nota{notas.length === 1 ? '' : 's'}
+                  </div>
+                </>
+              ) : (
+                <span className="text-[10px] font-black uppercase tracking-widest px-2 py-1 rounded bg-zinc-700 text-gray-300">Sem nota</span>
+              )
             ) : (
               <div className="flex flex-col items-end gap-1 text-gray-500" title="As notas dos outros conselheiros aparecem quando a tarefa for encerrada.">
                 <EyeOff size={22} />
