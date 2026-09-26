@@ -324,13 +324,16 @@ export const ExportButton = ({ label, onClick, icon: Icon, variante }: {
 export type TomContador = 'neutro' | 'verde' | 'amarelo' | 'laranja' | 'vermelho' | 'azul' | 'roxo' | 'dourado';
 const TONS_ALERTA = new Set<TomContador>(['amarelo', 'laranja', 'vermelho']);
 
-export const CardContador = ({ label, value, sub, tom = 'neutro', onClick, ativo = false }: {
+export const CardContador = ({ label, value, sub, tom = 'neutro', onClick, ativo = false, corFixa = false }: {
   label: string; value: React.ReactNode; sub?: React.ReactNode; tom?: TomContador;
   /** Com onClick o card vira botão (ex.: abre o detalhe no Dashboard). */
   onClick?: () => void; ativo?: boolean;
+  /** Mantém a cor mesmo com zero — quando a cor é a legenda da categoria
+   *  (Faltas vermelho, igual ao botão Falta da linha), e não um alerta. */
+  corFixa?: boolean;
 }) => {
   const zero = value === 0 || value === '0';
-  const efetivo: TomContador = zero && TONS_ALERTA.has(tom) ? 'neutro' : tom;
+  const efetivo: TomContador = zero && TONS_ALERTA.has(tom) && !corFixa ? 'neutro' : tom;
   // O card é container: valor comprido (R$ 106.096,37) encolhe até caber numa
   // linha só, em vez de estourar a borda ou quebrar o "-" do "R$".
   const texto = typeof value === 'string' || typeof value === 'number' ? String(value) : '';

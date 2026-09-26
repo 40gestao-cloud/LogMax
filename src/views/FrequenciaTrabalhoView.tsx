@@ -740,10 +740,11 @@ const FrequenciaTrabalhoViewInner = ({ showToast, profile, filial, embedded }: a
       {/* Resumo cards */}
       {filtro === 'dia' && (
         <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 shrink-0">
-          <CardContador label="Presentes" value={statsForDate.presentes} tom="verde" />
-          <CardContador label="Faltas" value={statsForDate.faltas} tom="vermelho" />
-          <CardContador label="Atrasos" value={statsForDate.atrasos} tom="laranja" />
-          <CardContador label="Justificados" value={statsForDate.justificados} tom="amarelo" />
+          {/* Mesmas cores dos botões da linha: a cor é a legenda, fica mesmo com zero. */}
+          <CardContador label="Presentes" value={statsForDate.presentes} tom="verde" corFixa />
+          <CardContador label="Faltas" value={statsForDate.faltas} tom="vermelho" corFixa />
+          <CardContador label="Atrasos" value={statsForDate.atrasos} tom="amarelo" corFixa />
+          <CardContador label="Justificados" value={statsForDate.justificados} tom="azul" corFixa />
           <CardContador label="Sem registro" value={statsForDate.semRegistro} tom="roxo" />
         </div>
       )}
@@ -814,7 +815,7 @@ const FrequenciaTrabalhoViewInner = ({ showToast, profile, filial, embedded }: a
 
       {/* Lançamento em lote — só na visão de um dia, que é onde se lança. */}
       {filtro === 'dia' && (
-        <div className="neu-flat rounded-2xl px-5 py-3.5 border border-white/5 shrink-0 flex flex-wrap items-center gap-3">
+        <div className="shrink-0 flex flex-wrap items-center gap-2.5" title="Marque todos e corrija só quem faltou — a linha continua editável antes de salvar.">
           <button
             type="button"
             onClick={marcarTodosPresentes}
@@ -822,10 +823,13 @@ const FrequenciaTrabalhoViewInner = ({ showToast, profile, filial, embedded }: a
             title={marcaveis.length
               ? `Marca ${marcaveis.length} funcionário(s) ainda sem lançamento em ${fmtData(dataSelecionada)}. Quem já tem registro não é tocado.`
               : 'Todo mundo da lista já tem lançamento ou rascunho neste dia.'}
-            className="flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-widest border transition disabled:opacity-40 disabled:cursor-not-allowed bg-emerald-500/10 border-emerald-500/30 text-emerald-300 hover:bg-emerald-500/20"
+            className="btn-solido btn-solido--verde !py-2.5 !px-4 !text-xs"
           >
-            <CheckCircle2 size={14} />
-            Todos presentes{marcaveis.length ? ` (${marcaveis.length})` : ''}
+            <CheckCircle2 size={15} />
+            Todos presentes
+            {marcaveis.length > 0 && (
+              <span className="ml-1 min-w-[1.5rem] px-1.5 py-0.5 rounded-md bg-black/25 text-[11px] font-black tabular-nums">{marcaveis.length}</span>
+            )}
           </button>
 
           <button
@@ -835,15 +839,14 @@ const FrequenciaTrabalhoViewInner = ({ showToast, profile, filial, embedded }: a
             title={pendentesDeSalvar.length
               ? `Grava ${pendentesDeSalvar.length} lançamento(s) em aberto.`
               : 'Nada em aberto para gravar.'}
-            className="flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-widest border transition disabled:opacity-40 disabled:cursor-not-allowed bg-accent/15 border-accent/30 text-accent hover:bg-accent/25"
+            className="btn-solido btn-solido--dourado !py-2.5 !px-4 !text-xs"
           >
-            {salvandoLote ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
-            {salvandoLote ? 'Gravando...' : `Salvar tudo${pendentesDeSalvar.length ? ` (${pendentesDeSalvar.length})` : ''}`}
+            {salvandoLote ? <Loader2 size={15} className="animate-spin" /> : <Save size={15} />}
+            {salvandoLote ? 'Gravando…' : 'Salvar tudo'}
+            {!salvandoLote && pendentesDeSalvar.length > 0 && (
+              <span className="ml-1 min-w-[1.5rem] px-1.5 py-0.5 rounded-md bg-black/20 text-[11px] font-black tabular-nums">{pendentesDeSalvar.length}</span>
+            )}
           </button>
-
-          <p className="text-[11px] text-gray-500 flex-1 min-w-[220px]">
-            Marque todos e corrija só quem faltou — a linha continua editável antes de salvar.
-          </p>
         </div>
       )}
 
@@ -862,8 +865,7 @@ const FrequenciaTrabalhoViewInner = ({ showToast, profile, filial, embedded }: a
                     <th className="pb-3 font-bold px-3">Cargo</th>
                     <th className="pb-3 font-bold px-3 text-center">Status</th>
                     <th className="pb-3 font-bold px-3 text-center">Registro</th>
-                    <th className="pb-3 font-bold px-3 text-center w-20">Justificativa</th>
-                    <th className="pb-3 font-bold px-3 text-center w-20">Ação</th>
+                    <th className="pb-3 font-bold px-3 text-center w-px whitespace-nowrap">Ações</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -990,33 +992,31 @@ const FrequenciaTrabalhoViewInner = ({ showToast, profile, filial, embedded }: a
                             );
                           })() : <span className="text-gray-700 text-xs">—</span>}
                         </td>
-                        <td className="py-3 px-3 text-center">
-                          {/* Ícone do tamanho do botão Salvar: o texto do motivo
-                              mora no modal, não na linha. O preenchido se
-                              distingue pelo accent. */}
-                          <button
-                            type="button"
-                            disabled={bloqueado}
-                            onClick={() => setJustModal({ func, texto: currentJust })}
-                            title={turmaAnterior ? 'Histórico da turma anterior' : bloqueado ? 'Motivo no módulo Afastamentos' : (currentJust || 'Escrever justificativa')}
-                            className={`w-9 h-9 rounded-xl flex items-center justify-center border transition mx-auto disabled:opacity-40 disabled:cursor-not-allowed ${
-                              currentJust
-                                ? 'bg-accent/15 border-accent/30 text-accent hover:bg-accent/25'
-                                : 'border-white/5 text-gray-600 hover:text-gray-300 hover:border-white/20'
-                            }`}
-                          >
-                            <MessageSquarePlus size={14} />
-                          </button>
-                        </td>
-                        <td className="py-3 px-3 text-center">
-                          <button
-                            onClick={() => handleSave(func)}
-                            disabled={!isDirty || isSaving || bloqueado || salvandoLote}
-                            className={`w-9 h-9 rounded-xl flex items-center justify-center border transition mx-auto ${isDirty && !bloqueado ? 'bg-accent/15 border-accent/30 text-accent hover:bg-accent/25' : 'border-white/5 text-gray-700'}`}
-                            title={turmaAnterior ? 'Dia da turma anterior — não se reescreve' : bloqueado ? 'Dia coberto por afastamento' : 'Salvar'}
-                          >
-                            {isSaving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
-                          </button>
+                        <td className="py-3 px-3 w-px whitespace-nowrap">
+                          {/* Justificativa e Salvar lado a lado: eram duas
+                              colunas de um botão só cada, e a tabela
+                              distribuía a sobra de largura entre elas. */}
+                          <div className="flex items-center justify-center gap-1.5">
+                            <button
+                              type="button"
+                              disabled={bloqueado}
+                              onClick={() => setJustModal({ func, texto: currentJust })}
+                              title={turmaAnterior ? 'Histórico da turma anterior' : bloqueado ? 'Motivo no módulo Afastamentos' : (currentJust || 'Escrever justificativa')}
+                              aria-label="Justificativa"
+                              className={`freq-acao-btn ${currentJust ? 'freq-acao-btn--just-cheio' : 'freq-acao-btn--just'}`}
+                            >
+                              <MessageSquarePlus size={15} />
+                            </button>
+                            <button
+                              onClick={() => handleSave(func)}
+                              disabled={!isDirty || isSaving || bloqueado || salvandoLote}
+                              aria-label="Salvar"
+                              className={`freq-acao-btn ${isDirty && !bloqueado ? 'freq-acao-btn--salvar-cheio' : 'freq-acao-btn--salvar'}`}
+                              title={turmaAnterior ? 'Dia da turma anterior — não se reescreve' : bloqueado ? 'Dia coberto por afastamento' : isDirty ? 'Salvar esta linha' : 'Nada a salvar'}
+                            >
+                              {isSaving ? <Loader2 size={15} className="animate-spin" /> : <Save size={15} />}
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     );

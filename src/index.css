@@ -2058,8 +2058,10 @@ main.main-scrollbar,
 /* ── Frequência de Trabalho — botões de status ──
    Quatro variantes: presente (verde), falta (vermelho), atraso (amarelo),
    justificada (azul).
-   Estado inativo: fundo e borda na cor, mas mais transparentes.
-   Estado ativo (.freq-status-btn--active): opacidade total, borda mais viva.
+   Estado inativo: chão sólido neutro, só o ícone na cor — lê-se a opção sem
+   que quatro cores disputem a linha. (Era vidro translúcido na cor, e o
+   escolhido se perdia no meio.)
+   Estado ativo (.freq-status-btn--active): a cor cheia, com anel.
 
    ── Por que aqui NÃO tem shimmer ──────────────────────────────────────────
    Tinha, e saiu em 2026-09-19. Estes quatro botões não aparecem uma vez na
@@ -2089,8 +2091,6 @@ main.main-scrollbar,
    dizendo tudo o que o shimmer não dizia. */
 
 .freq-status-btn {
-  position: relative;
-  overflow: hidden;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -2102,87 +2102,50 @@ main.main-scrollbar,
   font-weight: 700;
   white-space: nowrap;
   cursor: pointer;
-  transition: background 0.15s, border-color 0.15s, opacity 0.15s;
+  background: #1f1f23;
+  border: 1px solid #2e2e34;
+  color: #a1a1aa;
+  transition: background 0.15s, border-color 0.15s, color 0.15s, box-shadow 0.15s;
 }
+.freq-status-btn:hover { background: #2a2a30; border-color: #3f3f46; color: #e4e4e7; }
 
-/* Verde — Presente */
-.freq-status-btn--presente {
-  background: rgba(34, 197, 94, 0.06);
-  border: 1px solid rgba(34, 197, 94, 0.15);
-  color: rgba(74, 222, 128, 0.45);
-}
-.freq-status-btn--presente:hover { background: rgba(34, 197, 94, 0.14); border-color: rgba(34, 197, 94, 0.35); color: rgb(74, 222, 128); }
-.freq-status-btn--presente.freq-status-btn--active {
-  background: rgba(34, 197, 94, 0.30);
-  border-color: rgb(34, 197, 94);
-  color: rgb(134, 239, 172);
-  box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.35), 0 0 14px rgba(34, 197, 94, 0.30);
-  transform: scale(1.04);
-}
+/* Ícone na cor da opção enquanto não está escolhida */
+.freq-status-btn--presente    svg { color: #22c55e; }
+.freq-status-btn--falta       svg { color: #ef4444; }
+.freq-status-btn--atraso      svg { color: #eab308; }
+.freq-status-btn--justificada svg { color: #3b82f6; }
 
-/* Vermelho — Falta */
-.freq-status-btn--falta {
-  background: rgba(239, 68, 68, 0.06);
-  border: 1px solid rgba(239, 68, 68, 0.15);
-  color: rgba(248, 113, 113, 0.45);
-}
-.freq-status-btn--falta:hover { background: rgba(239, 68, 68, 0.14); border-color: rgba(239, 68, 68, 0.35); color: rgb(248, 113, 113); }
-.freq-status-btn--falta.freq-status-btn--active {
-  background: rgba(239, 68, 68, 0.30);
-  border-color: rgb(239, 68, 68);
-  color: rgb(252, 165, 165);
-  box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.35), 0 0 14px rgba(239, 68, 68, 0.30);
-  transform: scale(1.04);
-}
+/* Escolhida: cor cheia (mesma régua do StatusBadge) */
+.freq-status-btn--active svg { color: currentColor; }
+.freq-status-btn--presente.freq-status-btn--active    { background: #16a34a; border-color: #16a34a; color: #fff; box-shadow: 0 0 0 2px rgba(34,197,94,0.35); }
+.freq-status-btn--falta.freq-status-btn--active       { background: #dc2626; border-color: #dc2626; color: #fff; box-shadow: 0 0 0 2px rgba(239,68,68,0.35); }
+.freq-status-btn--atraso.freq-status-btn--active      { background: #facc15; border-color: #facc15; color: #0a0a0a; box-shadow: 0 0 0 2px rgba(234,179,8,0.35); }
+.freq-status-btn--justificada.freq-status-btn--active { background: #2563eb; border-color: #2563eb; color: #fff; box-shadow: 0 0 0 2px rgba(59,130,246,0.35); }
 
-/* Amarelo — Presente com Atraso */
-.freq-status-btn--atraso {
-  background: rgba(234, 179, 8, 0.06);
-  border: 1px solid rgba(234, 179, 8, 0.15);
-  color: rgba(250, 204, 21, 0.45);
-}
-.freq-status-btn--atraso:hover { background: rgba(234, 179, 8, 0.14); border-color: rgba(234, 179, 8, 0.35); color: rgb(250, 204, 21); }
-.freq-status-btn--atraso.freq-status-btn--active {
-  background: rgba(234, 179, 8, 0.30);
-  border-color: rgb(234, 179, 8);
-  color: rgb(253, 224, 71);
-  box-shadow: 0 0 0 2px rgba(234, 179, 8, 0.35), 0 0 14px rgba(234, 179, 8, 0.30);
-  transform: scale(1.04);
-}
+/* Light mode: chão claro sólido no lugar do escuro */
+[data-theme="light"] .freq-status-btn { background: #f4f4f5; border-color: #e4e4e7; color: #52525b; }
+[data-theme="light"] .freq-status-btn:hover { background: #e4e4e7; border-color: #d4d4d8; color: #18181b; }
 
-/* Azul — Falta Justificada */
-.freq-status-btn--justificada {
-  background: rgba(59, 130, 246, 0.08);
-  border: 1px solid rgba(59, 130, 246, 0.18);
-  color: rgba(96, 165, 250, 0.5);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
+/* Botões de ícone da linha. Cada um tem a sua cor o tempo todo (azul =
+   justificativa, dourado = salvar), sólida: em repouso num tom escuro dela,
+   aceso na cor cheia quando há o que fazer. No cinza comum os dois eram o
+   mesmo botão. */
+.freq-acao-btn {
+  width: 2.25rem; height: 2.25rem;
+  display: inline-flex; align-items: center; justify-content: center;
+  border-radius: 0.75rem; border: 1px solid transparent;
+  transition: background 0.15s, border-color 0.15s, color 0.15s, filter 0.15s;
 }
-.freq-status-btn--justificada:hover { background: rgba(59, 130, 246, 0.16); border-color: rgba(59, 130, 246, 0.38); color: rgb(96, 165, 250); }
-.freq-status-btn--justificada.freq-status-btn--active {
-  background: rgba(59, 130, 246, 0.32);
-  border-color: rgb(59, 130, 246);
-  color: rgb(191, 219, 254);
-  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.35), 0 0 14px rgba(59, 130, 246, 0.30);
-  transform: scale(1.04);
-}
-/* Shimmer mais presente que o das outras variantes — é o botão que o RH
-   precisa achar de relance na linha. */
-.freq-status-btn--justificada::before {
-  background: linear-gradient(to right, transparent 0%, rgba(255,255,255,0.32) 50%, transparent 100%);
-  animation-duration: 2.8s;
-}
+.freq-acao-btn:hover:not(:disabled) { filter: brightness(1.2); }
+.freq-acao-btn:disabled { opacity: 0.35; cursor: not-allowed; }
 
-/* Light mode */
-[data-theme="light"] .freq-status-btn--justificada { background: rgba(59,130,246,0.07); border-color: rgba(59,130,246,0.20); color: rgba(37,99,235,0.55); }
-[data-theme="light"] .freq-status-btn--justificada:hover { background: rgba(59,130,246,0.15); border-color: rgba(59,130,246,0.40); color: rgb(37,99,235); }
-[data-theme="light"] .freq-status-btn--justificada.freq-status-btn--active { background: rgba(59,130,246,0.22); border-color: rgb(37,99,235); color: rgb(29,78,216); box-shadow: 0 0 0 2px rgba(59,130,246,0.30), 0 0 10px rgba(59,130,246,0.20); }
-[data-theme="light"] .freq-status-btn--presente { background: rgba(34,197,94,0.05); border-color: rgba(34,197,94,0.18); color: rgba(22,163,74,0.5); }
-[data-theme="light"] .freq-status-btn--presente.freq-status-btn--active { background: rgba(34,197,94,0.20); border-color: rgb(22,163,74); color: rgb(21,128,61); box-shadow: 0 0 0 2px rgba(34,197,94,0.30), 0 0 10px rgba(34,197,94,0.20); }
-[data-theme="light"] .freq-status-btn--falta { background: rgba(239,68,68,0.05); border-color: rgba(239,68,68,0.18); color: rgba(220,38,38,0.5); }
-[data-theme="light"] .freq-status-btn--falta.freq-status-btn--active { background: rgba(239,68,68,0.20); border-color: rgb(220,38,38); color: rgb(185,28,28); box-shadow: 0 0 0 2px rgba(239,68,68,0.30), 0 0 10px rgba(239,68,68,0.20); }
-[data-theme="light"] .freq-status-btn--atraso { background: rgba(234,179,8,0.05); border-color: rgba(234,179,8,0.18); color: rgba(161,98,7,0.5); }
-[data-theme="light"] .freq-status-btn--atraso.freq-status-btn--active { background: rgba(234,179,8,0.20); border-color: rgb(161,98,7); color: rgb(133,77,14); box-shadow: 0 0 0 2px rgba(234,179,8,0.30), 0 0 10px rgba(234,179,8,0.20); }
+.freq-acao-btn--just        { background: #172554; border-color: #1e3a8a; color: #93c5fd; }
+.freq-acao-btn--just-cheio  { background: #2563eb; border-color: #2563eb; color: #fff; }
+.freq-acao-btn--salvar      { background: #2b230a; border-color: #4a3b0e; color: #eab308; }
+.freq-acao-btn--salvar-cheio { background: var(--color-accent); border-color: var(--color-accent); color: var(--color-accent-text, #000); }
+
+[data-theme="light"] .freq-acao-btn--just   { background: #dbeafe; border-color: #bfdbfe; color: #1d4ed8; }
+[data-theme="light"] .freq-acao-btn--salvar { background: #fef3c7; border-color: #fde68a; color: #a16207; }
 
 /* ── BI Panel: Markdown ──
    Estilo dedicado pro relatório executivo renderizado por react-markdown
