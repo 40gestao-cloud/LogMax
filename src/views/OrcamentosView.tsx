@@ -1,4 +1,3 @@
-import { useRolarAteFormulario } from '../hooks/useRolarAteFormulario';
 import { MenuMais, ItemMenu } from '../components/MenuMais';
 import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
@@ -8,7 +7,7 @@ import { numeroOrcamento } from '../lib/documentos';
 import { useFetchData, dbInsert, dbUpdate } from '../hooks/useSupabaseData';
 import { useTravaAtualizacao } from '../hooks/useTravaAtualizacao';
 import { ehVendavel } from '../lib/tipoProduto';
-import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent, StatusBadge, Pagination, ExportButton, TextoModal, SecaoFormulario } from '../components/ui';
+import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent, StatusBadge, Pagination, ExportButton, TextoModal, SecaoFormulario, ModalFormulario } from '../components/ui';
 import { useFormValidation, formatBRL, parseBRL, exportToPDFAgrupado, exportToExcelAgrupado, handleMoneyKeyDown } from '../lib/viewUtils';
 import {
   calcularCondicao, parcelasMaximas, rotuloCondicao, vencimentosPrevistos,
@@ -577,7 +576,6 @@ const OrcamentosViewInner = ({
     return ativos.includes(orc.status) && new Date() > limite;
   };
 
-  const formEdicaoRef = useRolarAteFormulario((showForm || editItem) && !modoFinanceiro, editItem?.id);
 
   return (
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col h-full gap-6">
@@ -664,281 +662,279 @@ const OrcamentosViewInner = ({
 
       {/* Form de criação/edição */}
       <AnimatePresence>
-        {(showForm || editItem) && !modoFinanceiro && (
-          <motion.div ref={formEdicaoRef} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="shrink-0">
-            <div className="neu-flat rounded-2xl p-6 border border-white/5 flex flex-col gap-4">
-              <h3 className="text-sm font-bold text-gray-200">{editItem ? 'Editar Proposta' : 'Nova Proposta'}</h3>
-              <SecaoFormulario titulo="Cliente" icon={User} cor="amarelo">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <FormField label="Cliente *" error={errors.cliente_id} className="md:col-span-2">
-                  <SelectBusca
-                    value={form.cliente_id}
-                    onChange={v => { setForm(f => ({ ...f, cliente_id: v })); clearError('cliente_id'); }}
-                    placeholder="Escolha o cliente"
-                    grupos={gruposDeCadastro(clientes)}
-                  />
-                </FormField>
-                <FormField label="Validade (dias) *">
-                  <input
-                    type="number"
-                    min="1"
-                    className="neu-input py-2 px-3 rounded-xl text-sm"
-                    value={form.validade_dias}
-                    onChange={e => setForm(f => ({ ...f, validade_dias: e.target.value }))}
-                  />
-                </FormField>
-              </div>
-              </SecaoFormulario>
+        <ModalFormulario
+          aberto={!!((showForm || editItem) && !modoFinanceiro)}
+          largura="xl"
+          titulo={editItem ? 'Editar Proposta' : 'Nova Proposta'}
+          onCancelar={closeForm}
+          acoes={<>
+            <button
+              onClick={() => handleSave(false)}
+              disabled={isSaving}
+              className="neu-button py-2 px-5 rounded-xl text-sm font-bold text-gray-300 flex items-center gap-1.5 disabled:opacity-50"
+            >
+              <Save size={14} /> Salvar Rascunho
+            </button>
+            <NeuButtonAccent onClick={() => handleSave(true)} isLoading={isSaving}>
+              <Send size={14} /> Enviar ao Financeiro
+            </NeuButtonAccent>
+          </>}
+        >
+          <SecaoFormulario titulo="Cliente" icon={User} cor="amarelo">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <FormField label="Cliente *" error={errors.cliente_id} className="md:col-span-2">
+              <SelectBusca
+                value={form.cliente_id}
+                onChange={v => { setForm(f => ({ ...f, cliente_id: v })); clearError('cliente_id'); }}
+                placeholder="Escolha o cliente"
+                grupos={gruposDeCadastro(clientes)}
+              />
+            </FormField>
+            <FormField label="Validade (dias) *">
+              <input
+                type="number"
+                min="1"
+                className="neu-input py-2 px-3 rounded-xl text-sm"
+                value={form.validade_dias}
+                onChange={e => setForm(f => ({ ...f, validade_dias: e.target.value }))}
+              />
+            </FormField>
+          </div>
+          </SecaoFormulario>
 
-              <SecaoFormulario titulo="Itens da proposta" icon={ShoppingCart} cor="vermelho"
-                extra={`${itens.length} ite${itens.length === 1 ? 'm' : 'ns'}`}>
-              <div className="flex flex-col gap-2">
-                <div className="flex items-center justify-between gap-2 flex-wrap">
-                  <div className="flex items-center gap-2 flex-1">
-                    <input
-                      type="text"
-                      value={produtoBusca}
-                      onChange={e => setProdutoBusca(e.target.value)}
-                      placeholder="Buscar produto por nome ou código..."
-                      className="neu-input py-1.5 px-3 rounded-lg text-xs flex-1"
-                    />
-                    <button onClick={addItem} className="btn-solido btn-solido--amarelo !py-1.5 !px-3 !text-[11px] shrink-0">
-                      <Plus size={11} /> Adicionar item
-                    </button>
-                  </div>
-                </div>
-                {itens.length === 0 ? (
-                  <p className="text-xs text-gray-600 py-3 text-center">Nenhum item ainda — adicione produtos do catálogo.</p>
-                ) : (
-                  <div className="flex flex-col gap-2">
-                    {itens.map((it, idx) => (
-                      <div key={idx} className="grid grid-cols-12 gap-2 items-center neu-pressed rounded-xl p-3">
-                        <SelectBusca
-                          compacto
-                          className="col-span-5"
-                          value={it.produto_id}
-                          onChange={v => escolherProduto(idx, v)}
-                          placeholder="Produto"
-                          opcoes={produtosFiltrados.map((p: any) => ({
-                            ...opcaoProduto(p, { saldo: true }),
-                            tag: p.preco != null ? { texto: `R$ ${formatBRL(Number(p.preco))}`, tom: 'cinza' as const } : null,
-                          }))}
-                        />
-                        <div className="col-span-2">
-                          <input
-                            type="number"
-                            min="1"
-                            className="neu-input py-1.5 px-2 rounded-lg text-xs w-full text-right"
-                            value={it.qtd}
-                            onChange={e => updateItem(idx, { qtd: Math.max(0, Number(e.target.value) || 0) })}
-                            placeholder="Qtd"
-                          />
-                        </div>
-                        <div className="col-span-2">
-                          <input
-                            type="text"
-                            inputMode="numeric"
-                            className="neu-input py-1.5 px-2 rounded-lg text-xs w-full text-right"
-                            value={it.preco_unitario ? formatBRL(it.preco_unitario) : ''}
-                            onChange={e => updateItem(idx, { preco_unitario: parseBRL(formatBRL(e.target.value)) })}
-                            onKeyDown={handleMoneyKeyDown}
-                            placeholder="Preço"
-                          />
-                        </div>
-                        <span className="col-span-2 text-xs font-mono text-accent text-right tabular-nums">
-                          R$ {formatBRL(it.subtotal)}
-                        </span>
-                        <button onClick={() => removeItem(idx)} className="col-span-1 mx-auto action-btn-delete">
-                          <Trash2 size={12} />
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-              </SecaoFormulario>
-
-              <SecaoFormulario titulo="Pagamento" icon={CreditCard} cor="azul">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <FormField label="Desconto comercial (R$)">
-                  <input
-                    type="text"
-                    inputMode="numeric"
-                    className="neu-input py-2 px-3 rounded-xl text-sm"
-                    value={extras.desconto}
-                    onChange={e => setExtras(x => ({ ...x, desconto: formatBRL(e.target.value) }))}
-                    onKeyDown={handleMoneyKeyDown}
-                    placeholder="0,00"
-                  />
-                </FormField>
-                <FormField label="Forma de pagamento">
-                  <select
-                    className="neu-input py-2 px-3 rounded-xl text-sm"
-                    value={condicao.forma_pagamento_id}
-                    onChange={e => {
-                      const id = e.target.value;
-                      const f = formasAtivas.find(x => x.id === id) ?? null;
-                      // Trocar de forma pode baixar o teto de parcelas: 6x no
-                      // cartão não sobrevive à mudança para Pix.
-                      const teto = parcelasMaximas(f);
-                      setCondicao(c => ({
-                        forma_pagamento_id: id,
-                        parcelas: String(Math.min(Math.max(1, parseInt(c.parcelas) || 1), teto)),
-                      }));
-                    }}
-                  >
-                    <option value="">A combinar</option>
-                    {formasAtivas.map(f => (
-                      <option key={f.id} value={f.id}>{f.descricao}</option>
-                    ))}
-                  </select>
-                </FormField>
-                <FormField label="Parcelas">
-                  <select
-                    className="neu-input py-2 px-3 rounded-xl text-sm disabled:opacity-40"
-                    value={String(Math.min(parcelasNum, maxParcelas))}
-                    disabled={!formaEscolhida || maxParcelas <= 1}
-                    onChange={e => setCondicao(c => ({ ...c, parcelas: e.target.value }))}
-                  >
-                    {Array.from({ length: maxParcelas }, (_, i) => i + 1).map(n => (
-                      <option key={n} value={String(n)}>
-                        {n === 1 ? 'À vista' : `${n}x`}
-                        {formaEscolhida && n > Math.max(1, Number(formaEscolhida.parcelas_sem_juros ?? 1)) && Number(formaEscolhida.juros_mensal ?? 0) > 0
-                          ? ' (com juros)' : ''}
-                      </option>
-                    ))}
-                  </select>
-                </FormField>
-              </div>
-
-              {/* Crediário: o dinheiro é da própria loja. Aviso agora, trava na
-                  conversão em pedido (migr. 569). */}
-              {ehCrediario && (
-                <div className={`mt-4 rounded-xl p-3 text-xs flex items-start gap-2 border ${
-                  (credito?.vencidos ?? 0) > 0 || estouraLimite
-                    ? 'border-red-500/30 bg-red-500/5 text-red-300'
-                    : 'border-cyan-500/20 bg-cyan-500/5 text-cyan-300'}`}>
-                  <AlertTriangle size={14} className="mt-0.5 shrink-0" />
-                  <div className="flex flex-col gap-0.5">
-                    <span className="font-bold">Crediário — crédito da própria loja</span>
-                    {!form.cliente_id ? (
-                      <span>Selecione o cliente para consultar o limite.</span>
-                    ) : credito == null ? (
-                      <span>Consultando o crédito do cliente…</span>
-                    ) : (
-                      <>
-                        <span>
-                          Limite: {limiteCliente == null ? 'não cadastrado' : `R$ ${formatBRL(limiteCliente)}`}
-                          {' · '}Já em aberto: R$ {formatBRL(credito.saldo)}
-                          {' · '}Esta proposta: R$ {formatBRL(valorTotal)}
-                        </span>
-                        {credito.vencidos > 0 && (
-                          <span className="font-bold">
-                            {credito.vencidos} título(s) vencido(s) — a conversão em pedido será recusada até a baixa em Financeiro → Contas a Receber.
-                          </span>
-                        )}
-                        {estouraLimite && (
-                          <span className="font-bold">Passa do limite do cliente — a conversão em pedido será recusada.</span>
-                        )}
-                      </>
-                    )}
-                  </div>
-                </div>
-              )}
-              </SecaoFormulario>
-
-              <SecaoFormulario titulo="Observações" icon={MessageSquareText} cor="laranja">
-                <textarea
-                  className="neu-input py-2 px-3 rounded-xl text-sm min-h-[60px] w-full"
-                  value={extras.observacoes}
-                  onChange={e => setExtras(x => ({ ...x, observacoes: e.target.value }))}
-                  placeholder="Condições, prazo de entrega, etc."
+          <SecaoFormulario titulo="Itens da proposta" icon={ShoppingCart} cor="vermelho"
+            extra={`${itens.length} ite${itens.length === 1 ? 'm' : 'ns'}`}>
+          <div className="flex flex-col gap-2">
+            <div className="flex items-center justify-between gap-2 flex-wrap">
+              <div className="flex items-center gap-2 flex-1">
+                <input
+                  type="text"
+                  value={produtoBusca}
+                  onChange={e => setProdutoBusca(e.target.value)}
+                  placeholder="Buscar produto por nome ou código..."
+                  className="neu-input py-1.5 px-3 rounded-lg text-xs flex-1"
                 />
-              </SecaoFormulario>
-
-              {/* Totais — a conta inteira, linha a linha. O aluno tem de ver
-                  de onde saiu cada número: mercadoria, o que ele negociou, o
-                  que a condição abateu, o que o parcelamento acrescentou, e o
-                  que a maquininha vai comer do que a loja recebe. */}
-              <SecaoFormulario titulo="Resumo" icon={Calculator} cor="verde">
-              <div className="flex flex-col gap-3">
-                <div className="flex justify-end gap-6 text-xs flex-wrap">
-                  <div className="flex flex-col items-end">
-                    <span className="text-gray-500 uppercase tracking-widest text-[10px]">Mercadoria</span>
-                    <span className="font-mono text-gray-300 tabular-nums">R$ {formatBRL(subtotal)}</span>
-                  </div>
-                  {descontoNum > 0 && (
-                    <div className="flex flex-col items-end">
-                      <span className="text-gray-500 uppercase tracking-widest text-[10px]">Desc. comercial</span>
-                      <span className="font-mono text-gray-300 tabular-nums">- R$ {formatBRL(descontoNum)}</span>
-                    </div>
-                  )}
-                  {resumo.descontoCondicao > 0 && (
-                    <div className="flex flex-col items-end">
-                      <span className="text-gray-500 uppercase tracking-widest text-[10px]">Desc. à vista</span>
-                      <span className="font-mono text-emerald-400 tabular-nums">- R$ {formatBRL(resumo.descontoCondicao)}</span>
-                    </div>
-                  )}
-                  {resumo.acrescimoJuros > 0 && (
-                    <div className="flex flex-col items-end">
-                      <span className="text-gray-500 uppercase tracking-widest text-[10px]">Juros ({formatBRL(Number(formaEscolhida?.juros_mensal ?? 0))}% a.m.)</span>
-                      <span className="font-mono text-yellow-400 tabular-nums">+ R$ {formatBRL(resumo.acrescimoJuros)}</span>
-                    </div>
-                  )}
-                  <div className="flex flex-col items-end">
-                    <span className="text-gray-500 uppercase tracking-widest text-[10px]">Total ao cliente</span>
-                    <span className="font-mono text-lg font-black text-accent tabular-nums">R$ {formatBRL(valorTotal)}</span>
-                    {resumo.parcelas > 1 && (
-                      <span className="font-mono text-[11px] text-gray-400 tabular-nums">
-                        {resumo.parcelas}x de R$ {formatBRL(resumo.valorParcela)}
-                      </span>
-                    )}
-                  </div>
-                </div>
-
-                {formaEscolhida && (
-                  <div className="flex justify-end gap-6 text-[11px] flex-wrap text-gray-500">
-                    {resumo.taxaAdquirente > 0 && (
-                      <span>
-                        Taxa da maquininha ({formatBRL(Number(formaEscolhida.taxa ?? 0))}%):
-                        {' '}<span className="font-mono text-red-400 tabular-nums">- R$ {formatBRL(resumo.taxaAdquirente)}</span>
-                        {' '}<span className="text-gray-600">— custo da loja, não do cliente</span>
-                      </span>
-                    )}
-                    <span>
-                      A loja recebe:
-                      {' '}<span className="font-mono text-gray-300 tabular-nums">R$ {formatBRL(resumo.valorLiquido)}</span>
-                    </span>
-                    <span>
-                      1º vencimento:
-                      {' '}<span className="font-mono text-gray-300">
-                        {vencimentos[0]?.toLocaleDateString('pt-BR')}
-                      </span>
-                      {vencimentos.length > 1 && (
-                        <span className="text-gray-600"> · último em {vencimentos[vencimentos.length - 1].toLocaleDateString('pt-BR')}</span>
-                      )}
-                    </span>
-                  </div>
-                )}
-              </div>
-              </SecaoFormulario>
-
-              <div className="flex gap-3 justify-end flex-wrap">
-                <button onClick={closeForm} className="neu-button py-2 px-5 rounded-xl text-sm text-gray-400">Cancelar</button>
-                <button
-                  onClick={() => handleSave(false)}
-                  disabled={isSaving}
-                  className="neu-button py-2 px-5 rounded-xl text-sm font-bold text-gray-300 flex items-center gap-1.5 disabled:opacity-50"
-                >
-                  <Save size={14} /> Salvar Rascunho
+                <button onClick={addItem} className="btn-solido btn-solido--amarelo !py-1.5 !px-3 !text-[11px] shrink-0">
+                  <Plus size={11} /> Adicionar item
                 </button>
-                <NeuButtonAccent onClick={() => handleSave(true)} isLoading={isSaving}>
-                  <Send size={14} /> Enviar ao Financeiro
-                </NeuButtonAccent>
               </div>
             </div>
-          </motion.div>
-        )}
+            {itens.length === 0 ? (
+              <p className="text-xs text-gray-600 py-3 text-center">Nenhum item ainda — adicione produtos do catálogo.</p>
+            ) : (
+              <div className="flex flex-col gap-2">
+                {itens.map((it, idx) => (
+                  <div key={idx} className="grid grid-cols-12 gap-2 items-center neu-pressed rounded-xl p-3">
+                    <SelectBusca
+                      compacto
+                      className="col-span-5"
+                      value={it.produto_id}
+                      onChange={v => escolherProduto(idx, v)}
+                      placeholder="Produto"
+                      opcoes={produtosFiltrados.map((p: any) => ({
+                        ...opcaoProduto(p, { saldo: true }),
+                        tag: p.preco != null ? { texto: `R$ ${formatBRL(Number(p.preco))}`, tom: 'cinza' as const } : null,
+                      }))}
+                    />
+                    <div className="col-span-2">
+                      <input
+                        type="number"
+                        min="1"
+                        className="neu-input py-1.5 px-2 rounded-lg text-xs w-full text-right"
+                        value={it.qtd}
+                        onChange={e => updateItem(idx, { qtd: Math.max(0, Number(e.target.value) || 0) })}
+                        placeholder="Qtd"
+                      />
+                    </div>
+                    <div className="col-span-2">
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        className="neu-input py-1.5 px-2 rounded-lg text-xs w-full text-right"
+                        value={it.preco_unitario ? formatBRL(it.preco_unitario) : ''}
+                        onChange={e => updateItem(idx, { preco_unitario: parseBRL(formatBRL(e.target.value)) })}
+                        onKeyDown={handleMoneyKeyDown}
+                        placeholder="Preço"
+                      />
+                    </div>
+                    <span className="col-span-2 text-xs font-mono text-accent text-right tabular-nums">
+                      R$ {formatBRL(it.subtotal)}
+                    </span>
+                    <button onClick={() => removeItem(idx)} className="col-span-1 mx-auto action-btn-delete">
+                      <Trash2 size={12} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+          </SecaoFormulario>
+
+          <SecaoFormulario titulo="Pagamento" icon={CreditCard} cor="azul">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <FormField label="Desconto comercial (R$)">
+              <input
+                type="text"
+                inputMode="numeric"
+                className="neu-input py-2 px-3 rounded-xl text-sm"
+                value={extras.desconto}
+                onChange={e => setExtras(x => ({ ...x, desconto: formatBRL(e.target.value) }))}
+                onKeyDown={handleMoneyKeyDown}
+                placeholder="0,00"
+              />
+            </FormField>
+            <FormField label="Forma de pagamento">
+              <select
+                className="neu-input py-2 px-3 rounded-xl text-sm"
+                value={condicao.forma_pagamento_id}
+                onChange={e => {
+                  const id = e.target.value;
+                  const f = formasAtivas.find(x => x.id === id) ?? null;
+                  // Trocar de forma pode baixar o teto de parcelas: 6x no
+                  // cartão não sobrevive à mudança para Pix.
+                  const teto = parcelasMaximas(f);
+                  setCondicao(c => ({
+                    forma_pagamento_id: id,
+                    parcelas: String(Math.min(Math.max(1, parseInt(c.parcelas) || 1), teto)),
+                  }));
+                }}
+              >
+                <option value="">A combinar</option>
+                {formasAtivas.map(f => (
+                  <option key={f.id} value={f.id}>{f.descricao}</option>
+                ))}
+              </select>
+            </FormField>
+            <FormField label="Parcelas">
+              <select
+                className="neu-input py-2 px-3 rounded-xl text-sm disabled:opacity-40"
+                value={String(Math.min(parcelasNum, maxParcelas))}
+                disabled={!formaEscolhida || maxParcelas <= 1}
+                onChange={e => setCondicao(c => ({ ...c, parcelas: e.target.value }))}
+              >
+                {Array.from({ length: maxParcelas }, (_, i) => i + 1).map(n => (
+                  <option key={n} value={String(n)}>
+                    {n === 1 ? 'À vista' : `${n}x`}
+                    {formaEscolhida && n > Math.max(1, Number(formaEscolhida.parcelas_sem_juros ?? 1)) && Number(formaEscolhida.juros_mensal ?? 0) > 0
+                      ? ' (com juros)' : ''}
+                  </option>
+                ))}
+              </select>
+            </FormField>
+          </div>
+
+          {/* Crediário: o dinheiro é da própria loja. Aviso agora, trava na
+              conversão em pedido (migr. 569). */}
+          {ehCrediario && (
+            <div className={`mt-4 rounded-xl p-3 text-xs flex items-start gap-2 border ${
+              (credito?.vencidos ?? 0) > 0 || estouraLimite
+                ? 'border-red-500/30 bg-red-500/5 text-red-300'
+                : 'border-cyan-500/20 bg-cyan-500/5 text-cyan-300'}`}>
+              <AlertTriangle size={14} className="mt-0.5 shrink-0" />
+              <div className="flex flex-col gap-0.5">
+                <span className="font-bold">Crediário — crédito da própria loja</span>
+                {!form.cliente_id ? (
+                  <span>Selecione o cliente para consultar o limite.</span>
+                ) : credito == null ? (
+                  <span>Consultando o crédito do cliente…</span>
+                ) : (
+                  <>
+                    <span>
+                      Limite: {limiteCliente == null ? 'não cadastrado' : `R$ ${formatBRL(limiteCliente)}`}
+                      {' · '}Já em aberto: R$ {formatBRL(credito.saldo)}
+                      {' · '}Esta proposta: R$ {formatBRL(valorTotal)}
+                    </span>
+                    {credito.vencidos > 0 && (
+                      <span className="font-bold">
+                        {credito.vencidos} título(s) vencido(s) — a conversão em pedido será recusada até a baixa em Financeiro → Contas a Receber.
+                      </span>
+                    )}
+                    {estouraLimite && (
+                      <span className="font-bold">Passa do limite do cliente — a conversão em pedido será recusada.</span>
+                    )}
+                  </>
+                )}
+              </div>
+            </div>
+          )}
+          </SecaoFormulario>
+
+          <SecaoFormulario titulo="Observações" icon={MessageSquareText} cor="laranja">
+            <textarea
+              className="neu-input py-2 px-3 rounded-xl text-sm min-h-[60px] w-full"
+              value={extras.observacoes}
+              onChange={e => setExtras(x => ({ ...x, observacoes: e.target.value }))}
+              placeholder="Condições, prazo de entrega, etc."
+            />
+          </SecaoFormulario>
+
+          {/* Totais — a conta inteira, linha a linha. O aluno tem de ver
+              de onde saiu cada número: mercadoria, o que ele negociou, o
+              que a condição abateu, o que o parcelamento acrescentou, e o
+              que a maquininha vai comer do que a loja recebe. */}
+          <SecaoFormulario titulo="Resumo" icon={Calculator} cor="verde">
+          <div className="flex flex-col gap-3">
+            <div className="flex justify-end gap-6 text-xs flex-wrap">
+              <div className="flex flex-col items-end">
+                <span className="text-gray-500 uppercase tracking-widest text-[10px]">Mercadoria</span>
+                <span className="font-mono text-gray-300 tabular-nums">R$ {formatBRL(subtotal)}</span>
+              </div>
+              {descontoNum > 0 && (
+                <div className="flex flex-col items-end">
+                  <span className="text-gray-500 uppercase tracking-widest text-[10px]">Desc. comercial</span>
+                  <span className="font-mono text-gray-300 tabular-nums">- R$ {formatBRL(descontoNum)}</span>
+                </div>
+              )}
+              {resumo.descontoCondicao > 0 && (
+                <div className="flex flex-col items-end">
+                  <span className="text-gray-500 uppercase tracking-widest text-[10px]">Desc. à vista</span>
+                  <span className="font-mono text-emerald-400 tabular-nums">- R$ {formatBRL(resumo.descontoCondicao)}</span>
+                </div>
+              )}
+              {resumo.acrescimoJuros > 0 && (
+                <div className="flex flex-col items-end">
+                  <span className="text-gray-500 uppercase tracking-widest text-[10px]">Juros ({formatBRL(Number(formaEscolhida?.juros_mensal ?? 0))}% a.m.)</span>
+                  <span className="font-mono text-yellow-400 tabular-nums">+ R$ {formatBRL(resumo.acrescimoJuros)}</span>
+                </div>
+              )}
+              <div className="flex flex-col items-end">
+                <span className="text-gray-500 uppercase tracking-widest text-[10px]">Total ao cliente</span>
+                <span className="font-mono text-lg font-black text-accent tabular-nums">R$ {formatBRL(valorTotal)}</span>
+                {resumo.parcelas > 1 && (
+                  <span className="font-mono text-[11px] text-gray-400 tabular-nums">
+                    {resumo.parcelas}x de R$ {formatBRL(resumo.valorParcela)}
+                  </span>
+                )}
+              </div>
+            </div>
+
+            {formaEscolhida && (
+              <div className="flex justify-end gap-6 text-[11px] flex-wrap text-gray-500">
+                {resumo.taxaAdquirente > 0 && (
+                  <span>
+                    Taxa da maquininha ({formatBRL(Number(formaEscolhida.taxa ?? 0))}%):
+                    {' '}<span className="font-mono text-red-400 tabular-nums">- R$ {formatBRL(resumo.taxaAdquirente)}</span>
+                    {' '}<span className="text-gray-600">— custo da loja, não do cliente</span>
+                  </span>
+                )}
+                <span>
+                  A loja recebe:
+                  {' '}<span className="font-mono text-gray-300 tabular-nums">R$ {formatBRL(resumo.valorLiquido)}</span>
+                </span>
+                <span>
+                  1º vencimento:
+                  {' '}<span className="font-mono text-gray-300">
+                    {vencimentos[0]?.toLocaleDateString('pt-BR')}
+                  </span>
+                  {vencimentos.length > 1 && (
+                    <span className="text-gray-600"> · último em {vencimentos[vencimentos.length - 1].toLocaleDateString('pt-BR')}</span>
+                  )}
+                </span>
+              </div>
+            )}
+          </div>
+          </SecaoFormulario>
+        </ModalFormulario>
       </AnimatePresence>
 
       {/* Lista */}

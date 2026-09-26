@@ -1,10 +1,9 @@
-import { useRolarAteFormulario } from '../hooks/useRolarAteFormulario';
 import React, { useMemo, useState } from 'react';
 import { useFilial } from '../contexts/FilialContext';
 import { motion, AnimatePresence } from 'motion/react';
 import { Plus, X, Trash2, Edit3, Calendar, ChevronRight, ExternalLink, Filter, Sparkles, Loader2, Copy, CheckCircle2 } from 'lucide-react';
 import { useFetchData, dbInsert, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
-import { LoadingSpinner, EmptyState, NeuButtonAccent, CardContador, type TomContador, corDoStatus } from '../components/ui';
+import { LoadingSpinner, EmptyState, NeuButtonAccent, CardContador, type TomContador, corDoStatus, ModalFormulario } from '../components/ui';
 import { formatDataHoraBR } from '../lib/dates';
 import { hasSetor } from '../lib/rbac';
 import { freshToken, lerJsonDaApi } from '../lib/authFetch';
@@ -260,7 +259,6 @@ const CalendarioEditorialViewInner = ({ showToast, profile, filial }: any) => {
     }
   };
 
-  const formEdicaoRef = useRolarAteFormulario(showForm, editing?.id);
   if (isLoading) return <div className="flex-1 flex items-center justify-center"><LoadingSpinner /></div>;
 
   const postsFiltrados = posts
@@ -322,99 +320,93 @@ const CalendarioEditorialViewInner = ({ showToast, profile, filial }: any) => {
       </div>
 
       <AnimatePresence>
-        {showForm && (
-          <motion.div ref={formEdicaoRef} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            className="neu-flat rounded-3xl p-6 border border-white/5 shrink-0">
-            <div className="flex items-center justify-between mb-5">
-              <h3 className="text-sm font-bold text-gray-300">{editing ? 'Editar Post' : 'Novo Post no Calendário'}</h3>
-              <button onClick={resetForm} className="modal-close-btn"><X size={16} /></button>
+        <ModalFormulario
+          aberto={showForm}
+          titulo={editing ? 'Editar Post' : 'Novo Post no Calendário'}
+          onCancelar={resetForm}
+          acoes={<>
+            <NeuButtonAccent variant="" onClick={handleSave} disabled={saving}>
+              {saving ? 'Salvando...' : (editing ? 'Salvar' : 'Agendar Post')}
+            </NeuButtonAccent>
+          </>}
+        >
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div className="flex flex-col gap-1.5 lg:col-span-2">
+              <label htmlFor="cal-titulo" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Título *</label>
+              <input id="cal-titulo" type="text" value={form.titulo}
+                onChange={e => setForm(f => ({ ...f, titulo: e.target.value }))}
+                className="neu-input rounded-xl px-3 py-2.5 text-sm" placeholder="Ex: Lançamento Coleção Verão" />
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              <div className="flex flex-col gap-1.5 lg:col-span-2">
-                <label htmlFor="cal-titulo" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Título *</label>
-                <input id="cal-titulo" type="text" value={form.titulo}
-                  onChange={e => setForm(f => ({ ...f, titulo: e.target.value }))}
-                  className="neu-input rounded-xl px-3 py-2.5 text-sm" placeholder="Ex: Lançamento Coleção Verão" />
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <label htmlFor="cal-canal" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Canal *</label>
-                <select id="cal-canal" value={form.canal}
-                  onChange={e => setForm(f => ({ ...f, canal: e.target.value }))}
-                  className="neu-input rounded-xl px-3 py-2.5 text-sm">
-                  {CANAIS.map(c => <option key={c} value={c}>{c}</option>)}
-                </select>
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <label htmlFor="cal-data" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Data *</label>
-                <input id="cal-data" type="date" value={form.data_post}
-                  onChange={e => setForm(f => ({ ...f, data_post: e.target.value }))}
-                  className="neu-input rounded-xl px-3 py-2.5 text-sm" />
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <label htmlFor="cal-hora" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Horário</label>
-                <input id="cal-hora" type="time" value={form.hora_post}
-                  onChange={e => setForm(f => ({ ...f, hora_post: e.target.value }))}
-                  className="neu-input rounded-xl px-3 py-2.5 text-sm" />
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <label htmlFor="cal-status" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Status</label>
-                <select id="cal-status" value={form.status}
-                  onChange={e => setForm(f => ({ ...f, status: e.target.value as Status }))}
-                  className="neu-input rounded-xl px-3 py-2.5 text-sm">
-                  {STATUS_FLOW.map(s => <option key={s} value={s}>{s}</option>)}
-                </select>
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <label htmlFor="cal-responsavel" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Responsável</label>
-                <input id="cal-responsavel" type="text" value={form.nome_responsavel}
-                  onChange={e => setForm(f => ({ ...f, nome_responsavel: e.target.value }))}
-                  className="neu-input rounded-xl px-3 py-2.5 text-sm" placeholder="Default: você" />
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <label htmlFor="cal-promocao" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Promoção vinculada</label>
-                <select id="cal-promocao" value={form.promocao_id}
-                  onChange={e => setForm(f => ({ ...f, promocao_id: e.target.value }))}
-                  className="neu-input rounded-xl px-3 py-2.5 text-sm">
-                  <option value="">Sem promoção</option>
-                  {promocoesAprovadas.map((p: any) => (
-                    <option key={p.id} value={p.id}>{p.nome_produto}</option>
-                  ))}
-                </select>
-              </div>
-              <div className="flex flex-col gap-1.5 lg:col-span-3">
-                <label htmlFor="cal-link" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Link da arte (Canva, Drive)</label>
-                <input id="cal-link" type="url" value={form.link_arte}
-                  onChange={e => setForm(f => ({ ...f, link_arte: e.target.value }))}
-                  className="neu-input rounded-xl px-3 py-2.5 text-sm" placeholder="https://..." />
-              </div>
-              <div className="flex flex-col gap-1.5 lg:col-span-3">
-                <div className="flex items-center justify-between">
-                  <label htmlFor="cal-conteudo" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Conteúdo / Legenda</label>
-                  <button
-                    type="button"
-                    onClick={gerarLegenda}
-                    disabled={!form.promocao_id}
-                    title={form.promocao_id ? 'IA gera 3 variações com base na promoção vinculada' : 'Vincule uma promoção pra gerar a legenda'}
-                    className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-accent border border-accent/30 rounded-lg px-2.5 py-1 hover:bg-accent/10 transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
-                    <Sparkles size={10} />Gerar legenda com IA
-                  </button>
-                </div>
-                <textarea id="cal-conteudo" value={form.conteudo} rows={3}
-                  onChange={e => setForm(f => ({ ...f, conteudo: e.target.value }))}
-                  className="neu-input rounded-xl px-3 py-2.5 text-sm resize-none"
-                  placeholder="Copy do post. Vincule uma promoção e clique em Gerar legenda com IA acima pra obter 3 variações." />
-              </div>
+            <div className="flex flex-col gap-1.5">
+              <label htmlFor="cal-canal" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Canal *</label>
+              <select id="cal-canal" value={form.canal}
+                onChange={e => setForm(f => ({ ...f, canal: e.target.value }))}
+                className="neu-input rounded-xl px-3 py-2.5 text-sm">
+                {CANAIS.map(c => <option key={c} value={c}>{c}</option>)}
+              </select>
             </div>
-            <div className="flex justify-end gap-2 mt-5">
-              <button onClick={resetForm} className="neu-button rounded-xl px-4 py-2 text-xs font-bold uppercase tracking-widest text-gray-400 hover:text-white">
-                Cancelar
-              </button>
-              <NeuButtonAccent variant="" onClick={handleSave} disabled={saving}>
-                {saving ? 'Salvando...' : (editing ? 'Salvar' : 'Agendar Post')}
-              </NeuButtonAccent>
+            <div className="flex flex-col gap-1.5">
+              <label htmlFor="cal-data" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Data *</label>
+              <input id="cal-data" type="date" value={form.data_post}
+                onChange={e => setForm(f => ({ ...f, data_post: e.target.value }))}
+                className="neu-input rounded-xl px-3 py-2.5 text-sm" />
             </div>
-          </motion.div>
-        )}
+            <div className="flex flex-col gap-1.5">
+              <label htmlFor="cal-hora" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Horário</label>
+              <input id="cal-hora" type="time" value={form.hora_post}
+                onChange={e => setForm(f => ({ ...f, hora_post: e.target.value }))}
+                className="neu-input rounded-xl px-3 py-2.5 text-sm" />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <label htmlFor="cal-status" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Status</label>
+              <select id="cal-status" value={form.status}
+                onChange={e => setForm(f => ({ ...f, status: e.target.value as Status }))}
+                className="neu-input rounded-xl px-3 py-2.5 text-sm">
+                {STATUS_FLOW.map(s => <option key={s} value={s}>{s}</option>)}
+              </select>
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <label htmlFor="cal-responsavel" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Responsável</label>
+              <input id="cal-responsavel" type="text" value={form.nome_responsavel}
+                onChange={e => setForm(f => ({ ...f, nome_responsavel: e.target.value }))}
+                className="neu-input rounded-xl px-3 py-2.5 text-sm" placeholder="Default: você" />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <label htmlFor="cal-promocao" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Promoção vinculada</label>
+              <select id="cal-promocao" value={form.promocao_id}
+                onChange={e => setForm(f => ({ ...f, promocao_id: e.target.value }))}
+                className="neu-input rounded-xl px-3 py-2.5 text-sm">
+                <option value="">Sem promoção</option>
+                {promocoesAprovadas.map((p: any) => (
+                  <option key={p.id} value={p.id}>{p.nome_produto}</option>
+                ))}
+              </select>
+            </div>
+            <div className="flex flex-col gap-1.5 lg:col-span-3">
+              <label htmlFor="cal-link" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Link da arte (Canva, Drive)</label>
+              <input id="cal-link" type="url" value={form.link_arte}
+                onChange={e => setForm(f => ({ ...f, link_arte: e.target.value }))}
+                className="neu-input rounded-xl px-3 py-2.5 text-sm" placeholder="https://..." />
+            </div>
+            <div className="flex flex-col gap-1.5 lg:col-span-3">
+              <div className="flex items-center justify-between">
+                <label htmlFor="cal-conteudo" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Conteúdo / Legenda</label>
+                <button
+                  type="button"
+                  onClick={gerarLegenda}
+                  disabled={!form.promocao_id}
+                  title={form.promocao_id ? 'IA gera 3 variações com base na promoção vinculada' : 'Vincule uma promoção pra gerar a legenda'}
+                  className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-accent border border-accent/30 rounded-lg px-2.5 py-1 hover:bg-accent/10 transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
+                  <Sparkles size={10} />Gerar legenda com IA
+                </button>
+              </div>
+              <textarea id="cal-conteudo" value={form.conteudo} rows={3}
+                onChange={e => setForm(f => ({ ...f, conteudo: e.target.value }))}
+                className="neu-input rounded-xl px-3 py-2.5 text-sm resize-none"
+                placeholder="Copy do post. Vincule uma promoção e clique em Gerar legenda com IA acima pra obter 3 variações." />
+            </div>
+          </div>
+        </ModalFormulario>
       </AnimatePresence>
 
       <div className="flex flex-col gap-3 shrink-0">

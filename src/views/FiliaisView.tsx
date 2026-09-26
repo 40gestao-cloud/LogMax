@@ -1,4 +1,3 @@
-import { useRolarAteFormulario } from '../hooks/useRolarAteFormulario';
 import { MenuMais, ItemMenu } from '../components/MenuMais';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
@@ -6,7 +5,7 @@ import { Search, Edit2, Trash2, MapPin, Building2, Plus, Save, FileDown, Sheet, 
 import { HistoricoOperacoes } from '../components/HistoricoOperacoes';
 import { useFetchData, dbInsert, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
 import { supabase } from '../lib/supabase';
-import { LoadingSpinner, EmptyState, FormField, ExportButton, NeuButtonAccent, StatusBadge, FilialBadge } from '../components/ui';
+import { LoadingSpinner, EmptyState, FormField, ExportButton, NeuButtonAccent, StatusBadge, FilialBadge, ModalFormulario } from '../components/ui';
 import { useFormValidation, exportToPDF, exportToExcel, formatCNPJ, formatPhone, formatBRL, parseBRL, handleMoneyKeyDown } from '../lib/viewUtils';
 import { useConfirm } from '../contexts/ConfirmContext';
 import { uploadLogoFilial, removerLogoFilial, FILIAL_LOGO_ACCEPT, FILIAL_LOGO_MAX_LABEL, validarLogoFilial } from '../lib/filialLogo';
@@ -565,7 +564,6 @@ export const FiliaisView = ({ showToast }: any) => {
 
   const isFormOpen = showForm || !!editItem;
 
-  const formEdicaoRef = useRolarAteFormulario(isFormOpen, editItem?.id);
 
   return (
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col h-full gap-6 overflow-y-auto main-scrollbar">
@@ -599,281 +597,278 @@ export const FiliaisView = ({ showToast }: any) => {
       </div>
 
       <AnimatePresence>
-        {isFormOpen && (
-          <motion.div ref={formEdicaoRef} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-            <div className="neu-flat rounded-2xl p-6 border border-white/5 flex flex-col gap-5">
-              <h3 className="text-sm font-bold text-gray-200">{editItem ? 'Editar Filial' : 'Nova Filial'}</h3>
-
-              {/* Logo */}
-              <div>
-                <p className="text-[10px] text-gray-600 uppercase tracking-widest font-bold mb-3 flex items-center gap-2">
-                  <ImagePlus size={12} /> Logo da Filial
-                </p>
-                <div className="neu-pressed rounded-2xl p-4 border border-white/5 flex flex-col sm:flex-row items-center gap-4">
-                  <FilialThumb url={imagemUrl} size="lg" alt={form.nome || 'Filial'} />
-                  <div className="flex-1 flex flex-col gap-2 w-full">
-                    <input ref={imagemInputRef} type="file" accept={FILIAL_LOGO_ACCEPT} onChange={handleImagemChange} className="hidden" />
-                    <div className="flex flex-wrap items-center gap-2">
-                      <button type="button" onClick={() => imagemInputRef.current?.click()} disabled={imagemUploading}
-                        className="neu-button py-2 px-4 rounded-xl text-xs font-bold text-gray-300 hover:text-accent transition-colors flex items-center gap-1.5 disabled:opacity-60">
-                        {imagemUploading
-                          ? <><Loader2 size={12} className="animate-spin" /> Enviando...</>
-                          : <><ImagePlus size={12} /> {imagemUrl ? 'Trocar logo' : 'Selecionar logo'}</>}
-                      </button>
-                      {imagemUrl && !imagemUploading && (
-                        <button type="button" onClick={() => setImagemUrl('')}
-                          className="neu-button py-2 px-3 rounded-xl text-xs font-bold text-gray-500 hover:text-red-500 transition-colors flex items-center gap-1.5">
-                          <XIcon size={11} /> Remover
-                        </button>
-                      )}
-                    </div>
-                    <p className="text-[11px] text-gray-500">JPG, PNG, WEBP ou SVG · até {FILIAL_LOGO_MAX_LABEL}</p>
-                  </div>
-                </div>
-              </div>
-
-              {/* Campos */}
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                <FormField label="Nome da filial *" error={errors.nome}>
-                  <input className={`neu-input py-2 px-3 rounded-xl text-sm ${errors.nome ? 'border border-red-500/40' : ''}`}
-                    value={form.nome} onChange={e => { setForm(f => ({ ...f, nome: e.target.value })); clearError('nome'); }}
-                    placeholder="Ex: Filial Sul" />
-                </FormField>
-                <FormField label="CNPJ *" error={errors.cnpj}>
-                  <input className={`neu-input py-2 px-3 rounded-xl text-sm font-mono ${errors.cnpj ? 'border border-red-500/40' : ''}`}
-                    value={form.cnpj} onChange={e => { setForm(f => ({ ...f, cnpj: formatCNPJ(e.target.value) })); clearError('cnpj'); }}
-                    placeholder="00.000.000/0000-00" inputMode="numeric" />
-                </FormField>
-                <FormField label="Cidade/UF *" error={errors.cidade}>
-                  <input className={`neu-input py-2 px-3 rounded-xl text-sm ${errors.cidade ? 'border border-red-500/40' : ''}`}
-                    value={form.cidade} onChange={e => { setForm(f => ({ ...f, cidade: e.target.value })); clearError('cidade'); }}
-                    placeholder="Ex: Rio Branco/AC" />
-                </FormField>
-                <FormField label="Celular">
-                  <input className="neu-input py-2 px-3 rounded-xl text-sm" value={extras.celular}
-                    onChange={e => setExtras(x => ({ ...x, celular: formatPhone(e.target.value) }))}
-                    placeholder="(68) 99999-9999" inputMode="numeric" />
-                </FormField>
-                <FormField label="Endereço">
-                  <input className="neu-input py-2 px-3 rounded-xl text-sm" value={extras.endereco}
-                    onChange={e => setExtras(x => ({ ...x, endereco: e.target.value }))}
-                    placeholder="Rua, número, bairro" />
-                </FormField>
-                <FormField label="Representante">
-                  <input className="neu-input py-2 px-3 rounded-xl text-sm" value={extras.representante}
-                    onChange={e => setExtras(x => ({ ...x, representante: e.target.value }))}
-                    placeholder="Ex: João Silva" />
-                </FormField>
-              </div>
-
-              {/* Detalhes operacionais / plano de negócio */}
-              <div>
-                <p className="text-[10px] text-gray-600 uppercase tracking-widest font-bold mb-3 flex items-center gap-2">
-                  <Ruler size={12} /> Detalhes Operacionais
-                </p>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  <FormField label="Tamanho do espaço (m²)">
-                    <input className="neu-input py-2 px-3 rounded-xl text-sm" type="number" min="0" value={detalhes.tamanhoM2}
-                      onChange={e => setDetalhes(d => ({ ...d, tamanhoM2: e.target.value }))}
-                      placeholder="Ex: 180" />
-                  </FormField>
-                  <FormField label="Tipo de imóvel">
-                    <select className="neu-input py-2 px-3 rounded-xl text-sm" value={detalhes.tipoImovel}
-                      onChange={e => setDetalhes(d => ({ ...d, tipoImovel: e.target.value }))}>
-                      <option value="">Selecione...</option>
-                      <option value="Próprio">Próprio</option>
-                      <option value="Alugado">Alugado</option>
-                    </select>
-                  </FormField>
-                  <FormField label="Vagas de estacionamento">
-                    <input className="neu-input py-2 px-3 rounded-xl text-sm" type="number" min="0" value={detalhes.vagas}
-                      onChange={e => setDetalhes(d => ({ ...d, vagas: e.target.value }))}
-                      placeholder="Ex: 10" />
-                  </FormField>
-                  <FormField label="Capacidade (pessoas/PDVs)">
-                    <input className="neu-input py-2 px-3 rounded-xl text-sm" type="number" min="0" value={detalhes.capacidade}
-                      onChange={e => setDetalhes(d => ({ ...d, capacidade: e.target.value }))}
-                      placeholder="Ex: 40" />
-                  </FormField>
-                  <FormField label="Horário de funcionamento">
-                    <input className="neu-input py-2 px-3 rounded-xl text-sm" value={detalhes.horarioFuncionamento}
-                      onChange={e => setDetalhes(d => ({ ...d, horarioFuncionamento: e.target.value }))}
-                      placeholder="Ex: 08h às 18h" />
-                  </FormField>
-                  <FormField label="Data de inauguração">
-                    <input className="neu-input py-2 px-3 rounded-xl text-sm" type="date" value={detalhes.dataInauguracao}
-                      onChange={e => setDetalhes(d => ({ ...d, dataInauguracao: e.target.value }))} />
-                  </FormField>
-                  <FormField label="Investimento inicial">
-                    <input className="neu-input py-2 px-3 rounded-xl text-sm" type="text" inputMode="numeric" value={detalhes.investimentoInicial}
-                      onChange={e => setDetalhes(d => ({ ...d, investimentoInicial: formatBRL(e.target.value) }))}
-                      onKeyDown={handleMoneyKeyDown}
-                      placeholder="R$ 0,00" />
-                  </FormField>
-                  <FormField label="Funcionários — Valor total da folha de pagamento">
-                    <input className="neu-input py-2 px-3 rounded-xl text-sm" type="text" inputMode="numeric" value={detalhes.folhaPagamento}
-                      onChange={e => setDetalhes(d => ({ ...d, folhaPagamento: formatBRL(e.target.value) }))}
-                      onKeyDown={handleMoneyKeyDown}
-                      placeholder="R$ 0,00" />
-                  </FormField>
-                </div>
-              </div>
-
-              {/* Investimento item a item (migr. 509, Fase 2) — cada linha é uma
-                  filial_investimentos amarrada a esta filial. Só existe depois
-                  que a filial tem id (salva ao menos uma vez). */}
-              <div>
-                <p className="text-[10px] text-gray-600 uppercase tracking-widest font-bold mb-3 flex items-center gap-2">
-                  <Package size={12} /> Investimento — Item a Item <span className="text-accent">· {nichoDoForm}</span>
-                </p>
-
-                {!editItem ? (
-                  <div className="neu-pressed rounded-xl p-4 text-xs text-gray-500">
-                    Salve a filial primeiro — os itens de investimento se amarram a ela.
-                  </div>
-                ) : (
-                  <>
-                    {(itens ?? []).length === 0 && CAMPOS_NICHO[nichoDoForm]
-                      .some(([k]) => Number(editItem.detalhes?.[k] || 0) > 0) && (
-                      <button type="button" onClick={handleImportarParaItens}
-                        className="neu-button py-2 px-4 rounded-xl text-xs text-accent mb-3">
-                        Importar de Detalhes (uma vez)
-                      </button>
-                    )}
-
-                    <div className="flex flex-wrap gap-2 mb-3">
-                      {CAMPOS_NICHO[nichoDoForm].filter(([k]) => !itemJaNaLista(k)).map(([k, label]) => (
-                        <button type="button" key={k} onClick={() => handleAddItemGrade(k, label)}
-                          className="neu-button py-1.5 px-3 rounded-lg text-[11px] text-gray-400 hover:text-accent">
-                          + {label}
-                        </button>
-                      ))}
-                      <button type="button" onClick={handleAddItemCustom}
-                        className="neu-button py-1.5 px-3 rounded-lg text-[11px] text-accent font-bold">
-                        <Plus size={11} className="inline -mt-0.5 mr-1" /> Adicionar item
-                      </button>
-                    </div>
-
-                    <div className="flex flex-col gap-2">
-                      {(itens ?? []).map((item: any) => {
-                        // Item com conta gerada não muda de valor pelas costas: o
-                        // gatilho da migr. 512 recusa o UPDATE, e a tela evita que o
-                        // aluno descubra isso por erro.
-                        const gerado = !!item.conta_pagar_id;
-                        const travaTitle = gerado
-                          ? 'Conta já gerada — desvincule para editar (a conta é cancelada, não apagada)'
-                          : undefined;
-                        return (
-                        <div key={item.id + '_' + item.updated_at} className="flex flex-col gap-1.5">
-                        <div className={`neu-pressed rounded-xl p-3 border grid grid-cols-2 md:grid-cols-6 gap-2 items-center ${gerado ? 'border-accent/20' : 'border-white/5'}`}>
-                          {item.origem_campo === 'customizado' ? (
-                            <input className="neu-input py-2 px-3 rounded-lg text-sm col-span-2 disabled:opacity-60"
-                              defaultValue={item.rotulo} disabled={gerado} title={travaTitle}
-                              onBlur={e => { const v = e.target.value.trim(); if (v && v !== item.rotulo) handleUpdateItem(item.id, { rotulo: v }); }}
-                              placeholder="Rótulo do item" />
-                          ) : (
-                            <span className="text-xs text-gray-300 col-span-2 truncate" title={item.rotulo}>{item.rotulo}</span>
-                          )}
-                          {item.origem_campo === 'customizado' ? (
-                            <select className="neu-input py-2 px-2 rounded-lg text-xs disabled:opacity-60" value={item.categoria}
-                              disabled={gerado} title={travaTitle}
-                              onChange={e => handleUpdateItem(item.id, { categoria: e.target.value })}>
-                              <option value="outro">Outro</option>
-                              <option value="equipamento">Equipamento</option>
-                              <option value="aluguel">Aluguel</option>
-                            </select>
-                          ) : (
-                            <span className="text-[10px] text-gray-500 uppercase tracking-wide">Equipamento</span>
-                          )}
-                          <input className="neu-input py-2 px-2 rounded-lg text-sm disabled:opacity-60" type="number" min="0" step="0.01"
-                            defaultValue={item.quantidade} disabled={gerado}
-                            onBlur={e => { const v = Number(e.target.value); if (Number.isFinite(v) && v !== Number(item.quantidade)) handleUpdateItem(item.id, { quantidade: v }); }}
-                            title={travaTitle ?? 'Quantidade'} />
-                          <input className="neu-input py-2 px-2 rounded-lg text-sm disabled:opacity-60" type="text" inputMode="numeric"
-                            defaultValue={formatBRL(item.preco_unitario)} disabled={gerado}
-                            onKeyDown={handleMoneyKeyDown}
-                            onBlur={e => { const v = valorNum(e.target.value); if (v !== Number(item.preco_unitario)) handleUpdateItem(item.id, { preco_unitario: v }); }}
-                            title={travaTitle ?? 'Preço unitário'} />
-                          <select className="neu-input py-2 px-2 rounded-lg text-xs disabled:opacity-60" value={item.centro_custo_id ?? ''}
-                            disabled={gerado} title={travaTitle}
-                            onChange={e => handleUpdateItem(item.id, { centro_custo_id: e.target.value || null })}>
-                            <option value="">Centro de custo...</option>
-                            {(centrosCusto ?? []).map((cc: any) => (
-                              <option key={cc.id} value={cc.id}>{cc.nome}</option>
-                            ))}
-                          </select>
-                          <div className="flex items-center justify-between col-span-2 md:col-span-1">
-                            <span className="text-xs font-bold text-gray-300 tabular-nums">R$ {formatBRL(item.valor_total)}</span>
-                            <button type="button" onClick={() => handleRemoveItem(item)}
-                              disabled={!!item.conta_pagar_id}
-                              title={item.conta_pagar_id ? 'Conta já gerada — desvincule antes de remover' : 'Remover'}
-                              className="action-btn-delete disabled:opacity-30 disabled:cursor-not-allowed">
-                              <Trash2 size={12} />
-                            </button>
-                          </div>
-                        </div>
-                        {item.conta_pagar_id && (
-                          <div className="flex items-center justify-between px-3 text-[10px] text-gray-500">
-                            <span>
-                              {item.categoria === 'aluguel' ? 'Parcelas geradas' : 'Conta gerada'} em{' '}
-                              {new Date(item.updated_at).toLocaleDateString('pt-BR')} por R$ {formatBRL(item.valor_total)}
-                              {item.categoria === 'aluguel' ? ' cada' : ''} — campos travados
-                            </span>
-                            <button type="button" onClick={() => handleDesvincular(item)}
-                              className="text-accent hover:underline">Desvincular</button>
-                          </div>
-                        )}
-                        </div>
-                        );
-                      })}
-                      {(itens ?? []).length === 0 && (
-                        <p className="text-xs text-gray-500 py-2">Nenhum item ainda — use os atalhos acima ou "Adicionar item".</p>
-                      )}
-                    </div>
-
-                    <p className="text-[11px] text-gray-500 mt-3">Para lançar em Contas a Pagar, use o botão "Lançar" de cada item na ficha da filial.</p>
-                  </>
-                )}
-
-                <div className="neu-flat rounded-xl p-4 mt-4 border border-accent/20 flex flex-col gap-2">
-                  <div className="flex items-center justify-between text-[11px] text-gray-500">
-                    <span>Equipamentos & mobiliário</span>
-                    <span className="tabular-nums">R$ {formatBRL(espelhoInvestimento.equipamentos)}</span>
-                  </div>
-                  {espelhoInvestimento.aluguel > 0 && (
-                    <div className="flex items-center justify-between text-[11px] text-gray-500">
-                      <span>Aluguel</span>
-                      <span className="tabular-nums">R$ {formatBRL(espelhoInvestimento.aluguel)}</span>
-                    </div>
+        <ModalFormulario
+          aberto={isFormOpen}
+          largura="xl"
+          titulo={editItem ? 'Editar Filial' : 'Nova Filial'}
+          onCancelar={() => closeForm()}
+          acoes={<>
+            <NeuButtonAccent onClick={handleSave} isLoading={isSaving}>
+              <Save size={14} /> {editItem ? 'Atualizar' : 'Salvar'}
+            </NeuButtonAccent>
+          </>}
+        >
+          {/* Logo */}
+          <div>
+            <p className="text-[10px] text-gray-600 uppercase tracking-widest font-bold mb-3 flex items-center gap-2">
+              <ImagePlus size={12} /> Logo da Filial
+            </p>
+            <div className="neu-pressed rounded-2xl p-4 border border-white/5 flex flex-col sm:flex-row items-center gap-4">
+              <FilialThumb url={imagemUrl} size="lg" alt={form.nome || 'Filial'} />
+              <div className="flex-1 flex flex-col gap-2 w-full">
+                <input ref={imagemInputRef} type="file" accept={FILIAL_LOGO_ACCEPT} onChange={handleImagemChange} className="hidden" />
+                <div className="flex flex-wrap items-center gap-2">
+                  <button type="button" onClick={() => imagemInputRef.current?.click()} disabled={imagemUploading}
+                    className="neu-button py-2 px-4 rounded-xl text-xs font-bold text-gray-300 hover:text-accent transition-colors flex items-center gap-1.5 disabled:opacity-60">
+                    {imagemUploading
+                      ? <><Loader2 size={12} className="animate-spin" /> Enviando...</>
+                      : <><ImagePlus size={12} /> {imagemUrl ? 'Trocar logo' : 'Selecionar logo'}</>}
+                  </button>
+                  {imagemUrl && !imagemUploading && (
+                    <button type="button" onClick={() => setImagemUrl('')}
+                      className="neu-button py-2 px-3 rounded-xl text-xs font-bold text-gray-500 hover:text-red-500 transition-colors flex items-center gap-1.5">
+                      <XIcon size={11} /> Remover
+                    </button>
                   )}
-                  {espelhoInvestimento.outros > 0 && (
-                    <div className="flex items-center justify-between text-[11px] text-gray-500">
-                      <span>Outros itens</span>
-                      <span className="tabular-nums">R$ {formatBRL(espelhoInvestimento.outros)}</span>
-                    </div>
-                  )}
-                  {detalhes.folhaPagamento && (
-                    <div className="flex items-center justify-between text-[11px] text-gray-500">
-                      <span>Folha de pagamento</span>
-                      <span className="tabular-nums">R$ {detalhes.folhaPagamento}</span>
-                    </div>
-                  )}
-                  <div className="flex items-center justify-between pt-2 border-t border-white/5">
-                    <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">Valor total investido</span>
-                    <span className="text-lg font-black text-accent tabular-nums">R$ {formatBRL(espelhoInvestimento.total)}</span>
-                  </div>
                 </div>
-              </div>
-
-              <div className="flex gap-3 justify-end">
-                <button onClick={() => closeForm()} className="neu-button py-2 px-5 rounded-xl text-sm text-gray-400">Cancelar</button>
-                <NeuButtonAccent onClick={handleSave} isLoading={isSaving}>
-                  <Save size={14} /> {editItem ? 'Atualizar' : 'Salvar'}
-                </NeuButtonAccent>
+                <p className="text-[11px] text-gray-500">JPG, PNG, WEBP ou SVG · até {FILIAL_LOGO_MAX_LABEL}</p>
               </div>
             </div>
-          </motion.div>
-        )}
+          </div>
+
+          {/* Campos */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <FormField label="Nome da filial *" error={errors.nome}>
+              <input className={`neu-input py-2 px-3 rounded-xl text-sm ${errors.nome ? 'border border-red-500/40' : ''}`}
+                value={form.nome} onChange={e => { setForm(f => ({ ...f, nome: e.target.value })); clearError('nome'); }}
+                placeholder="Ex: Filial Sul" />
+            </FormField>
+            <FormField label="CNPJ *" error={errors.cnpj}>
+              <input className={`neu-input py-2 px-3 rounded-xl text-sm font-mono ${errors.cnpj ? 'border border-red-500/40' : ''}`}
+                value={form.cnpj} onChange={e => { setForm(f => ({ ...f, cnpj: formatCNPJ(e.target.value) })); clearError('cnpj'); }}
+                placeholder="00.000.000/0000-00" inputMode="numeric" />
+            </FormField>
+            <FormField label="Cidade/UF *" error={errors.cidade}>
+              <input className={`neu-input py-2 px-3 rounded-xl text-sm ${errors.cidade ? 'border border-red-500/40' : ''}`}
+                value={form.cidade} onChange={e => { setForm(f => ({ ...f, cidade: e.target.value })); clearError('cidade'); }}
+                placeholder="Ex: Rio Branco/AC" />
+            </FormField>
+            <FormField label="Celular">
+              <input className="neu-input py-2 px-3 rounded-xl text-sm" value={extras.celular}
+                onChange={e => setExtras(x => ({ ...x, celular: formatPhone(e.target.value) }))}
+                placeholder="(68) 99999-9999" inputMode="numeric" />
+            </FormField>
+            <FormField label="Endereço">
+              <input className="neu-input py-2 px-3 rounded-xl text-sm" value={extras.endereco}
+                onChange={e => setExtras(x => ({ ...x, endereco: e.target.value }))}
+                placeholder="Rua, número, bairro" />
+            </FormField>
+            <FormField label="Representante">
+              <input className="neu-input py-2 px-3 rounded-xl text-sm" value={extras.representante}
+                onChange={e => setExtras(x => ({ ...x, representante: e.target.value }))}
+                placeholder="Ex: João Silva" />
+            </FormField>
+          </div>
+
+          {/* Detalhes operacionais / plano de negócio */}
+          <div>
+            <p className="text-[10px] text-gray-600 uppercase tracking-widest font-bold mb-3 flex items-center gap-2">
+              <Ruler size={12} /> Detalhes Operacionais
+            </p>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              <FormField label="Tamanho do espaço (m²)">
+                <input className="neu-input py-2 px-3 rounded-xl text-sm" type="number" min="0" value={detalhes.tamanhoM2}
+                  onChange={e => setDetalhes(d => ({ ...d, tamanhoM2: e.target.value }))}
+                  placeholder="Ex: 180" />
+              </FormField>
+              <FormField label="Tipo de imóvel">
+                <select className="neu-input py-2 px-3 rounded-xl text-sm" value={detalhes.tipoImovel}
+                  onChange={e => setDetalhes(d => ({ ...d, tipoImovel: e.target.value }))}>
+                  <option value="">Selecione...</option>
+                  <option value="Próprio">Próprio</option>
+                  <option value="Alugado">Alugado</option>
+                </select>
+              </FormField>
+              <FormField label="Vagas de estacionamento">
+                <input className="neu-input py-2 px-3 rounded-xl text-sm" type="number" min="0" value={detalhes.vagas}
+                  onChange={e => setDetalhes(d => ({ ...d, vagas: e.target.value }))}
+                  placeholder="Ex: 10" />
+              </FormField>
+              <FormField label="Capacidade (pessoas/PDVs)">
+                <input className="neu-input py-2 px-3 rounded-xl text-sm" type="number" min="0" value={detalhes.capacidade}
+                  onChange={e => setDetalhes(d => ({ ...d, capacidade: e.target.value }))}
+                  placeholder="Ex: 40" />
+              </FormField>
+              <FormField label="Horário de funcionamento">
+                <input className="neu-input py-2 px-3 rounded-xl text-sm" value={detalhes.horarioFuncionamento}
+                  onChange={e => setDetalhes(d => ({ ...d, horarioFuncionamento: e.target.value }))}
+                  placeholder="Ex: 08h às 18h" />
+              </FormField>
+              <FormField label="Data de inauguração">
+                <input className="neu-input py-2 px-3 rounded-xl text-sm" type="date" value={detalhes.dataInauguracao}
+                  onChange={e => setDetalhes(d => ({ ...d, dataInauguracao: e.target.value }))} />
+              </FormField>
+              <FormField label="Investimento inicial">
+                <input className="neu-input py-2 px-3 rounded-xl text-sm" type="text" inputMode="numeric" value={detalhes.investimentoInicial}
+                  onChange={e => setDetalhes(d => ({ ...d, investimentoInicial: formatBRL(e.target.value) }))}
+                  onKeyDown={handleMoneyKeyDown}
+                  placeholder="R$ 0,00" />
+              </FormField>
+              <FormField label="Funcionários — Valor total da folha de pagamento">
+                <input className="neu-input py-2 px-3 rounded-xl text-sm" type="text" inputMode="numeric" value={detalhes.folhaPagamento}
+                  onChange={e => setDetalhes(d => ({ ...d, folhaPagamento: formatBRL(e.target.value) }))}
+                  onKeyDown={handleMoneyKeyDown}
+                  placeholder="R$ 0,00" />
+              </FormField>
+            </div>
+          </div>
+
+          {/* Investimento item a item (migr. 509, Fase 2) — cada linha é uma
+              filial_investimentos amarrada a esta filial. Só existe depois
+              que a filial tem id (salva ao menos uma vez). */}
+          <div>
+            <p className="text-[10px] text-gray-600 uppercase tracking-widest font-bold mb-3 flex items-center gap-2">
+              <Package size={12} /> Investimento — Item a Item <span className="text-accent">· {nichoDoForm}</span>
+            </p>
+
+            {!editItem ? (
+              <div className="neu-pressed rounded-xl p-4 text-xs text-gray-500">
+                Salve a filial primeiro — os itens de investimento se amarram a ela.
+              </div>
+            ) : (
+              <>
+                {(itens ?? []).length === 0 && CAMPOS_NICHO[nichoDoForm]
+                  .some(([k]) => Number(editItem.detalhes?.[k] || 0) > 0) && (
+                  <button type="button" onClick={handleImportarParaItens}
+                    className="neu-button py-2 px-4 rounded-xl text-xs text-accent mb-3">
+                    Importar de Detalhes (uma vez)
+                  </button>
+                )}
+
+                <div className="flex flex-wrap gap-2 mb-3">
+                  {CAMPOS_NICHO[nichoDoForm].filter(([k]) => !itemJaNaLista(k)).map(([k, label]) => (
+                    <button type="button" key={k} onClick={() => handleAddItemGrade(k, label)}
+                      className="neu-button py-1.5 px-3 rounded-lg text-[11px] text-gray-400 hover:text-accent">
+                      + {label}
+                    </button>
+                  ))}
+                  <button type="button" onClick={handleAddItemCustom}
+                    className="neu-button py-1.5 px-3 rounded-lg text-[11px] text-accent font-bold">
+                    <Plus size={11} className="inline -mt-0.5 mr-1" /> Adicionar item
+                  </button>
+                </div>
+
+                <div className="flex flex-col gap-2">
+                  {(itens ?? []).map((item: any) => {
+                    // Item com conta gerada não muda de valor pelas costas: o
+                    // gatilho da migr. 512 recusa o UPDATE, e a tela evita que o
+                    // aluno descubra isso por erro.
+                    const gerado = !!item.conta_pagar_id;
+                    const travaTitle = gerado
+                      ? 'Conta já gerada — desvincule para editar (a conta é cancelada, não apagada)'
+                      : undefined;
+                    return (
+                    <div key={item.id + '_' + item.updated_at} className="flex flex-col gap-1.5">
+                    <div className={`neu-pressed rounded-xl p-3 border grid grid-cols-2 md:grid-cols-6 gap-2 items-center ${gerado ? 'border-accent/20' : 'border-white/5'}`}>
+                      {item.origem_campo === 'customizado' ? (
+                        <input className="neu-input py-2 px-3 rounded-lg text-sm col-span-2 disabled:opacity-60"
+                          defaultValue={item.rotulo} disabled={gerado} title={travaTitle}
+                          onBlur={e => { const v = e.target.value.trim(); if (v && v !== item.rotulo) handleUpdateItem(item.id, { rotulo: v }); }}
+                          placeholder="Rótulo do item" />
+                      ) : (
+                        <span className="text-xs text-gray-300 col-span-2 truncate" title={item.rotulo}>{item.rotulo}</span>
+                      )}
+                      {item.origem_campo === 'customizado' ? (
+                        <select className="neu-input py-2 px-2 rounded-lg text-xs disabled:opacity-60" value={item.categoria}
+                          disabled={gerado} title={travaTitle}
+                          onChange={e => handleUpdateItem(item.id, { categoria: e.target.value })}>
+                          <option value="outro">Outro</option>
+                          <option value="equipamento">Equipamento</option>
+                          <option value="aluguel">Aluguel</option>
+                        </select>
+                      ) : (
+                        <span className="text-[10px] text-gray-500 uppercase tracking-wide">Equipamento</span>
+                      )}
+                      <input className="neu-input py-2 px-2 rounded-lg text-sm disabled:opacity-60" type="number" min="0" step="0.01"
+                        defaultValue={item.quantidade} disabled={gerado}
+                        onBlur={e => { const v = Number(e.target.value); if (Number.isFinite(v) && v !== Number(item.quantidade)) handleUpdateItem(item.id, { quantidade: v }); }}
+                        title={travaTitle ?? 'Quantidade'} />
+                      <input className="neu-input py-2 px-2 rounded-lg text-sm disabled:opacity-60" type="text" inputMode="numeric"
+                        defaultValue={formatBRL(item.preco_unitario)} disabled={gerado}
+                        onKeyDown={handleMoneyKeyDown}
+                        onBlur={e => { const v = valorNum(e.target.value); if (v !== Number(item.preco_unitario)) handleUpdateItem(item.id, { preco_unitario: v }); }}
+                        title={travaTitle ?? 'Preço unitário'} />
+                      <select className="neu-input py-2 px-2 rounded-lg text-xs disabled:opacity-60" value={item.centro_custo_id ?? ''}
+                        disabled={gerado} title={travaTitle}
+                        onChange={e => handleUpdateItem(item.id, { centro_custo_id: e.target.value || null })}>
+                        <option value="">Centro de custo...</option>
+                        {(centrosCusto ?? []).map((cc: any) => (
+                          <option key={cc.id} value={cc.id}>{cc.nome}</option>
+                        ))}
+                      </select>
+                      <div className="flex items-center justify-between col-span-2 md:col-span-1">
+                        <span className="text-xs font-bold text-gray-300 tabular-nums">R$ {formatBRL(item.valor_total)}</span>
+                        <button type="button" onClick={() => handleRemoveItem(item)}
+                          disabled={!!item.conta_pagar_id}
+                          title={item.conta_pagar_id ? 'Conta já gerada — desvincule antes de remover' : 'Remover'}
+                          className="action-btn-delete disabled:opacity-30 disabled:cursor-not-allowed">
+                          <Trash2 size={12} />
+                        </button>
+                      </div>
+                    </div>
+                    {item.conta_pagar_id && (
+                      <div className="flex items-center justify-between px-3 text-[10px] text-gray-500">
+                        <span>
+                          {item.categoria === 'aluguel' ? 'Parcelas geradas' : 'Conta gerada'} em{' '}
+                          {new Date(item.updated_at).toLocaleDateString('pt-BR')} por R$ {formatBRL(item.valor_total)}
+                          {item.categoria === 'aluguel' ? ' cada' : ''} — campos travados
+                        </span>
+                        <button type="button" onClick={() => handleDesvincular(item)}
+                          className="text-accent hover:underline">Desvincular</button>
+                      </div>
+                    )}
+                    </div>
+                    );
+                  })}
+                  {(itens ?? []).length === 0 && (
+                    <p className="text-xs text-gray-500 py-2">Nenhum item ainda — use os atalhos acima ou "Adicionar item".</p>
+                  )}
+                </div>
+
+                <p className="text-[11px] text-gray-500 mt-3">Para lançar em Contas a Pagar, use o botão "Lançar" de cada item na ficha da filial.</p>
+              </>
+            )}
+
+            <div className="neu-flat rounded-xl p-4 mt-4 border border-accent/20 flex flex-col gap-2">
+              <div className="flex items-center justify-between text-[11px] text-gray-500">
+                <span>Equipamentos & mobiliário</span>
+                <span className="tabular-nums">R$ {formatBRL(espelhoInvestimento.equipamentos)}</span>
+              </div>
+              {espelhoInvestimento.aluguel > 0 && (
+                <div className="flex items-center justify-between text-[11px] text-gray-500">
+                  <span>Aluguel</span>
+                  <span className="tabular-nums">R$ {formatBRL(espelhoInvestimento.aluguel)}</span>
+                </div>
+              )}
+              {espelhoInvestimento.outros > 0 && (
+                <div className="flex items-center justify-between text-[11px] text-gray-500">
+                  <span>Outros itens</span>
+                  <span className="tabular-nums">R$ {formatBRL(espelhoInvestimento.outros)}</span>
+                </div>
+              )}
+              {detalhes.folhaPagamento && (
+                <div className="flex items-center justify-between text-[11px] text-gray-500">
+                  <span>Folha de pagamento</span>
+                  <span className="tabular-nums">R$ {detalhes.folhaPagamento}</span>
+                </div>
+              )}
+              <div className="flex items-center justify-between pt-2 border-t border-white/5">
+                <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">Valor total investido</span>
+                <span className="text-lg font-black text-accent tabular-nums">R$ {formatBRL(espelhoInvestimento.total)}</span>
+              </div>
+            </div>
+          </div>
+        </ModalFormulario>
       </AnimatePresence>
 
       {isLoading ? <LoadingSpinner /> : filtered.length === 0 ? <EmptyState /> : (

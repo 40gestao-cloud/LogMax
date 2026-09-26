@@ -1,4 +1,3 @@
-import { useRolarAteFormulario } from '../hooks/useRolarAteFormulario';
 import { MenuMais, ItemMenu } from '../components/MenuMais';
 import React, { useState, useEffect } from 'react';
 import type { FilialOp } from '../components/FilialSelector';
@@ -10,7 +9,7 @@ import { ImagemUploader, LogoCadastro } from '../components/ImagemCadastro';
 import { uploadImagem, removerImagem, CADASTRO_IMAGEM_BUCKET } from '../lib/imagemCadastro';
 import { BotaoModeloPlanilha } from '../components/BotaoModeloPlanilha';
 import { useFetchData, dbInsert, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
-import { LoadingSpinner, EmptyState, FormField, ExportButton, NeuButtonAccent, FilialBadge, Pagination } from '../components/ui';
+import { LoadingSpinner, EmptyState, FormField, ExportButton, NeuButtonAccent, FilialBadge, Pagination, ModalFormulario } from '../components/ui';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import { useFormValidation, exportToPDF, exportToExcel, formatPhone, formatCPF, formatCNPJ, formatBRL, parseBRL, handleMoneyKeyDown } from '../lib/viewUtils';
 import { useConfirm } from '../contexts/ConfirmContext';
@@ -258,7 +257,6 @@ const CRMViewInner = ({ type, showToast, filial }: {
 
   const isFormOpen = showForm || !!editItem;
 
-  const formEdicaoRef = useRolarAteFormulario(isFormOpen, editItem?.id);
 
   return (
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col h-full gap-8">
@@ -287,170 +285,164 @@ const CRMViewInner = ({ type, showToast, filial }: {
 
       {/* Formulário */}
       <AnimatePresence>
-        {isFormOpen && (
-          <motion.div ref={formEdicaoRef} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-            <div className="neu-flat rounded-2xl p-6 border border-white/5 flex flex-col gap-5">
-              <div className="flex items-start justify-between gap-4">
-                <h3 className="text-sm font-bold text-gray-200">
-                  {editItem ? (isClientes ? 'Editar Cliente' : 'Editar Fornecedor') : (isClientes ? 'Novo Cliente' : 'Novo Fornecedor')}
-                </h3>
-                {/* MaxID é ferramenta do formulário inteiro (documento e celular saem de lá). */}
-                <button type="button"
-                  onClick={() => window.open(MAXID_URL, '_blank', 'noopener,noreferrer')}
-                  className="neu-button py-2.5 px-5 rounded-xl text-sm font-bold text-accent hover:bg-accent/10 inline-flex items-center gap-3 transition-colors shrink-0">
-                  <img src="/icon-maxid.png" alt="" className="h-11 w-auto rounded-md" />
-                  <span className="flex flex-col items-start leading-tight">
-                    <span className="inline-flex items-center gap-1.5">Gerar no MaxID <ExternalLink size={13} /></span>
-                    <span className="text-[10px] font-normal text-gray-500">
-                      {extras.pessoa_tipo === 'Empresa' ? 'CNPJ' : 'CPF'} e celular · abre em outra aba
-                    </span>
-                  </span>
-                </button>
-              </div>
+        <ModalFormulario
+          aberto={isFormOpen}
+          largura="xl"
+          titulo={editItem ? (isClientes ? 'Editar Cliente' : 'Editar Fornecedor') : (isClientes ? 'Novo Cliente' : 'Novo Fornecedor')}
+          onCancelar={closeForm}
+          acoes={<>
+            {/* MaxID é ferramenta do formulário inteiro (documento e celular saem de lá). */}
+            <button type="button"
+              onClick={() => window.open(MAXID_URL, '_blank', 'noopener,noreferrer')}
+              className="neu-button py-2.5 px-5 rounded-xl text-sm font-bold text-accent hover:bg-accent/10 inline-flex items-center gap-3 transition-colors shrink-0">
+              <img src="/icon-maxid.png" alt="" className="h-11 w-auto rounded-md" />
+              <span className="flex flex-col items-start leading-tight">
+                <span className="inline-flex items-center gap-1.5">Gerar no MaxID <ExternalLink size={13} /></span>
+                <span className="text-[10px] font-normal text-gray-500">
+                  {extras.pessoa_tipo === 'Empresa' ? 'CNPJ' : 'CPF'} e celular · abre em outra aba
+                </span>
+              </span>
+            </button>
+            <NeuButtonAccent onClick={handleSave} isLoading={isSaving}><Save size={14} /> {editItem ? 'Atualizar' : 'Salvar'}</NeuButtonAccent>
+          </>}
+        >
 
-              {/* Logo — só fornecedor (migr. 429). O card do cliente cai no
-                  monograma, que não precisa de campo. */}
-              {!isClientes && (
-                <div className="flex flex-wrap items-center gap-5">
-                  <FormField label="Logo do fornecedor">
-                    <ImagemUploader
-                      imagemUrl={extras.logo_url} rotulo="logo"
-                      onPreview={handleLogoPreview} onClear={handleLogoClear} />
-                  </FormField>
-                  <div className="pt-4">
-                    <LogoCadastro imagemUrl={extras.logo_url} nome={form.nome} size={44} />
-                  </div>
-                </div>
-              )}
-
-              {/* Toggle Empresa / Pessoa Física */}
-              <div>
-                <span className="text-[10px] text-gray-500 uppercase tracking-widest font-bold block mb-2" id="crm-tipo-pessoa-label">Tipo de pessoa</span>
-                <div className="flex gap-1 neu-pressed rounded-xl p-1 w-fit border border-white/5" role="radiogroup" aria-labelledby="crm-tipo-pessoa-label">
-                  {(['Empresa', 'Pessoa Física'] as PessoaTipo[]).map(tipo => (
-                    <button key={tipo} type="button"
-                      onClick={() => setExtras(x => ({ ...x, pessoa_tipo: tipo, cpf_cnpj: '' }))}
-                      className={`px-4 py-1.5 rounded-lg text-xs font-bold uppercase tracking-widest transition-all ${
-                        extras.pessoa_tipo === tipo
-                          ? 'neu-flat text-gray-200 border border-white/10'
-                          : 'text-gray-600 hover:text-gray-400'
-                      }`}>
-                      {tipo}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                <FormField label="Nome *" error={errors.nome}>
-                  <input className={`neu-input py-2 px-3 rounded-xl text-sm ${errors.nome ? 'border border-red-500/40' : ''}`}
-                    value={form.nome}
-                    onChange={e => { setForm(f => ({ ...f, nome: e.target.value })); clearError('nome'); }}
-                    placeholder={extras.pessoa_tipo === 'Empresa' ? 'Razão social ou nome fantasia' : 'Nome completo'} />
-                </FormField>
-
-                <FormField label="Telefone / Celular">
-                  <input className="neu-input py-2 px-3 rounded-xl text-sm"
-                    value={extras.telefone}
-                    onChange={e => setExtras(x => ({ ...x, telefone: formatPhone(e.target.value) }))}
-                    placeholder="(11) 99999-9999" />
-                </FormField>
-
-                <FormField label="E-mail">
-                  <input type="email" className="neu-input py-2 px-3 rounded-xl text-sm"
-                    value={extras.email}
-                    onChange={e => setExtras(x => ({ ...x, email: e.target.value }))}
-                    placeholder="email@exemplo.com" />
-                </FormField>
-
-                <FormField label="Endereço">
-                  <input className="neu-input py-2 px-3 rounded-xl text-sm"
-                    value={extras.endereco}
-                    onChange={e => setExtras(x => ({ ...x, endereco: e.target.value }))}
-                    placeholder="Rua, número, bairro, cidade" />
-                </FormField>
-
-                <FormField label={extras.pessoa_tipo === 'Empresa' ? 'CNPJ' : 'CPF'}>
-                  <input className="neu-input py-2 px-3 rounded-xl text-sm font-mono"
-                    value={extras.cpf_cnpj}
-                    onChange={e => setExtras(x => ({ ...x, cpf_cnpj: extras.pessoa_tipo === 'Empresa' ? formatCNPJ(e.target.value) : formatCPF(e.target.value) }))}
-                    placeholder={extras.pessoa_tipo === 'Empresa' ? '00.000.000/0001-00' : '000.000.000-00'} />
-                </FormField>
-
-                {!isClientes && (
-                  <FormField label="Categoria">
-                    <input className="neu-input py-2 px-3 rounded-xl text-sm"
-                      value={extras.categoria}
-                      onChange={e => setExtras(x => ({ ...x, categoria: e.target.value }))}
-                      placeholder="Ex: Materiais, Serviços" />
-                  </FormField>
-                )}
-
-                {isClientes && (
-                  <FormField label="Limite do fiado (R$)">
-                    {/* Vazio = sem limite; zero = não leva fiado. Título vencido bloqueia de qualquer jeito. */}
-                    <input type="text" inputMode="numeric" className="neu-input py-2 px-3 rounded-xl text-sm tabular-nums"
-                      value={extras.limite_credito}
-                      onChange={e => setExtras(x => ({ ...x, limite_credito: formatBRL(e.target.value) }))}
-                      onKeyDown={handleMoneyKeyDown} placeholder="Vazio = sem limite · 0 = sem fiado" />
-                  </FormField>
-                )}
-
-                {!isClientes && (
-                  <FormField label="Prazo de entrega (dias)">
-                    <input className="neu-input py-2 px-3 rounded-xl text-sm" inputMode="numeric"
-                      value={extras.prazo_entrega_dias}
-                      onChange={e => setExtras(x => ({ ...x, prazo_entrega_dias: e.target.value.replace(/\D/g, '').slice(0, 3) }))}
-                      placeholder="Ex: 15" />
-                  </FormField>
-                )}
-              </div>
-
-              {/* Atributos JSONB — só fornecedor + MaxLook/TechMax. Cliente e
-                  SuperMax mantêm o form padrão sem seção extra. */}
-              {!isClientes && (ATRIBUTOS_FORNECEDOR[extras.filial] ?? []).length > 0 && (
-                <div className="mt-2 pt-6 border-t border-white/5">
-                  <p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-3">
-                    {extras.filial === 'MaxLook' ? 'Perfil do parceiro (Moda)' : 'Perfil do parceiro (Assistência)'}
-                  </p>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    {(ATRIBUTOS_FORNECEDOR[extras.filial] ?? []).map(d => {
-                      const val = extras.atributos?.[d.key] ?? '';
-                      const setAtr = (v: any) => setExtras(x => ({
-                        ...x, atributos: { ...(x.atributos ?? {}), [d.key]: v }
-                      }));
-                      if (d.type === 'select' && d.options) {
-                        return (
-                          <FormField key={d.key} label={d.label}>
-                            <select className="neu-input py-2 px-3 rounded-xl text-sm"
-                              value={String(val)} onChange={e => setAtr(e.target.value)}>
-                              <option value="">— Selecione —</option>
-                              {d.options.map(o => <option key={o} value={o}>{o}</option>)}
-                            </select>
-                          </FormField>
-                        );
-                      }
-                      return (
-                        <FormField key={d.key} label={d.label}>
-                          <input className="neu-input py-2 px-3 rounded-xl text-sm"
-                            type={d.type === 'number' ? 'number' : 'text'}
-                            inputMode={d.type === 'number' ? 'numeric' : undefined}
-                            value={String(val)} onChange={e => setAtr(e.target.value)}
-                            placeholder={d.placeholder} />
-                        </FormField>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-
-              <div className="flex gap-3 justify-end">
-                <button onClick={closeForm} className="neu-button py-2 px-5 rounded-xl text-sm text-gray-400">Cancelar</button>
-                <NeuButtonAccent onClick={handleSave} isLoading={isSaving}><Save size={14} /> {editItem ? 'Atualizar' : 'Salvar'}</NeuButtonAccent>
+          {/* Logo — só fornecedor (migr. 429). O card do cliente cai no
+              monograma, que não precisa de campo. */}
+          {!isClientes && (
+            <div className="flex flex-wrap items-center gap-5">
+              <FormField label="Logo do fornecedor">
+                <ImagemUploader
+                  imagemUrl={extras.logo_url} rotulo="logo"
+                  onPreview={handleLogoPreview} onClear={handleLogoClear} />
+              </FormField>
+              <div className="pt-4">
+                <LogoCadastro imagemUrl={extras.logo_url} nome={form.nome} size={44} />
               </div>
             </div>
-          </motion.div>
-        )}
+          )}
+
+          {/* Toggle Empresa / Pessoa Física */}
+          <div>
+            <span className="text-[10px] text-gray-500 uppercase tracking-widest font-bold block mb-2" id="crm-tipo-pessoa-label">Tipo de pessoa</span>
+            <div className="flex gap-1 neu-pressed rounded-xl p-1 w-fit border border-white/5" role="radiogroup" aria-labelledby="crm-tipo-pessoa-label">
+              {(['Empresa', 'Pessoa Física'] as PessoaTipo[]).map(tipo => (
+                <button key={tipo} type="button"
+                  onClick={() => setExtras(x => ({ ...x, pessoa_tipo: tipo, cpf_cnpj: '' }))}
+                  className={`px-4 py-1.5 rounded-lg text-xs font-bold uppercase tracking-widest transition-all ${
+                    extras.pessoa_tipo === tipo
+                      ? 'neu-flat text-gray-200 border border-white/10'
+                      : 'text-gray-600 hover:text-gray-400'
+                  }`}>
+                  {tipo}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <FormField label="Nome *" error={errors.nome}>
+              <input className={`neu-input py-2 px-3 rounded-xl text-sm ${errors.nome ? 'border border-red-500/40' : ''}`}
+                value={form.nome}
+                onChange={e => { setForm(f => ({ ...f, nome: e.target.value })); clearError('nome'); }}
+                placeholder={extras.pessoa_tipo === 'Empresa' ? 'Razão social ou nome fantasia' : 'Nome completo'} />
+            </FormField>
+
+            <FormField label="Telefone / Celular">
+              <input className="neu-input py-2 px-3 rounded-xl text-sm"
+                value={extras.telefone}
+                onChange={e => setExtras(x => ({ ...x, telefone: formatPhone(e.target.value) }))}
+                placeholder="(11) 99999-9999" />
+            </FormField>
+
+            <FormField label="E-mail">
+              <input type="email" className="neu-input py-2 px-3 rounded-xl text-sm"
+                value={extras.email}
+                onChange={e => setExtras(x => ({ ...x, email: e.target.value }))}
+                placeholder="email@exemplo.com" />
+            </FormField>
+
+            <FormField label="Endereço">
+              <input className="neu-input py-2 px-3 rounded-xl text-sm"
+                value={extras.endereco}
+                onChange={e => setExtras(x => ({ ...x, endereco: e.target.value }))}
+                placeholder="Rua, número, bairro, cidade" />
+            </FormField>
+
+            <FormField label={extras.pessoa_tipo === 'Empresa' ? 'CNPJ' : 'CPF'}>
+              <input className="neu-input py-2 px-3 rounded-xl text-sm font-mono"
+                value={extras.cpf_cnpj}
+                onChange={e => setExtras(x => ({ ...x, cpf_cnpj: extras.pessoa_tipo === 'Empresa' ? formatCNPJ(e.target.value) : formatCPF(e.target.value) }))}
+                placeholder={extras.pessoa_tipo === 'Empresa' ? '00.000.000/0001-00' : '000.000.000-00'} />
+            </FormField>
+
+            {!isClientes && (
+              <FormField label="Categoria">
+                <input className="neu-input py-2 px-3 rounded-xl text-sm"
+                  value={extras.categoria}
+                  onChange={e => setExtras(x => ({ ...x, categoria: e.target.value }))}
+                  placeholder="Ex: Materiais, Serviços" />
+              </FormField>
+            )}
+
+            {isClientes && (
+              <FormField label="Limite do fiado (R$)">
+                {/* Vazio = sem limite; zero = não leva fiado. Título vencido bloqueia de qualquer jeito. */}
+                <input type="text" inputMode="numeric" className="neu-input py-2 px-3 rounded-xl text-sm tabular-nums"
+                  value={extras.limite_credito}
+                  onChange={e => setExtras(x => ({ ...x, limite_credito: formatBRL(e.target.value) }))}
+                  onKeyDown={handleMoneyKeyDown} placeholder="Vazio = sem limite · 0 = sem fiado" />
+              </FormField>
+            )}
+
+            {!isClientes && (
+              <FormField label="Prazo de entrega (dias)">
+                <input className="neu-input py-2 px-3 rounded-xl text-sm" inputMode="numeric"
+                  value={extras.prazo_entrega_dias}
+                  onChange={e => setExtras(x => ({ ...x, prazo_entrega_dias: e.target.value.replace(/\D/g, '').slice(0, 3) }))}
+                  placeholder="Ex: 15" />
+              </FormField>
+            )}
+          </div>
+
+          {/* Atributos JSONB — só fornecedor + MaxLook/TechMax. Cliente e
+              SuperMax mantêm o form padrão sem seção extra. */}
+          {!isClientes && (ATRIBUTOS_FORNECEDOR[extras.filial] ?? []).length > 0 && (
+            <div className="mt-2 pt-6 border-t border-white/5">
+              <p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-3">
+                {extras.filial === 'MaxLook' ? 'Perfil do parceiro (Moda)' : 'Perfil do parceiro (Assistência)'}
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {(ATRIBUTOS_FORNECEDOR[extras.filial] ?? []).map(d => {
+                  const val = extras.atributos?.[d.key] ?? '';
+                  const setAtr = (v: any) => setExtras(x => ({
+                    ...x, atributos: { ...(x.atributos ?? {}), [d.key]: v }
+                  }));
+                  if (d.type === 'select' && d.options) {
+                    return (
+                      <FormField key={d.key} label={d.label}>
+                        <select className="neu-input py-2 px-3 rounded-xl text-sm"
+                          value={String(val)} onChange={e => setAtr(e.target.value)}>
+                          <option value="">— Selecione —</option>
+                          {d.options.map(o => <option key={o} value={o}>{o}</option>)}
+                        </select>
+                      </FormField>
+                    );
+                  }
+                  return (
+                    <FormField key={d.key} label={d.label}>
+                      <input className="neu-input py-2 px-3 rounded-xl text-sm"
+                        type={d.type === 'number' ? 'number' : 'text'}
+                        inputMode={d.type === 'number' ? 'numeric' : undefined}
+                        value={String(val)} onChange={e => setAtr(e.target.value)}
+                        placeholder={d.placeholder} />
+                    </FormField>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </ModalFormulario>
       </AnimatePresence>
 
       {/* Cards */}

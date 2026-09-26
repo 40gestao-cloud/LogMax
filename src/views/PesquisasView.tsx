@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Plus, X, Send, Lock, BarChart3, ChevronRight, Trash2, Eye, FileText } from 'lucide-react';
 import { useFetchData, dbInsert, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
 import { supabase } from '../lib/supabase';
-import { LoadingSpinner, EmptyState, NeuButtonAccent, CardContador, type TomContador, corDoStatus } from '../components/ui';
+import { LoadingSpinner, EmptyState, NeuButtonAccent, CardContador, type TomContador, corDoStatus, ModalFormulario } from '../components/ui';
 import { hasSetor } from '../lib/rbac';
 
 type Status = 'Rascunho' | 'Ativa' | 'Encerrada';
@@ -133,78 +133,75 @@ const PesquisasViewInner = ({ showToast, profile, filial }: any) => {
       </div>
 
       <AnimatePresence>
-        {showForm && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            className="neu-flat rounded-3xl p-6 border border-white/5 shrink-0">
-            <div className="flex items-center justify-between mb-5">
-              <h3 className="text-sm font-bold text-gray-300">Nova Pesquisa</h3>
-              <button onClick={() => setShowForm(false)} className="w-7 h-7 neu-button rounded-lg flex items-center justify-center text-gray-500 hover:text-white"><X size={14} /></button>
+        <ModalFormulario
+          aberto={showForm}
+          titulo="Nova Pesquisa"
+          onCancelar={() => setShowForm(false)}
+          acoes={<>
+            <NeuButtonAccent variant="" onClick={handleCreate} disabled={saving}>
+              {saving ? 'Criando...' : 'Criar Rascunho'}
+            </NeuButtonAccent>
+          </>}
+        >
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="flex flex-col gap-1.5 sm:col-span-2">
+              <label htmlFor="pesquisa-titulo" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Título *</label>
+              <input id="pesquisa-titulo" type="text" value={form.titulo} onChange={e => setForm((f: any) => ({ ...f, titulo: e.target.value }))}
+                className="neu-input rounded-xl px-3 py-2.5 text-sm" placeholder="Ex: Pesquisa de clima organizacional Q1" />
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="flex flex-col gap-1.5 sm:col-span-2">
-                <label htmlFor="pesquisa-titulo" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Título *</label>
-                <input id="pesquisa-titulo" type="text" value={form.titulo} onChange={e => setForm((f: any) => ({ ...f, titulo: e.target.value }))}
-                  className="neu-input rounded-xl px-3 py-2.5 text-sm" placeholder="Ex: Pesquisa de clima organizacional Q1" />
-              </div>
-              <div className="flex flex-col gap-1.5 sm:col-span-2">
-                <label htmlFor="pesquisa-descricao" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Descrição</label>
-                <input id="pesquisa-descricao" type="text" value={form.descricao} onChange={e => setForm((f: any) => ({ ...f, descricao: e.target.value }))}
-                  className="neu-input rounded-xl px-3 py-2.5 text-sm" placeholder="Contexto e objetivo da pesquisa..." />
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <label htmlFor="pesquisa-inicio" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Início</label>
-                <input id="pesquisa-inicio" type="date" value={form.data_inicio} onChange={e => setForm((f: any) => ({ ...f, data_inicio: e.target.value }))}
-                  className="neu-input rounded-xl px-3 py-2.5 text-sm" />
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <label htmlFor="pesquisa-fim" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Fim</label>
-                <input id="pesquisa-fim" type="date" value={form.data_fim} onChange={e => setForm((f: any) => ({ ...f, data_fim: e.target.value }))}
-                  className="neu-input rounded-xl px-3 py-2.5 text-sm" />
-              </div>
-              <div className="flex flex-col gap-1.5 sm:col-span-2">
-                <span id="pesquisa-roles-label" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Roles-alvo (vazio = todos)</span>
-                <div className="flex flex-wrap gap-2" role="group" aria-labelledby="pesquisa-roles-label">
-                  {ROLES_DISPONIVEIS.map(r => {
-                    const active = form.alvo_roles.includes(r);
-                    return (
-                      <button key={r} type="button"
-                        onClick={() => setForm((f: any) => ({ ...f, alvo_roles: toggleArrayValue(f.alvo_roles, r) }))}
-                        className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-colors ${active ? 'bg-accent/10 text-accent border-accent/30' : 'neu-button text-gray-500 border-transparent'}`}>
-                        {r}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-              <div className="flex flex-col gap-1.5 sm:col-span-2">
-                <span id="pesquisa-setores-label" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Setores-alvo (vazio = todos)</span>
-                <div className="flex flex-wrap gap-2" role="group" aria-labelledby="pesquisa-setores-label">
-                  {SETORES_DISPONIVEIS.map(s => {
-                    const active = form.alvo_setores.includes(s);
-                    return (
-                      <button key={s} type="button"
-                        onClick={() => setForm((f: any) => ({ ...f, alvo_setores: toggleArrayValue(f.alvo_setores, s) }))}
-                        className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-colors ${active ? 'bg-accent/10 text-accent border-accent/30' : 'neu-button text-gray-500 border-transparent'}`}>
-                        {s}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-              <label className="flex items-center gap-2 text-xs text-gray-400 sm:col-span-2 cursor-pointer">
-                <input type="checkbox" checked={form.anonima}
-                  onChange={e => setForm((f: any) => ({ ...f, anonima: e.target.checked }))}
-                  className="accent-current" />
-                <span>Anônima — respostas não gravam quem respondeu (recomendado para clima)</span>
-              </label>
+            <div className="flex flex-col gap-1.5 sm:col-span-2">
+              <label htmlFor="pesquisa-descricao" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Descrição</label>
+              <input id="pesquisa-descricao" type="text" value={form.descricao} onChange={e => setForm((f: any) => ({ ...f, descricao: e.target.value }))}
+                className="neu-input rounded-xl px-3 py-2.5 text-sm" placeholder="Contexto e objetivo da pesquisa..." />
             </div>
-            <div className="flex justify-end mt-5">
-              <NeuButtonAccent variant="" onClick={handleCreate} disabled={saving}>
-                {saving ? 'Criando...' : 'Criar Rascunho'}
-              </NeuButtonAccent>
+            <div className="flex flex-col gap-1.5">
+              <label htmlFor="pesquisa-inicio" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Início</label>
+              <input id="pesquisa-inicio" type="date" value={form.data_inicio} onChange={e => setForm((f: any) => ({ ...f, data_inicio: e.target.value }))}
+                className="neu-input rounded-xl px-3 py-2.5 text-sm" />
             </div>
-          </motion.div>
-        )}
+            <div className="flex flex-col gap-1.5">
+              <label htmlFor="pesquisa-fim" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Fim</label>
+              <input id="pesquisa-fim" type="date" value={form.data_fim} onChange={e => setForm((f: any) => ({ ...f, data_fim: e.target.value }))}
+                className="neu-input rounded-xl px-3 py-2.5 text-sm" />
+            </div>
+            <div className="flex flex-col gap-1.5 sm:col-span-2">
+              <span id="pesquisa-roles-label" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Roles-alvo (vazio = todos)</span>
+              <div className="flex flex-wrap gap-2" role="group" aria-labelledby="pesquisa-roles-label">
+                {ROLES_DISPONIVEIS.map(r => {
+                  const active = form.alvo_roles.includes(r);
+                  return (
+                    <button key={r} type="button"
+                      onClick={() => setForm((f: any) => ({ ...f, alvo_roles: toggleArrayValue(f.alvo_roles, r) }))}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-colors ${active ? 'bg-accent/10 text-accent border-accent/30' : 'neu-button text-gray-500 border-transparent'}`}>
+                      {r}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+            <div className="flex flex-col gap-1.5 sm:col-span-2">
+              <span id="pesquisa-setores-label" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Setores-alvo (vazio = todos)</span>
+              <div className="flex flex-wrap gap-2" role="group" aria-labelledby="pesquisa-setores-label">
+                {SETORES_DISPONIVEIS.map(s => {
+                  const active = form.alvo_setores.includes(s);
+                  return (
+                    <button key={s} type="button"
+                      onClick={() => setForm((f: any) => ({ ...f, alvo_setores: toggleArrayValue(f.alvo_setores, s) }))}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-colors ${active ? 'bg-accent/10 text-accent border-accent/30' : 'neu-button text-gray-500 border-transparent'}`}>
+                      {s}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+            <label className="flex items-center gap-2 text-xs text-gray-400 sm:col-span-2 cursor-pointer">
+              <input type="checkbox" checked={form.anonima}
+                onChange={e => setForm((f: any) => ({ ...f, anonima: e.target.checked }))}
+                className="accent-current" />
+              <span>Anônima — respostas não gravam quem respondeu (recomendado para clima)</span>
+            </label>
+          </div>
+        </ModalFormulario>
       </AnimatePresence>
 
       <div className="flex flex-col gap-3 shrink-0">

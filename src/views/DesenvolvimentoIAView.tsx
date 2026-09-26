@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 import { useFetchData, dbInsert, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
 import { supabase } from '../lib/supabase';
-import { LoadingSpinner, EmptyState, NeuButtonAccent, CardContador, type TomContador, corDoStatus } from '../components/ui';
+import { LoadingSpinner, EmptyState, NeuButtonAccent, CardContador, type TomContador, corDoStatus, ModalFormulario } from '../components/ui';
 import type { UserProfile } from '../hooks/useUserProfile';
 import { hasSetor, isConselheiro } from '../lib/rbac';
 import { CRITERIOS, CategoriaCriterio } from '../lib/avaliacaoCriterios';
@@ -568,142 +568,110 @@ function FormModal({ show, editing, onClose, form, setForm, saving, onSave, peop
   useEffect(() => { if (!show) setSearch(''); }, [show]);
 
   return (
-    <AnimatePresence>
-      {show && (
-        <>
-          <motion.div
-            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            onClick={onClose}
-            className="fixed inset-0 bg-black/60 z-40"
-          />
-          <motion.div
-            initial={{ opacity: 0, scale: 0.95, y: 20 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.95, y: 20 }}
-            className="fixed inset-x-4 top-8 sm:top-12 sm:left-1/2 sm:-translate-x-1/2 sm:inset-x-auto sm:w-full sm:max-w-2xl z-50 neu-flat rounded-3xl p-6 border border-white/10 max-h-[90vh] flex flex-col"
-            style={{ background: 'var(--color-bg-base)' }}
-          >
-            <div className="flex items-center justify-between mb-5 shrink-0">
-              <h3 className="text-base font-bold text-gray-100">
-                {editing ? 'Editar Treinamento' : 'Novo Treinamento de IA'}
-              </h3>
-              <button
-                onClick={onClose}
-                className="modal-close-btn"
-              >
-                <X size={16} />
+    <ModalFormulario
+      aberto={show}
+      titulo={editing ? 'Editar Treinamento' : 'Novo Treinamento de IA'}
+      onCancelar={onClose}
+      acoes={
+        <NeuButtonAccent variant="" onClick={onSave} disabled={saving}>
+          {saving ? <><Loader2 size={14} className="animate-spin" />Salvando...</>
+            : <><Plus size={14} />{editing ? 'Salvar Alterações' : 'Agendar'}</>}
+        </NeuButtonAccent>
+      }
+    >
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div className="flex flex-col gap-1.5 sm:col-span-2">
+          <label htmlFor="dev-nome" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Nome do treinamento *</label>
+          <input id="dev-nome" type="text" value={form.nome}
+            onChange={e => setForm(f => ({ ...f, nome: e.target.value }))}
+            className="neu-input rounded-xl px-3 py-2.5 text-sm"
+            placeholder="Ex: Automação de relatórios com ChatGPT" />
+        </div>
+
+        <div className="flex flex-col gap-1.5 sm:col-span-2">
+          <label htmlFor="dev-ferramenta" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Ferramenta de IA / tecnologia *</label>
+          <input id="dev-ferramenta" type="text" value={form.ferramenta}
+            onChange={e => setForm(f => ({ ...f, ferramenta: e.target.value }))}
+            className="neu-input rounded-xl px-3 py-2.5 text-sm"
+            placeholder="Ex: ChatGPT, Gemini, n8n, Power BI..." />
+        </div>
+
+        <div className="flex flex-col gap-1.5 sm:col-span-2">
+          <label htmlFor="dev-descricao" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Descrição (opcional)</label>
+          <textarea id="dev-descricao" rows={2} value={form.descricao}
+            onChange={e => setForm(f => ({ ...f, descricao: e.target.value }))}
+            className="neu-input rounded-xl px-3 py-2.5 text-sm resize-none"
+            placeholder="O que será abordado..." />
+        </div>
+
+        <div className="flex flex-col gap-1.5">
+          <label htmlFor="dev-data" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Data *</label>
+          <input id="dev-data" type="date" value={form.data}
+            onChange={e => setForm(f => ({ ...f, data: e.target.value }))}
+            className="neu-input rounded-xl px-3 py-2.5 text-sm" />
+        </div>
+
+        <div className="grid grid-cols-2 gap-3">
+          <div className="flex flex-col gap-1.5">
+            <label htmlFor="dev-hora-inicio" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Início *</label>
+            <input id="dev-hora-inicio" type="time" value={form.hora_inicio}
+              onChange={e => setForm(f => ({ ...f, hora_inicio: e.target.value }))}
+              className="neu-input rounded-xl px-3 py-2.5 text-sm" />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <label htmlFor="dev-hora-fim" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Fim *</label>
+            <input id="dev-hora-fim" type="time" value={form.hora_fim}
+              onChange={e => setForm(f => ({ ...f, hora_fim: e.target.value }))}
+              className="neu-input rounded-xl px-3 py-2.5 text-sm" />
+          </div>
+        </div>
+      </div>
+
+      <div className="flex flex-col gap-2 mt-2">
+        <div className="flex items-center justify-between gap-2">
+          <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">
+            Auxiliares ({form.auxiliares.length})
+          </label>
+          <input type="text" value={search} onChange={e => setSearch(e.target.value)}
+            placeholder="Buscar..."
+            className="neu-input rounded-lg px-2.5 py-1.5 text-xs w-32 sm:w-44" />
+        </div>
+
+        {form.auxiliares.length > 0 && (
+          <div className="flex flex-wrap gap-1.5">
+            {form.auxiliares.map(a => (
+              <button key={a.id} type="button" onClick={() => toggleAuxiliar(a)}
+                className="text-[10px] px-2 py-1 rounded-full bg-accent/15 text-accent border border-accent/30 flex items-center gap-1 hover:bg-accent/25 transition-colors">
+                {a.nome}<X size={10} />
               </button>
-            </div>
+            ))}
+          </div>
+        )}
 
-            <div className="flex-1 overflow-y-auto custom-scrollbar -mx-2 px-2 flex flex-col gap-4">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="flex flex-col gap-1.5 sm:col-span-2">
-                  <label htmlFor="dev-nome" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Nome do treinamento *</label>
-                  <input id="dev-nome" type="text" value={form.nome}
-                    onChange={e => setForm(f => ({ ...f, nome: e.target.value }))}
-                    className="neu-input rounded-xl px-3 py-2.5 text-sm"
-                    placeholder="Ex: Automação de relatórios com ChatGPT" />
-                </div>
-
-                <div className="flex flex-col gap-1.5 sm:col-span-2">
-                  <label htmlFor="dev-ferramenta" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Ferramenta de IA / tecnologia *</label>
-                  <input id="dev-ferramenta" type="text" value={form.ferramenta}
-                    onChange={e => setForm(f => ({ ...f, ferramenta: e.target.value }))}
-                    className="neu-input rounded-xl px-3 py-2.5 text-sm"
-                    placeholder="Ex: ChatGPT, Gemini, n8n, Power BI..." />
-                </div>
-
-                <div className="flex flex-col gap-1.5 sm:col-span-2">
-                  <label htmlFor="dev-descricao" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Descrição (opcional)</label>
-                  <textarea id="dev-descricao" rows={2} value={form.descricao}
-                    onChange={e => setForm(f => ({ ...f, descricao: e.target.value }))}
-                    className="neu-input rounded-xl px-3 py-2.5 text-sm resize-none"
-                    placeholder="O que será abordado..." />
-                </div>
-
-                <div className="flex flex-col gap-1.5">
-                  <label htmlFor="dev-data" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Data *</label>
-                  <input id="dev-data" type="date" value={form.data}
-                    onChange={e => setForm(f => ({ ...f, data: e.target.value }))}
-                    className="neu-input rounded-xl px-3 py-2.5 text-sm" />
-                </div>
-
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="flex flex-col gap-1.5">
-                    <label htmlFor="dev-hora-inicio" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Início *</label>
-                    <input id="dev-hora-inicio" type="time" value={form.hora_inicio}
-                      onChange={e => setForm(f => ({ ...f, hora_inicio: e.target.value }))}
-                      className="neu-input rounded-xl px-3 py-2.5 text-sm" />
-                  </div>
-                  <div className="flex flex-col gap-1.5">
-                    <label htmlFor="dev-hora-fim" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Fim *</label>
-                    <input id="dev-hora-fim" type="time" value={form.hora_fim}
-                      onChange={e => setForm(f => ({ ...f, hora_fim: e.target.value }))}
-                      className="neu-input rounded-xl px-3 py-2.5 text-sm" />
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex flex-col gap-2 mt-2">
-                <div className="flex items-center justify-between gap-2">
-                  <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">
-                    Auxiliares ({form.auxiliares.length})
-                  </label>
-                  <input type="text" value={search} onChange={e => setSearch(e.target.value)}
-                    placeholder="Buscar..."
-                    className="neu-input rounded-lg px-2.5 py-1.5 text-xs w-32 sm:w-44" />
-                </div>
-
-                {form.auxiliares.length > 0 && (
-                  <div className="flex flex-wrap gap-1.5">
-                    {form.auxiliares.map(a => (
-                      <button key={a.id} type="button" onClick={() => toggleAuxiliar(a)}
-                        className="text-[10px] px-2 py-1 rounded-full bg-accent/15 text-accent border border-accent/30 flex items-center gap-1 hover:bg-accent/25 transition-colors">
-                        {a.nome}<X size={10} />
-                      </button>
-                    ))}
-                  </div>
-                )}
-
-                <div className="neu-pressed rounded-xl border border-white/5 max-h-44 overflow-y-auto custom-scrollbar">
-                  {filteredPeople.length === 0 ? (
-                    <p className="text-[11px] text-gray-500 text-center py-3">Nenhum colaborador encontrado.</p>
-                  ) : (
-                    <ul className="divide-y divide-white/5">
-                      {filteredPeople.map(p => {
-                        const selected = selectedIds.has(p.id);
-                        return (
-                          <li key={p.id}>
-                            <button type="button" onClick={() => toggleAuxiliar(p)}
-                              className={`w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-white/5 transition-colors ${selected ? 'text-accent' : 'text-gray-300'}`}>
-                              <span className={`w-4 h-4 rounded border flex items-center justify-center ${selected ? 'bg-accent/20 border-accent/60' : 'border-gray-600'}`}>
-                                {selected && <Check size={10} />}
-                              </span>
-                              <span className="text-xs font-bold flex-1 truncate">{p.nome}</span>
-                              <span className="text-[9px] uppercase tracking-widest text-gray-500">{p.role}</span>
-                            </button>
-                          </li>
-                        );
-                      })}
-                    </ul>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            <div className="flex justify-end gap-2 mt-5 shrink-0">
-              <button onClick={onClose} disabled={saving}
-                className="neu-button px-4 py-2 rounded-xl text-xs font-bold text-gray-400 hover:text-gray-200 transition-colors">
-                Cancelar
-              </button>
-              <NeuButtonAccent variant="" onClick={onSave} disabled={saving}>
-                {saving ? <><Loader2 size={14} className="animate-spin" />Salvando...</>
-                  : <><Plus size={14} />{editing ? 'Salvar Alterações' : 'Agendar'}</>}
-              </NeuButtonAccent>
-            </div>
-          </motion.div>
-        </>
-      )}
-    </AnimatePresence>
+        <div className="neu-pressed rounded-xl border border-white/5 max-h-44 overflow-y-auto custom-scrollbar">
+          {filteredPeople.length === 0 ? (
+            <p className="text-[11px] text-gray-500 text-center py-3">Nenhum colaborador encontrado.</p>
+          ) : (
+            <ul className="divide-y divide-white/5">
+              {filteredPeople.map(p => {
+                const selected = selectedIds.has(p.id);
+                return (
+                  <li key={p.id}>
+                    <button type="button" onClick={() => toggleAuxiliar(p)}
+                      className={`w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-white/5 transition-colors ${selected ? 'text-accent' : 'text-gray-300'}`}>
+                      <span className={`w-4 h-4 rounded border flex items-center justify-center ${selected ? 'bg-accent/20 border-accent/60' : 'border-gray-600'}`}>
+                        {selected && <Check size={10} />}
+                      </span>
+                      <span className="text-xs font-bold flex-1 truncate">{p.nome}</span>
+                      <span className="text-[9px] uppercase tracking-widest text-gray-500">{p.role}</span>
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </div>
+      </div>
+    </ModalFormulario>
   );
 }

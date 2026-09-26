@@ -1,4 +1,3 @@
-import { useRolarAteFormulario } from '../hooks/useRolarAteFormulario';
 import { MenuMais, ItemMenu } from '../components/MenuMais';
 import React, { useMemo, useState } from 'react';
 import type { FilialOp } from '../components/FilialSelector';
@@ -6,7 +5,7 @@ import { useFilial } from '../contexts/FilialContext';
 import { motion, AnimatePresence } from 'motion/react';
 import { Plus, X, Trash2, Edit3, TrendingUp, TrendingDown, Target, Calendar, DollarSign, Package, Send, CheckCircle, XCircle, Search, Megaphone, CalendarClock } from 'lucide-react';
 import { useFetchData, dbInsert, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
-import { LoadingSpinner, EmptyState, NeuButtonAccent, CardContador, SecaoFormulario, type TomContador, corDoStatus } from '../components/ui';
+import { LoadingSpinner, EmptyState, NeuButtonAccent, CardContador, SecaoFormulario, type TomContador, corDoStatus, ModalFormulario } from '../components/ui';
 import { formatBRL, parseBRL, handleMoneyKeyDown } from '../lib/viewUtils';
 import { hasSetor } from '../lib/rbac';
 import { supabase } from '../lib/supabase';
@@ -369,7 +368,6 @@ const CampanhasMarketingViewInner = ({ showToast, profile, filial }: { showToast
     } catch (err: any) { showToast(`Erro: ${err?.message}`, 'error'); }
   };
 
-  const formEdicaoRef = useRolarAteFormulario(showForm, editing?.id);
   if (isLoading) return <div className="flex-1 flex items-center justify-center"><LoadingSpinner /></div>;
 
   const ativas         = campanhas.filter((c: any) => c.status === 'Ativa').length;
@@ -424,79 +422,75 @@ const CampanhasMarketingViewInner = ({ showToast, profile, filial }: { showToast
         </div>
 
         <AnimatePresence>
-          {showForm && (
-            <motion.div ref={formEdicaoRef} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-              className="neu-flat rounded-3xl p-6 border border-white/5 shrink-0">
-              <div className="flex items-center justify-between mb-5">
-                <h3 className="text-sm font-bold text-gray-300">{editing ? 'Editar Campanha' : 'Nova Campanha'}</h3>
-                <button onClick={resetForm} className="modal-close-btn"><X size={16} /></button>
+          <ModalFormulario
+            aberto={showForm}
+            titulo={editing ? 'Editar Campanha' : 'Nova Campanha'}
+            onCancelar={resetForm}
+            acoes={<>
+              <NeuButtonAccent variant="" onClick={handleSave} disabled={saving}>
+                {saving ? 'Salvando...' : (editing ? 'Salvar' : 'Criar Campanha')}
+              </NeuButtonAccent>
+            </>}
+          >
+            <div className="flex flex-col gap-4">
+            <SecaoFormulario titulo="Identificação" icon={Megaphone} cor="amarelo">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              <div className="flex flex-col gap-1.5 lg:col-span-2">
+                <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Nome *</label>
+                <input type="text" value={form.nome} onChange={e => setForm(f => ({ ...f, nome: e.target.value }))}
+                  className="neu-input rounded-xl px-3 py-2.5 text-sm" placeholder="Ex: Verão 2026" />
               </div>
-              <div className="flex flex-col gap-4">
-              <SecaoFormulario titulo="Identificação" icon={Megaphone} cor="amarelo">
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                <div className="flex flex-col gap-1.5 lg:col-span-2">
-                  <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Nome *</label>
-                  <input type="text" value={form.nome} onChange={e => setForm(f => ({ ...f, nome: e.target.value }))}
-                    className="neu-input rounded-xl px-3 py-2.5 text-sm" placeholder="Ex: Verão 2026" />
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Status</label>
-                  <select value={form.status} onChange={e => setForm(f => ({ ...f, status: e.target.value }))}
-                    className="neu-input rounded-xl px-3 py-2.5 text-sm">
-                    {opcoesStatus(form.status).map(s => <option key={s} value={s}>{s}</option>)}
-                  </select>
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Unidade</label>
-                  <div className="neu-pressed rounded-xl px-3 py-2.5 text-sm text-accent font-semibold border border-white/5">{filial}</div>
-                </div>
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Status</label>
+                <select value={form.status} onChange={e => setForm(f => ({ ...f, status: e.target.value }))}
+                  className="neu-input rounded-xl px-3 py-2.5 text-sm">
+                  {opcoesStatus(form.status).map(s => <option key={s} value={s}>{s}</option>)}
+                </select>
               </div>
-              </SecaoFormulario>
-              <SecaoFormulario titulo="Período e orçamento" icon={CalendarClock} cor="azul">
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Início *</label>
-                  <input type="date" value={form.data_inicio} onChange={e => setForm(f => ({ ...f, data_inicio: e.target.value }))}
-                    className="neu-input rounded-xl px-3 py-2.5 text-sm" />
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Fim *</label>
-                  <input type="date" value={form.data_fim} onChange={e => setForm(f => ({ ...f, data_fim: e.target.value }))}
-                    className="neu-input rounded-xl px-3 py-2.5 text-sm" />
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Orçamento (R$)</label>
-                  <input type="text" inputMode="numeric" value={form.orcamento}
-                    onChange={e => setForm(f => ({ ...f, orcamento: formatBRL(e.target.value) }))}
-                    onKeyDown={handleMoneyKeyDown}
-                    className="neu-input rounded-xl px-3 py-2.5 text-sm" placeholder="0,00" />
-                </div>
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Unidade</label>
+                <div className="neu-pressed rounded-xl px-3 py-2.5 text-sm text-accent font-semibold border border-white/5">{filial}</div>
               </div>
-              </SecaoFormulario>
-              <SecaoFormulario titulo="Objetivo e descrição" icon={Target} cor="verde">
-              <div className="grid grid-cols-1 gap-4">
-                <div className="flex flex-col gap-1.5 ">
-                  <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Objetivo</label>
-                  <input type="text" value={form.objetivo} onChange={e => setForm(f => ({ ...f, objetivo: e.target.value }))}
-                    className="neu-input rounded-xl px-3 py-2.5 text-sm" placeholder="Ex: aumentar ticket médio em 15%" />
-                </div>
-                <div className="flex flex-col gap-1.5 ">
-                  <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Descrição</label>
-                  <textarea value={form.descricao} rows={2} onChange={e => setForm(f => ({ ...f, descricao: e.target.value }))}
-                    className="neu-input rounded-xl px-3 py-2.5 text-sm resize-none"
-                    placeholder="Detalhes pra equipe (canais, peças, calendário, etc.)" />
-                </div>
+            </div>
+            </SecaoFormulario>
+            <SecaoFormulario titulo="Período e orçamento" icon={CalendarClock} cor="azul">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Início *</label>
+                <input type="date" value={form.data_inicio} onChange={e => setForm(f => ({ ...f, data_inicio: e.target.value }))}
+                  className="neu-input rounded-xl px-3 py-2.5 text-sm" />
               </div>
-              </SecaoFormulario>
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Fim *</label>
+                <input type="date" value={form.data_fim} onChange={e => setForm(f => ({ ...f, data_fim: e.target.value }))}
+                  className="neu-input rounded-xl px-3 py-2.5 text-sm" />
               </div>
-              <div className="flex justify-end gap-2 mt-5">
-                <button onClick={resetForm} className="neu-button rounded-xl px-4 py-2 text-xs font-bold uppercase tracking-widest text-gray-400 hover:text-white">Cancelar</button>
-                <NeuButtonAccent variant="" onClick={handleSave} disabled={saving}>
-                  {saving ? 'Salvando...' : (editing ? 'Salvar' : 'Criar Campanha')}
-                </NeuButtonAccent>
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Orçamento (R$)</label>
+                <input type="text" inputMode="numeric" value={form.orcamento}
+                  onChange={e => setForm(f => ({ ...f, orcamento: formatBRL(e.target.value) }))}
+                  onKeyDown={handleMoneyKeyDown}
+                  className="neu-input rounded-xl px-3 py-2.5 text-sm" placeholder="0,00" />
               </div>
-            </motion.div>
-          )}
+            </div>
+            </SecaoFormulario>
+            <SecaoFormulario titulo="Objetivo e descrição" icon={Target} cor="verde">
+            <div className="grid grid-cols-1 gap-4">
+              <div className="flex flex-col gap-1.5 ">
+                <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Objetivo</label>
+                <input type="text" value={form.objetivo} onChange={e => setForm(f => ({ ...f, objetivo: e.target.value }))}
+                  className="neu-input rounded-xl px-3 py-2.5 text-sm" placeholder="Ex: aumentar ticket médio em 15%" />
+              </div>
+              <div className="flex flex-col gap-1.5 ">
+                <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Descrição</label>
+                <textarea value={form.descricao} rows={2} onChange={e => setForm(f => ({ ...f, descricao: e.target.value }))}
+                  className="neu-input rounded-xl px-3 py-2.5 text-sm resize-none"
+                  placeholder="Detalhes pra equipe (canais, peças, calendário, etc.)" />
+              </div>
+            </div>
+            </SecaoFormulario>
+            </div>
+          </ModalFormulario>
         </AnimatePresence>
 
         <div className="neu-flat rounded-3xl p-6 border border-white/5 shrink-0">

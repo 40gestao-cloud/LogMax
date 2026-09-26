@@ -1,11 +1,11 @@
 import { MenuMais, ItemMenu } from '../components/MenuMais';
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Search, Edit2, Trash2, Plus, Save, Ban, RotateCcw } from 'lucide-react';
 import { HistoricoOperacoes } from '../components/HistoricoOperacoes';
 import { useFetchData, dbInsert, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
 import { ENDPOINT_TABLE_MAP } from '../lib/supabase';
-import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent, StatusBadge, FilialBadge } from '../components/ui';
+import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent, StatusBadge, FilialBadge, ModalFormulario } from '../components/ui';
 import { GField, formatBRL, parseBRL, handleMoneyKeyDown } from '../lib/viewUtils';
 import { useConfirm } from '../contexts/ConfirmContext';
 import { useFilial } from '../contexts/FilialContext';
@@ -144,18 +144,6 @@ export const GenericCRUDView = ({ title, endpoint, fields, defaultStatus = 'Ativ
 
   const isFormOpen = showForm || !!editItem;
 
-  // Form acima da tabela: editar uma linha do fim da lista abria o formulário
-  // fora da viewport. Vale para todas as telas que usam este componente —
-  // Clientes, Fornecedores, Bancos e companhia tinham o mesmo problema que
-  // Produtos.
-  const formRef = useRef<HTMLDivElement | null>(null);
-  useEffect(() => {
-    if (!isFormOpen) return;
-    requestAnimationFrame(() => {
-      formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      formRef.current?.querySelector<HTMLInputElement>('input, select')?.focus();
-    });
-  }, [isFormOpen, editItem?.id]);
 
   return (
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col h-full gap-8">
@@ -181,11 +169,12 @@ export const GenericCRUDView = ({ title, endpoint, fields, defaultStatus = 'Ativ
         </div>
       </div>
 
-      <AnimatePresence>
-        {isFormOpen && (
-          <motion.div ref={formRef} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-            <div className="neu-flat rounded-2xl p-6 border border-white/5 flex flex-col gap-4">
-              <h3 className="text-sm font-bold text-gray-200">{editItem ? 'Editar' : 'Novo'}</h3>
+      <ModalFormulario
+        aberto={isFormOpen}
+        titulo={`${editItem ? 'Editar' : 'Novo'} — ${title}`}
+        onCancelar={closeForm}
+        acoes={<NeuButtonAccent onClick={handleSave} isLoading={isSaving}><Save size={14} /> {editItem ? 'Atualizar' : 'Salvar'}</NeuButtonAccent>}
+      >
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 {fields.map(f => {
                   // textarea + fullWidth ocupam a linha inteira (md:col-span-3).
@@ -230,14 +219,7 @@ export const GenericCRUDView = ({ title, endpoint, fields, defaultStatus = 'Ativ
                   );
                 })}
               </div>
-              <div className="flex gap-3 justify-end">
-                <button onClick={closeForm} className="neu-button py-2 px-5 rounded-xl text-sm text-gray-400">Cancelar</button>
-                <NeuButtonAccent onClick={handleSave} isLoading={isSaving}><Save size={14} /> {editItem ? 'Atualizar' : 'Salvar'}</NeuButtonAccent>
-              </div>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      </ModalFormulario>
 
       <div className="neu-flat rounded-3xl p-6 border border-white/5 flex flex-col mb-6">
         <div className="overflow-x-auto main-scrollbar">

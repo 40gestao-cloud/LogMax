@@ -1,4 +1,3 @@
-import { useRolarAteFormulario } from '../hooks/useRolarAteFormulario';
 import React, { useEffect, useMemo, useState } from 'react';
 import type { FilialOp } from '../components/FilialSelector';
 import { useFilial } from '../contexts/FilialContext';
@@ -7,7 +6,7 @@ import { Plus, BookOpen, X, Edit2, Trash2, Users, Search, Check } from 'lucide-r
 import { useFetchData, dbInsert, dbUpdate, dbDelete, dbSetStatus } from '../hooks/useSupabaseData';
 import { supabase } from '../lib/supabase';
 import { notificarSetor } from '../lib/notificar';
-import { LoadingSpinner, EmptyState, NeuButtonAccent, CardContador, type TomContador, corDoStatus } from '../components/ui';
+import { LoadingSpinner, EmptyState, NeuButtonAccent, CardContador, type TomContador, corDoStatus, ModalFormulario } from '../components/ui';
 import { TreinamentoInscricoesModal } from '../components/TreinamentoInscricoesModal';
 import { useConfirm } from '../contexts/ConfirmContext';
 import { fmtInstrutores } from '../lib/viewUtils';
@@ -115,7 +114,6 @@ const TreinamentosViewInner = ({ showToast, filial }: { showToast: any; filial: 
       .then(({ data }) => setFuncionarios((data ?? []).filter(f => (f.status ?? 'Ativo') === 'Ativo')));
   }, []);
 
-  const formEdicaoRef = useRolarAteFormulario(showForm, editId);
   if (isLoading) return <div className="flex-1 flex items-center justify-center"><LoadingSpinner /></div>;
 
   const agendados = treinamentos.filter((t: any) => t.status === 'Agendado').length;
@@ -336,86 +334,81 @@ const TreinamentosViewInner = ({ showToast, filial }: { showToast: any; filial: 
       </div>
 
       <AnimatePresence>
-        {showForm && (
-          <motion.div ref={formEdicaoRef} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            className="neu-flat rounded-3xl p-6 border border-white/5 shrink-0">
-            <div className="flex items-center justify-between mb-5">
-              <h3 className="text-sm font-bold text-gray-300">{editId ? 'Editar Treinamento' : 'Novo Treinamento'}</h3>
-              <button onClick={closeForm} className="modal-close-btn"><X size={16} /></button>
+        <ModalFormulario
+          aberto={showForm}
+          titulo={editId ? 'Editar Treinamento' : 'Novo Treinamento'}
+          onCancelar={closeForm}
+          acoes={<>
+            <NeuButtonAccent variant="" onClick={handleSave} disabled={saving}>{saving ? 'Salvando...' : (editId ? 'Salvar Alterações' : 'Criar')}</NeuButtonAccent>
+          </>}
+        >
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div className="flex flex-col gap-1.5 lg:col-span-3">
+              <label htmlFor="treino-nome" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Nome *</label>
+              <input id="treino-nome" type="text" value={form.nome}
+                onChange={e => setForm(p => ({ ...p, nome: e.target.value }))}
+                className="neu-input rounded-xl px-3 py-2.5 text-sm" />
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              <div className="flex flex-col gap-1.5 lg:col-span-3">
-                <label htmlFor="treino-nome" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Nome *</label>
-                <input id="treino-nome" type="text" value={form.nome}
-                  onChange={e => setForm(p => ({ ...p, nome: e.target.value }))}
-                  className="neu-input rounded-xl px-3 py-2.5 text-sm" />
-              </div>
-
-              <div className="flex flex-col gap-1.5 lg:col-span-3">
-                <label htmlFor="treino-descricao" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Descrição do Treinamento</label>
-                <textarea id="treino-descricao" rows={3} value={form.descricao}
-                  onChange={e => setForm(p => ({ ...p, descricao: e.target.value }))}
-                  placeholder="Contexto, pauta, objetivos, materiais..."
-                  className="neu-input rounded-xl px-3 py-2.5 text-sm resize-y" />
-              </div>
-
-              <div className="flex flex-col gap-1.5">
-                <label htmlFor="treino-di" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Data Início</label>
-                <input id="treino-di" type="date" value={form.data_inicio}
-                  onChange={e => setForm(p => ({ ...p, data_inicio: e.target.value }))}
-                  className="neu-input rounded-xl px-3 py-2.5 text-sm" />
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <label htmlFor="treino-df" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Data Fim</label>
-                <input id="treino-df" type="date" value={form.data_fim}
-                  onChange={e => setForm(p => ({ ...p, data_fim: e.target.value }))}
-                  className="neu-input rounded-xl px-3 py-2.5 text-sm" />
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <label htmlFor="treino-status" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Status</label>
-                <select id="treino-status" value={form.status}
-                  onChange={e => setForm(p => ({ ...p, status: e.target.value }))}
-                  className="neu-input rounded-xl px-3 py-2.5 text-sm">
-                  {['Agendado', 'Em Andamento', 'Concluído', 'Cancelado'].map(o => <option key={o} value={o}>{o}</option>)}
-                </select>
-              </div>
-
-              <div className="flex flex-col gap-1.5">
-                <label htmlFor="treino-hi" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Hora Início</label>
-                <input id="treino-hi" type="time" value={form.hora_inicio}
-                  onChange={e => setForm(p => ({ ...p, hora_inicio: e.target.value }))}
-                  className="neu-input rounded-xl px-3 py-2.5 text-sm" />
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <label htmlFor="treino-hf" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Hora Encerramento</label>
-                <input id="treino-hf" type="time" value={form.hora_fim}
-                  onChange={e => setForm(p => ({ ...p, hora_fim: e.target.value }))}
-                  className="neu-input rounded-xl px-3 py-2.5 text-sm" />
-              </div>
-              <div className="hidden lg:block" />
-
-              <div className="lg:col-span-3 grid grid-cols-1 md:grid-cols-2 gap-4">
-                <FuncPicker
-                  label="Instrutor(es)"
-                  funcionarios={funcionarios}
-                  selected={form.instrutores}
-                  onChange={(next) => setForm(p => ({ ...p, instrutores: next }))}
-                />
-                <FuncPicker
-                  label="Inscritos"
-                  funcionarios={funcionarios}
-                  selected={form.inscritos}
-                  onChange={(next) => setForm(p => ({ ...p, inscritos: next }))}
-                />
-              </div>
+            <div className="flex flex-col gap-1.5 lg:col-span-3">
+              <label htmlFor="treino-descricao" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Descrição do Treinamento</label>
+              <textarea id="treino-descricao" rows={3} value={form.descricao}
+                onChange={e => setForm(p => ({ ...p, descricao: e.target.value }))}
+                placeholder="Contexto, pauta, objetivos, materiais..."
+                className="neu-input rounded-xl px-3 py-2.5 text-sm resize-y" />
             </div>
 
-            <div className="flex justify-end mt-5">
-              <NeuButtonAccent variant="" onClick={handleSave} disabled={saving}>{saving ? 'Salvando...' : (editId ? 'Salvar Alterações' : 'Criar')}</NeuButtonAccent>
+            <div className="flex flex-col gap-1.5">
+              <label htmlFor="treino-di" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Data Início</label>
+              <input id="treino-di" type="date" value={form.data_inicio}
+                onChange={e => setForm(p => ({ ...p, data_inicio: e.target.value }))}
+                className="neu-input rounded-xl px-3 py-2.5 text-sm" />
             </div>
-          </motion.div>
-        )}
+            <div className="flex flex-col gap-1.5">
+              <label htmlFor="treino-df" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Data Fim</label>
+              <input id="treino-df" type="date" value={form.data_fim}
+                onChange={e => setForm(p => ({ ...p, data_fim: e.target.value }))}
+                className="neu-input rounded-xl px-3 py-2.5 text-sm" />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <label htmlFor="treino-status" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Status</label>
+              <select id="treino-status" value={form.status}
+                onChange={e => setForm(p => ({ ...p, status: e.target.value }))}
+                className="neu-input rounded-xl px-3 py-2.5 text-sm">
+                {['Agendado', 'Em Andamento', 'Concluído', 'Cancelado'].map(o => <option key={o} value={o}>{o}</option>)}
+              </select>
+            </div>
+
+            <div className="flex flex-col gap-1.5">
+              <label htmlFor="treino-hi" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Hora Início</label>
+              <input id="treino-hi" type="time" value={form.hora_inicio}
+                onChange={e => setForm(p => ({ ...p, hora_inicio: e.target.value }))}
+                className="neu-input rounded-xl px-3 py-2.5 text-sm" />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <label htmlFor="treino-hf" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Hora Encerramento</label>
+              <input id="treino-hf" type="time" value={form.hora_fim}
+                onChange={e => setForm(p => ({ ...p, hora_fim: e.target.value }))}
+                className="neu-input rounded-xl px-3 py-2.5 text-sm" />
+            </div>
+            <div className="hidden lg:block" />
+
+            <div className="lg:col-span-3 grid grid-cols-1 md:grid-cols-2 gap-4">
+              <FuncPicker
+                label="Instrutor(es)"
+                funcionarios={funcionarios}
+                selected={form.instrutores}
+                onChange={(next) => setForm(p => ({ ...p, instrutores: next }))}
+              />
+              <FuncPicker
+                label="Inscritos"
+                funcionarios={funcionarios}
+                selected={form.inscritos}
+                onChange={(next) => setForm(p => ({ ...p, inscritos: next }))}
+              />
+            </div>
+          </div>
+        </ModalFormulario>
       </AnimatePresence>
 
       <AnimatePresence>

@@ -1,11 +1,10 @@
-import { useRolarAteFormulario } from '../hooks/useRolarAteFormulario';
 import { MenuMais, ItemMenu } from '../components/MenuMais';
 import React, { useRef, useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Search, Edit2, Trash2, Plus, Save, Upload, X, Lock, Unlock, ShieldAlert, ShieldCheck, PiggyBank, Landmark, Wallet, ArrowLeftRight, Ban, RotateCcw } from 'lucide-react';
 import { HistoricoOperacoes } from '../components/HistoricoOperacoes';
 import { useFetchData, dbInsert, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
-import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent, StatusBadge, BancoThumb } from '../components/ui';
+import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent, StatusBadge, BancoThumb, ModalFormulario } from '../components/ui';
 import {
   BANCO_LOGO_ACCEPT,
   BANCO_LOGO_MAX_LABEL,
@@ -352,7 +351,6 @@ export const CaixaBancosView = ({
   const canEdit = matrizMode ? podeGerenciar(profile) : (podeGerenciar(profile) || !bloqueado);
   const isFormOpen = showForm || !!editItem;
 
-  const formEdicaoRef = useRolarAteFormulario(isFormOpen && canEdit, editItem?.id);
 
   return (
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col h-full gap-6">
@@ -549,105 +547,102 @@ export const CaixaBancosView = ({
 
       {/* Formulário */}
       <AnimatePresence>
-        {isFormOpen && canEdit && (
-          <motion.div ref={formEdicaoRef} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-            <div className="neu-flat rounded-2xl p-6 border border-white/5 flex flex-col gap-4">
-              <h3 className="text-sm font-bold text-gray-200">{editItem ? 'Editar Conta' : 'Nova Conta'}</h3>
-              <p className="text-[11px] text-gray-500 -mt-2">Conta nova nasce com saldo R$ 0,00.</p>
+        <ModalFormulario
+          aberto={!!(isFormOpen && canEdit)}
+          titulo={editItem ? 'Editar Conta' : 'Nova Conta'}
+          onCancelar={closeForm}
+          acoes={<>
+            <NeuButtonAccent onClick={handleSave} isLoading={isSaving}><Save size={14} /> {editItem ? 'Atualizar' : 'Salvar'}</NeuButtonAccent>
+          </>}
+        >
+          <p className="text-[11px] text-gray-500 -mt-2">Conta nova nasce com saldo R$ 0,00.</p>
 
-              <div className="flex items-start gap-4 flex-wrap">
-                <BancoThumb url={imagemUrl} size="lg" alt={form.banco || 'Banco'} />
-                <div className="flex flex-col gap-2">
-                  <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Logo do banco</label>
-                  <div className="flex gap-2 items-center">
-                    <input
-                      ref={imagemInputRef}
-                      type="file"
-                      accept={BANCO_LOGO_ACCEPT}
-                      onChange={handleImagemChange}
-                      className="hidden"
-                      id="logo-input"
-                    />
-                    <label htmlFor="logo-input" className="neu-button py-2 px-4 rounded-xl text-xs font-bold flex items-center gap-2 cursor-pointer hover:text-accent transition-colors">
-                      <Upload size={12} /> {imagemUploading ? 'Enviando...' : 'Escolher logo'}
-                    </label>
-                    {imagemUrl && (
-                      <button onClick={() => setImagemUrl('')} className="neu-button py-2 px-3 rounded-xl text-xs text-gray-500 flex items-center gap-1 hover:text-red-400 transition-colors">
-                        <X size={11} /> Remover
-                      </button>
-                    )}
-                  </div>
-                  <p className="text-[10px] text-gray-600">JPG, PNG, WEBP ou SVG · até {BANCO_LOGO_MAX_LABEL} · comprime auto para WebP 512 px (SVG sobe inalterado)</p>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <FormField label="Conta *" error={errors.conta}>
-                  <input type="text" className={`neu-input py-2 px-3 rounded-xl text-sm ${errors.conta ? 'border border-red-500/40' : ''}`}
-                    value={form.conta}
-                    onChange={e => { setForm(s => ({ ...s, conta: e.target.value })); setErrors(ev => { const n = { ...ev }; delete n.conta; return n; }); }}
-                    placeholder="Ex: 12345-6" />
-                </FormField>
-                <FormField label="Banco">
-                  <input type="text" className="neu-input py-2 px-3 rounded-xl text-sm"
-                    value={form.banco} onChange={e => setForm(s => ({ ...s, banco: e.target.value }))} placeholder="Ex: Banco do Brasil" />
-                </FormField>
-                <FormField label="Agência">
-                  <input type="text" className="neu-input py-2 px-3 rounded-xl text-sm"
-                    value={form.agencia} onChange={e => setForm(s => ({ ...s, agencia: e.target.value }))} placeholder="Ex: 0001" />
-                </FormField>
-                <FormField label="Tipo">
-                  <select className="neu-input py-2 px-3 rounded-xl text-sm"
-                    value={form.tipo} onChange={e => setForm(s => ({ ...s, tipo: e.target.value }))}>
-                    {TIPOS.map(t => <option key={t} value={t}>{t}</option>)}
-                  </select>
-                </FormField>
-                <FormField label="Status">
-                  <select className="neu-input py-2 px-3 rounded-xl text-sm"
-                    value={form.status} onChange={e => setForm(s => ({ ...s, status: e.target.value }))}>
-                    {STATUS_OPCOES.map(s => <option key={s} value={s}>{s}</option>)}
-                  </select>
-                </FormField>
-                {/* Selector de unidade: só aparece em modo Matriz */}
-                {matrizMode && (
-                  <FormField label="Unidade dona da conta">
-                    <select className="neu-input py-2 px-3 rounded-xl text-sm"
-                      value={form.filial} onChange={e => setForm(s => ({ ...s, filial: e.target.value }))}>
-                      <option value="Matriz">Matriz (holding)</option>
-                      {FILIAIS.map(f => <option key={f} value={f}>{f}</option>)}
-                      {/* Só some quem já é global: conta anterior à coluna filial. */}
-                      {editItem && !editItem.filial && (
-                        <option value="">Global (legado — visível a todas)</option>
-                      )}
-                    </select>
-                  </FormField>
+          <div className="flex items-start gap-4 flex-wrap">
+            <BancoThumb url={imagemUrl} size="lg" alt={form.banco || 'Banco'} />
+            <div className="flex flex-col gap-2">
+              <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Logo do banco</label>
+              <div className="flex gap-2 items-center">
+                <input
+                  ref={imagemInputRef}
+                  type="file"
+                  accept={BANCO_LOGO_ACCEPT}
+                  onChange={handleImagemChange}
+                  className="hidden"
+                  id="logo-input"
+                />
+                <label htmlFor="logo-input" className="neu-button py-2 px-4 rounded-xl text-xs font-bold flex items-center gap-2 cursor-pointer hover:text-accent transition-colors">
+                  <Upload size={12} /> {imagemUploading ? 'Enviando...' : 'Escolher logo'}
+                </label>
+                {imagemUrl && (
+                  <button onClick={() => setImagemUrl('')} className="neu-button py-2 px-3 rounded-xl text-xs text-gray-500 flex items-center gap-1 hover:text-red-400 transition-colors">
+                    <X size={11} /> Remover
+                  </button>
                 )}
               </div>
-
-              {/* Flag reserva de emergencia — soma no card resumo do topo. */}
-              <label className="flex items-start gap-3 neu-pressed rounded-xl p-3 cursor-pointer hover:bg-white/5 transition-colors">
-                <input
-                  type="checkbox"
-                  checked={form.is_reserva}
-                  onChange={e => setForm(s => ({ ...s, is_reserva: e.target.checked }))}
-                  className="mt-0.5 accent-yellow-400 w-4 h-4"
-                />
-                <div className="flex-1">
-                  <div className="flex items-center gap-2 text-sm font-bold text-gray-200">
-                    <PiggyBank size={14} className="text-yellow-300" />
-                    Reserva de emergência
-                  </div>
-                  <p className="text-[11px] text-gray-500 mt-0.5">Conta como "Em Reserva", fora do disponível.</p>
-                </div>
-              </label>
-
-              <div className="flex gap-3 justify-end">
-                <button onClick={closeForm} className="neu-button py-2 px-5 rounded-xl text-sm text-gray-400">Cancelar</button>
-                <NeuButtonAccent onClick={handleSave} isLoading={isSaving}><Save size={14} /> {editItem ? 'Atualizar' : 'Salvar'}</NeuButtonAccent>
-              </div>
+              <p className="text-[10px] text-gray-600">JPG, PNG, WEBP ou SVG · até {BANCO_LOGO_MAX_LABEL} · comprime auto para WebP 512 px (SVG sobe inalterado)</p>
             </div>
-          </motion.div>
-        )}
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <FormField label="Conta *" error={errors.conta}>
+              <input type="text" className={`neu-input py-2 px-3 rounded-xl text-sm ${errors.conta ? 'border border-red-500/40' : ''}`}
+                value={form.conta}
+                onChange={e => { setForm(s => ({ ...s, conta: e.target.value })); setErrors(ev => { const n = { ...ev }; delete n.conta; return n; }); }}
+                placeholder="Ex: 12345-6" />
+            </FormField>
+            <FormField label="Banco">
+              <input type="text" className="neu-input py-2 px-3 rounded-xl text-sm"
+                value={form.banco} onChange={e => setForm(s => ({ ...s, banco: e.target.value }))} placeholder="Ex: Banco do Brasil" />
+            </FormField>
+            <FormField label="Agência">
+              <input type="text" className="neu-input py-2 px-3 rounded-xl text-sm"
+                value={form.agencia} onChange={e => setForm(s => ({ ...s, agencia: e.target.value }))} placeholder="Ex: 0001" />
+            </FormField>
+            <FormField label="Tipo">
+              <select className="neu-input py-2 px-3 rounded-xl text-sm"
+                value={form.tipo} onChange={e => setForm(s => ({ ...s, tipo: e.target.value }))}>
+                {TIPOS.map(t => <option key={t} value={t}>{t}</option>)}
+              </select>
+            </FormField>
+            <FormField label="Status">
+              <select className="neu-input py-2 px-3 rounded-xl text-sm"
+                value={form.status} onChange={e => setForm(s => ({ ...s, status: e.target.value }))}>
+                {STATUS_OPCOES.map(s => <option key={s} value={s}>{s}</option>)}
+              </select>
+            </FormField>
+            {/* Selector de unidade: só aparece em modo Matriz */}
+            {matrizMode && (
+              <FormField label="Unidade dona da conta">
+                <select className="neu-input py-2 px-3 rounded-xl text-sm"
+                  value={form.filial} onChange={e => setForm(s => ({ ...s, filial: e.target.value }))}>
+                  <option value="Matriz">Matriz (holding)</option>
+                  {FILIAIS.map(f => <option key={f} value={f}>{f}</option>)}
+                  {/* Só some quem já é global: conta anterior à coluna filial. */}
+                  {editItem && !editItem.filial && (
+                    <option value="">Global (legado — visível a todas)</option>
+                  )}
+                </select>
+              </FormField>
+            )}
+          </div>
+
+          {/* Flag reserva de emergencia — soma no card resumo do topo. */}
+          <label className="flex items-start gap-3 neu-pressed rounded-xl p-3 cursor-pointer hover:bg-white/5 transition-colors">
+            <input
+              type="checkbox"
+              checked={form.is_reserva}
+              onChange={e => setForm(s => ({ ...s, is_reserva: e.target.checked }))}
+              className="mt-0.5 accent-yellow-400 w-4 h-4"
+            />
+            <div className="flex-1">
+              <div className="flex items-center gap-2 text-sm font-bold text-gray-200">
+                <PiggyBank size={14} className="text-yellow-300" />
+                Reserva de emergência
+              </div>
+              <p className="text-[11px] text-gray-500 mt-0.5">Conta como "Em Reserva", fora do disponível.</p>
+            </div>
+          </label>
+        </ModalFormulario>
       </AnimatePresence>
 
       {/* Tabela */}

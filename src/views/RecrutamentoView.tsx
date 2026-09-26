@@ -9,7 +9,7 @@ import {
 import { freshToken } from '../lib/authFetch';
 import { useFetchData } from '../hooks/useSupabaseData';
 import { supabase } from '../lib/supabase';
-import { LoadingSpinner, NeuButtonAccent, CardContador, type TomContador, corDoStatus } from '../components/ui';
+import { LoadingSpinner, NeuButtonAccent, CardContador, type TomContador, corDoStatus, ModalFormulario } from '../components/ui';
 import { hasSetor } from '../lib/rbac';
 import { formatBRL, parseBRL } from '../lib/viewUtils';
 import { todayBR } from '../lib/dates';
@@ -649,169 +649,161 @@ const RecrutamentoInner = ({ showToast, profile, filial }: {
           página e o botão que o chama fica no topo, então quem clicava não via
           nada acontecer sem rolar. */}
       <AnimatePresence>
-        {showForm && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 bg-black/60 flex items-start sm:items-center justify-center p-4 overflow-y-auto"
-            onClick={closeForm}>
-          <motion.div initial={{ scale: 0.95 }} animate={{ scale: 1 }} onClick={e => e.stopPropagation()}
-            className="neu-flat rounded-2xl p-5 sm:p-6 w-full max-w-3xl my-auto border border-white/10">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-sm font-bold text-gray-200 flex items-center gap-2"><Briefcase size={16} className="text-accent" />Nova vaga</h3>
-              <button onClick={closeForm} className="modal-close-btn"><X size={16} /></button>
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {emMatriz && (
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Unidade de destino</label>
-                  <select value={form.filialDestino}
-                    onChange={e => {
-                      const dest = e.target.value;
-                      setForm(p => ({
-                        ...p, filialDestino: dest, cargo: '', departamento: '',
-                        // Vaga da Matriz é sempre interna e busca na rede toda.
-                        tipo:  dest === DESTINO_MATRIZ ? 'Interna' : p.tipo,
-                        escopo: dest === DESTINO_MATRIZ ? 'Interfilial' : p.escopo,
-                        // O par role × unidade tem CHECK no banco: trocar o
-                        // destino invalida a role escolhida antes.
-                        role_alvo: '',
-                      }));
-                      setCargoSel(''); setDeptoSel('');
-                    }}
-                    className="neu-input rounded-xl px-3 py-2.5 text-sm">
-                    <option value="">Selecionar...</option>
-                    {UNIDADES.map(u => <option key={u} value={u}>{u}</option>)}
-                    {/* Vaga de cargo da holding (CEO, Conselheiro). Só admin/CEO
-                        abre — é a mesma régua do escopo Interfilial. */}
-                    {podeInterfilial && <option value={DESTINO_MATRIZ}>Matriz (holding)</option>}
-                  </select>
-                </div>
-              )}
+        <ModalFormulario
+          aberto={showForm}
+          titulo={<span className="inline-flex items-center gap-2"><Briefcase size={16} className="text-accent" />Nova vaga</span>}
+          onCancelar={closeForm}
+          acoes={<>
+            <NeuButtonAccent onClick={handleAbrirVaga} isLoading={salvandoVaga}>Enviar para aprovação</NeuButtonAccent>
+          </>}
+        >
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {emMatriz && (
               <div className="flex flex-col gap-1.5">
-                <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Tipo</label>
-                <select value={form.tipo}
-                  onChange={e => setForm(p => ({ ...p, tipo: e.target.value, escopo: 'Filial', role_alvo: '' }))}
-                  className="neu-input rounded-xl px-3 py-2.5 text-sm" disabled={destinoMatriz}>
-                  <option value="Externa">Externa — contrata de fora</option>
-                  <option value="Interna">Interna — promove quem já está aqui</option>
+                <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Unidade de destino</label>
+                <select value={form.filialDestino}
+                  onChange={e => {
+                    const dest = e.target.value;
+                    setForm(p => ({
+                      ...p, filialDestino: dest, cargo: '', departamento: '',
+                      // Vaga da Matriz é sempre interna e busca na rede toda.
+                      tipo:  dest === DESTINO_MATRIZ ? 'Interna' : p.tipo,
+                      escopo: dest === DESTINO_MATRIZ ? 'Interfilial' : p.escopo,
+                      // O par role × unidade tem CHECK no banco: trocar o
+                      // destino invalida a role escolhida antes.
+                      role_alvo: '',
+                    }));
+                    setCargoSel(''); setDeptoSel('');
+                  }}
+                  className="neu-input rounded-xl px-3 py-2.5 text-sm">
+                  <option value="">Selecionar...</option>
+                  {UNIDADES.map(u => <option key={u} value={u}>{u}</option>)}
+                  {/* Vaga de cargo da holding (CEO, Conselheiro). Só admin/CEO
+                      abre — é a mesma régua do escopo Interfilial. */}
+                  {podeInterfilial && <option value={DESTINO_MATRIZ}>Matriz (holding)</option>}
                 </select>
+              </div>
+            )}
+            <div className="flex flex-col gap-1.5">
+              <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Tipo</label>
+              <select value={form.tipo}
+                onChange={e => setForm(p => ({ ...p, tipo: e.target.value, escopo: 'Filial', role_alvo: '' }))}
+                className="neu-input rounded-xl px-3 py-2.5 text-sm" disabled={destinoMatriz}>
+                <option value="Externa">Externa — contrata de fora</option>
+                <option value="Interna">Interna — promove quem já está aqui</option>
+              </select>
+              {destinoMatriz && (
+                <p className="text-[10px] text-gray-600">Cargo da holding é sucessão: promove quem já está na rede.</p>
+              )}
+            </div>
+            {form.tipo === 'Interna' && (
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Nota mínima</label>
+                <select value={form.nota_minima}
+                  onChange={e => setForm(p => ({ ...p, nota_minima: e.target.value }))}
+                  className="neu-input rounded-xl px-3 py-2.5 text-sm">
+                  <option value="">Sem exigência</option>
+                  {['3', '3.5', '4', '4.5'].map(n => (
+                    <option key={n} value={n}>{n.replace('.', ',')} ou mais</option>
+                  ))}
+                </select>
+                <p className="text-[10px] text-gray-600">
+                  Média da última avaliação (1 a 5). Quem não tem avaliação não entra.
+                </p>
+              </div>
+            )}
+            {form.tipo === 'Interna' && (
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Escopo</label>
+                <select value={destinoMatriz ? 'Interfilial' : form.escopo}
+                  onChange={e => setForm(p => ({ ...p, escopo: e.target.value }))}
+                  className="neu-input rounded-xl px-3 py-2.5 text-sm" disabled={!podeInterfilial || destinoMatriz}>
+                  <option value="Filial">Só desta unidade</option>
+                  <option value="Interfilial">Toda a rede (inter-filiais)</option>
+                </select>
+                {!podeInterfilial && (
+                  <p className="text-[10px] text-gray-600">Buscar candidato em outra unidade é decisão da Matriz.</p>
+                )}
                 {destinoMatriz && (
-                  <p className="text-[10px] text-gray-600">Cargo da holding é sucessão: promove quem já está na rede.</p>
+                  <p className="text-[10px] text-gray-600">Vaga da Matriz busca em toda a rede — os candidatos vêm das unidades.</p>
                 )}
               </div>
-              {form.tipo === 'Interna' && (
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Nota mínima</label>
-                  <select value={form.nota_minima}
-                    onChange={e => setForm(p => ({ ...p, nota_minima: e.target.value }))}
-                    className="neu-input rounded-xl px-3 py-2.5 text-sm">
-                    <option value="">Sem exigência</option>
-                    {['3', '3.5', '4', '4.5'].map(n => (
-                      <option key={n} value={n}>{n.replace('.', ',')} ou mais</option>
-                    ))}
-                  </select>
-                  <p className="text-[10px] text-gray-600">
-                    Média da última avaliação (1 a 5). Quem não tem avaliação não entra.
-                  </p>
-                </div>
-              )}
-              {form.tipo === 'Interna' && (
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Escopo</label>
-                  <select value={destinoMatriz ? 'Interfilial' : form.escopo}
-                    onChange={e => setForm(p => ({ ...p, escopo: e.target.value }))}
-                    className="neu-input rounded-xl px-3 py-2.5 text-sm" disabled={!podeInterfilial || destinoMatriz}>
-                    <option value="Filial">Só desta unidade</option>
-                    <option value="Interfilial">Toda a rede (inter-filiais)</option>
-                  </select>
-                  {!podeInterfilial && (
-                    <p className="text-[10px] text-gray-600">Buscar candidato em outra unidade é decisão da Matriz.</p>
-                  )}
-                  {destinoMatriz && (
-                    <p className="text-[10px] text-gray-600">Vaga da Matriz busca em toda a rede — os candidatos vêm das unidades.</p>
-                  )}
-                </div>
-              )}
+            )}
 
-              {/* Nível de acesso (RBAC), separado do cargo de RH de propósito.
-                  `user_profiles.role` não muda por promoção — a trava da migr.
-                  258 barra qualquer caminho fora do service_role, e está certa.
-                  Declarar aqui é o que faz a pendência de acesso aparecer
-                  depois, em vez de a pessoa ficar com cargo novo e poder velho. */}
-              {form.tipo === 'Interna' && podeInterfilial && (
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Nível de acesso</label>
-                  <select value={form.role_alvo}
-                    onChange={e => setForm(p => ({ ...p, role_alvo: e.target.value }))}
-                    className="neu-input rounded-xl px-3 py-2.5 text-sm">
-                    <option value="">Não altera o acesso</option>
-                    {rolesDisponiveis.map(r => <option key={r.v} value={r.v}>{r.label}</option>)}
-                  </select>
-                  <p className="text-[10px] text-gray-600 leading-relaxed">
-                    {destinoMatriz
-                      ? 'Cargo da holding exige nível de acesso — sem ele o login não pode ir para a Matriz.'
-                      : 'Diferente do cargo. Ao efetivar, o ajuste do login aparece como pendência aqui em cima.'}
-                  </p>
-                </div>
+            {/* Nível de acesso (RBAC), separado do cargo de RH de propósito.
+                `user_profiles.role` não muda por promoção — a trava da migr.
+                258 barra qualquer caminho fora do service_role, e está certa.
+                Declarar aqui é o que faz a pendência de acesso aparecer
+                depois, em vez de a pessoa ficar com cargo novo e poder velho. */}
+            {form.tipo === 'Interna' && podeInterfilial && (
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Nível de acesso</label>
+                <select value={form.role_alvo}
+                  onChange={e => setForm(p => ({ ...p, role_alvo: e.target.value }))}
+                  className="neu-input rounded-xl px-3 py-2.5 text-sm">
+                  <option value="">Não altera o acesso</option>
+                  {rolesDisponiveis.map(r => <option key={r.v} value={r.v}>{r.label}</option>)}
+                </select>
+                <p className="text-[10px] text-gray-600 leading-relaxed">
+                  {destinoMatriz
+                    ? 'Cargo da holding exige nível de acesso — sem ele o login não pode ir para a Matriz.'
+                    : 'Diferente do cargo. Ao efetivar, o ajuste do login aparece como pendência aqui em cima.'}
+                </p>
+              </div>
+            )}
+            <div className="flex flex-col gap-1.5">
+              <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Cargo</label>
+              <select value={cargoSel} onChange={e => handleCargoChange(e.target.value)} className="neu-input rounded-xl px-3 py-2.5 text-sm">
+                <option value="">Selecionar...</option>
+                {cargosAtivos.map((c: any) => <option key={c.id} value={c.id}>{c.nome}{rotuloFilial(c)}</option>)}
+                <option value={OUTRO}>Outro (digitar)</option>
+              </select>
+              {cargoSel === OUTRO && (
+                <input type="text" value={form.cargo} placeholder="Cargo fora do catálogo"
+                  onChange={e => setForm(p => ({ ...p, cargo: e.target.value }))}
+                  className="neu-input rounded-xl px-3 py-2.5 text-sm" />
               )}
-              <div className="flex flex-col gap-1.5">
-                <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Cargo</label>
-                <select value={cargoSel} onChange={e => handleCargoChange(e.target.value)} className="neu-input rounded-xl px-3 py-2.5 text-sm">
-                  <option value="">Selecionar...</option>
-                  {cargosAtivos.map((c: any) => <option key={c.id} value={c.id}>{c.nome}{rotuloFilial(c)}</option>)}
-                  <option value={OUTRO}>Outro (digitar)</option>
-                </select>
-                {cargoSel === OUTRO && (
-                  <input type="text" value={form.cargo} placeholder="Cargo fora do catálogo"
-                    onChange={e => setForm(p => ({ ...p, cargo: e.target.value }))}
-                    className="neu-input rounded-xl px-3 py-2.5 text-sm" />
-                )}
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Departamento</label>
-                <select value={deptoSel} onChange={e => handleDeptoChange(e.target.value)} className="neu-input rounded-xl px-3 py-2.5 text-sm">
-                  <option value="">Selecionar...</option>
-                  {deptosAtivos.map((d: any) => <option key={d.id} value={d.id}>{d.nome}{rotuloFilial(d)}</option>)}
-                  <option value={OUTRO}>Outro (digitar)</option>
-                </select>
-                {deptoSel === OUTRO && (
-                  <input type="text" value={form.departamento} placeholder="Departamento fora do catálogo"
-                    onChange={e => setForm(p => ({ ...p, departamento: e.target.value }))}
-                    className="neu-input rounded-xl px-3 py-2.5 text-sm" />
-                )}
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Quantidade</label>
-                <input type="number" min={1} value={form.quantidade}
-                  onChange={e => setForm(p => ({ ...p, quantidade: e.target.value }))}
-                  className="neu-input rounded-xl px-3 py-2.5 text-sm font-mono tabular-nums" />
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Salário mín.</label>
-                <input type="text" inputMode="numeric" value={form.salario_min}
-                  onChange={e => setForm(p => ({ ...p, salario_min: formatBRL(e.target.value) }))}
-                  className="neu-input rounded-xl px-3 py-2.5 text-sm font-mono tabular-nums" placeholder="Opcional" />
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Salário máx.</label>
-                <input type="text" inputMode="numeric" value={form.salario_max}
-                  onChange={e => setForm(p => ({ ...p, salario_max: formatBRL(e.target.value) }))}
-                  className="neu-input rounded-xl px-3 py-2.5 text-sm font-mono tabular-nums" placeholder="Opcional" />
-              </div>
-              <div className="flex flex-col gap-1.5 sm:col-span-2 lg:col-span-3">
-                <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Justificativa</label>
-                <textarea rows={2} value={form.justificativa}
-                  onChange={e => setForm(p => ({ ...p, justificativa: e.target.value }))}
-                  className="neu-input rounded-xl px-3 py-2.5 text-sm resize-none"
-                  placeholder="Por que esse headcount é necessário agora?" />
-              </div>
             </div>
-            <div className="flex justify-end gap-3 mt-4">
-              <button onClick={closeForm} className="text-sm text-gray-400 hover:text-gray-300 px-4">Cancelar</button>
-              <NeuButtonAccent onClick={handleAbrirVaga} isLoading={salvandoVaga}>Enviar para aprovação</NeuButtonAccent>
+            <div className="flex flex-col gap-1.5">
+              <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Departamento</label>
+              <select value={deptoSel} onChange={e => handleDeptoChange(e.target.value)} className="neu-input rounded-xl px-3 py-2.5 text-sm">
+                <option value="">Selecionar...</option>
+                {deptosAtivos.map((d: any) => <option key={d.id} value={d.id}>{d.nome}{rotuloFilial(d)}</option>)}
+                <option value={OUTRO}>Outro (digitar)</option>
+              </select>
+              {deptoSel === OUTRO && (
+                <input type="text" value={form.departamento} placeholder="Departamento fora do catálogo"
+                  onChange={e => setForm(p => ({ ...p, departamento: e.target.value }))}
+                  className="neu-input rounded-xl px-3 py-2.5 text-sm" />
+              )}
             </div>
-          </motion.div>
-          </motion.div>
-        )}
+            <div className="flex flex-col gap-1.5">
+              <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Quantidade</label>
+              <input type="number" min={1} value={form.quantidade}
+                onChange={e => setForm(p => ({ ...p, quantidade: e.target.value }))}
+                className="neu-input rounded-xl px-3 py-2.5 text-sm font-mono tabular-nums" />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Salário mín.</label>
+              <input type="text" inputMode="numeric" value={form.salario_min}
+                onChange={e => setForm(p => ({ ...p, salario_min: formatBRL(e.target.value) }))}
+                className="neu-input rounded-xl px-3 py-2.5 text-sm font-mono tabular-nums" placeholder="Opcional" />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Salário máx.</label>
+              <input type="text" inputMode="numeric" value={form.salario_max}
+                onChange={e => setForm(p => ({ ...p, salario_max: formatBRL(e.target.value) }))}
+                className="neu-input rounded-xl px-3 py-2.5 text-sm font-mono tabular-nums" placeholder="Opcional" />
+            </div>
+            <div className="flex flex-col gap-1.5 sm:col-span-2 lg:col-span-3">
+              <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Justificativa</label>
+              <textarea rows={2} value={form.justificativa}
+                onChange={e => setForm(p => ({ ...p, justificativa: e.target.value }))}
+                className="neu-input rounded-xl px-3 py-2.5 text-sm resize-none"
+                placeholder="Por que esse headcount é necessário agora?" />
+            </div>
+          </div>
+        </ModalFormulario>
       </AnimatePresence>
 
       {emMatriz && (

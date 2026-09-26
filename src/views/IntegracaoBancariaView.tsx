@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Plus, Trash2, CheckCircle, AlertTriangle, Clock, Building2 } from 'lucide-react';
 import { useFetchData, dbInsert, dbDelete, dbSetStatus } from '../hooks/useSupabaseData';
-import { LoadingSpinner, StatusBadge, FormField, NeuButtonAccent, BancoThumb, CardContador, type TomContador } from '../components/ui';
+import { LoadingSpinner, StatusBadge, FormField, NeuButtonAccent, BancoThumb, CardContador, type TomContador, ModalFormulario } from '../components/ui';
 import { useFilial } from '../contexts/FilialContext';
 
 const statusIcon = (s: string) => {
@@ -131,38 +131,39 @@ export const IntegracaoBancariaView = ({ showToast }: any) => {
         </div>
 
         <AnimatePresence>
-          {showForm && (
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-              className="neu-flat rounded-2xl p-5 border border-white/5 mb-4">
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                <FormField label="Banco">
-                  <input type="text" className="neu-input py-2 px-3 rounded-xl text-sm" placeholder="Ex: Banco do Brasil"
-                    value={form.banco} onChange={e => setForm((p: any) => ({ ...p, banco: e.target.value }))} />
-                </FormField>
-                <FormField label="Arquivo">
-                  <input type="text" className="neu-input py-2 px-3 rounded-xl text-sm" placeholder="Ex: extrato_jan.ofx"
-                    value={form.arquivo} onChange={e => setForm((p: any) => ({ ...p, arquivo: e.target.value }))} />
-                </FormField>
-                <FormField label="Data de Importação">
-                  <input type="date" className="neu-input py-2 px-3 rounded-xl text-sm"
-                    value={form.data_import} onChange={e => setForm((p: any) => ({ ...p, data_import: e.target.value }))} />
-                </FormField>
-                <FormField label="Nº de Registros">
-                  <input type="number" className="neu-input py-2 px-3 rounded-xl text-sm" placeholder="0"
-                    value={form.registros} onChange={e => setForm((p: any) => ({ ...p, registros: e.target.value }))} />
-                </FormField>
-                <FormField label="Status">
-                  <select className="neu-input py-2 px-3 rounded-xl text-sm"
-                    value={form.status} onChange={e => setForm((p: any) => ({ ...p, status: e.target.value }))}>
-                    {['Pendente', 'Processado', 'Erro'].map(o => <option key={o} value={o}>{o}</option>)}
-                  </select>
-                </FormField>
-              </div>
-              <div className="flex justify-end mt-4">
-                <NeuButtonAccent onClick={handleSave} disabled={saving}>{saving ? 'Salvando...' : 'Registrar Importação'}</NeuButtonAccent>
-              </div>
-            </motion.div>
-          )}
+          <ModalFormulario
+            aberto={showForm}
+            titulo="Registrar Importação"
+            onCancelar={() => setShowForm(false)}
+            acoes={<>
+              <NeuButtonAccent onClick={handleSave} disabled={saving}>{saving ? 'Salvando...' : 'Registrar Importação'}</NeuButtonAccent>
+            </>}
+          >
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              <FormField label="Banco">
+                <input type="text" className="neu-input py-2 px-3 rounded-xl text-sm" placeholder="Ex: Banco do Brasil"
+                  value={form.banco} onChange={e => setForm((p: any) => ({ ...p, banco: e.target.value }))} />
+              </FormField>
+              <FormField label="Arquivo">
+                <input type="text" className="neu-input py-2 px-3 rounded-xl text-sm" placeholder="Ex: extrato_jan.ofx"
+                  value={form.arquivo} onChange={e => setForm((p: any) => ({ ...p, arquivo: e.target.value }))} />
+              </FormField>
+              <FormField label="Data de Importação">
+                <input type="date" className="neu-input py-2 px-3 rounded-xl text-sm"
+                  value={form.data_import} onChange={e => setForm((p: any) => ({ ...p, data_import: e.target.value }))} />
+              </FormField>
+              <FormField label="Nº de Registros">
+                <input type="number" className="neu-input py-2 px-3 rounded-xl text-sm" placeholder="0"
+                  value={form.registros} onChange={e => setForm((p: any) => ({ ...p, registros: e.target.value }))} />
+              </FormField>
+              <FormField label="Status">
+                <select className="neu-input py-2 px-3 rounded-xl text-sm"
+                  value={form.status} onChange={e => setForm((p: any) => ({ ...p, status: e.target.value }))}>
+                  {['Pendente', 'Processado', 'Erro'].map(o => <option key={o} value={o}>{o}</option>)}
+                </select>
+              </FormField>
+            </div>
+          </ModalFormulario>
         </AnimatePresence>
 
         <div className="neu-flat rounded-2xl border border-white/5">

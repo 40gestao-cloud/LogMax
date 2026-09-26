@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Plus, Save, Check, X, ShoppingBag, MessageSquare, Send, Loader2, Search, GitCompare, Award, RotateCcw, Ban, CornerUpLeft, Pencil, AlertTriangle, Copy, Package, Truck, DollarSign, CalendarClock, MessageSquareText } from 'lucide-react';
 import { HistoricoOperacoes } from '../components/HistoricoOperacoes';
 import { useFetchData, dbInsert, dbUpdate } from '../hooks/useSupabaseData';
-import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent, StatusBadge, Pagination, SelecioneUnidade, FilaDeTrabalho, TextoModal, AbaComContador, SecaoFormulario } from '../components/ui';
+import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent, StatusBadge, Pagination, SelecioneUnidade, FilaDeTrabalho, TextoModal, AbaComContador, SecaoFormulario, ModalFormulario } from '../components/ui';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import { todayBR } from '../lib/dates';
 import { useFormValidation, formatBRL, parseBRL, handleMoneyKeyDown, qtdBR } from '../lib/viewUtils';
@@ -1657,362 +1657,361 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode, onNavigate }: { s
       )}
 
       <AnimatePresence>
-        {showForm && isCompras && !modoFinanceiro && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="shrink-0">
-            <div className="neu-flat rounded-2xl p-6 border border-white/5 flex flex-col gap-4">
-              <h3 className="text-sm font-bold text-gray-200">Nova Cotação</h3>
-              {semFornecedor ? (
-                <div className="neu-pressed rounded-2xl p-6 border border-yellow-500/30 flex flex-col items-center text-center gap-3">
-                  <AlertTriangle size={22} className="text-yellow-400" />
-                  <p className="text-sm font-bold text-yellow-400">
-                    Nenhum fornecedor cadastrado nesta unidade.
-                  </p>
-                  <p className="text-xs text-gray-400 max-w-md leading-relaxed">
-                    Cotação é o preço que um fornecedor informa, então só dá para abrir uma
-                    depois que existir pelo menos um fornecedor cadastrado — pessoa jurídica
-                    (PJ) ou pessoa física (PF).
-                  </p>
-                  {podeCadastrarFornecedor ? (
-                    // Botão de ação de verdade (mesmo peso visual de "Nova
-                    // Cotação"), não um `neu-button` apagado: aqui ele é a
-                    // única saída da tela, e um botão discreto no meio de
-                    // texto explicativo lê como mais uma linha do aviso.
-                    <div className="mt-2">
-                      <NeuButtonAccent onClick={irParaFornecedores}>
-                        <Plus size={16} /> Cadastrar fornecedor
-                      </NeuButtonAccent>
-                    </div>
-                  ) : (
-                    <p className="text-[11px] text-gray-500 mt-1">
-                      O cadastro fica em <span className="font-bold text-gray-400">Cadastros › Fornecedores</span>
-                      {temAcessoCadastros ? '.' : ', fora do seu acesso — peça à Logística.'}
-                    </p>
-                  )}
+        <ModalFormulario
+          aberto={!!(showForm && isCompras && !modoFinanceiro)}
+          largura="xl"
+          titulo="Nova Cotação"
+          onCancelar={closeForm}
+          acoes={!semFornecedor && <>
+            <NeuButtonAccent onClick={handleSave} isLoading={isSaving} disabled={reserva.travado}>
+              <Send size={14} /> Enviar ao Financeiro
+            </NeuButtonAccent>
+          </>}
+        >
+          {semFornecedor ? (
+            <div className="neu-pressed rounded-2xl p-6 border border-yellow-500/30 flex flex-col items-center text-center gap-3">
+              <AlertTriangle size={22} className="text-yellow-400" />
+              <p className="text-sm font-bold text-yellow-400">
+                Nenhum fornecedor cadastrado nesta unidade.
+              </p>
+              <p className="text-xs text-gray-400 max-w-md leading-relaxed">
+                Cotação é o preço que um fornecedor informa, então só dá para abrir uma
+                depois que existir pelo menos um fornecedor cadastrado — pessoa jurídica
+                (PJ) ou pessoa física (PF).
+              </p>
+              {podeCadastrarFornecedor ? (
+                // Botão de ação de verdade (mesmo peso visual de "Nova
+                // Cotação"), não um `neu-button` apagado: aqui ele é a
+                // única saída da tela, e um botão discreto no meio de
+                // texto explicativo lê como mais uma linha do aviso.
+                <div className="mt-2">
+                  <NeuButtonAccent onClick={irParaFornecedores}>
+                    <Plus size={16} /> Cadastrar fornecedor
+                  </NeuButtonAccent>
                 </div>
-              ) : requisicoesAprovadaOrdenadas.length === 0 ? (
-                <p className="text-sm text-yellow-400/80 text-center py-4">Nenhuma requisição aprovada disponível. Aprove uma requisição primeiro.</p>
               ) : (
-                <>
-                  {/* Fila zerada some do FilaDeTrabalho, então sem esta linha a
-                      tela ficava idêntica com tudo cotado e com nada cotado. */}
-                  {requisicoesParaCotar.pendentes.length === 0 && (
-                    <p className="text-[11px] text-emerald-400/80 -mt-2">
-                      Todas as requisições aprovadas já têm proposta.
-                    </p>
-                  )}
-                  <SecaoFormulario titulo="Item a cotar" icon={Package} cor="amarelo">
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <FormField label="Requisição *" error={errors.requisicao_id} className="md:col-span-2">
-                      <SelectBusca
-                        value={form.requisicao_id}
-                        error={undefined}
-                        placeholder="Escolha a requisição"
-                        onAbrir={selReq.handlers.onMouseDown}
-                        onFechar={selReq.soltar}
-                        onChange={v => { selReq.soltar(); setForm(f => ({ ...f, requisicao_id: v })); clearError('requisicao_id'); }}
-                        grupos={(() => {
-                          // Quem mais está cotando este item AGORA (reserva de
-                          // outro aluno) trava a opção antes do clique — o
-                          // professor não quer dois alunos apresentando
-                          // cotação do mesmo item.
-                          const emUsoPorOutro = (id: string) => {
-                            const res = selReq.opcoes.reservas[id];
-                            return res && res.usuario_id !== profile.id ? res : null;
-                          };
-                          // Item com proposta viva (mesmo devolvida/em correção)
-                          // some da lista — cotação é de um aluno só, não uma
-                          // rodada de comparação entre vários. Rejeitada/negada
-                          // não conta como viva (STATUS_VIVOS): o item volta
-                          // para "Ainda sem cotação" e outro aluno pode pegar.
-                          return [
-                            { label: 'Ainda sem cotação', tom: 'vermelho' as const, opcoes: selReq.opcoes.pendentes.map(({ r }) => {
-                              const res = emUsoPorOutro(r.id);
-                              return {
-                                value: r.id, label: r.item ?? '—', sub: rotuloQtdReq(r), hint: numeroRequisicao(r),
-                                tag: res ? { texto: 'Em uso', tom: 'amarelo' as const } : null,
-                                disabled: !!res,
-                                motivo: res ? `${res.usuario_nome} está cotando este item agora` : null,
-                              };
-                            }) },
-                            { label: 'Aprovadas — gere o pedido', tom: 'verde' as const, opcoes: selReq.opcoes.cotadas.filter(x => x.aprovada).map(({ r }) => ({
-                              value: r.id, label: r.item ?? '—', sub: rotuloQtdReq(r), hint: numeroRequisicao(r),
-                              tag: { texto: 'Aprovada', tom: 'verde' as const }, disabled: true,
-                            })) },
-                          ].filter(g => g.opcoes.length > 0);
-                        })()}
-                      />
-                      {/* A lista suspensa não deixa selecionar texto: o nome do
-                          produto escolhido aparece aqui, copiável, para o aluno
-                          pesquisar o preço fora sem redigitar. É a única
-                          exceção à trava de seleção do app (index.css). */}
-                      {(() => {
-                        const reqSel = requisicoes.find((r: any) => r.id === form.requisicao_id);
-                        if (!reqSel?.item) return null;
-                        return (
-                          <div className="mt-1.5 flex items-center gap-2 neu-pressed rounded-lg pl-3 pr-1.5 py-1.5 border border-white/5">
-                            <span className="selectable cursor-text text-xs font-semibold text-gray-100 flex-1 min-w-0 truncate" title={reqSel.item}>
-                              {reqSel.item}
-                            </span>
-                            <button type="button" title="Copiar nome do produto" aria-label="Copiar nome do produto"
-                              className="action-btn-neutral shrink-0"
-                              onClick={async () => {
-                                try {
-                                  await navigator.clipboard.writeText(reqSel.item);
-                                  showToast('Nome copiado — cole na pesquisa.', 'success', true);
-                                } catch {
-                                  showToast('Não foi possível copiar. Selecione o nome e use Ctrl+C.', 'error', true);
-                                }
-                              }}>
-                              <Copy size={12} />
-                            </button>
-                          </div>
-                        );
-                      })()}
-                    </FormField>
-                    {/* Quantidade não é digitada aqui: ela é da requisição.
-                        Mostrar em cinza tira a conta da cabeça do comprador e
-                        deixa claro sobre quantas unidades o preço incide. */}
-                    {reqSelecionada && (
-                      <FormField label="Quantidade solicitada">
-                        <div className="neu-pressed py-2 px-3 rounded-xl text-sm text-gray-300 tabular-nums">
-                          {temQtd ? `${qtdBR(qtdReq)} ${unidadeReq}` : '—'}
-                          {/* Migr. 589: em que embalagem o setor pediu. O
-                              fornecedor fala nessa medida, e é ela que o
-                              comprador tem na frente ao telefone. */}
-                          {embReq && (
-                            <span className="block text-[10px] text-accent/90 mt-0.5">
-                              {qtdBR(embReq.qtd)} {pluralEmbalagem(embReq.nome, embReq.qtd)} de {qtdBR(embReq.fator)} {unidadeReq}
-                            </span>
-                          )}
-                        </div>
-                      </FormField>
-                    )}
-                  </div>
-                  </SecaoFormulario>
-
-                  <SecaoFormulario titulo="Fornecedor" icon={Truck} cor="vermelho">
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <FormField label="Fornecedor PJ" error={errors.fornecedor_id}>
-                      <SelectBusca
-                        value={form.fornecedor_tipo === 'Empresa' ? form.fornecedor_id : ''}
-                        placeholder="Escolha o fornecedor PJ"
-                        disabled={reserva.travado}
-                        onAbrir={selPJ.handlers.onMouseDown}
-                        onFechar={selPJ.soltar}
-                        onChange={v => { selPJ.soltar(); setForm(f => ({ ...f, fornecedor_id: v, fornecedor_tipo: v ? 'Empresa' : '' })); clearError('fornecedor_id'); }}
-                        grupos={selPJ.opcoes.grupos.map((g): SelectBuscaGrupo => ({
-                          label: g.label,
-                          opcoes: g.items.map((f: any) => {
-                            // Proposta que já existe é definitiva (o banco
-                            // recusa, migr. 538) — a trava de trabalho agora é
-                            // no item inteiro (form.requisicao_id), não mais
-                            // por fornecedor.
-                            const jaCotado = selPJ.opcoes.jaCotados.get(f.id);
-                            return {
-                              value: f.id, label: f.nome ?? '—',
-                              sub: [f.cnpj || f.cpf, f.cidade].filter(Boolean).join(' · ') || null,
-                              tag: jaCotado ? { texto: 'Já cotado', tom: 'verde' as const } : null,
-                              disabled: !!jaCotado,
-                              motivo: jaCotado ? `Já tem proposta nesta requisição (${jaCotado})` : null,
-                            };
-                          }),
-                        }))}
-                      />
-                    </FormField>
-                    <FormField label="Fornecedor PF" error={errors.fornecedor_id}>
-                      <SelectBusca
-                        value={form.fornecedor_tipo === 'Pessoa Física' ? form.fornecedor_id : ''}
-                        placeholder="Escolha o fornecedor PF"
-                        disabled={reserva.travado}
-                        onAbrir={selPF.handlers.onMouseDown}
-                        onFechar={selPF.soltar}
-                        onChange={v => { selPF.soltar(); setForm(f => ({ ...f, fornecedor_id: v, fornecedor_tipo: v ? 'Pessoa Física' : '' })); clearError('fornecedor_id'); }}
-                        grupos={selPF.opcoes.grupos.map((g): SelectBuscaGrupo => ({
-                          label: g.label,
-                          opcoes: g.items.map((f: any) => {
-                            // Proposta que já existe é definitiva (o banco
-                            // recusa, migr. 538) — a trava de trabalho agora é
-                            // no item inteiro (form.requisicao_id), não mais
-                            // por fornecedor.
-                            const jaCotado = selPF.opcoes.jaCotados.get(f.id);
-                            return {
-                              value: f.id, label: f.nome ?? '—',
-                              sub: [f.cnpj || f.cpf, f.cidade].filter(Boolean).join(' · ') || null,
-                              tag: jaCotado ? { texto: 'Já cotado', tom: 'verde' as const } : null,
-                              disabled: !!jaCotado,
-                              motivo: jaCotado ? `Já tem proposta nesta requisição (${jaCotado})` : null,
-                            };
-                          }),
-                        }))}
-                      />
-                    </FormField>
-                    {/* Atalho permanente: a lista pode ter fornecedor e ainda
-                        assim faltar justo o que o aluno precisa cotar, e o
-                        caminho de volta (sair da tela, achar Cadastros, voltar
-                        e refazer o formulário) custa o formulário inteiro. */}
-                    {podeCadastrarFornecedor && (
-                      <div className="md:col-span-3 -mt-2 flex flex-wrap items-center gap-x-3 gap-y-2">
-                        {!temPJ && <span className="text-[11px] text-yellow-400/90">Nenhum fornecedor PJ cadastrado.</span>}
-                        {!temPF && <span className="text-[11px] text-yellow-400/90">Nenhum fornecedor PF cadastrado.</span>}
-                        <span className="text-[11px] text-gray-500">Falta o fornecedor na lista?</span>
-                        {/* Contorno e fundo: como texto sublinhado no meio da
-                            frase, isto lia como nota de rodapé e o aluno
-                            passava batido. */}
-                        <button type="button" onClick={irParaFornecedores}
-                          className="neu-button rounded-xl py-1.5 px-3 inline-flex items-center gap-1.5 text-[11px] font-bold text-accent border border-accent/30 hover:bg-accent/10 transition-colors">
-                          <Plus size={12} /> Cadastrar fornecedor
-                        </button>
-                      </div>
-                    )}
-                    {reserva.travado && (
-                      <p className="text-[11px] text-yellow-400 md:col-span-3 -mt-2">
-                        🔒 {reserva.dono?.usuario_nome} já está cotando este item agora.
-                        Escolha outro item ou espere.
-                      </p>
-                    )}
-                    {/* Histórico de quem foi escolhido, ainda no formulário: o
-                        prazo prometido abaixo vale o que o fornecedor costuma
-                        cumprir. */}
-                    {desempenhoDisponivel && form.fornecedor_id && (
-                      <div className="flex flex-col gap-1 justify-end pb-1">
-                        <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">
-                          Histórico de entrega
-                        </span>
-                        <SeloDesempenho d={desempenho[form.fornecedor_id]} />
-                      </div>
-                    )}
-                  </div>
-                  </SecaoFormulario>
-
-                  <SecaoFormulario titulo="Proposta" icon={DollarSign} cor="verde">
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    {/* O ÚNICO campo de preço que se digita, na medida em que o
-                        fornecedor fala: "R$ 135,00 o fardo" com embalagem
-                        fechada (migr. 589), "R$ 4,50 a unidade" sem ela. O
-                        resto é conta, e conta não se digita. */}
-                    {fonte && (
-                      <FormField label={fonte.label}>
-                        <input type="text" inputMode="numeric" className="neu-input py-2 px-3 rounded-xl text-sm"
-                          value={extras.valor_fonte}
-                          onChange={e => { setFonte(e.target.value); setErrosExtras(x => ({ ...x, valor_total: undefined })); }}
-                          onKeyDown={handleMoneyKeyDown}
-                          placeholder="0,00" />
-                      </FormField>
-                    )}
-                    {/* Unitário só aparece quando NÃO é a fonte — senão seria o
-                        mesmo campo duas vezes. É leitura: sai do total, com as
-                        casas que a divisão pedir, e é o número que compara duas
-                        propostas de embalagens diferentes. */}
-                    {embReq && (
-                      <FormField label={`Valor Unitário (R$ / ${unidadeReq})`}>
-                        <div className="neu-pressed py-2 px-3 rounded-xl text-sm text-gray-300 tabular-nums">
-                          {precoUnitario(parseBRL(extras.valor_total), qtdReq) || '—'}
-                        </div>
-                      </FormField>
-                    )}
-                    <FormField label="Valor Total (R$) *" error={errosExtras.valor_total}>
-                      <input type="text" inputMode="numeric"
-                        className={`neu-input py-2 px-3 rounded-xl text-sm ${errosExtras.valor_total ? 'border border-red-500/40' : ''}`}
-                        value={extras.valor_total}
-                        onChange={e => { setTotal(e.target.value); setErrosExtras(x => ({ ...x, valor_total: undefined })); }}
-                        onKeyDown={handleMoneyKeyDown}
-                        placeholder="0,00" />
-                      {/* Mexer no total é legítimo (frete, desconto fechado),
-                          mas deixa de ser a conta da fonte — e isso tem de
-                          estar dito na tela, não descoberto depois no pedido. */}
-                      {temAjuste && (
-                        <p className="text-[10px] text-amber-400 mt-1 leading-relaxed">
-                          Ajustado à mão: a conta dava R$ {formatBRL(totalBase)}
-                          {' '}({ajusteTotal > 0 ? '+' : '−'} R$ {formatBRL(Math.abs(ajusteTotal))}).
-                        </p>
-                      )}
-                    </FormField>
-                    {/* Marca (migr. 526). Na eventual é campo da proposta; na
-                        reposição é o que o catálogo já diz, em cinza. */}
-                    {form.requisicao_id && (ehEventual ? (
-                      <FormField label="Marca oferecida">
-                        <input list="marcas-conhecidas" className="neu-input py-2 px-3 rounded-xl text-sm"
-                          value={extras.marca}
-                          onChange={e => setExtras(x => ({ ...x, marca: e.target.value }))}
-                          placeholder="Ex.: Foxton" />
-                        {reqSelecionada?.marca && extras.marca.trim() !== String(reqSelecionada.marca).trim() && (
-                          <p className="text-[10px] text-cyan-400/80 mt-1">
-                            Pedida na requisição: <span className="font-bold">{reqSelecionada.marca}</span>
-                          </p>
-                        )}
-                      </FormField>
-                    ) : (
-                      <FormField label="Marca">
-                        <div className="neu-pressed py-2 px-3 rounded-xl text-sm text-gray-300">
-                          {produtoDaReq?.marca || '—'}
-                        </div>
-                      </FormField>
-                    ))}
-                  </div>
-                  </SecaoFormulario>
-
-                  <SecaoFormulario titulo="Prazo e pagamento" icon={CalendarClock} cor="azul">
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <FormField label="Prazo de Entrega">
-                      <input type="date" className={`neu-input py-2 px-3 rounded-xl text-sm ${prazoEstoura ? 'border border-red-500/40' : ''}`}
-                        value={extras.prazo_entrega} onChange={e => setExtras(x => ({ ...x, prazo_entrega: e.target.value }))} />
-                      {/* Duas datas parecidas viram uma só na cabeça de quem
-                          preenche se o alvo não estiver à vista. A da
-                          requisição é a DEMANDA (quando eu preciso); esta é a
-                          OFERTA (quando o fornecedor promete). Comparar as duas
-                          é metade do critério de compra — a outra é o preço. */}
-                      {prazoEstoura && (
-                        <p className="text-[10px] mt-1 leading-relaxed text-red-400">
-                          Depois do necessário ({dataBR(reqSelecionada.data_necessidade)}).
-                        </p>
-                      )}
-                    </FormField>
-                    <FormField label="Validade da Proposta *" error={errosExtras.validade}>
-                      <input type="date" min={todayBR()}
-                        className={`neu-input py-2 px-3 rounded-xl text-sm ${errosExtras.validade ? 'border border-red-500/40' : ''}`}
-                        value={extras.validade}
-                        onChange={e => { setExtras(x => ({ ...x, validade: e.target.value })); setErrosExtras(x => ({ ...x, validade: undefined })); }} />
-                      {/* Preço de fornecedor vence. Depois desta data o
-                          Financeiro não aprova (migr. 583) — a saída é devolver
-                          para Compras revalidar, que é o que se faz na rua. */}
-                    </FormField>
-                    {/* MIGR 584. Prazo é negociação, não detalhe: duas
-                        propostas de mesmo valor não são a mesma compra se uma
-                        é à vista e a outra é 30/60/90. Daqui saem os
-                        vencimentos dos títulos no contas a pagar. */}
-                    <FormField label="Condição de pagamento *">
-                      <select className="neu-input py-2 px-3 rounded-xl text-sm"
-                        value={extras.condicao_pagamento}
-                        onChange={e => setExtras(x => ({ ...x, condicao_pagamento: e.target.value }))}>
-                        {CONDICOES_PAGAMENTO.map(c => <option key={c} value={c}>{c}</option>)}
-                      </select>
-                    </FormField>
-                  </div>
-                  </SecaoFormulario>
-
-                  {/* MIGR 583. Proposta real não é só um número: vem com
-                      frete, garantia, prazo de troca. Sem lugar para isso, o
-                      aluno comparava dois preços fingindo que as condições
-                      eram iguais — e é aqui que a diferença dos três nichos
-                      aparece sem precisar de campo por nicho. */}
-                  <SecaoFormulario titulo="Condições / observações do fornecedor" icon={MessageSquareText} cor="laranja">
-                    <textarea maxLength={240}
-                      className="neu-input py-2 px-3 rounded-xl text-sm resize-none campo-cresce w-full"
-                      value={extras.observacao}
-                      onChange={e => setExtras(x => ({ ...x, observacao: e.target.value }))}
-                      placeholder="Ex.: frete incluso; garantia de 12 meses; troca em até 7 dias" />
-                  </SecaoFormulario>
-                  <div className="flex gap-3 justify-end">
-                    <button onClick={closeForm} className="neu-button py-2 px-5 rounded-xl text-sm text-gray-400">Cancelar</button>
-                    <NeuButtonAccent onClick={handleSave} isLoading={isSaving} disabled={reserva.travado}>
-                      <Send size={14} /> Enviar ao Financeiro
-                    </NeuButtonAccent>
-                  </div>
-                </>
+                <p className="text-[11px] text-gray-500 mt-1">
+                  O cadastro fica em <span className="font-bold text-gray-400">Cadastros › Fornecedores</span>
+                  {temAcessoCadastros ? '.' : ', fora do seu acesso — peça à Logística.'}
+                </p>
               )}
             </div>
-          </motion.div>
-        )}
+          ) : requisicoesAprovadaOrdenadas.length === 0 ? (
+            <p className="text-sm text-yellow-400/80 text-center py-4">Nenhuma requisição aprovada disponível. Aprove uma requisição primeiro.</p>
+          ) : (
+            <>
+              {/* Fila zerada some do FilaDeTrabalho, então sem esta linha a
+                  tela ficava idêntica com tudo cotado e com nada cotado. */}
+              {requisicoesParaCotar.pendentes.length === 0 && (
+                <p className="text-[11px] text-emerald-400/80 -mt-2">
+                  Todas as requisições aprovadas já têm proposta.
+                </p>
+              )}
+              <SecaoFormulario titulo="Item a cotar" icon={Package} cor="amarelo">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <FormField label="Requisição *" error={errors.requisicao_id} className="md:col-span-2">
+                  <SelectBusca
+                    value={form.requisicao_id}
+                    error={undefined}
+                    placeholder="Escolha a requisição"
+                    onAbrir={selReq.handlers.onMouseDown}
+                    onFechar={selReq.soltar}
+                    onChange={v => { selReq.soltar(); setForm(f => ({ ...f, requisicao_id: v })); clearError('requisicao_id'); }}
+                    grupos={(() => {
+                      // Quem mais está cotando este item AGORA (reserva de
+                      // outro aluno) trava a opção antes do clique — o
+                      // professor não quer dois alunos apresentando
+                      // cotação do mesmo item.
+                      const emUsoPorOutro = (id: string) => {
+                        const res = selReq.opcoes.reservas[id];
+                        return res && res.usuario_id !== profile.id ? res : null;
+                      };
+                      // Item com proposta viva (mesmo devolvida/em correção)
+                      // some da lista — cotação é de um aluno só, não uma
+                      // rodada de comparação entre vários. Rejeitada/negada
+                      // não conta como viva (STATUS_VIVOS): o item volta
+                      // para "Ainda sem cotação" e outro aluno pode pegar.
+                      return [
+                        { label: 'Ainda sem cotação', tom: 'vermelho' as const, opcoes: selReq.opcoes.pendentes.map(({ r }) => {
+                          const res = emUsoPorOutro(r.id);
+                          return {
+                            value: r.id, label: r.item ?? '—', sub: rotuloQtdReq(r), hint: numeroRequisicao(r),
+                            tag: res ? { texto: 'Em uso', tom: 'amarelo' as const } : null,
+                            disabled: !!res,
+                            motivo: res ? `${res.usuario_nome} está cotando este item agora` : null,
+                          };
+                        }) },
+                        { label: 'Aprovadas — gere o pedido', tom: 'verde' as const, opcoes: selReq.opcoes.cotadas.filter(x => x.aprovada).map(({ r }) => ({
+                          value: r.id, label: r.item ?? '—', sub: rotuloQtdReq(r), hint: numeroRequisicao(r),
+                          tag: { texto: 'Aprovada', tom: 'verde' as const }, disabled: true,
+                        })) },
+                      ].filter(g => g.opcoes.length > 0);
+                    })()}
+                  />
+                  {/* A lista suspensa não deixa selecionar texto: o nome do
+                      produto escolhido aparece aqui, copiável, para o aluno
+                      pesquisar o preço fora sem redigitar. É a única
+                      exceção à trava de seleção do app (index.css). */}
+                  {(() => {
+                    const reqSel = requisicoes.find((r: any) => r.id === form.requisicao_id);
+                    if (!reqSel?.item) return null;
+                    return (
+                      <div className="mt-1.5 flex items-center gap-2 neu-pressed rounded-lg pl-3 pr-1.5 py-1.5 border border-white/5">
+                        <span className="selectable cursor-text text-xs font-semibold text-gray-100 flex-1 min-w-0 truncate" title={reqSel.item}>
+                          {reqSel.item}
+                        </span>
+                        <button type="button" title="Copiar nome do produto" aria-label="Copiar nome do produto"
+                          className="action-btn-neutral shrink-0"
+                          onClick={async () => {
+                            try {
+                              await navigator.clipboard.writeText(reqSel.item);
+                              showToast('Nome copiado — cole na pesquisa.', 'success', true);
+                            } catch {
+                              showToast('Não foi possível copiar. Selecione o nome e use Ctrl+C.', 'error', true);
+                            }
+                          }}>
+                          <Copy size={12} />
+                        </button>
+                      </div>
+                    );
+                  })()}
+                </FormField>
+                {/* Quantidade não é digitada aqui: ela é da requisição.
+                    Mostrar em cinza tira a conta da cabeça do comprador e
+                    deixa claro sobre quantas unidades o preço incide. */}
+                {reqSelecionada && (
+                  <FormField label="Quantidade solicitada">
+                    <div className="neu-pressed py-2 px-3 rounded-xl text-sm text-gray-300 tabular-nums">
+                      {temQtd ? `${qtdBR(qtdReq)} ${unidadeReq}` : '—'}
+                      {/* Migr. 589: em que embalagem o setor pediu. O
+                          fornecedor fala nessa medida, e é ela que o
+                          comprador tem na frente ao telefone. */}
+                      {embReq && (
+                        <span className="block text-[10px] text-accent/90 mt-0.5">
+                          {qtdBR(embReq.qtd)} {pluralEmbalagem(embReq.nome, embReq.qtd)} de {qtdBR(embReq.fator)} {unidadeReq}
+                        </span>
+                      )}
+                    </div>
+                  </FormField>
+                )}
+              </div>
+              </SecaoFormulario>
+
+              <SecaoFormulario titulo="Fornecedor" icon={Truck} cor="vermelho">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <FormField label="Fornecedor PJ" error={errors.fornecedor_id}>
+                  <SelectBusca
+                    value={form.fornecedor_tipo === 'Empresa' ? form.fornecedor_id : ''}
+                    placeholder="Escolha o fornecedor PJ"
+                    disabled={reserva.travado}
+                    onAbrir={selPJ.handlers.onMouseDown}
+                    onFechar={selPJ.soltar}
+                    onChange={v => { selPJ.soltar(); setForm(f => ({ ...f, fornecedor_id: v, fornecedor_tipo: v ? 'Empresa' : '' })); clearError('fornecedor_id'); }}
+                    grupos={selPJ.opcoes.grupos.map((g): SelectBuscaGrupo => ({
+                      label: g.label,
+                      opcoes: g.items.map((f: any) => {
+                        // Proposta que já existe é definitiva (o banco
+                        // recusa, migr. 538) — a trava de trabalho agora é
+                        // no item inteiro (form.requisicao_id), não mais
+                        // por fornecedor.
+                        const jaCotado = selPJ.opcoes.jaCotados.get(f.id);
+                        return {
+                          value: f.id, label: f.nome ?? '—',
+                          sub: [f.cnpj || f.cpf, f.cidade].filter(Boolean).join(' · ') || null,
+                          tag: jaCotado ? { texto: 'Já cotado', tom: 'verde' as const } : null,
+                          disabled: !!jaCotado,
+                          motivo: jaCotado ? `Já tem proposta nesta requisição (${jaCotado})` : null,
+                        };
+                      }),
+                    }))}
+                  />
+                </FormField>
+                <FormField label="Fornecedor PF" error={errors.fornecedor_id}>
+                  <SelectBusca
+                    value={form.fornecedor_tipo === 'Pessoa Física' ? form.fornecedor_id : ''}
+                    placeholder="Escolha o fornecedor PF"
+                    disabled={reserva.travado}
+                    onAbrir={selPF.handlers.onMouseDown}
+                    onFechar={selPF.soltar}
+                    onChange={v => { selPF.soltar(); setForm(f => ({ ...f, fornecedor_id: v, fornecedor_tipo: v ? 'Pessoa Física' : '' })); clearError('fornecedor_id'); }}
+                    grupos={selPF.opcoes.grupos.map((g): SelectBuscaGrupo => ({
+                      label: g.label,
+                      opcoes: g.items.map((f: any) => {
+                        // Proposta que já existe é definitiva (o banco
+                        // recusa, migr. 538) — a trava de trabalho agora é
+                        // no item inteiro (form.requisicao_id), não mais
+                        // por fornecedor.
+                        const jaCotado = selPF.opcoes.jaCotados.get(f.id);
+                        return {
+                          value: f.id, label: f.nome ?? '—',
+                          sub: [f.cnpj || f.cpf, f.cidade].filter(Boolean).join(' · ') || null,
+                          tag: jaCotado ? { texto: 'Já cotado', tom: 'verde' as const } : null,
+                          disabled: !!jaCotado,
+                          motivo: jaCotado ? `Já tem proposta nesta requisição (${jaCotado})` : null,
+                        };
+                      }),
+                    }))}
+                  />
+                </FormField>
+                {/* Atalho permanente: a lista pode ter fornecedor e ainda
+                    assim faltar justo o que o aluno precisa cotar, e o
+                    caminho de volta (sair da tela, achar Cadastros, voltar
+                    e refazer o formulário) custa o formulário inteiro. */}
+                {podeCadastrarFornecedor && (
+                  <div className="md:col-span-3 -mt-2 flex flex-wrap items-center gap-x-3 gap-y-2">
+                    {!temPJ && <span className="text-[11px] text-yellow-400/90">Nenhum fornecedor PJ cadastrado.</span>}
+                    {!temPF && <span className="text-[11px] text-yellow-400/90">Nenhum fornecedor PF cadastrado.</span>}
+                    <span className="text-[11px] text-gray-500">Falta o fornecedor na lista?</span>
+                    {/* Contorno e fundo: como texto sublinhado no meio da
+                        frase, isto lia como nota de rodapé e o aluno
+                        passava batido. */}
+                    <button type="button" onClick={irParaFornecedores}
+                      className="neu-button rounded-xl py-1.5 px-3 inline-flex items-center gap-1.5 text-[11px] font-bold text-accent border border-accent/30 hover:bg-accent/10 transition-colors">
+                      <Plus size={12} /> Cadastrar fornecedor
+                    </button>
+                  </div>
+                )}
+                {reserva.travado && (
+                  <p className="text-[11px] text-yellow-400 md:col-span-3 -mt-2">
+                    🔒 {reserva.dono?.usuario_nome} já está cotando este item agora.
+                    Escolha outro item ou espere.
+                  </p>
+                )}
+                {/* Histórico de quem foi escolhido, ainda no formulário: o
+                    prazo prometido abaixo vale o que o fornecedor costuma
+                    cumprir. */}
+                {desempenhoDisponivel && form.fornecedor_id && (
+                  <div className="flex flex-col gap-1 justify-end pb-1">
+                    <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">
+                      Histórico de entrega
+                    </span>
+                    <SeloDesempenho d={desempenho[form.fornecedor_id]} />
+                  </div>
+                )}
+              </div>
+              </SecaoFormulario>
+
+              <SecaoFormulario titulo="Proposta" icon={DollarSign} cor="verde">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {/* O ÚNICO campo de preço que se digita, na medida em que o
+                    fornecedor fala: "R$ 135,00 o fardo" com embalagem
+                    fechada (migr. 589), "R$ 4,50 a unidade" sem ela. O
+                    resto é conta, e conta não se digita. */}
+                {fonte && (
+                  <FormField label={fonte.label}>
+                    <input type="text" inputMode="numeric" className="neu-input py-2 px-3 rounded-xl text-sm"
+                      value={extras.valor_fonte}
+                      onChange={e => { setFonte(e.target.value); setErrosExtras(x => ({ ...x, valor_total: undefined })); }}
+                      onKeyDown={handleMoneyKeyDown}
+                      placeholder="0,00" />
+                  </FormField>
+                )}
+                {/* Unitário só aparece quando NÃO é a fonte — senão seria o
+                    mesmo campo duas vezes. É leitura: sai do total, com as
+                    casas que a divisão pedir, e é o número que compara duas
+                    propostas de embalagens diferentes. */}
+                {embReq && (
+                  <FormField label={`Valor Unitário (R$ / ${unidadeReq})`}>
+                    <div className="neu-pressed py-2 px-3 rounded-xl text-sm text-gray-300 tabular-nums">
+                      {precoUnitario(parseBRL(extras.valor_total), qtdReq) || '—'}
+                    </div>
+                  </FormField>
+                )}
+                <FormField label="Valor Total (R$) *" error={errosExtras.valor_total}>
+                  <input type="text" inputMode="numeric"
+                    className={`neu-input py-2 px-3 rounded-xl text-sm ${errosExtras.valor_total ? 'border border-red-500/40' : ''}`}
+                    value={extras.valor_total}
+                    onChange={e => { setTotal(e.target.value); setErrosExtras(x => ({ ...x, valor_total: undefined })); }}
+                    onKeyDown={handleMoneyKeyDown}
+                    placeholder="0,00" />
+                  {/* Mexer no total é legítimo (frete, desconto fechado),
+                      mas deixa de ser a conta da fonte — e isso tem de
+                      estar dito na tela, não descoberto depois no pedido. */}
+                  {temAjuste && (
+                    <p className="text-[10px] text-amber-400 mt-1 leading-relaxed">
+                      Ajustado à mão: a conta dava R$ {formatBRL(totalBase)}
+                      {' '}({ajusteTotal > 0 ? '+' : '−'} R$ {formatBRL(Math.abs(ajusteTotal))}).
+                    </p>
+                  )}
+                </FormField>
+                {/* Marca (migr. 526). Na eventual é campo da proposta; na
+                    reposição é o que o catálogo já diz, em cinza. */}
+                {form.requisicao_id && (ehEventual ? (
+                  <FormField label="Marca oferecida">
+                    <input list="marcas-conhecidas" className="neu-input py-2 px-3 rounded-xl text-sm"
+                      value={extras.marca}
+                      onChange={e => setExtras(x => ({ ...x, marca: e.target.value }))}
+                      placeholder="Ex.: Foxton" />
+                    {reqSelecionada?.marca && extras.marca.trim() !== String(reqSelecionada.marca).trim() && (
+                      <p className="text-[10px] text-cyan-400/80 mt-1">
+                        Pedida na requisição: <span className="font-bold">{reqSelecionada.marca}</span>
+                      </p>
+                    )}
+                  </FormField>
+                ) : (
+                  <FormField label="Marca">
+                    <div className="neu-pressed py-2 px-3 rounded-xl text-sm text-gray-300">
+                      {produtoDaReq?.marca || '—'}
+                    </div>
+                  </FormField>
+                ))}
+              </div>
+              </SecaoFormulario>
+
+              <SecaoFormulario titulo="Prazo e pagamento" icon={CalendarClock} cor="azul">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <FormField label="Prazo de Entrega">
+                  <input type="date" className={`neu-input py-2 px-3 rounded-xl text-sm ${prazoEstoura ? 'border border-red-500/40' : ''}`}
+                    value={extras.prazo_entrega} onChange={e => setExtras(x => ({ ...x, prazo_entrega: e.target.value }))} />
+                  {/* Duas datas parecidas viram uma só na cabeça de quem
+                      preenche se o alvo não estiver à vista. A da
+                      requisição é a DEMANDA (quando eu preciso); esta é a
+                      OFERTA (quando o fornecedor promete). Comparar as duas
+                      é metade do critério de compra — a outra é o preço. */}
+                  {prazoEstoura && (
+                    <p className="text-[10px] mt-1 leading-relaxed text-red-400">
+                      Depois do necessário ({dataBR(reqSelecionada.data_necessidade)}).
+                    </p>
+                  )}
+                </FormField>
+                <FormField label="Validade da Proposta *" error={errosExtras.validade}>
+                  <input type="date" min={todayBR()}
+                    className={`neu-input py-2 px-3 rounded-xl text-sm ${errosExtras.validade ? 'border border-red-500/40' : ''}`}
+                    value={extras.validade}
+                    onChange={e => { setExtras(x => ({ ...x, validade: e.target.value })); setErrosExtras(x => ({ ...x, validade: undefined })); }} />
+                  {/* Preço de fornecedor vence. Depois desta data o
+                      Financeiro não aprova (migr. 583) — a saída é devolver
+                      para Compras revalidar, que é o que se faz na rua. */}
+                </FormField>
+                {/* MIGR 584. Prazo é negociação, não detalhe: duas
+                    propostas de mesmo valor não são a mesma compra se uma
+                    é à vista e a outra é 30/60/90. Daqui saem os
+                    vencimentos dos títulos no contas a pagar. */}
+                <FormField label="Condição de pagamento *">
+                  <select className="neu-input py-2 px-3 rounded-xl text-sm"
+                    value={extras.condicao_pagamento}
+                    onChange={e => setExtras(x => ({ ...x, condicao_pagamento: e.target.value }))}>
+                    {CONDICOES_PAGAMENTO.map(c => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                </FormField>
+              </div>
+              </SecaoFormulario>
+
+              {/* MIGR 583. Proposta real não é só um número: vem com
+                  frete, garantia, prazo de troca. Sem lugar para isso, o
+                  aluno comparava dois preços fingindo que as condições
+                  eram iguais — e é aqui que a diferença dos três nichos
+                  aparece sem precisar de campo por nicho. */}
+              <SecaoFormulario titulo="Condições / observações do fornecedor" icon={MessageSquareText} cor="laranja">
+                <textarea maxLength={240}
+                  className="neu-input py-2 px-3 rounded-xl text-sm resize-none campo-cresce w-full"
+                  value={extras.observacao}
+                  onChange={e => setExtras(x => ({ ...x, observacao: e.target.value }))}
+                  placeholder="Ex.: frete incluso; garantia de 12 meses; troca em até 7 dias" />
+              </SecaoFormulario>
+            </>
+          )}
+        </ModalFormulario>
       </AnimatePresence>
 
       {abaAtiva !== 'cotacoes' ? null : isLoading ? <LoadingSpinner /> : enrichedFiltered.length === 0 ? <EmptyState message="Nenhuma cotação encontrada" /> : (

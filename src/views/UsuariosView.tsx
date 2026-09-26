@@ -6,7 +6,7 @@ import { Plus, Users, X, Eye, EyeOff, Shield, User, Trash2, Pencil, FileDown, Fi
 import { uploadFotoPerfil, validarFotoPerfil, PERFIL_FOTO_ACCEPT } from '../lib/perfilFoto';
 import { supabase } from '../lib/supabase';
 import { freshToken } from '../lib/authFetch';
-import { LoadingSpinner, EmptyState, NeuButtonAccent, FilialBadge, CardContador, type TomContador } from '../components/ui';
+import { LoadingSpinner, EmptyState, NeuButtonAccent, FilialBadge, CardContador, type TomContador, ModalFormulario } from '../components/ui';
 import { useFetchData } from '../hooks/useSupabaseData';
 import type { UserProfile } from '../hooks/useUserProfile';
 import { FILIAIS_HOLDING } from '../lib/filiais';
@@ -1021,176 +1021,147 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
       )}
 
       <AnimatePresence>
-        {showForm && isAdmin && (
-          <motion.div
-            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4"
-            onClick={() => !saving && fecharNovo()}>
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95, y: 10 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 10 }}
-              onClick={e => e.stopPropagation()}
-              className="neu-flat rounded-3xl border border-white/10 w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden">
+        <ModalFormulario
+          aberto={!!(showForm && isAdmin)}
+          titulo="Novo Usuário"
+          subtitulo={'Login no LogMax, com ou sem ficha no RH.'}
+          onCancelar={fecharNovo}
+          acoes={<>
+            <NeuButtonAccent onClick={handleSave} disabled={saving || !form.nome || !form.email || form.password.length < 6}>
+              {saving ? 'Criando...' : 'Criar Usuário'}
+            </NeuButtonAccent>
+          </>}
+        >
+          <SecaoForm icon={Link2} titulo="Vínculo com o RH"
+            dica="Escolha o funcionário para trazer nome, e-mail e unidade da ficha.">
+            <SelectBusca
+              value={form.funcionario_id}
+              onChange={v => v ? escolherFuncionario(v) : setForm((p: any) => ({ ...p, funcionario_id: '' }))}
+              placeholder="Sem vínculo — conta avulsa"
+              permitirVazio="Sem vínculo"
+              opcoes={funcionariosLivres(form.filial).map((f: any) => opcaoFuncionario(f))}
+            />
+            {funcionariosLivres(form.filial).length === 0 && (
+              <p className="text-[10px] text-gray-600 mt-1.5">
+                Nenhum funcionário ativo sem conta{form.filial ? ` na ${form.filial}` : ''}.
+              </p>
+            )}
+          </SecaoForm>
 
-              <div className="flex items-center justify-between gap-3 px-6 pt-6 pb-4 border-b border-white/5 shrink-0">
-                <div className="flex items-center gap-3 min-w-0">
-                  <div className="w-10 h-10 neu-pressed rounded-xl flex items-center justify-center shrink-0">
-                    <UserPlus size={18} className="text-accent" />
-                  </div>
-                  <div className="min-w-0">
-                    <h3 className="text-base font-bold text-gray-200">Novo Usuário</h3>
-                    <p className="text-[11px] text-gray-500">Login no LogMax, com ou sem ficha no RH.</p>
-                  </div>
-                </div>
-                <button onClick={fecharNovo} className="modal-close-btn"><X size={16} /></button>
-              </div>
-
-              <div className="px-6 py-5 overflow-y-auto main-scrollbar flex-1 min-h-0 flex flex-col gap-6">
-
-                <SecaoForm icon={Link2} titulo="Vínculo com o RH"
-                  dica="Escolha o funcionário para trazer nome, e-mail e unidade da ficha.">
-                  <SelectBusca
-                    value={form.funcionario_id}
-                    onChange={v => v ? escolherFuncionario(v) : setForm((p: any) => ({ ...p, funcionario_id: '' }))}
-                    placeholder="Sem vínculo — conta avulsa"
-                    permitirVazio="Sem vínculo"
-                    opcoes={funcionariosLivres(form.filial).map((f: any) => opcaoFuncionario(f))}
-                  />
-                  {funcionariosLivres(form.filial).length === 0 && (
-                    <p className="text-[10px] text-gray-600 mt-1.5">
-                      Nenhum funcionário ativo sem conta{form.filial ? ` na ${form.filial}` : ''}.
-                    </p>
-                  )}
-                </SecaoForm>
-
-                <SecaoForm icon={User} titulo="Identificação">
-                  <div className="flex flex-col sm:flex-row gap-4">
-                    <div className="flex sm:flex-col items-center gap-3 sm:gap-1.5 shrink-0">
-                      <button type="button" onClick={() => formPhotoInputRef.current?.click()}
-                        className="relative w-20 h-20 rounded-full neu-button overflow-hidden flex items-center justify-center text-gray-500 hover:text-accent transition-colors"
-                        title="Adicionar foto (opcional)">
-                        {formPhotoPreview
-                          ? <img src={formPhotoPreview} alt="Prévia da foto" className="w-full h-full object-cover" />
-                          : <Camera size={22} />}
-                      </button>
-                      <div className="sm:text-center">
-                        <p className="text-[10px] text-gray-600">JPG, PNG ou WEBP<br className="hidden sm:block" /> · máx 150 KB</p>
-                        {formPhotoPreview && (
-                          <button type="button" onClick={() => { setFormPhotoFile(null); URL.revokeObjectURL(formPhotoPreview); setFormPhotoPreview(null); }}
-                            className="text-[10px] text-red-500 hover:text-red-400">Remover</button>
-                        )}
-                      </div>
-                      <input ref={formPhotoInputRef} type="file" accept={PERFIL_FOTO_ACCEPT} className="hidden"
-                        onChange={e => {
-                          const f = e.target.files?.[0]; e.target.value = '';
-                          if (!f) return;
-                          const val = validarFotoPerfil(f);
-                          if (!val.ok) { showToast(val.motivo, 'error'); return; }
-                          setFormPhotoFile(f);
-                          if (formPhotoPreview) URL.revokeObjectURL(formPhotoPreview);
-                          setFormPhotoPreview(URL.createObjectURL(f));
-                        }} />
-                    </div>
-                    <div className="flex-1 grid grid-cols-1 gap-4">
-                      <CampoForm id="user-nome" label="Nome completo *">
-                        <input id="user-nome" type="text" value={form.nome} autoComplete="off"
-                          onChange={e => setForm((p: any) => ({ ...p, nome: e.target.value }))}
-                          className="neu-input rounded-xl px-3 py-2.5 text-sm" />
-                      </CampoForm>
-                      <CampoForm id="user-email" label="E-mail de login *">
-                        <input id="user-email" type="email" value={form.email} autoComplete="off"
-                          onChange={e => setForm((p: any) => ({ ...p, email: e.target.value }))}
-                          className="neu-input rounded-xl px-3 py-2.5 text-sm" />
-                      </CampoForm>
-                    </div>
-                  </div>
-                </SecaoForm>
-
-                <SecaoForm icon={KeyRound} titulo="Senha de acesso"
-                  dica="Fica guardada no cofre e sai no PDF de credenciais.">
-                  <div className="flex gap-2">
-                    <div className="relative flex-1">
-                      <input id="user-password" aria-label="Senha" type={showPass ? 'text' : 'password'} value={form.password}
-                        autoComplete="new-password" placeholder="Mínimo 6 caracteres"
-                        onChange={e => setForm((p: any) => ({ ...p, password: e.target.value }))}
-                        className="neu-input rounded-xl px-3 py-2.5 pr-16 text-sm w-full font-mono" />
-                      <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-2">
-                        {form.password && showPass && (
-                          <button type="button" onClick={() => copiarSenha(form.password)} title="Copiar senha"
-                            className="text-gray-500 hover:text-accent"><Copy size={13} /></button>
-                        )}
-                        <button type="button" onClick={() => setShowPass(v => !v)} title={showPass ? 'Ocultar' : 'Mostrar'}
-                          className="text-gray-500 hover:text-gray-300">
-                          {showPass ? <EyeOff size={14} /> : <Eye size={14} />}
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                </SecaoForm>
-
-                <SecaoForm icon={Briefcase} titulo="Cargo e lotação">
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                    <CampoForm id="user-role" label="Cargo">
-                      <select id="user-role" value={form.role} onChange={e => setForm((p: any) => ({ ...p, role: e.target.value }))}
-                        disabled={!isGlobal} className="neu-input rounded-xl px-3 py-2.5 text-sm disabled:opacity-50">
-                        {roleOptions.map(r => <option key={r} value={r}>{ROLE_LABEL[r]}</option>)}
-                      </select>
-                    </CampoForm>
-                    <CampoForm id="user-setor" label="Setor">
-                      <select id="user-setor" value={form.setor} onChange={e => setForm((p: any) => ({ ...p, setor: e.target.value }))}
-                        disabled={roleEscopoGlobal(form.role)}
-                        className="neu-input rounded-xl px-3 py-2.5 text-sm disabled:opacity-50">
-                        {setorOptions.map(s => <option key={s} value={s}>{SETOR_LABEL[s]}</option>)}
-                        {roleEscopoGlobal(form.role) && <option value="all">{SETOR_LABEL.all}</option>}
-                      </select>
-                    </CampoForm>
-                    {/* Colaborador/gerente não vão para a Matriz (o FilialContext
-                        barra o login); gerente não-global fica na própria unidade. */}
-                    <CampoForm id="user-filial" label="Unidade">
-                      <select id="user-filial" value={form.filial}
-                        onChange={e => {
-                          const filial = e.target.value;
-                          setForm((p: any) => {
-                            const f: any = funcionarios.find((x: any) => x.id === p.funcionario_id);
-                            const desfaz = f && filial !== SEM_ALOCACAO && f.filial !== filial;
-                            return { ...p, filial, funcionario_id: desfaz ? '' : p.funcionario_id };
-                          });
-                        }}
-                        disabled={isGerente && !isGlobal}
-                        className="neu-input rounded-xl px-3 py-2.5 text-sm disabled:opacity-50">
-                        {isGlobal && <option value={SEM_ALOCACAO}>Sem alocação</option>}
-                        {(isGerente && !isGlobal ? [callerProfile.filial] : filiaisParaRole(form.role)).map(f => <option key={f} value={f}>{f}</option>)}
-                      </select>
-                    </CampoForm>
-                  </div>
-                  {form.filial === SEM_ALOCACAO && (
-                    <p className="text-[10px] text-amber-400/80 leading-relaxed mt-2">
-                      Sem unidade, o aluno vê "Filial não configurada" ao entrar até você alocá-lo.
-                    </p>
-                  )}
-                </SecaoForm>
-
-                {isGlobal && !roleEscopoGlobal(form.role) && (
-                  <SecaoForm icon={Layers} titulo="Acesso a outros setores" dica="Somam ao setor principal, sem mudar o cargo.">
-                    <SetoresExtras setor={form.setor} value={form.setores_extras ?? []}
-                      onChange={v => setForm((p: any) => ({ ...p, setores_extras: v }))} />
-                  </SecaoForm>
-                )}
-              </div>
-
-              <div className="flex items-center justify-end gap-2 px-6 py-4 border-t border-white/5 shrink-0">
-                <button onClick={fecharNovo} disabled={saving}
-                  className="px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-widest neu-button text-gray-400 hover:text-gray-200 disabled:opacity-50">
-                  Cancelar
+          <SecaoForm icon={User} titulo="Identificação">
+            <div className="flex flex-col sm:flex-row gap-4">
+              <div className="flex sm:flex-col items-center gap-3 sm:gap-1.5 shrink-0">
+                <button type="button" onClick={() => formPhotoInputRef.current?.click()}
+                  className="relative w-20 h-20 rounded-full neu-button overflow-hidden flex items-center justify-center text-gray-500 hover:text-accent transition-colors"
+                  title="Adicionar foto (opcional)">
+                  {formPhotoPreview
+                    ? <img src={formPhotoPreview} alt="Prévia da foto" className="w-full h-full object-cover" />
+                    : <Camera size={22} />}
                 </button>
-                <NeuButtonAccent onClick={handleSave} disabled={saving || !form.nome || !form.email || form.password.length < 6}>
-                  {saving ? 'Criando...' : 'Criar Usuário'}
-                </NeuButtonAccent>
+                <div className="sm:text-center">
+                  <p className="text-[10px] text-gray-600">JPG, PNG ou WEBP<br className="hidden sm:block" /> · máx 150 KB</p>
+                  {formPhotoPreview && (
+                    <button type="button" onClick={() => { setFormPhotoFile(null); URL.revokeObjectURL(formPhotoPreview); setFormPhotoPreview(null); }}
+                      className="text-[10px] text-red-500 hover:text-red-400">Remover</button>
+                  )}
+                </div>
+                <input ref={formPhotoInputRef} type="file" accept={PERFIL_FOTO_ACCEPT} className="hidden"
+                  onChange={e => {
+                    const f = e.target.files?.[0]; e.target.value = '';
+                    if (!f) return;
+                    const val = validarFotoPerfil(f);
+                    if (!val.ok) { showToast(val.motivo, 'error'); return; }
+                    setFormPhotoFile(f);
+                    if (formPhotoPreview) URL.revokeObjectURL(formPhotoPreview);
+                    setFormPhotoPreview(URL.createObjectURL(f));
+                  }} />
               </div>
-            </motion.div>
-          </motion.div>
-        )}
+              <div className="flex-1 grid grid-cols-1 gap-4">
+                <CampoForm id="user-nome" label="Nome completo *">
+                  <input id="user-nome" type="text" value={form.nome} autoComplete="off"
+                    onChange={e => setForm((p: any) => ({ ...p, nome: e.target.value }))}
+                    className="neu-input rounded-xl px-3 py-2.5 text-sm" />
+                </CampoForm>
+                <CampoForm id="user-email" label="E-mail de login *">
+                  <input id="user-email" type="email" value={form.email} autoComplete="off"
+                    onChange={e => setForm((p: any) => ({ ...p, email: e.target.value }))}
+                    className="neu-input rounded-xl px-3 py-2.5 text-sm" />
+                </CampoForm>
+              </div>
+            </div>
+          </SecaoForm>
+
+          <SecaoForm icon={KeyRound} titulo="Senha de acesso"
+            dica="Fica guardada no cofre e sai no PDF de credenciais.">
+            <div className="flex gap-2">
+              <div className="relative flex-1">
+                <input id="user-password" aria-label="Senha" type={showPass ? 'text' : 'password'} value={form.password}
+                  autoComplete="new-password" placeholder="Mínimo 6 caracteres"
+                  onChange={e => setForm((p: any) => ({ ...p, password: e.target.value }))}
+                  className="neu-input rounded-xl px-3 py-2.5 pr-16 text-sm w-full font-mono" />
+                <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-2">
+                  {form.password && showPass && (
+                    <button type="button" onClick={() => copiarSenha(form.password)} title="Copiar senha"
+                      className="text-gray-500 hover:text-accent"><Copy size={13} /></button>
+                  )}
+                  <button type="button" onClick={() => setShowPass(v => !v)} title={showPass ? 'Ocultar' : 'Mostrar'}
+                    className="text-gray-500 hover:text-gray-300">
+                    {showPass ? <EyeOff size={14} /> : <Eye size={14} />}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </SecaoForm>
+
+          <SecaoForm icon={Briefcase} titulo="Cargo e lotação">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <CampoForm id="user-role" label="Cargo">
+                <select id="user-role" value={form.role} onChange={e => setForm((p: any) => ({ ...p, role: e.target.value }))}
+                  disabled={!isGlobal} className="neu-input rounded-xl px-3 py-2.5 text-sm disabled:opacity-50">
+                  {roleOptions.map(r => <option key={r} value={r}>{ROLE_LABEL[r]}</option>)}
+                </select>
+              </CampoForm>
+              <CampoForm id="user-setor" label="Setor">
+                <select id="user-setor" value={form.setor} onChange={e => setForm((p: any) => ({ ...p, setor: e.target.value }))}
+                  disabled={roleEscopoGlobal(form.role)}
+                  className="neu-input rounded-xl px-3 py-2.5 text-sm disabled:opacity-50">
+                  {setorOptions.map(s => <option key={s} value={s}>{SETOR_LABEL[s]}</option>)}
+                  {roleEscopoGlobal(form.role) && <option value="all">{SETOR_LABEL.all}</option>}
+                </select>
+              </CampoForm>
+              {/* Colaborador/gerente não vão para a Matriz (o FilialContext
+                  barra o login); gerente não-global fica na própria unidade. */}
+              <CampoForm id="user-filial" label="Unidade">
+                <select id="user-filial" value={form.filial}
+                  onChange={e => {
+                    const filial = e.target.value;
+                    setForm((p: any) => {
+                      const f: any = funcionarios.find((x: any) => x.id === p.funcionario_id);
+                      const desfaz = f && filial !== SEM_ALOCACAO && f.filial !== filial;
+                      return { ...p, filial, funcionario_id: desfaz ? '' : p.funcionario_id };
+                    });
+                  }}
+                  disabled={isGerente && !isGlobal}
+                  className="neu-input rounded-xl px-3 py-2.5 text-sm disabled:opacity-50">
+                  {isGlobal && <option value={SEM_ALOCACAO}>Sem alocação</option>}
+                  {(isGerente && !isGlobal ? [callerProfile.filial] : filiaisParaRole(form.role)).map(f => <option key={f} value={f}>{f}</option>)}
+                </select>
+              </CampoForm>
+            </div>
+            {form.filial === SEM_ALOCACAO && (
+              <p className="text-[10px] text-amber-400/80 leading-relaxed mt-2">
+                Sem unidade, o aluno vê "Filial não configurada" ao entrar até você alocá-lo.
+              </p>
+            )}
+          </SecaoForm>
+
+          {isGlobal && !roleEscopoGlobal(form.role) && (
+            <SecaoForm icon={Layers} titulo="Acesso a outros setores" dica="Somam ao setor principal, sem mudar o cargo.">
+              <SetoresExtras setor={form.setor} value={form.setores_extras ?? []}
+                onChange={v => setForm((p: any) => ({ ...p, setores_extras: v }))} />
+            </SecaoForm>
+          )}
+        </ModalFormulario>
       </AnimatePresence>
 
       <div className="neu-flat rounded-3xl p-6 border border-white/5 shrink-0">

@@ -1,4 +1,3 @@
-import { useRolarAteFormulario } from '../hooks/useRolarAteFormulario';
 import { MenuMais, ItemMenu } from '../components/MenuMais';
 import React, { useState, useEffect, useMemo } from 'react';
 import type { FilialSelectorValue } from '../components/FilialSelector';
@@ -7,7 +6,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Search, Edit2, Trash2, Plus, Save, Check, Landmark, X, FileDown, Sheet, FileCheck, Clock } from 'lucide-react';
 import { HistoricoOperacoes } from '../components/HistoricoOperacoes';
 import { useFetchData, dbInsert, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
-import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent, StatusBadge, FilialBadge, Pagination } from '../components/ui';
+import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent, StatusBadge, FilialBadge, Pagination, ModalFormulario } from '../components/ui';
 import { useFormValidation, formatBRL, parseBRL, handleMoneyKeyDown, exportToExcel, drawPdfHeader } from '../lib/viewUtils';
 import { GOLD, BLACK, GRAY_INK, GOLD_TINT } from '../lib/pdfPalette';
 import { FILIAL_DEFAULT, bancoDaUnidade } from '../lib/filiais';
@@ -482,7 +481,6 @@ const ContasPagarViewInner = ({ showToast, filial }: { showToast: any; filial: F
 
   const isFormOpen = showForm || !!editItem;
 
-  const formEdicaoRef = useRolarAteFormulario(isFormOpen, editItem?.id);
 
   return (
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col h-full gap-8">
@@ -521,56 +519,54 @@ const ContasPagarViewInner = ({ showToast, filial }: { showToast: any; filial: F
       </div>
 
       <AnimatePresence>
-        {isFormOpen && (
-          <motion.div ref={formEdicaoRef} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="shrink-0">
-            <div className="neu-flat rounded-2xl p-6 border border-white/5 flex flex-col gap-4">
-              <h3 className="text-sm font-bold text-gray-200">{editItem ? 'Editar Conta' : 'Nova Conta a Pagar'}</h3>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                <div className="sm:col-span-2">
-                <FormField label="Descrição *" error={errors.descricao}>
-                  <input className={`neu-input py-2 px-3 rounded-xl text-sm ${errors.descricao ? 'border border-red-500/40' : ''}`}
-                    value={form.descricao} onChange={e => { setForm(f => ({ ...f, descricao: e.target.value })); clearError('descricao'); }}
-                    placeholder="Ex: Fornecimento de material" />
-                </FormField>
-                </div>
-                <FormField label="Valor (R$)">
-                  <input type="text" inputMode="numeric" className="neu-input py-2 px-3 rounded-xl text-sm tabular-nums"
-                    value={extras.valor} onChange={e => setExtras(x => ({ ...x, valor: formatBRL(e.target.value) }))} onKeyDown={handleMoneyKeyDown} placeholder="0,00" />
-                </FormField>
-                <FormField label="Vencimento">
-                  <input type="date" className="neu-input py-2 px-3 rounded-xl text-sm"
-                    value={extras.vencimento} onChange={e => setExtras(x => ({ ...x, vencimento: e.target.value }))} />
-                </FormField>
-                <FormField label="Fornecedor">
-                  <SelectBusca
-                    value={extras.fornecedor_id}
-                    onChange={v => setExtras(x => ({ ...x, fornecedor_id: v }))}
-                    placeholder="Nenhum"
-                    permitirVazio="Nenhum"
-                    grupos={gruposDeCadastro(fornecedores)}
-                  />
-                </FormField>
-
-                {/* Migr. 447: conta de pedido é estoque por definição e não mostra o campo. */}
-                {!editItem?.pedido_id && !editItem?.folha_pagamento_id && !editItem?.rescisao_id && (
-                  <FormField label="Natureza">
-                    <select className="neu-input py-2 px-3 rounded-xl text-sm"
-                      value={extras.natureza}
-                      onChange={e => setExtras(x => ({ ...x, natureza: e.target.value }))}>
-                      <option value="despesa">Despesa (luz, aluguel, serviço)</option>
-                      <option value="estoque">Estoque (mercadoria, material)</option>
-                      <option value="imobilizado">Imobilizado (freezer, balcão)</option>
-                    </select>
-                  </FormField>
-                )}
-              </div>
-              <div className="flex gap-3 justify-end">
-                <button onClick={closeForm} className="neu-button py-2 px-5 rounded-xl text-sm text-gray-400">Cancelar</button>
-                <NeuButtonAccent onClick={handleSave} isLoading={isSaving}><Save size={14} /> {editItem ? 'Atualizar' : 'Salvar'}</NeuButtonAccent>
-              </div>
+        <ModalFormulario
+          aberto={isFormOpen}
+          titulo={editItem ? 'Editar Conta' : 'Nova Conta a Pagar'}
+          onCancelar={closeForm}
+          acoes={<>
+            <NeuButtonAccent onClick={handleSave} isLoading={isSaving}><Save size={14} /> {editItem ? 'Atualizar' : 'Salvar'}</NeuButtonAccent>
+          </>}
+        >
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="sm:col-span-2">
+            <FormField label="Descrição *" error={errors.descricao}>
+              <input className={`neu-input py-2 px-3 rounded-xl text-sm ${errors.descricao ? 'border border-red-500/40' : ''}`}
+                value={form.descricao} onChange={e => { setForm(f => ({ ...f, descricao: e.target.value })); clearError('descricao'); }}
+                placeholder="Ex: Fornecimento de material" />
+            </FormField>
             </div>
-          </motion.div>
-        )}
+            <FormField label="Valor (R$)">
+              <input type="text" inputMode="numeric" className="neu-input py-2 px-3 rounded-xl text-sm tabular-nums"
+                value={extras.valor} onChange={e => setExtras(x => ({ ...x, valor: formatBRL(e.target.value) }))} onKeyDown={handleMoneyKeyDown} placeholder="0,00" />
+            </FormField>
+            <FormField label="Vencimento">
+              <input type="date" className="neu-input py-2 px-3 rounded-xl text-sm"
+                value={extras.vencimento} onChange={e => setExtras(x => ({ ...x, vencimento: e.target.value }))} />
+            </FormField>
+            <FormField label="Fornecedor">
+              <SelectBusca
+                value={extras.fornecedor_id}
+                onChange={v => setExtras(x => ({ ...x, fornecedor_id: v }))}
+                placeholder="Nenhum"
+                permitirVazio="Nenhum"
+                grupos={gruposDeCadastro(fornecedores)}
+              />
+            </FormField>
+
+            {/* Migr. 447: conta de pedido é estoque por definição e não mostra o campo. */}
+            {!editItem?.pedido_id && !editItem?.folha_pagamento_id && !editItem?.rescisao_id && (
+              <FormField label="Natureza">
+                <select className="neu-input py-2 px-3 rounded-xl text-sm"
+                  value={extras.natureza}
+                  onChange={e => setExtras(x => ({ ...x, natureza: e.target.value }))}>
+                  <option value="despesa">Despesa (luz, aluguel, serviço)</option>
+                  <option value="estoque">Estoque (mercadoria, material)</option>
+                  <option value="imobilizado">Imobilizado (freezer, balcão)</option>
+                </select>
+              </FormField>
+            )}
+          </div>
+        </ModalFormulario>
       </AnimatePresence>
 
       {isLoading ? <LoadingSpinner /> : filtered.length === 0 ? <EmptyState message="Nenhuma conta a pagar" /> : (

@@ -1,4 +1,3 @@
-import { useRolarAteFormulario } from '../hooks/useRolarAteFormulario';
 import { MenuMais, ItemMenu } from '../components/MenuMais';
 import React, { useEffect, useRef, useState } from 'react';
 import { useFilial } from '../contexts/FilialContext';
@@ -6,7 +5,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Search, Edit2, Trash2, Plus, Save, Landmark, Package as PackageIcon, Paperclip, FileText, X, ExternalLink } from 'lucide-react';
 import { HistoricoOperacoes } from '../components/HistoricoOperacoes';
 import { useFetchData, dbInsert, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
-import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent, StatusBadge } from '../components/ui';
+import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent, StatusBadge, ModalFormulario } from '../components/ui';
 import { useFormValidation, formatBRL, parseBRL, handleMoneyKeyDown } from '../lib/viewUtils';
 import { useConfirm } from '../contexts/ConfirmContext';
 import { supabase } from '../lib/supabase';
@@ -213,7 +212,6 @@ const NotasRecebidasViewInner = ({ showToast, filial }: any) => {
 
   const isFormOpen = showForm || !!editItem;
 
-  const formEdicaoRef = useRolarAteFormulario(isFormOpen, editItem?.id);
 
   return (
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col h-full gap-8">
@@ -231,151 +229,149 @@ const NotasRecebidasViewInner = ({ showToast, filial }: any) => {
       </div>
 
       <AnimatePresence>
-        {isFormOpen && (
-          <motion.div ref={formEdicaoRef} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-            <div className="neu-flat rounded-2xl p-6 border border-white/5 flex flex-col gap-4">
-              <h3 className="text-sm font-bold text-gray-200">{editItem ? 'Editar NF' : 'Nova NF'}</h3>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <FormField label="Número NF *" error={errors.numero_nf}>
-                  <input className={`neu-input py-2 px-3 rounded-xl text-sm ${errors.numero_nf ? 'border border-red-500/40' : ''}`}
-                    value={form.numero_nf}
-                    onChange={e => { setForm(f => ({ ...f, numero_nf: e.target.value })); clearError('numero_nf'); }}
-                    placeholder="Ex: NF-001234" />
-                </FormField>
-                <FormField label="Categoria *">
-                  <select className="neu-input py-2 px-3 rounded-xl text-sm"
-                    value={extras.categoria_gasto}
-                    onChange={e => setExtras(x => ({ ...x, categoria_gasto: e.target.value as any }))}>
-                    {CATEGORIAS_GASTO.map(c => <option key={c} value={c}>{c}</option>)}
-                  </select>
-                </FormField>
-                <FormField label="Fornecedor">
-                  <SelectBusca
-                    value={extras.fornecedor_id}
-                    onChange={v => setExtras(x => ({ ...x, fornecedor_id: v }))}
-                    placeholder="Nenhum"
-                    permitirVazio="Nenhum"
-                    grupos={gruposDeCadastro(fornecedores)}
-                  />
-                </FormField>
+        <ModalFormulario
+          aberto={isFormOpen}
+          titulo={editItem ? 'Editar NF' : 'Nova NF'}
+          onCancelar={() => closeForm()}
+          acoes={<>
+            <NeuButtonAccent onClick={handleSave} isLoading={isSaving}><Save size={14} /> {editItem ? 'Atualizar' : 'Salvar'}</NeuButtonAccent>
+          </>}
+        >
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <FormField label="Número NF *" error={errors.numero_nf}>
+              <input className={`neu-input py-2 px-3 rounded-xl text-sm ${errors.numero_nf ? 'border border-red-500/40' : ''}`}
+                value={form.numero_nf}
+                onChange={e => { setForm(f => ({ ...f, numero_nf: e.target.value })); clearError('numero_nf'); }}
+                placeholder="Ex: NF-001234" />
+            </FormField>
+            <FormField label="Categoria *">
+              <select className="neu-input py-2 px-3 rounded-xl text-sm"
+                value={extras.categoria_gasto}
+                onChange={e => setExtras(x => ({ ...x, categoria_gasto: e.target.value as any }))}>
+                {CATEGORIAS_GASTO.map(c => <option key={c} value={c}>{c}</option>)}
+              </select>
+            </FormField>
+            <FormField label="Fornecedor">
+              <SelectBusca
+                value={extras.fornecedor_id}
+                onChange={v => setExtras(x => ({ ...x, fornecedor_id: v }))}
+                placeholder="Nenhum"
+                permitirVazio="Nenhum"
+                grupos={gruposDeCadastro(fornecedores)}
+              />
+            </FormField>
 
-                <FormField label="Valor Total (R$)">
-                  <input type="text" inputMode="numeric" className="neu-input py-2 px-3 rounded-xl text-sm"
-                    value={extras.valor_total}
-                    onChange={e => setExtras(x => ({ ...x, valor_total: formatBRL(e.target.value) }))}
-                    onKeyDown={handleMoneyKeyDown} placeholder="0,00" />
-                </FormField>
-                <FormField label="Data Emissão">
-                  <input type="date" className="neu-input py-2 px-3 rounded-xl text-sm"
-                    value={extras.data_emissao}
-                    onChange={e => setExtras(x => ({ ...x, data_emissao: e.target.value }))} />
-                </FormField>
-                <FormField label="Status">
-                  <select className="neu-input py-2 px-3 rounded-xl text-sm"
-                    value={extras.status}
-                    onChange={e => setExtras(x => ({ ...x, status: e.target.value }))}>
-                    {['Não Vinculada', 'Vinculada', 'Cancelada'].map(s => <option key={s} value={s}>{s}</option>)}
-                  </select>
-                </FormField>
+            <FormField label="Valor Total (R$)">
+              <input type="text" inputMode="numeric" className="neu-input py-2 px-3 rounded-xl text-sm"
+                value={extras.valor_total}
+                onChange={e => setExtras(x => ({ ...x, valor_total: formatBRL(e.target.value) }))}
+                onKeyDown={handleMoneyKeyDown} placeholder="0,00" />
+            </FormField>
+            <FormField label="Data Emissão">
+              <input type="date" className="neu-input py-2 px-3 rounded-xl text-sm"
+                value={extras.data_emissao}
+                onChange={e => setExtras(x => ({ ...x, data_emissao: e.target.value }))} />
+            </FormField>
+            <FormField label="Status">
+              <select className="neu-input py-2 px-3 rounded-xl text-sm"
+                value={extras.status}
+                onChange={e => setExtras(x => ({ ...x, status: e.target.value }))}>
+                {['Não Vinculada', 'Vinculada', 'Cancelada'].map(s => <option key={s} value={s}>{s}</option>)}
+              </select>
+            </FormField>
 
-                <FormField label="Descrição do gasto">
-                  <textarea rows={2}
-                    className="neu-input py-2 px-3 rounded-xl text-sm resize-none"
-                    value={extras.descricao}
-                    onChange={e => setExtras(x => ({ ...x, descricao: e.target.value }))}
-                    placeholder="Ex: 2 arcondicionados split 12000 BTU + instalação" />
-                </FormField>
-                <FormField label="Conta a Pagar (opcional)">
-                  <SelectBusca
-                    value={extras.conta_pagar_id}
-                    onChange={v => setExtras(x => ({ ...x, conta_pagar_id: v }))}
-                    placeholder="Não amarrar"
-                    permitirVazio="Não amarrar"
-                    grupos={(() => {
-                      // A conta que já tem nota amarrada continuava na lista sem
-                      // nenhum sinal — dava para amarrar a mesma despesa duas
-                      // vezes. Vai para o 2º grupo, indisponível, exceto a da
-                      // própria nota em edição.
-                      const livres = contasPagar.filter((c: any) => !contasComNota.has(c.id) || c.id === extras.conta_pagar_id);
-                      const usadas = contasPagar.filter((c: any) => contasComNota.has(c.id) && c.id !== extras.conta_pagar_id);
-                      const op = (c: any) => ({
-                        value: String(c.id), label: c.descricao ?? '—',
-                        sub: [c.vencimento ? String(c.vencimento).slice(0, 10).split('-').reverse().join('/') : null, c.status].filter(Boolean).join(' · ') || null,
-                        tag: { texto: `R$ ${formatBRL(Number(c.valor ?? 0))}`, tom: 'cinza' as const },
-                      });
-                      return [
-                        { label: 'Sem nota vinculada', opcoes: livres.slice(0, 200).map(op) },
-                        { label: 'Já vinculadas a outra nota', opcoes: usadas.slice(0, 200).map(c => ({ ...op(c), disabled: true })) },
-                      ].filter(g => g.opcoes.length > 0);
-                    })()}
-                  />
-                </FormField>
-                <FormField label="Origem do valor">
-                  <label className="flex items-center gap-2 h-full pt-1 cursor-pointer">
-                    <input type="checkbox"
-                      checked={extras.capital_origem}
-                      onChange={e => setExtras(x => ({ ...x, capital_origem: e.target.checked }))}
-                      className="w-4 h-4 accent-accent" />
-                    <span className="text-xs text-gray-300 flex items-center gap-1.5">
-                      <Landmark size={12} className="text-accent" /> Saiu do Capital Inicial
-                    </span>
-                  </label>
-                </FormField>
-              </div>
+            <FormField label="Descrição do gasto">
+              <textarea rows={2}
+                className="neu-input py-2 px-3 rounded-xl text-sm resize-none"
+                value={extras.descricao}
+                onChange={e => setExtras(x => ({ ...x, descricao: e.target.value }))}
+                placeholder="Ex: 2 arcondicionados split 12000 BTU + instalação" />
+            </FormField>
+            <FormField label="Conta a Pagar (opcional)">
+              <SelectBusca
+                value={extras.conta_pagar_id}
+                onChange={v => setExtras(x => ({ ...x, conta_pagar_id: v }))}
+                placeholder="Não amarrar"
+                permitirVazio="Não amarrar"
+                grupos={(() => {
+                  // A conta que já tem nota amarrada continuava na lista sem
+                  // nenhum sinal — dava para amarrar a mesma despesa duas
+                  // vezes. Vai para o 2º grupo, indisponível, exceto a da
+                  // própria nota em edição.
+                  const livres = contasPagar.filter((c: any) => !contasComNota.has(c.id) || c.id === extras.conta_pagar_id);
+                  const usadas = contasPagar.filter((c: any) => contasComNota.has(c.id) && c.id !== extras.conta_pagar_id);
+                  const op = (c: any) => ({
+                    value: String(c.id), label: c.descricao ?? '—',
+                    sub: [c.vencimento ? String(c.vencimento).slice(0, 10).split('-').reverse().join('/') : null, c.status].filter(Boolean).join(' · ') || null,
+                    tag: { texto: `R$ ${formatBRL(Number(c.valor ?? 0))}`, tom: 'cinza' as const },
+                  });
+                  return [
+                    { label: 'Sem nota vinculada', opcoes: livres.slice(0, 200).map(op) },
+                    { label: 'Já vinculadas a outra nota', opcoes: usadas.slice(0, 200).map(c => ({ ...op(c), disabled: true })) },
+                  ].filter(g => g.opcoes.length > 0);
+                })()}
+              />
+            </FormField>
+            <FormField label="Origem do valor">
+              <label className="flex items-center gap-2 h-full pt-1 cursor-pointer">
+                <input type="checkbox"
+                  checked={extras.capital_origem}
+                  onChange={e => setExtras(x => ({ ...x, capital_origem: e.target.checked }))}
+                  className="w-4 h-4 accent-accent" />
+                <span className="text-xs text-gray-300 flex items-center gap-1.5">
+                  <Landmark size={12} className="text-accent" /> Saiu do Capital Inicial
+                </span>
+              </label>
+            </FormField>
+          </div>
 
-              {/* Anexo: PDF ou imagem da nota original — comprova a prestação de contas */}
-              <div className="border-t border-white/5 pt-4">
-                <div className="flex items-center justify-between mb-2">
-                  <label className="text-xs font-bold text-gray-300 flex items-center gap-2">
-                    <Paperclip size={12} className="text-accent" />
-                    Anexar documento da nota
-                    <span className="text-[10px] text-gray-500 font-normal">(PDF, JPG, PNG · máx. {NOTA_ANEXO_MAX_LABEL})</span>
-                  </label>
-                </div>
-                {anexo ? (
-                  <div className="flex items-center gap-3 p-3 rounded-xl bg-accent/5 border border-accent/20">
-                    <FileText size={18} className="text-accent shrink-0" />
-                    <div className="flex-1 min-w-0">
-                      <div className="text-xs font-semibold text-gray-200 truncate">{anexo.nome}</div>
-                      <div className="text-[10px] text-gray-500">
-                        {formatarTamanhoAnexo(anexo.tamanho)}
-                        {anexo.url && (
-                          <>
-                            {' · '}
-                            <a href={anexo.url} target="_blank" rel="noopener noreferrer"
-                              className="text-accent hover:underline inline-flex items-center gap-0.5">
-                              Visualizar <ExternalLink size={9} />
-                            </a>
-                          </>
-                        )}
-                      </div>
-                    </div>
-                    <button type="button" onClick={removerAnexoLocal}
-                      className="text-xs text-red-400 hover:text-red-300 flex items-center gap-1 shrink-0">
-                      <X size={12} /> Remover
-                    </button>
-                  </div>
-                ) : (
-                  <label className={`flex items-center gap-3 px-4 py-3 rounded-xl border border-dashed border-white/10 hover:border-accent/40 hover:bg-white/5 transition-colors cursor-pointer ${anexoUploading ? 'opacity-50 pointer-events-none' : ''}`}>
-                    <input ref={anexoInputRef}
-                      type="file" className="hidden"
-                      accept={NOTA_ANEXO_ACCEPT}
-                      onChange={handleAnexoChange}
-                      disabled={anexoUploading} />
-                    <Paperclip size={16} className="text-gray-500" />
-                    <span className="text-xs text-gray-400">
-                      {anexoUploading ? 'Enviando...' : 'Escolher arquivo (PDF ou imagem)'}
-                    </span>
-                  </label>
-                )}
-              </div>
-              <div className="flex gap-3 justify-end">
-                <button onClick={() => closeForm()} className="neu-button py-2 px-5 rounded-xl text-sm text-gray-400">Cancelar</button>
-                <NeuButtonAccent onClick={handleSave} isLoading={isSaving}><Save size={14} /> {editItem ? 'Atualizar' : 'Salvar'}</NeuButtonAccent>
-              </div>
+          {/* Anexo: PDF ou imagem da nota original — comprova a prestação de contas */}
+          <div className="border-t border-white/5 pt-4">
+            <div className="flex items-center justify-between mb-2">
+              <label className="text-xs font-bold text-gray-300 flex items-center gap-2">
+                <Paperclip size={12} className="text-accent" />
+                Anexar documento da nota
+                <span className="text-[10px] text-gray-500 font-normal">(PDF, JPG, PNG · máx. {NOTA_ANEXO_MAX_LABEL})</span>
+              </label>
             </div>
-          </motion.div>
-        )}
+            {anexo ? (
+              <div className="flex items-center gap-3 p-3 rounded-xl bg-accent/5 border border-accent/20">
+                <FileText size={18} className="text-accent shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <div className="text-xs font-semibold text-gray-200 truncate">{anexo.nome}</div>
+                  <div className="text-[10px] text-gray-500">
+                    {formatarTamanhoAnexo(anexo.tamanho)}
+                    {anexo.url && (
+                      <>
+                        {' · '}
+                        <a href={anexo.url} target="_blank" rel="noopener noreferrer"
+                          className="text-accent hover:underline inline-flex items-center gap-0.5">
+                          Visualizar <ExternalLink size={9} />
+                        </a>
+                      </>
+                    )}
+                  </div>
+                </div>
+                <button type="button" onClick={removerAnexoLocal}
+                  className="text-xs text-red-400 hover:text-red-300 flex items-center gap-1 shrink-0">
+                  <X size={12} /> Remover
+                </button>
+              </div>
+            ) : (
+              <label className={`flex items-center gap-3 px-4 py-3 rounded-xl border border-dashed border-white/10 hover:border-accent/40 hover:bg-white/5 transition-colors cursor-pointer ${anexoUploading ? 'opacity-50 pointer-events-none' : ''}`}>
+                <input ref={anexoInputRef}
+                  type="file" className="hidden"
+                  accept={NOTA_ANEXO_ACCEPT}
+                  onChange={handleAnexoChange}
+                  disabled={anexoUploading} />
+                <Paperclip size={16} className="text-gray-500" />
+                <span className="text-xs text-gray-400">
+                  {anexoUploading ? 'Enviando...' : 'Escolher arquivo (PDF ou imagem)'}
+                </span>
+              </label>
+            )}
+          </div>
+        </ModalFormulario>
       </AnimatePresence>
 
       <div className="neu-flat rounded-3xl p-6 border border-white/5 flex flex-col mb-6">

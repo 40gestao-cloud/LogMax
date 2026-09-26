@@ -1,4 +1,3 @@
-import { useRolarAteFormulario } from '../hooks/useRolarAteFormulario';
 import React, { useMemo, useState } from 'react';
 import { todayBR } from '../lib/dates';
 import type { FilialOp } from '../components/FilialSelector';
@@ -6,7 +5,7 @@ import { useFilial } from '../contexts/FilialContext';
 import { motion, AnimatePresence } from 'motion/react';
 import { Plus, X, Trash2, Edit3, Ticket, Copy, CheckCircle2, Search } from 'lucide-react';
 import { useFetchData, dbInsert, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
-import { LoadingSpinner, EmptyState, NeuButtonAccent, CardContador, type TomContador } from '../components/ui';
+import { LoadingSpinner, EmptyState, NeuButtonAccent, CardContador, type TomContador, ModalFormulario } from '../components/ui';
 import { formatBRL, parseBRL, handleMoneyKeyDown } from '../lib/viewUtils';
 import { hasSetor } from '../lib/rbac';
 import { useConfirm } from '../contexts/ConfirmContext';
@@ -177,7 +176,6 @@ const CuponsMarketingViewInner = ({ showToast, profile, filial }: { showToast: a
     }
   };
 
-  const formEdicaoRef = useRolarAteFormulario(showForm, editing?.id);
   if (isLoading) return <div className="flex-1 flex items-center justify-center"><LoadingSpinner /></div>;
 
   const today = todayBR();
@@ -226,118 +224,112 @@ const CuponsMarketingViewInner = ({ showToast, profile, filial }: { showToast: a
       </div>
 
       <AnimatePresence>
-        {showForm && (
-          <motion.div ref={formEdicaoRef} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            className="neu-flat rounded-3xl p-6 border border-white/5 shrink-0">
-            <div className="flex items-center justify-between mb-5">
-              <h3 className="text-sm font-bold text-gray-300">{editing ? 'Editar Cupom' : 'Novo Cupom'}</h3>
-              <button onClick={resetForm} className="modal-close-btn"><X size={16} /></button>
+        <ModalFormulario
+          aberto={showForm}
+          titulo={editing ? 'Editar Cupom' : 'Novo Cupom'}
+          onCancelar={resetForm}
+          acoes={<>
+            <NeuButtonAccent variant="" onClick={handleSave} disabled={saving}>
+              {saving ? 'Salvando...' : (editing ? 'Salvar' : 'Criar Cupom')}
+            </NeuButtonAccent>
+          </>}
+        >
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div className="flex flex-col gap-1.5">
+              <label htmlFor="cup-codigo" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Código *</label>
+              <input id="cup-codigo" type="text" value={form.codigo}
+                onChange={e => setForm(f => ({ ...f, codigo: sanitizeCodigo(e.target.value) }))}
+                className="neu-input rounded-xl px-3 py-2.5 text-sm font-credencial uppercase"
+                placeholder="VERAO10" disabled={!!editing}
+                title={editing ? 'Código não pode ser editado depois de criado.' : 'Maiúsculas, números, _ ou -'}
+              />
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div className="flex flex-col gap-1.5">
+              <label htmlFor="cup-tipo" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Tipo *</label>
+              <select id="cup-tipo" value={form.tipo}
+                onChange={e => setForm(f => ({ ...f, tipo: e.target.value as Tipo, valor: '', desconto_maximo: '' }))}
+                className="neu-input rounded-xl px-3 py-2.5 text-sm">
+                <option value="percentual">Percentual (%)</option>
+                <option value="fixo">Valor fixo (R$)</option>
+              </select>
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <label htmlFor="cup-valor" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">
+                Valor * {form.tipo === 'percentual' ? '(0–100)' : '(R$)'}
+              </label>
+              <input id="cup-valor" type="text" inputMode={form.tipo === 'percentual' ? 'decimal' : 'numeric'}
+                value={form.valor}
+                onChange={e => setForm(f => ({
+                  ...f,
+                  valor: form.tipo === 'percentual'
+                    ? e.target.value.replace(/[^0-9,]/g, '').slice(0, 6)
+                    : formatBRL(e.target.value),
+                }))}
+                onKeyDown={form.tipo === 'fixo' ? handleMoneyKeyDown : undefined}
+                className="neu-input rounded-xl px-3 py-2.5 text-sm"
+                placeholder={form.tipo === 'percentual' ? '10' : '0,00'} />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <label htmlFor="cup-valor-minimo" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Compra mínima (R$)</label>
+              <input id="cup-valor-minimo" type="text" inputMode="numeric" value={form.valor_minimo}
+                onChange={e => setForm(f => ({ ...f, valor_minimo: formatBRL(e.target.value) }))}
+                onKeyDown={handleMoneyKeyDown}
+                className="neu-input rounded-xl px-3 py-2.5 text-sm" placeholder="0,00 = sem mínimo" />
+            </div>
+            {form.tipo === 'percentual' && (
               <div className="flex flex-col gap-1.5">
-                <label htmlFor="cup-codigo" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Código *</label>
-                <input id="cup-codigo" type="text" value={form.codigo}
-                  onChange={e => setForm(f => ({ ...f, codigo: sanitizeCodigo(e.target.value) }))}
-                  className="neu-input rounded-xl px-3 py-2.5 text-sm font-credencial uppercase"
-                  placeholder="VERAO10" disabled={!!editing}
-                  title={editing ? 'Código não pode ser editado depois de criado.' : 'Maiúsculas, números, _ ou -'}
-                />
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <label htmlFor="cup-tipo" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Tipo *</label>
-                <select id="cup-tipo" value={form.tipo}
-                  onChange={e => setForm(f => ({ ...f, tipo: e.target.value as Tipo, valor: '', desconto_maximo: '' }))}
-                  className="neu-input rounded-xl px-3 py-2.5 text-sm">
-                  <option value="percentual">Percentual (%)</option>
-                  <option value="fixo">Valor fixo (R$)</option>
-                </select>
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <label htmlFor="cup-valor" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">
-                  Valor * {form.tipo === 'percentual' ? '(0–100)' : '(R$)'}
-                </label>
-                <input id="cup-valor" type="text" inputMode={form.tipo === 'percentual' ? 'decimal' : 'numeric'}
-                  value={form.valor}
-                  onChange={e => setForm(f => ({
-                    ...f,
-                    valor: form.tipo === 'percentual'
-                      ? e.target.value.replace(/[^0-9,]/g, '').slice(0, 6)
-                      : formatBRL(e.target.value),
-                  }))}
-                  onKeyDown={form.tipo === 'fixo' ? handleMoneyKeyDown : undefined}
-                  className="neu-input rounded-xl px-3 py-2.5 text-sm"
-                  placeholder={form.tipo === 'percentual' ? '10' : '0,00'} />
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <label htmlFor="cup-valor-minimo" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Compra mínima (R$)</label>
-                <input id="cup-valor-minimo" type="text" inputMode="numeric" value={form.valor_minimo}
-                  onChange={e => setForm(f => ({ ...f, valor_minimo: formatBRL(e.target.value) }))}
+                <label htmlFor="cup-desconto-max" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Teto do desconto (R$)</label>
+                <input id="cup-desconto-max" type="text" inputMode="numeric" value={form.desconto_maximo}
+                  onChange={e => setForm(f => ({ ...f, desconto_maximo: formatBRL(e.target.value) }))}
                   onKeyDown={handleMoneyKeyDown}
-                  className="neu-input rounded-xl px-3 py-2.5 text-sm" placeholder="0,00 = sem mínimo" />
+                  className="neu-input rounded-xl px-3 py-2.5 text-sm" placeholder="vazio = sem teto" />
               </div>
-              {form.tipo === 'percentual' && (
-                <div className="flex flex-col gap-1.5">
-                  <label htmlFor="cup-desconto-max" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Teto do desconto (R$)</label>
-                  <input id="cup-desconto-max" type="text" inputMode="numeric" value={form.desconto_maximo}
-                    onChange={e => setForm(f => ({ ...f, desconto_maximo: formatBRL(e.target.value) }))}
-                    onKeyDown={handleMoneyKeyDown}
-                    className="neu-input rounded-xl px-3 py-2.5 text-sm" placeholder="vazio = sem teto" />
-                </div>
-              )}
-              <div className="flex flex-col gap-1.5">
-                <label htmlFor="cup-limite" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Limite de usos</label>
-                <input id="cup-limite" type="text" inputMode="numeric" value={form.limite_uso}
-                  onChange={e => setForm(f => ({ ...f, limite_uso: e.target.value.replace(/[^0-9]/g, '').slice(0, 6) }))}
-                  className="neu-input rounded-xl px-3 py-2.5 text-sm" placeholder="vazio = ilimitado" />
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <label htmlFor="cup-validade-ini" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Validade — Início</label>
-                <input id="cup-validade-ini" type="date" value={form.validade_inicio}
-                  onChange={e => setForm(f => ({ ...f, validade_inicio: e.target.value }))}
-                  className="neu-input rounded-xl px-3 py-2.5 text-sm" />
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <label htmlFor="cup-validade-fim" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Validade — Fim *</label>
-                <input id="cup-validade-fim" type="date" value={form.validade_fim}
-                  onChange={e => setForm(f => ({ ...f, validade_fim: e.target.value }))}
-                  className="neu-input rounded-xl px-3 py-2.5 text-sm" />
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Unidade</label>
-                <div className="neu-pressed rounded-xl px-3 py-2.5 text-sm text-accent font-semibold border border-white/5">{filial}</div>
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <label htmlFor="cup-campanha" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Campanha</label>
-                <select id="cup-campanha" value={form.campanha_id}
-                  onChange={e => setForm(f => ({ ...f, campanha_id: e.target.value }))}
-                  className="neu-input rounded-xl px-3 py-2.5 text-sm">
-                  <option value="">Sem campanha</option>
-                  {/* Mesma régua de Promoções: campanha cancelada sai da lista e
-                      o status vem no rótulo — sem ele dava para pendurar cupom
-                      novo numa campanha já encerrada sem perceber. */}
-                  {(campanhas ?? [])
-                    .filter((c: any) => c.status !== 'Cancelada')
-                    .map((c: any) => <option key={c.id} value={c.id}>{c.nome} · {c.status}</option>)}
-                </select>
-              </div>
-              <div className="flex flex-col gap-1.5 lg:col-span-3">
-                <label htmlFor="cup-descricao" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Descrição</label>
-                <input id="cup-descricao" type="text" value={form.descricao}
-                  onChange={e => setForm(f => ({ ...f, descricao: e.target.value }))}
-                  className="neu-input rounded-xl px-3 py-2.5 text-sm"
-                  placeholder="Ex: 10% off na primeira compra do mês" />
-              </div>
+            )}
+            <div className="flex flex-col gap-1.5">
+              <label htmlFor="cup-limite" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Limite de usos</label>
+              <input id="cup-limite" type="text" inputMode="numeric" value={form.limite_uso}
+                onChange={e => setForm(f => ({ ...f, limite_uso: e.target.value.replace(/[^0-9]/g, '').slice(0, 6) }))}
+                className="neu-input rounded-xl px-3 py-2.5 text-sm" placeholder="vazio = ilimitado" />
             </div>
-            <div className="flex justify-end gap-2 mt-5">
-              <button onClick={resetForm} className="neu-button rounded-xl px-4 py-2 text-xs font-bold uppercase tracking-widest text-gray-400 hover:text-white">
-                Cancelar
-              </button>
-              <NeuButtonAccent variant="" onClick={handleSave} disabled={saving}>
-                {saving ? 'Salvando...' : (editing ? 'Salvar' : 'Criar Cupom')}
-              </NeuButtonAccent>
+            <div className="flex flex-col gap-1.5">
+              <label htmlFor="cup-validade-ini" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Validade — Início</label>
+              <input id="cup-validade-ini" type="date" value={form.validade_inicio}
+                onChange={e => setForm(f => ({ ...f, validade_inicio: e.target.value }))}
+                className="neu-input rounded-xl px-3 py-2.5 text-sm" />
             </div>
-          </motion.div>
-        )}
+            <div className="flex flex-col gap-1.5">
+              <label htmlFor="cup-validade-fim" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Validade — Fim *</label>
+              <input id="cup-validade-fim" type="date" value={form.validade_fim}
+                onChange={e => setForm(f => ({ ...f, validade_fim: e.target.value }))}
+                className="neu-input rounded-xl px-3 py-2.5 text-sm" />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Unidade</label>
+              <div className="neu-pressed rounded-xl px-3 py-2.5 text-sm text-accent font-semibold border border-white/5">{filial}</div>
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <label htmlFor="cup-campanha" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Campanha</label>
+              <select id="cup-campanha" value={form.campanha_id}
+                onChange={e => setForm(f => ({ ...f, campanha_id: e.target.value }))}
+                className="neu-input rounded-xl px-3 py-2.5 text-sm">
+                <option value="">Sem campanha</option>
+                {/* Mesma régua de Promoções: campanha cancelada sai da lista e
+                    o status vem no rótulo — sem ele dava para pendurar cupom
+                    novo numa campanha já encerrada sem perceber. */}
+                {(campanhas ?? [])
+                  .filter((c: any) => c.status !== 'Cancelada')
+                  .map((c: any) => <option key={c.id} value={c.id}>{c.nome} · {c.status}</option>)}
+              </select>
+            </div>
+            <div className="flex flex-col gap-1.5 lg:col-span-3">
+              <label htmlFor="cup-descricao" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Descrição</label>
+              <input id="cup-descricao" type="text" value={form.descricao}
+                onChange={e => setForm(f => ({ ...f, descricao: e.target.value }))}
+                className="neu-input rounded-xl px-3 py-2.5 text-sm"
+                placeholder="Ex: 10% off na primeira compra do mês" />
+            </div>
+          </div>
+        </ModalFormulario>
       </AnimatePresence>
 
       <div className="neu-flat rounded-3xl p-6 border border-white/5 shrink-0">

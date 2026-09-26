@@ -7,7 +7,7 @@ import { Plus, CheckCircle, Clock, DollarSign, X, Edit2, Trash2, Lock, Calculato
 import { HistoricoOperacoes } from '../components/HistoricoOperacoes';
 import { MenuMais, ItemMenu } from '../components/MenuMais';
 import { useFetchData, dbInsert, dbUpdate, dbDelete, dbSetStatus } from '../hooks/useSupabaseData';
-import { LoadingSpinner, EmptyState, NeuButtonAccent, CardContador, type TomContador, corDoStatus } from '../components/ui';
+import { LoadingSpinner, EmptyState, NeuButtonAccent, CardContador, type TomContador, corDoStatus, ModalFormulario } from '../components/ui';
 import { supabase } from '../lib/supabase';
 import { hasSetor } from '../lib/rbac';
 import { formatBRL, parseBRL } from '../lib/viewUtils';
@@ -109,7 +109,6 @@ const FolhaPagamentoViewInner = ({ showToast, profile, filial }: { showToast: an
   const hoje = todayBR().slice(0, 7);
   const [mesFiltro, setMesFiltro] = useState(hoje);
   const [showForm, setShowForm] = useState(false);
-  const formRef = useRef<HTMLDivElement>(null);
   const [editId, setEditId] = useState<string | null>(null);
   const [form, setForm] = useState<any>(EMPTY);
   const [saving, setSaving] = useState(false);
@@ -365,7 +364,6 @@ const FolhaPagamentoViewInner = ({ showToast, profile, filial }: { showToast: an
       status:           f.status        ?? 'Pendente',
     });
     setShowForm(true);
-    requestAnimationFrame(() => formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
   };
 
   const handleDelete = async (folha: any) => {
@@ -664,71 +662,68 @@ const FolhaPagamentoViewInner = ({ showToast, profile, filial }: { showToast: an
       </div>
 
       <AnimatePresence>
-        {showForm && (
-          <motion.div ref={formRef} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            className="neu-flat rounded-3xl p-6 border border-white/5 shrink-0 scroll-mt-4">
-            <div className="flex items-center justify-between mb-5">
-              <h3 className="text-sm font-bold text-gray-300">{editId ? 'Editar Folha' : 'Registrar Folha'}</h3>
-              <button onClick={closeForm} className="modal-close-btn"><X size={16} /></button>
+        <ModalFormulario
+          aberto={showForm}
+          titulo={editId ? 'Editar Folha' : 'Registrar Folha'}
+          onCancelar={closeForm}
+          acoes={<>
+            <NeuButtonAccent variant="" onClick={handleSave} disabled={saving}>{saving ? 'Salvando...' : (editId ? 'Salvar Alterações' : 'Registrar')}</NeuButtonAccent>
+          </>}
+        >
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div className="flex flex-col gap-1.5">
+              <label htmlFor="folha-funcionario" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Funcionário *</label>
+              <SelectBusca
+                id="folha-funcionario"
+                value={form.funcionario_id}
+                onChange={v => handleFuncionarioChange(v)}
+                placeholder="Escolha o funcionário"
+                grupos={[
+                  { label: `Sem folha em ${mesDoForm}`, opcoes: funcSemFolhaNoMes.map((f: any) => opcaoFuncionario(f)) },
+                  { label: `Já com folha em ${mesDoForm}`, opcoes: funcComFolhaNoMes.map((f: any) => {
+                    const fp = folhaDoMesPorFunc.get(f.id)!;
+                    return opcaoFuncionario(f, {
+                      disabled: true,
+                      tag: { texto: fp.status ?? 'Lançada', tom: 'verde' as const },
+                    });
+                  }) },
+                ].filter(g => g.opcoes.length > 0)}
+              />
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              <div className="flex flex-col gap-1.5">
-                <label htmlFor="folha-funcionario" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Funcionário *</label>
-                <SelectBusca
-                  id="folha-funcionario"
-                  value={form.funcionario_id}
-                  onChange={v => handleFuncionarioChange(v)}
-                  placeholder="Escolha o funcionário"
-                  grupos={[
-                    { label: `Sem folha em ${mesDoForm}`, opcoes: funcSemFolhaNoMes.map((f: any) => opcaoFuncionario(f)) },
-                    { label: `Já com folha em ${mesDoForm}`, opcoes: funcComFolhaNoMes.map((f: any) => {
-                      const fp = folhaDoMesPorFunc.get(f.id)!;
-                      return opcaoFuncionario(f, {
-                        disabled: true,
-                        tag: { texto: fp.status ?? 'Lançada', tom: 'verde' as const },
-                      });
-                    }) },
-                  ].filter(g => g.opcoes.length > 0)}
-                />
+            {/* Campos de R$ usam text + formatBRL/parseBRL, não type="number" —
+                é o padrão de moeda desta base, e o número cru aceitava ponto
+                decimal onde o operador digita vírgula. */}
+            {[
+              { label: 'Mês Ref. *', k: 'mes_ref', type: 'month', money: false },
+              { label: 'Salário Base (R$)', k: 'salario_base', type: 'text', money: true },
+              // "manuais" no rótulo porque INSS, IRRF e faltas entram
+              // sozinhos pelo recálculo — este campo é só o que se lança à mão.
+              { label: 'Descontos manuais (R$)', k: 'descontos', type: 'text', money: true },
+              { label: 'Benefícios (R$)', k: 'valor_beneficios', type: 'text', money: true },
+            ].map(({ label, k, type, money }) => (
+              <div key={k} className="flex flex-col gap-1.5">
+                <label htmlFor={`folha-${k}`} className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">{label}</label>
+                <input id={`folha-${k}`} type={type} value={form[k]}
+                  inputMode={money ? 'numeric' : undefined}
+                  onChange={e => {
+                    const v = money ? formatBRL(e.target.value) : e.target.value;
+                    setForm((p: any) => ({ ...p, [k]: v }));
+                  }}
+                  className={`neu-input rounded-xl px-3 py-2.5 text-sm ${money ? 'font-mono tabular-nums' : ''}`} />
+                {k === 'valor_beneficios' && !editId && form.funcionario_id && (
+                  <p className="text-[10px] text-gray-500">Somado dos benefícios atribuídos em Funcionários.</p>
+                )}
               </div>
-              {/* Campos de R$ usam text + formatBRL/parseBRL, não type="number" —
-                  é o padrão de moeda desta base, e o número cru aceitava ponto
-                  decimal onde o operador digita vírgula. */}
-              {[
-                { label: 'Mês Ref. *', k: 'mes_ref', type: 'month', money: false },
-                { label: 'Salário Base (R$)', k: 'salario_base', type: 'text', money: true },
-                // "manuais" no rótulo porque INSS, IRRF e faltas entram
-                // sozinhos pelo recálculo — este campo é só o que se lança à mão.
-                { label: 'Descontos manuais (R$)', k: 'descontos', type: 'text', money: true },
-                { label: 'Benefícios (R$)', k: 'valor_beneficios', type: 'text', money: true },
-              ].map(({ label, k, type, money }) => (
-                <div key={k} className="flex flex-col gap-1.5">
-                  <label htmlFor={`folha-${k}`} className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">{label}</label>
-                  <input id={`folha-${k}`} type={type} value={form[k]}
-                    inputMode={money ? 'numeric' : undefined}
-                    onChange={e => {
-                      const v = money ? formatBRL(e.target.value) : e.target.value;
-                      setForm((p: any) => ({ ...p, [k]: v }));
-                    }}
-                    className={`neu-input rounded-xl px-3 py-2.5 text-sm ${money ? 'font-mono tabular-nums' : ''}`} />
-                  {k === 'valor_beneficios' && !editId && form.funcionario_id && (
-                    <p className="text-[10px] text-gray-500">Somado dos benefícios atribuídos em Funcionários.</p>
-                  )}
-                </div>
-              ))}
-              <div className="flex flex-col gap-1.5">
-                {/* O "Líquido Estimado" é texto somente-leitura, sem input — usamos span por isso */}
-                <span className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Líquido Estimado</span>
-                <p className="neu-input rounded-xl px-3 py-2.5 text-sm text-green-400 font-mono font-bold">
-                  R$ {(parseBRL(form.salario_base) - parseBRL(form.descontos)).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                </p>
-              </div>
+            ))}
+            <div className="flex flex-col gap-1.5">
+              {/* O "Líquido Estimado" é texto somente-leitura, sem input — usamos span por isso */}
+              <span className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Líquido Estimado</span>
+              <p className="neu-input rounded-xl px-3 py-2.5 text-sm text-green-400 font-mono font-bold">
+                R$ {(parseBRL(form.salario_base) - parseBRL(form.descontos)).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+              </p>
             </div>
-            <div className="flex justify-end mt-5">
-              <NeuButtonAccent variant="" onClick={handleSave} disabled={saving}>{saving ? 'Salvando...' : (editId ? 'Salvar Alterações' : 'Registrar')}</NeuButtonAccent>
-            </div>
-          </motion.div>
-        )}
+          </div>
+        </ModalFormulario>
       </AnimatePresence>
 
       <div className="neu-flat rounded-3xl p-6 border border-white/5 shrink-0">

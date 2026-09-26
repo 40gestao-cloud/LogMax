@@ -1,4 +1,5 @@
 import React from 'react';
+import { createPortal } from 'react-dom';
 import { Search, Loader2, AlertCircle, CheckCircle, RefreshCw } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Package, Landmark } from 'lucide-react';
@@ -420,6 +421,76 @@ export const SecaoFormulario = ({ titulo, icon: Icon, cor, extra, children }: {
     <div className="p-4 sm:p-5">{children}</div>
   </section>
 );
+
+// Formulário de cadastro em modal por cima da sidebar. No fluxo da página ele
+// ficava espremido ao lado dela e virava uma pilha de seções. Portal no body
+// porque as views animam com transform, e `fixed` dentro de transform se prende
+// à view em vez da tela. z-40 deixa o toast (z-50) por cima, que é onde a
+// validação avisa o que falta. Só o Cancelar fecha: clique fora ou Esc perderia
+// o cadastro pela metade. Com `lateral`, no desktop cada coluna rola sozinha.
+const LARGURA_MODAL_FORM = {
+  md: 'max-w-2xl',
+  lg: 'max-w-5xl',
+  xl: 'max-w-[1800px]',
+} as const;
+export const ModalFormulario = ({ aberto, titulo, subtitulo, onCancelar, acoes, lateral, largura = 'lg', children }: {
+  aberto: boolean;
+  titulo: React.ReactNode;
+  subtitulo?: React.ReactNode;
+  onCancelar: () => void;
+  /** Botão de salvar (e o que mais couber), ao lado do Cancelar no topo. */
+  acoes?: React.ReactNode;
+  /** Coluna fixa à direita (imagens, resumo, pré-visualização). */
+  lateral?: React.ReactNode;
+  largura?: keyof typeof LARGURA_MODAL_FORM;
+  children: React.ReactNode;
+}) => {
+  const ref = React.useRef<HTMLDivElement | null>(null);
+  React.useEffect(() => {
+    if (!aberto) return;
+    requestAnimationFrame(() => {
+      const campos = ref.current?.querySelectorAll<HTMLElement>('input:not([type=hidden]):not([type=file]):not([disabled]), select:not([disabled]), textarea:not([disabled])');
+      [...(campos ?? [])].find(c => c.offsetParent !== null)?.focus();
+    });
+  }, [aberto]);
+  const colunaCls = '@container flex-1 min-w-0 flex flex-col gap-5 p-3 sm:p-5 sem-barra [&>*]:shrink-0';
+  return createPortal(
+    <AnimatePresence>
+      {aberto && (
+        <motion.div
+          initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+          className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4">
+          <motion.div ref={ref} role="dialog" aria-modal="true"
+            aria-label={typeof titulo === 'string' ? titulo : undefined}
+            initial={{ scale: 0.98, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.98, opacity: 0 }}
+            className={`neu-flat rounded-3xl border border-white/10 w-full ${LARGURA_MODAL_FORM[largura]} max-h-full flex flex-col overflow-hidden`}>
+            <header className="flex items-center justify-between gap-3 px-5 py-3 border-b border-white/10 shrink-0">
+              <h3 className="text-sm font-bold text-gray-200 truncate min-w-0">
+                {titulo}
+                {subtitulo && <span className="text-gray-500 font-normal ml-2">{subtitulo}</span>}
+              </h3>
+              <div className="flex items-center gap-2 shrink-0">
+                <button type="button" onClick={onCancelar} className="neu-button py-2 px-5 rounded-xl text-sm text-gray-400">Cancelar</button>
+                {acoes}
+              </div>
+            </header>
+            {lateral ? (
+              <div className="flex-1 min-h-0 overflow-y-auto lg:overflow-hidden sem-barra flex flex-col lg:flex-row">
+                <div className={`${colunaCls} lg:overflow-y-auto`}>{children}</div>
+                <aside className="@container w-full lg:w-80 shrink-0 flex flex-col gap-5 p-3 sm:p-5 pt-0 sm:pt-0 lg:pt-5 lg:pl-0 lg:overflow-y-auto sem-barra [&>*]:shrink-0">
+                  {lateral}
+                </aside>
+              </div>
+            ) : (
+              <div className={`${colunaCls} min-h-0 overflow-y-auto`}>{children}</div>
+            )}
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>,
+    document.body,
+  );
+};
 
 // Aba colorida sem contador — mesma régua da AbaComContador (cor cheia e
 // parada, nunca cinza), para menus de aba que não têm uma quantidade para

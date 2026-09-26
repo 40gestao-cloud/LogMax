@@ -8,7 +8,7 @@ import { HistoricoOperacoes } from '../components/HistoricoOperacoes';
 import { MenuMais, ItemMenu } from '../components/MenuMais';
 import { FuncionarioBeneficiosModal } from '../components/FuncionarioBeneficiosModal';
 import { useFetchData, dbInsert, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
-import { LoadingSpinner, EmptyState, StatusBadge, NeuButtonAccent, ExportButton, CardContador, type TomContador } from '../components/ui';
+import { LoadingSpinner, EmptyState, StatusBadge, NeuButtonAccent, ExportButton, CardContador, type TomContador, ModalFormulario } from '../components/ui';
 import { exportToPDF, exportToExcel, formatCPF, formatPhone, formatBRL, parseBRL } from '../lib/viewUtils';
 import { uploadFotoDeFuncionario, validarFotoPerfil, PERFIL_FOTO_ACCEPT } from '../lib/perfilFoto';
 import { roleLabel } from '../lib/rbac';
@@ -74,7 +74,6 @@ const FuncionariosViewInner = ({ showToast, filial }: { showToast: any; filial: 
   const [editing, setEditing] = useState<any>(null);
   const [form, setForm] = useState<any>(makeEmpty(filial));
   const [saving, setSaving] = useState(false);
-  const formRef = useRef<HTMLDivElement>(null);
   const [photoUploadId, setPhotoUploadId] = useState<string | null>(null);
   const [photoUploading, setPhotoUploading] = useState(false);
   const photoInputRef = useRef<HTMLInputElement>(null);
@@ -82,14 +81,6 @@ const FuncionariosViewInner = ({ showToast, filial }: { showToast: any; filial: 
   const [formPhotoPreview, setFormPhotoPreview] = useState<string | null>(null);
   const formPhotoInputRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => {
-    if (showForm) {
-      requestAnimationFrame(() => {
-        formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        formRef.current?.querySelector<HTMLInputElement>('input, select')?.focus();
-      });
-    }
-  }, [showForm, editing?.id]);
 
   if (isLoading) return <div className="flex-1 flex items-center justify-center"><LoadingSpinner /></div>;
 
@@ -362,228 +353,220 @@ const FuncionariosViewInner = ({ showToast, filial }: { showToast: any; filial: 
       </div>
 
       <AnimatePresence>
-        {showForm && (
-          <motion.div ref={formRef} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            className="neu-flat rounded-3xl p-6 border border-white/5 shrink-0 scroll-mt-4">
-            <div className="flex items-center justify-between mb-5">
-              <div className="flex items-center gap-3 min-w-0">
-                <h3 className="text-sm font-bold text-gray-300">{editing ? 'Editar Funcionário' : 'Novo Funcionário'}</h3>
-                {form.user_profile_id && (
-                  // Vínculo visível: sem isso o RH não teria como saber que
-                  // este cadastro já está amarrado à conta do aluno — e é esse
-                  // vínculo que faz o crachá dele sair com QR.
-                  <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider bg-accent/15 text-accent shrink-0"
-                    title="Cadastro ligado à conta de usuário — o crachá dessa pessoa já sai com QR">
-                    <Link2 size={11} /> ligado ao usuário
-                  </span>
-                )}
-              </div>
-              <div className="flex items-start gap-3 shrink-0">
-                <button type="button"
-                  onClick={() => window.open(MAXID_URL, '_blank', 'noopener,noreferrer')}
-                  className="neu-button py-2.5 px-5 rounded-xl text-sm font-bold text-accent hover:bg-accent/10 inline-flex items-center gap-3 transition-colors">
-                  <img src="/icon-maxid.png" alt="" className="h-11 w-auto rounded-md" />
-                  <span className="flex flex-col items-start leading-tight">
-                    <span className="inline-flex items-center gap-1.5">Gerar no MaxID <ExternalLink size={13} /></span>
-                    <span className="text-[10px] font-normal text-gray-500">CPF e celular · abre em outra aba</span>
-                  </span>
-                </button>
-                <button onClick={closeForm} className="modal-close-btn"><X size={16} /></button>
-              </div>
-            </div>
-
-            {/* Foto */}
-            <div className="flex items-center gap-4 mb-5">
-              <button type="button" onClick={() => formPhotoInputRef.current?.click()}
-                className="relative w-16 h-16 rounded-full neu-button overflow-hidden flex items-center justify-center text-gray-500 hover:text-accent transition-colors shrink-0"
-                title="Adicionar foto (opcional)">
-                {formPhotoPreview || form.foto_url
-                  ? <img src={formPhotoPreview ?? form.foto_url} alt="preview" className="w-full h-full object-cover" />
-                  : <Camera size={22} />}
+        <ModalFormulario
+          aberto={showForm}
+          largura="xl"
+          titulo={editing ? 'Editar Funcionário' : 'Novo Funcionário'}
+          subtitulo={form.user_profile_id && (
+            // Vínculo visível: é ele que faz o crachá sair com QR.
+            <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider bg-accent/15 text-accent"
+              title="Cadastro ligado à conta de usuário — o crachá dessa pessoa já sai com QR">
+              <Link2 size={11} /> ligado ao usuário
+            </span>
+          )}
+          onCancelar={closeForm}
+          acoes={<>
+              <button type="button"
+                onClick={() => window.open(MAXID_URL, '_blank', 'noopener,noreferrer')}
+                className="neu-button py-2.5 px-5 rounded-xl text-sm font-bold text-accent hover:bg-accent/10 inline-flex items-center gap-3 transition-colors">
+                <img src="/icon-maxid.png" alt="" className="h-11 w-auto rounded-md" />
+                <span className="flex flex-col items-start leading-tight">
+                  <span className="inline-flex items-center gap-1.5">Gerar no MaxID <ExternalLink size={13} /></span>
+                  <span className="text-[10px] font-normal text-gray-500">CPF e celular · abre em outra aba</span>
+                </span>
               </button>
-              <div>
-                <p className="text-xs text-gray-300 font-semibold">Foto do funcionário <span className="text-gray-600 font-normal">(opcional)</span></p>
-                <p className="text-[10px] text-gray-600 mt-0.5">JPG, PNG ou WEBP · máx 150 KB</p>
-                {(formPhotoPreview || (!editing && form.foto_url)) && (
-                  <button type="button" onClick={() => { setFormPhotoFile(null); if (formPhotoPreview) URL.revokeObjectURL(formPhotoPreview); setFormPhotoPreview(null); }}
-                    className="text-[10px] text-red-500 hover:text-red-400 mt-1">Remover</button>
-                )}
-              </div>
-              <input ref={formPhotoInputRef} type="file" accept={PERFIL_FOTO_ACCEPT} className="hidden"
-                onChange={e => {
-                  const f = e.target.files?.[0]; e.target.value = '';
-                  if (!f) return;
-                  const val = validarFotoPerfil(f);
-                  if (!val.ok) { showToast(val.motivo, 'error'); return; }
-                  setFormPhotoFile(f);
-                  if (formPhotoPreview) URL.revokeObjectURL(formPhotoPreview);
-                  setFormPhotoPreview(URL.createObjectURL(f));
-                }} />
+            <NeuButtonAccent variant="" onClick={handleSave} disabled={saving}>{saving ? 'Salvando...' : editing ? 'Salvar Alterações' : 'Cadastrar'}</NeuButtonAccent>
+          </>}
+        >
+
+          {/* Foto */}
+          <div className="flex items-center gap-4 mb-5">
+            <button type="button" onClick={() => formPhotoInputRef.current?.click()}
+              className="relative w-16 h-16 rounded-full neu-button overflow-hidden flex items-center justify-center text-gray-500 hover:text-accent transition-colors shrink-0"
+              title="Adicionar foto (opcional)">
+              {formPhotoPreview || form.foto_url
+                ? <img src={formPhotoPreview ?? form.foto_url} alt="preview" className="w-full h-full object-cover" />
+                : <Camera size={22} />}
+            </button>
+            <div>
+              <p className="text-xs text-gray-300 font-semibold">Foto do funcionário <span className="text-gray-600 font-normal">(opcional)</span></p>
+              <p className="text-[10px] text-gray-600 mt-0.5">JPG, PNG ou WEBP · máx 150 KB</p>
+              {(formPhotoPreview || (!editing && form.foto_url)) && (
+                <button type="button" onClick={() => { setFormPhotoFile(null); if (formPhotoPreview) URL.revokeObjectURL(formPhotoPreview); setFormPhotoPreview(null); }}
+                  className="text-[10px] text-red-500 hover:text-red-400 mt-1">Remover</button>
+              )}
+            </div>
+            <input ref={formPhotoInputRef} type="file" accept={PERFIL_FOTO_ACCEPT} className="hidden"
+              onChange={e => {
+                const f = e.target.files?.[0]; e.target.value = '';
+                if (!f) return;
+                const val = validarFotoPerfil(f);
+                if (!val.ok) { showToast(val.motivo, 'error'); return; }
+                setFormPhotoFile(f);
+                if (formPhotoPreview) URL.revokeObjectURL(formPhotoPreview);
+                setFormPhotoPreview(URL.createObjectURL(f));
+              }} />
+          </div>
+
+          {/* Trazer de Usuários — só no cadastro novo. Editar um funcionário
+              existente não escolhe pessoa: escolher outra ali reescreveria o
+              cadastro de alguém por cima. */}
+          {!editing && (
+            <div className="flex flex-col gap-1.5 mb-4">
+              <label htmlFor="func-usuario" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">
+                Trazer de Usuários ({filial}) — opcional
+              </label>
+              <SelectBusca
+                id="func-usuario"
+                value={usuarioSel}
+                onChange={v => {
+                  const escolhido = usuariosDaUnidade.find((u: any) => u.id === v);
+                  if (escolhido) { openNewFromUser(escolhido); return; }
+                  // "Do zero" desfaz só o VÍNCULO. O texto já digitado fica:
+                  // apagar o que o RH escreveu por causa de uma troca de
+                  // seleção seria perda silenciosa.
+                  setUsuarioSel('');
+                  setForm((p: any) => ({ ...p, user_profile_id: null }));
+                }}
+                placeholder="Cadastrar do zero (sem conta de usuário)"
+                permitirVazio="Cadastrar do zero (sem conta de usuário)"
+                opcoes={usuariosDaUnidade.map((u: any) => ({
+                  value: String(u.id),
+                  label: u.nome || '(sem nome)',
+                  sub: [u.email, u.cargoTexto, u.deptoTexto].filter(Boolean).join(' · ') || null,
+                  tag: u.jaCadastrado ? { texto: 'Já cadastrado', tom: 'verde' as const } : null,
+                  disabled: !!u.jaCadastrado,
+                }))}
+              />
+              {usuariosSemCadastro.length > 0 && (
+                <p className="text-[11px] text-gray-500">
+                  {usuariosSemCadastro.length} de {usuariosDaUnidade.length} sem cadastro
+                </p>
+              )}
+            </div>
+          )}
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="flex flex-col gap-1.5">
+              <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Unidade</label>
+              <div className="neu-pressed rounded-xl px-3 py-2.5 text-sm text-accent font-semibold border border-white/5">{filial}</div>
+            </div>
+            {[
+              { label: 'Nome *', k: 'nome', type: 'text' },
+              { label: 'CPF', k: 'cpf', type: 'text' },
+              { label: 'E-mail', k: 'email', type: 'text' },
+              { label: 'Telefone', k: 'telefone', type: 'text' },
+            ].map(({ label, k, type }) => {
+              const mask = MASK_FOR[k];
+              const isNumericMask = !!mask;
+              return (
+                <div key={k} className="flex flex-col gap-1.5">
+                  <label htmlFor={`func-${k}`} className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">{label}</label>
+                  <input
+                    id={`func-${k}`}
+                    type={type}
+                    inputMode={isNumericMask ? 'numeric' : undefined}
+                    value={form[k]}
+                    onChange={e => {
+                      const raw = e.target.value;
+                      const next = mask ? mask(raw) : raw;
+                      setForm((p: any) => ({ ...p, [k]: next }));
+                    }}
+                    className={`neu-input rounded-xl px-3 py-2.5 text-sm ${isNumericMask ? 'font-mono tabular-nums' : ''}`}
+                  />
+                </div>
+              );
+            })}
+
+            {/* Cargo — vem do catálogo de Cargos da unidade. */}
+            <div className="flex flex-col gap-1.5">
+              <label htmlFor="func-cargo-sel" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Cargo</label>
+              <select id="func-cargo-sel" value={cargoSel} onChange={e => handleCargoChange(e.target.value)}
+                className="neu-input rounded-xl px-3 py-2.5 text-sm">
+                <option value="">Selecionar...</option>
+                {cargosAtivos.map((c: any) => (
+                  <option key={c.id} value={c.id}>{c.nome}{c.nivel ? ` · ${c.nivel}` : ''}</option>
+                ))}
+                <option value={OUTRO}>Outro (digitar)</option>
+              </select>
+              {cargoSel === OUTRO && (
+                <input id="func-cargo" type="text" value={form.cargo} placeholder="Cargo fora do catálogo"
+                  onChange={e => setForm((p: any) => ({ ...p, cargo: e.target.value }))}
+                  className="neu-input rounded-xl px-3 py-2.5 text-sm" />
+              )}
+              {cargoContradizPapel && (
+                <p className="text-[10px] text-amber-400/90 flex items-start gap-1.5">
+                  <AlertTriangle size={11} className="shrink-0 mt-[2px]" />
+                  <span>
+                    Em Usuários a conta é <span className="font-semibold">{roleLabel(papelLigado)}</span>.
+                  </span>
+                </p>
+              )}
+              {cargoEscolhido && Number(cargoEscolhido.salario_base) > 0 && (
+                <p className="text-[10px] text-gray-500">
+                  Base do cargo: <span className="font-mono text-gray-400">R$ {formatBRL(Number(cargoEscolhido.salario_base))}</span>
+                </p>
+              )}
             </div>
 
-            {/* Trazer de Usuários — só no cadastro novo. Editar um funcionário
-                existente não escolhe pessoa: escolher outra ali reescreveria o
-                cadastro de alguém por cima. */}
-            {!editing && (
-              <div className="flex flex-col gap-1.5 mb-4">
-                <label htmlFor="func-usuario" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">
-                  Trazer de Usuários ({filial}) — opcional
-                </label>
-                <SelectBusca
-                  id="func-usuario"
-                  value={usuarioSel}
-                  onChange={v => {
-                    const escolhido = usuariosDaUnidade.find((u: any) => u.id === v);
-                    if (escolhido) { openNewFromUser(escolhido); return; }
-                    // "Do zero" desfaz só o VÍNCULO. O texto já digitado fica:
-                    // apagar o que o RH escreveu por causa de uma troca de
-                    // seleção seria perda silenciosa.
-                    setUsuarioSel('');
-                    setForm((p: any) => ({ ...p, user_profile_id: null }));
-                  }}
-                  placeholder="Cadastrar do zero (sem conta de usuário)"
-                  permitirVazio="Cadastrar do zero (sem conta de usuário)"
-                  opcoes={usuariosDaUnidade.map((u: any) => ({
-                    value: String(u.id),
-                    label: u.nome || '(sem nome)',
-                    sub: [u.email, u.cargoTexto, u.deptoTexto].filter(Boolean).join(' · ') || null,
-                    tag: u.jaCadastrado ? { texto: 'Já cadastrado', tom: 'verde' as const } : null,
-                    disabled: !!u.jaCadastrado,
-                  }))}
-                />
-                {usuariosSemCadastro.length > 0 && (
-                  <p className="text-[11px] text-gray-500">
-                    {usuariosSemCadastro.length} de {usuariosDaUnidade.length} sem cadastro
-                  </p>
-                )}
-              </div>
-            )}
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-              <div className="flex flex-col gap-1.5">
-                <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Unidade</label>
-                <div className="neu-pressed rounded-xl px-3 py-2.5 text-sm text-accent font-semibold border border-white/5">{filial}</div>
-              </div>
-              {[
-                { label: 'Nome *', k: 'nome', type: 'text' },
-                { label: 'CPF', k: 'cpf', type: 'text' },
-                { label: 'E-mail', k: 'email', type: 'text' },
-                { label: 'Telefone', k: 'telefone', type: 'text' },
-              ].map(({ label, k, type }) => {
-                const mask = MASK_FOR[k];
-                const isNumericMask = !!mask;
-                return (
-                  <div key={k} className="flex flex-col gap-1.5">
-                    <label htmlFor={`func-${k}`} className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">{label}</label>
-                    <input
-                      id={`func-${k}`}
-                      type={type}
-                      inputMode={isNumericMask ? 'numeric' : undefined}
-                      value={form[k]}
-                      onChange={e => {
-                        const raw = e.target.value;
-                        const next = mask ? mask(raw) : raw;
-                        setForm((p: any) => ({ ...p, [k]: next }));
-                      }}
-                      className={`neu-input rounded-xl px-3 py-2.5 text-sm ${isNumericMask ? 'font-mono tabular-nums' : ''}`}
-                    />
-                  </div>
-                );
-              })}
-
-              {/* Cargo — vem do catálogo de Cargos da unidade. */}
-              <div className="flex flex-col gap-1.5">
-                <label htmlFor="func-cargo-sel" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Cargo</label>
-                <select id="func-cargo-sel" value={cargoSel} onChange={e => handleCargoChange(e.target.value)}
-                  className="neu-input rounded-xl px-3 py-2.5 text-sm">
-                  <option value="">Selecionar...</option>
-                  {cargosAtivos.map((c: any) => (
-                    <option key={c.id} value={c.id}>{c.nome}{c.nivel ? ` · ${c.nivel}` : ''}</option>
-                  ))}
-                  <option value={OUTRO}>Outro (digitar)</option>
-                </select>
-                {cargoSel === OUTRO && (
-                  <input id="func-cargo" type="text" value={form.cargo} placeholder="Cargo fora do catálogo"
-                    onChange={e => setForm((p: any) => ({ ...p, cargo: e.target.value }))}
-                    className="neu-input rounded-xl px-3 py-2.5 text-sm" />
-                )}
-                {cargoContradizPapel && (
-                  <p className="text-[10px] text-amber-400/90 flex items-start gap-1.5">
-                    <AlertTriangle size={11} className="shrink-0 mt-[2px]" />
-                    <span>
-                      Em Usuários a conta é <span className="font-semibold">{roleLabel(papelLigado)}</span>.
-                    </span>
-                  </p>
-                )}
-                {cargoEscolhido && Number(cargoEscolhido.salario_base) > 0 && (
-                  <p className="text-[10px] text-gray-500">
-                    Base do cargo: <span className="font-mono text-gray-400">R$ {formatBRL(Number(cargoEscolhido.salario_base))}</span>
-                  </p>
-                )}
-              </div>
-
-              {/* Departamento — catálogo de Departamentos da unidade. */}
-              <div className="flex flex-col gap-1.5">
-                <label htmlFor="func-depto-sel" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Departamento</label>
-                <select id="func-depto-sel" value={deptoSel} onChange={e => handleDeptoChange(e.target.value)}
-                  className="neu-input rounded-xl px-3 py-2.5 text-sm">
-                  <option value="">Selecionar...</option>
-                  {deptosAtivos.map((d: any) => <option key={d.id} value={d.id}>{d.nome}</option>)}
-                  <option value={OUTRO}>Outro (digitar)</option>
-                </select>
-                {deptoSel === OUTRO && (
-                  <input id="func-departamento" type="text" value={form.departamento} placeholder="Departamento fora do catálogo"
-                    onChange={e => setForm((p: any) => ({ ...p, departamento: e.target.value }))}
-                    className="neu-input rounded-xl px-3 py-2.5 text-sm" />
-                )}
-              </div>
-
-              {[
-                { label: 'Data de Admissão', k: 'data_admissao', type: 'date' },
-                { label: 'Data de Nascimento', k: 'data_nascimento', type: 'date' },
-                { label: 'Salário (R$)', k: 'salario', type: 'text' },
-                // Dedução do IRRF na folha e na rescisão (migr. 319). Só produz
-                // efeito quando a vigência cadastrada em `rh_parametros` tiver
-                // `deducao_dependente` preenchida — a vigência-piso vem zerada
-                // de propósito, para a migration não mudar número nenhum.
-                ...(temDependentes
-                  ? [{ label: 'Dependentes (IRRF)', k: 'dependentes', type: 'number' }]
-                  : []),
-              ].map(({ label, k, type }) => {
-                const mask = MASK_FOR[k];
-                const isNumericMask = !!mask;
-                return (
-                  <div key={k} className="flex flex-col gap-1.5">
-                    <label htmlFor={`func-${k}`} className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">{label}</label>
-                    <input
-                      id={`func-${k}`}
-                      type={type}
-                      inputMode={isNumericMask ? 'numeric' : undefined}
-                      value={form[k]}
-                      onChange={e => {
-                        const raw = e.target.value;
-                        const next = mask ? mask(raw) : raw;
-                        setForm((p: any) => ({ ...p, [k]: next }));
-                      }}
-                      className={`neu-input rounded-xl px-3 py-2.5 text-sm ${isNumericMask ? 'font-mono tabular-nums' : ''}`}
-                    />
-                  </div>
-                );
-              })}
-
-              <div className="flex flex-col gap-1.5">
-                <label htmlFor="func-status" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Status</label>
-                <select id="func-status" value={form.status} onChange={e => setForm((p: any) => ({ ...p, status: e.target.value }))}
-                  className="neu-input rounded-xl px-3 py-2.5 text-sm">
-                  {['Ativo', 'Inativo', 'Afastado', 'Desligado'].map(o => <option key={o} value={o}>{o}</option>)}
-                </select>
-              </div>
+            {/* Departamento — catálogo de Departamentos da unidade. */}
+            <div className="flex flex-col gap-1.5">
+              <label htmlFor="func-depto-sel" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Departamento</label>
+              <select id="func-depto-sel" value={deptoSel} onChange={e => handleDeptoChange(e.target.value)}
+                className="neu-input rounded-xl px-3 py-2.5 text-sm">
+                <option value="">Selecionar...</option>
+                {deptosAtivos.map((d: any) => <option key={d.id} value={d.id}>{d.nome}</option>)}
+                <option value={OUTRO}>Outro (digitar)</option>
+              </select>
+              {deptoSel === OUTRO && (
+                <input id="func-departamento" type="text" value={form.departamento} placeholder="Departamento fora do catálogo"
+                  onChange={e => setForm((p: any) => ({ ...p, departamento: e.target.value }))}
+                  className="neu-input rounded-xl px-3 py-2.5 text-sm" />
+              )}
             </div>
-            <div className="flex justify-end mt-5">
-              <NeuButtonAccent variant="" onClick={handleSave} disabled={saving}>{saving ? 'Salvando...' : editing ? 'Salvar Alterações' : 'Cadastrar'}</NeuButtonAccent>
+
+            {[
+              { label: 'Data de Admissão', k: 'data_admissao', type: 'date' },
+              { label: 'Data de Nascimento', k: 'data_nascimento', type: 'date' },
+              { label: 'Salário (R$)', k: 'salario', type: 'text' },
+              // Dedução do IRRF na folha e na rescisão (migr. 319). Só produz
+              // efeito quando a vigência cadastrada em `rh_parametros` tiver
+              // `deducao_dependente` preenchida — a vigência-piso vem zerada
+              // de propósito, para a migration não mudar número nenhum.
+              ...(temDependentes
+                ? [{ label: 'Dependentes (IRRF)', k: 'dependentes', type: 'number' }]
+                : []),
+            ].map(({ label, k, type }) => {
+              const mask = MASK_FOR[k];
+              const isNumericMask = !!mask;
+              return (
+                <div key={k} className="flex flex-col gap-1.5">
+                  <label htmlFor={`func-${k}`} className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">{label}</label>
+                  <input
+                    id={`func-${k}`}
+                    type={type}
+                    inputMode={isNumericMask ? 'numeric' : undefined}
+                    value={form[k]}
+                    onChange={e => {
+                      const raw = e.target.value;
+                      const next = mask ? mask(raw) : raw;
+                      setForm((p: any) => ({ ...p, [k]: next }));
+                    }}
+                    className={`neu-input rounded-xl px-3 py-2.5 text-sm ${isNumericMask ? 'font-mono tabular-nums' : ''}`}
+                  />
+                </div>
+              );
+            })}
+
+            <div className="flex flex-col gap-1.5">
+              <label htmlFor="func-status" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Status</label>
+              <select id="func-status" value={form.status} onChange={e => setForm((p: any) => ({ ...p, status: e.target.value }))}
+                className="neu-input rounded-xl px-3 py-2.5 text-sm">
+                {['Ativo', 'Inativo', 'Afastado', 'Desligado'].map(o => <option key={o} value={o}>{o}</option>)}
+              </select>
             </div>
-          </motion.div>
-        )}
+          </div>
+        </ModalFormulario>
       </AnimatePresence>
 
       <div className="neu-flat rounded-3xl p-6 border border-white/5 shrink-0">

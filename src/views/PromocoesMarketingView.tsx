@@ -7,7 +7,7 @@ import { useFetchData, dbInsert, dbDelete } from '../hooks/useSupabaseData';
 import { supabase } from '../lib/supabase';
 import { notificarSetor } from '../lib/notificar';
 import { freshToken, lerJsonDaApi } from '../lib/authFetch';
-import { LoadingSpinner, EmptyState, NeuButtonAccent, ExportButton, CardContador, SecaoFormulario, type TomContador, corDoStatus } from '../components/ui';
+import { LoadingSpinner, EmptyState, NeuButtonAccent, ExportButton, CardContador, SecaoFormulario, type TomContador, corDoStatus, ModalFormulario } from '../components/ui';
 import { exportToPDF, exportToExcel, formatBRL, parseBRL, handleMoneyKeyDown } from '../lib/viewUtils';
 import { ehPrestado } from '../lib/naturezaServico';
 import {
@@ -677,111 +677,109 @@ const PromocoesMarketingViewInner = ({ showToast, profile, filial }: { showToast
       </div>
 
       <AnimatePresence>
-        {showForm && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            className="neu-flat rounded-3xl p-6 border border-white/5 shrink-0">
-            <div className="flex items-center justify-between mb-5">
-              <h3 className="text-sm font-bold text-gray-300">Nova Proposta de Promoção</h3>
-              <button onClick={() => setShowForm(false)} className="w-7 h-7 neu-button rounded-lg flex items-center justify-center text-gray-500 hover:text-white"><X size={14} /></button>
+        <ModalFormulario
+          aberto={showForm}
+          largura="xl"
+          titulo="Nova Proposta de Promoção"
+          onCancelar={() => setShowForm(false)}
+          acoes={<>
+            <button
+              type="button"
+              onClick={() => gerarLegenda({ doForm: true })}
+              disabled={!form.produto_id || !form.preco_promocional}
+              title={!form.produto_id || !form.preco_promocional ? 'Preencha produto e preço promocional primeiro' : 'IA gera 3 variações de legenda'}
+              className="inline-flex items-center gap-1.5 text-xs font-bold py-2 px-3 rounded-xl border border-accent/30 text-accent bg-accent/5 hover:bg-accent/10 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              <Sparkles size={12} />Gerar legenda com IA
+            </button>
+            <NeuButtonAccent variant="" onClick={handleSave} disabled={saving}>
+              {saving ? 'Enviando...' : 'Enviar para Aprovação'}
+            </NeuButtonAccent>
+          </>}
+        >
+          <div className="flex flex-col gap-4">
+          <SecaoFormulario titulo="Produto ou serviço" icon={Package} cor="amarelo">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="flex flex-col gap-1.5">
+              <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Produto</label>
+              <SearchableSelect
+                value={form.tipo_origem === 'produto' ? form.produto_id : ''}
+                onChange={handleProductChange}
+                items={itensProduto}
+                placeholder="Digite para buscar produto…"
+              />
             </div>
-            <div className="flex flex-col gap-4">
-            <SecaoFormulario titulo="Produto ou serviço" icon={Package} cor="amarelo">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="flex flex-col gap-1.5">
-                <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Produto</label>
-                <SearchableSelect
-                  value={form.tipo_origem === 'produto' ? form.produto_id : ''}
-                  onChange={handleProductChange}
-                  items={itensProduto}
-                  placeholder="Digite para buscar produto…"
-                />
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Serviço</label>
-                <SearchableSelect
-                  value={form.tipo_origem === 'servico' ? form.produto_id : ''}
-                  onChange={handleProductChange}
-                  items={itensServico}
-                  placeholder="Digite para buscar serviço…"
-                />
-              </div>
+            <div className="flex flex-col gap-1.5">
+              <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Serviço</label>
+              <SearchableSelect
+                value={form.tipo_origem === 'servico' ? form.produto_id : ''}
+                onChange={handleProductChange}
+                items={itensServico}
+                placeholder="Digite para buscar serviço…"
+              />
             </div>
-            </SecaoFormulario>
-            <SecaoFormulario titulo="Preços" icon={DollarSign} cor="vermelho">
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <div className="flex flex-col gap-1.5">
-                <label htmlFor="promo-preco-atual" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Preço de Venda Atual</label>
-                <input id="promo-preco-atual" type="text" value={form.preco_atual} readOnly
-                  className="neu-input rounded-xl px-3 py-2.5 text-sm opacity-50 cursor-not-allowed" placeholder="Auto" />
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <label htmlFor="promo-preco-custo" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Preço de Custo (referência)</label>
-                <input id="promo-preco-custo" type="text" value={form.preco_custo} readOnly
-                  className="neu-input rounded-xl px-3 py-2.5 text-sm opacity-50 cursor-not-allowed" placeholder="Auto" />
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <label htmlFor="promo-preco-promocional" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Preço Promocional (R$) *</label>
-                <input id="promo-preco-promocional" type="text" inputMode="numeric" value={form.preco_promocional}
-                  onChange={e => setForm((f: any) => ({ ...f, preco_promocional: formatBRL(e.target.value) }))}
-                  onKeyDown={handleMoneyKeyDown}
-                  className="neu-input rounded-xl px-3 py-2.5 text-sm" placeholder="0,00" />
-              </div>
+          </div>
+          </SecaoFormulario>
+          <SecaoFormulario titulo="Preços" icon={DollarSign} cor="vermelho">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="flex flex-col gap-1.5">
+              <label htmlFor="promo-preco-atual" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Preço de Venda Atual</label>
+              <input id="promo-preco-atual" type="text" value={form.preco_atual} readOnly
+                className="neu-input rounded-xl px-3 py-2.5 text-sm opacity-50 cursor-not-allowed" placeholder="Auto" />
             </div>
-            </SecaoFormulario>
-            <SecaoFormulario titulo="Período" icon={CalendarClock} cor="azul">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="flex flex-col gap-1.5">
-                <label htmlFor="promo-data-inicio" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Início da Campanha</label>
-                <input id="promo-data-inicio" type="date" value={form.data_inicio} onChange={e => setForm((f: any) => ({ ...f, data_inicio: e.target.value }))}
-                  className="neu-input rounded-xl px-3 py-2.5 text-sm" />
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <label htmlFor="promo-data-fim" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Fim da Campanha *</label>
-                <input id="promo-data-fim" type="date" value={form.data_fim} onChange={e => setForm((f: any) => ({ ...f, data_fim: e.target.value }))}
-                  className="neu-input rounded-xl px-3 py-2.5 text-sm" />
-                <span className="text-[10px] text-gray-500">É o prazo que devolve o preço: sem ele a promoção nunca encerra.</span>
-              </div>
+            <div className="flex flex-col gap-1.5">
+              <label htmlFor="promo-preco-custo" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Preço de Custo (referência)</label>
+              <input id="promo-preco-custo" type="text" value={form.preco_custo} readOnly
+                className="neu-input rounded-xl px-3 py-2.5 text-sm opacity-50 cursor-not-allowed" placeholder="Auto" />
             </div>
-            </SecaoFormulario>
-            <SecaoFormulario titulo="Descrição e campanha" icon={Megaphone} cor="verde">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="flex flex-col gap-1.5">
-                <label htmlFor="promo-descricao" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Descrição da Promoção</label>
-                <input id="promo-descricao" type="text" value={form.descricao} onChange={e => setForm((f: any) => ({ ...f, descricao: e.target.value }))}
-                  className="neu-input rounded-xl px-3 py-2.5 text-sm" placeholder="Ex: Black Friday" />
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <label htmlFor="promo-campanha" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Campanha (opcional)</label>
-                <select id="promo-campanha" value={form.campanha_id}
-                  onChange={e => setForm((f: any) => ({ ...f, campanha_id: e.target.value }))}
-                  className="neu-input rounded-xl px-3 py-2.5 text-sm">
-                  <option value="">Sem campanha</option>
-                  {(campanhas ?? [])
-                    .filter((c: any) => c.status !== 'Cancelada')
-                    .map((c: any) => (
-                      <option key={c.id} value={c.id}>{c.nome} · {c.status}</option>
-                    ))}
-                </select>
-              </div>
+            <div className="flex flex-col gap-1.5">
+              <label htmlFor="promo-preco-promocional" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Preço Promocional (R$) *</label>
+              <input id="promo-preco-promocional" type="text" inputMode="numeric" value={form.preco_promocional}
+                onChange={e => setForm((f: any) => ({ ...f, preco_promocional: formatBRL(e.target.value) }))}
+                onKeyDown={handleMoneyKeyDown}
+                className="neu-input rounded-xl px-3 py-2.5 text-sm" placeholder="0,00" />
             </div>
-            </SecaoFormulario>
+          </div>
+          </SecaoFormulario>
+          <SecaoFormulario titulo="Período" icon={CalendarClock} cor="azul">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="flex flex-col gap-1.5">
+              <label htmlFor="promo-data-inicio" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Início da Campanha</label>
+              <input id="promo-data-inicio" type="date" value={form.data_inicio} onChange={e => setForm((f: any) => ({ ...f, data_inicio: e.target.value }))}
+                className="neu-input rounded-xl px-3 py-2.5 text-sm" />
             </div>
-            <div className="flex justify-between items-center mt-5 gap-2">
-              <button
-                type="button"
-                onClick={() => gerarLegenda({ doForm: true })}
-                disabled={!form.produto_id || !form.preco_promocional}
-                title={!form.produto_id || !form.preco_promocional ? 'Preencha produto e preço promocional primeiro' : 'IA gera 3 variações de legenda'}
-                className="inline-flex items-center gap-1.5 text-xs font-bold py-2 px-3 rounded-xl border border-accent/30 text-accent bg-accent/5 hover:bg-accent/10 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-              >
-                <Sparkles size={12} />Gerar legenda com IA
-              </button>
-              <NeuButtonAccent variant="" onClick={handleSave} disabled={saving}>
-                {saving ? 'Enviando...' : 'Enviar para Aprovação'}
-              </NeuButtonAccent>
+            <div className="flex flex-col gap-1.5">
+              <label htmlFor="promo-data-fim" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Fim da Campanha *</label>
+              <input id="promo-data-fim" type="date" value={form.data_fim} onChange={e => setForm((f: any) => ({ ...f, data_fim: e.target.value }))}
+                className="neu-input rounded-xl px-3 py-2.5 text-sm" />
+              <span className="text-[10px] text-gray-500">É o prazo que devolve o preço: sem ele a promoção nunca encerra.</span>
             </div>
-          </motion.div>
-        )}
+          </div>
+          </SecaoFormulario>
+          <SecaoFormulario titulo="Descrição e campanha" icon={Megaphone} cor="verde">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="flex flex-col gap-1.5">
+              <label htmlFor="promo-descricao" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Descrição da Promoção</label>
+              <input id="promo-descricao" type="text" value={form.descricao} onChange={e => setForm((f: any) => ({ ...f, descricao: e.target.value }))}
+                className="neu-input rounded-xl px-3 py-2.5 text-sm" placeholder="Ex: Black Friday" />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <label htmlFor="promo-campanha" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Campanha (opcional)</label>
+              <select id="promo-campanha" value={form.campanha_id}
+                onChange={e => setForm((f: any) => ({ ...f, campanha_id: e.target.value }))}
+                className="neu-input rounded-xl px-3 py-2.5 text-sm">
+                <option value="">Sem campanha</option>
+                {(campanhas ?? [])
+                  .filter((c: any) => c.status !== 'Cancelada')
+                  .map((c: any) => (
+                    <option key={c.id} value={c.id}>{c.nome} · {c.status}</option>
+                  ))}
+              </select>
+            </div>
+          </div>
+          </SecaoFormulario>
+          </div>
+        </ModalFormulario>
       </AnimatePresence>
 
       <div className="neu-flat rounded-3xl p-6 border border-white/5 shrink-0">

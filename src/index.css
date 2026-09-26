@@ -541,6 +541,10 @@ textarea,
 }
 .campo-cresce::-webkit-scrollbar { display: none; }
 
+/* Rola sem mostrar a barra (colunas do ModalFormulario). */
+.sem-barra { scrollbar-width: none; }
+.sem-barra::-webkit-scrollbar { display: none; }
+
 /* ── Global dark-mode overrides for Tailwind gray classes ──
    Tons Tailwind crus de gray-500/600/700 ficam quase invisíveis em fundo
    escuro (queixa de baixo contraste em 2026-06-10). Subimos cada tom 1

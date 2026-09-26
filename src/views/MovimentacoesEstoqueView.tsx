@@ -7,7 +7,7 @@ import { Search, Plus, Save, Trash2, CornerUpLeft, X } from 'lucide-react';
 import { HistoricoOperacoes } from '../components/HistoricoOperacoes';
 import { useFetchData, dbDelete } from '../hooks/useSupabaseData';
 import { supabase } from '../lib/supabase';
-import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent, Pagination } from '../components/ui';
+import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent, Pagination, ModalFormulario } from '../components/ui';
 import { useFormValidation, idsDeProdutosPorTermo } from '../lib/viewUtils';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import { useConfirm } from '../contexts/ConfirmContext';
@@ -155,49 +155,47 @@ const MovimentacoesEstoqueViewInner = ({ showToast, filial, profile }: { showToa
       </div>
 
       <AnimatePresence>
-        {showForm && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-            <div className="neu-flat rounded-2xl p-6 border border-white/5 flex flex-col gap-4">
-              <h3 className="text-sm font-bold text-gray-200">Nova Movimentação</h3>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <FormField label="Produto *" error={errors.produto_id}>
-                  <SelectBusca
-                    value={form.produto_id}
-                    onChange={v => { setForm(ff => ({ ...ff, produto_id: v })); clearError('produto_id'); }}
-                    placeholder="Escolha o produto"
-                    opcoes={produtos.map((p: any) => opcaoProduto(p, { saldo: true }))}
-                  />
-                </FormField>
-                <FormField label="Tipo *" error={errors.tipo}>
-                  <select className={`neu-input py-2 px-3 rounded-xl text-sm ${errors.tipo ? 'border border-red-500/40' : ''}`}
-                    value={form.tipo} onChange={e => { setForm(f => ({ ...f, tipo: e.target.value })); clearError('tipo'); }}>
-                    <option value="">Selecione...</option>
-                    {/* 'Ajuste' virou dois tipos com sinal (migr. 268). Sem
-                        sinal, o trigger caía no ELSE e SOMAVA — ajustar para
-                        corrigir contagem a menor aumentava o estoque. */}
-                    {['Entrada', 'Saída', 'Ajuste +', 'Ajuste −'].map(t => <option key={t} value={t}>{t}</option>)}
-                  </select>
-                </FormField>
-                <FormField label="Quantidade">
-                  <input type="number" className="neu-input py-2 px-3 rounded-xl text-sm" value={extras.qtd}
-                    onChange={e => setExtras(x => ({ ...x, qtd: e.target.value }))} placeholder="0" />
-                </FormField>
-                <FormField label="Origem">
-                  <input className="neu-input py-2 px-3 rounded-xl text-sm" value={extras.origem}
-                    onChange={e => setExtras(x => ({ ...x, origem: e.target.value }))} placeholder="Ex: Fornecedor XYZ" />
-                </FormField>
-                <FormField label="Destino">
-                  <input className="neu-input py-2 px-3 rounded-xl text-sm" value={extras.destino}
-                    onChange={e => setExtras(x => ({ ...x, destino: e.target.value }))} placeholder="Ex: Almoxarifado A" />
-                </FormField>
-              </div>
-              <div className="flex gap-3 justify-end">
-                <button onClick={closeForm} className="neu-button py-2 px-5 rounded-xl text-sm text-gray-400">Cancelar</button>
-                <NeuButtonAccent onClick={handleSave} isLoading={isSaving}><Save size={14} /> Registrar</NeuButtonAccent>
-              </div>
-            </div>
-          </motion.div>
-        )}
+        <ModalFormulario
+          aberto={showForm}
+          titulo="Nova Movimentação"
+          onCancelar={closeForm}
+          acoes={<>
+            <NeuButtonAccent onClick={handleSave} isLoading={isSaving}><Save size={14} /> Registrar</NeuButtonAccent>
+          </>}
+        >
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <FormField label="Produto *" error={errors.produto_id}>
+              <SelectBusca
+                value={form.produto_id}
+                onChange={v => { setForm(ff => ({ ...ff, produto_id: v })); clearError('produto_id'); }}
+                placeholder="Escolha o produto"
+                opcoes={produtos.map((p: any) => opcaoProduto(p, { saldo: true }))}
+              />
+            </FormField>
+            <FormField label="Tipo *" error={errors.tipo}>
+              <select className={`neu-input py-2 px-3 rounded-xl text-sm ${errors.tipo ? 'border border-red-500/40' : ''}`}
+                value={form.tipo} onChange={e => { setForm(f => ({ ...f, tipo: e.target.value })); clearError('tipo'); }}>
+                <option value="">Selecione...</option>
+                {/* 'Ajuste' virou dois tipos com sinal (migr. 268). Sem
+                    sinal, o trigger caía no ELSE e SOMAVA — ajustar para
+                    corrigir contagem a menor aumentava o estoque. */}
+                {['Entrada', 'Saída', 'Ajuste +', 'Ajuste −'].map(t => <option key={t} value={t}>{t}</option>)}
+              </select>
+            </FormField>
+            <FormField label="Quantidade">
+              <input type="number" className="neu-input py-2 px-3 rounded-xl text-sm" value={extras.qtd}
+                onChange={e => setExtras(x => ({ ...x, qtd: e.target.value }))} placeholder="0" />
+            </FormField>
+            <FormField label="Origem">
+              <input className="neu-input py-2 px-3 rounded-xl text-sm" value={extras.origem}
+                onChange={e => setExtras(x => ({ ...x, origem: e.target.value }))} placeholder="Ex: Fornecedor XYZ" />
+            </FormField>
+            <FormField label="Destino">
+              <input className="neu-input py-2 px-3 rounded-xl text-sm" value={extras.destino}
+                onChange={e => setExtras(x => ({ ...x, destino: e.target.value }))} placeholder="Ex: Almoxarifado A" />
+            </FormField>
+          </div>
+        </ModalFormulario>
       </AnimatePresence>
 
       <div className="neu-flat rounded-3xl p-6 border border-white/5 flex flex-col mb-6">

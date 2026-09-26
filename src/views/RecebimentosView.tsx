@@ -9,7 +9,7 @@ import { HistoricoOperacoes } from '../components/HistoricoOperacoes';
 import { useFetchData, dbInsert, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
 import { supabase } from '../lib/supabase';
 import { numeroPedido } from '../lib/documentos';
-import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent, StatusBadge, Pagination, SelecioneUnidade, FilaDeTrabalho } from '../components/ui';
+import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent, StatusBadge, Pagination, SelecioneUnidade, FilaDeTrabalho, ModalFormulario } from '../components/ui';
 import { useFormValidation, formatBRL, parseBRL, formatQtd, parseQtd, handleQtdKeyDown, qtdBR } from '../lib/viewUtils';
 import { UNIDADES_FRACIONARIAS, normalizarUnidade, embalagemDoProduto } from '../lib/unidades';
 import { QuantidadeEmbalagem, qtdEmEstoque } from '../components/QuantidadeEmbalagem';
@@ -677,88 +677,86 @@ const RecebimentosViewInner = ({ showToast, filial }: { showToast: any; filial: 
       ]} />
 
       <AnimatePresence>
-        {showForm && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-            <div className="neu-flat rounded-2xl p-6 border border-white/5 flex flex-col gap-4">
-              <h3 className="text-sm font-bold text-gray-200">Novo Recebimento</h3>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                <div className="sm:col-span-2">
-                <FormField label="Pedido *" error={errors.pedido_id}><SelectBusca
-                  value={form.pedido_id}
-                  onChange={v => { setForm(ff => ({ ...ff, pedido_id: v })); clearError('pedido_id'); }}
-                  placeholder="Escolha o pedido"
-                  opcoes={pedidosAtivos.map((p: any) => {
-                    const desc = p.item_descricao ?? p.req?.item ?? '';
-                    const s = saldos[p.id];
-                    const esgotado = !!s && s.qtd_saldo <= 0.0005;
-                    // Esgotado sem dizer por quê fazia o aluno reler a lista à
-                    // procura da linha que sumiu. A carga inteira já foi lançada:
-                    // o que falta é confirmar a entrada na tabela abaixo.
-                    const pendenteDeConfirmar = esgotado && resumo.pedidosAConfirmar.has(String(p.id));
-                    return {
-                      value: String(p.id),
-                      label: desc || numeroPedido(p),
-                      sub: [numeroPedido(p), s ? `falta ${qtdBR(s.qtd_saldo)} de ${qtdBR(s.qtd_pedida)}` : null].filter(Boolean).join(' · '),
-                      // Serviço na mesma lista, marcado (migr. 499): contratação
-                      // não chega em caixa, mas quem procura a dedetização acha.
-                      tag: p.servico_id ? { texto: 'Serviço', tom: 'roxo' as const } : null,
-                      disabled: esgotado,
-                      motivo: esgotado ? (pendenteDeConfirmar ? 'Carga já lançada — falta confirmar abaixo' : 'Recebido totalmente') : null,
-                    };
-                  })}
-                /></FormField>
-                </div>
-                {/* A unidade é a do produto do pedido (migr. 439). */}
-                <QuantidadeEmbalagem
-                  label="Qtd Recebida"
-                  unidade={unidadePedidoSel}
-                  embalagem={embPedidoSel}
-                  emEmbalagem={recebEmEmb}
-                  onModo={setRecebEmEmb}
-                  value={extras.qtd_recebida}
-                  onChange={v => setExtras(x => ({ ...x, qtd_recebida: v }))}
-                />
-                <FormField label="Data da chegada">
-                  <input type="date" className="neu-input py-2 px-3 rounded-xl text-sm"
-                    max={todayBR()}
-                    value={extras.data}
-                    onChange={e => setExtras(x => ({ ...x, data: e.target.value }))} />
-                </FormField>
-                <FormField label="Nota fiscal — número">
-                  <div className="flex gap-2">
-                    <input className="neu-input py-2 px-3 rounded-xl text-sm flex-1 min-w-0"
-                      value={extras.nf_numero}
-                      onChange={e => setExtras(x => ({ ...x, nf_numero: e.target.value }))}
-                      placeholder="Ex.: 000123456" />
-                    {/* Sequencial: o próximo depois do maior número da filial. */}
-                    <button type="button"
-                      onClick={() => setExtras(x => ({ ...x, nf_numero: proximoNumeroNfDeMaior(resumo.maxNf) }))}
-                      className="neu-button py-2 px-3 rounded-xl text-[11px] font-bold text-gray-400 hover:text-accent shrink-0">
-                      Gerar
-                    </button>
-                  </div>
-                </FormField>
-                <FormField label="Nota — série">
-                  <input className="neu-input py-2 px-3 rounded-xl text-sm"
-                    value={extras.nf_serie}
-                    onChange={e => setExtras(x => ({ ...x, nf_serie: e.target.value }))}
-                    placeholder="Ex.: 1" />
-                </FormField>
-                <FormField label="Nota — emissão">
-                  <input type="date" className="neu-input py-2 px-3 rounded-xl text-sm"
-                    max={todayBR()}
-                    value={extras.nf_emissao}
-                    onChange={e => setExtras(x => ({ ...x, nf_emissao: e.target.value }))} />
-                </FormField>
-                <FormField label="Observação"><input className="neu-input py-2 px-3 rounded-xl text-sm" value={extras.observacao} onChange={e => setExtras(x => ({ ...x, observacao: e.target.value }))} placeholder="Opcional..." /></FormField>
-              </div>
-              <div className="flex gap-3 justify-end">
-                <button onClick={closeForm} className="neu-button py-2 px-5 rounded-xl text-sm text-gray-400">Cancelar</button>
-                <NeuButtonAccent onClick={handleSave} isLoading={isSaving}><Save size={14} /> Registrar</NeuButtonAccent>
-              </div>
+        <ModalFormulario
+          aberto={showForm}
+          titulo="Novo Recebimento"
+          onCancelar={closeForm}
+          acoes={<>
+            <NeuButtonAccent onClick={handleSave} isLoading={isSaving}><Save size={14} /> Registrar</NeuButtonAccent>
+          </>}
+        >
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="sm:col-span-2">
+            <FormField label="Pedido *" error={errors.pedido_id}><SelectBusca
+              value={form.pedido_id}
+              onChange={v => { setForm(ff => ({ ...ff, pedido_id: v })); clearError('pedido_id'); }}
+              placeholder="Escolha o pedido"
+              opcoes={pedidosAtivos.map((p: any) => {
+                const desc = p.item_descricao ?? p.req?.item ?? '';
+                const s = saldos[p.id];
+                const esgotado = !!s && s.qtd_saldo <= 0.0005;
+                // Esgotado sem dizer por quê fazia o aluno reler a lista à
+                // procura da linha que sumiu. A carga inteira já foi lançada:
+                // o que falta é confirmar a entrada na tabela abaixo.
+                const pendenteDeConfirmar = esgotado && resumo.pedidosAConfirmar.has(String(p.id));
+                return {
+                  value: String(p.id),
+                  label: desc || numeroPedido(p),
+                  sub: [numeroPedido(p), s ? `falta ${qtdBR(s.qtd_saldo)} de ${qtdBR(s.qtd_pedida)}` : null].filter(Boolean).join(' · '),
+                  // Serviço na mesma lista, marcado (migr. 499): contratação
+                  // não chega em caixa, mas quem procura a dedetização acha.
+                  tag: p.servico_id ? { texto: 'Serviço', tom: 'roxo' as const } : null,
+                  disabled: esgotado,
+                  motivo: esgotado ? (pendenteDeConfirmar ? 'Carga já lançada — falta confirmar abaixo' : 'Recebido totalmente') : null,
+                };
+              })}
+            /></FormField>
             </div>
-          </motion.div>
-        )}
+            {/* A unidade é a do produto do pedido (migr. 439). */}
+            <QuantidadeEmbalagem
+              label="Qtd Recebida"
+              unidade={unidadePedidoSel}
+              embalagem={embPedidoSel}
+              emEmbalagem={recebEmEmb}
+              onModo={setRecebEmEmb}
+              value={extras.qtd_recebida}
+              onChange={v => setExtras(x => ({ ...x, qtd_recebida: v }))}
+            />
+            <FormField label="Data da chegada">
+              <input type="date" className="neu-input py-2 px-3 rounded-xl text-sm"
+                max={todayBR()}
+                value={extras.data}
+                onChange={e => setExtras(x => ({ ...x, data: e.target.value }))} />
+            </FormField>
+            <FormField label="Nota fiscal — número">
+              <div className="flex gap-2">
+                <input className="neu-input py-2 px-3 rounded-xl text-sm flex-1 min-w-0"
+                  value={extras.nf_numero}
+                  onChange={e => setExtras(x => ({ ...x, nf_numero: e.target.value }))}
+                  placeholder="Ex.: 000123456" />
+                {/* Sequencial: o próximo depois do maior número da filial. */}
+                <button type="button"
+                  onClick={() => setExtras(x => ({ ...x, nf_numero: proximoNumeroNfDeMaior(resumo.maxNf) }))}
+                  className="neu-button py-2 px-3 rounded-xl text-[11px] font-bold text-gray-400 hover:text-accent shrink-0">
+                  Gerar
+                </button>
+              </div>
+            </FormField>
+            <FormField label="Nota — série">
+              <input className="neu-input py-2 px-3 rounded-xl text-sm"
+                value={extras.nf_serie}
+                onChange={e => setExtras(x => ({ ...x, nf_serie: e.target.value }))}
+                placeholder="Ex.: 1" />
+            </FormField>
+            <FormField label="Nota — emissão">
+              <input type="date" className="neu-input py-2 px-3 rounded-xl text-sm"
+                max={todayBR()}
+                value={extras.nf_emissao}
+                onChange={e => setExtras(x => ({ ...x, nf_emissao: e.target.value }))} />
+            </FormField>
+            <FormField label="Observação"><input className="neu-input py-2 px-3 rounded-xl text-sm" value={extras.observacao} onChange={e => setExtras(x => ({ ...x, observacao: e.target.value }))} placeholder="Opcional..." /></FormField>
+          </div>
+        </ModalFormulario>
       </AnimatePresence>
 
       <div className="neu-flat rounded-3xl p-6 border border-white/5 flex flex-col mb-6">

@@ -1,4 +1,3 @@
-import { useRolarAteFormulario } from '../hooks/useRolarAteFormulario';
 import { MenuMais, ItemMenu } from '../components/MenuMais';
 import React, { useState, useEffect } from 'react';
 import type { FilialSelectorValue } from '../components/FilialSelector';
@@ -7,7 +6,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Search, Edit2, Trash2, Plus, Save, Check, Landmark, X, FileDown, Sheet, CreditCard } from 'lucide-react';
 import { HistoricoOperacoes } from '../components/HistoricoOperacoes';
 import { useFetchData, dbInsert, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
-import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent, StatusBadge, FilialBadge, Pagination } from '../components/ui';
+import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent, StatusBadge, FilialBadge, Pagination, ModalFormulario } from '../components/ui';
 import { useFormValidation, formatBRL, parseBRL, handleMoneyKeyDown, exportToExcel, drawPdfHeader } from '../lib/viewUtils';
 import { GOLD, BLACK, GRAY_INK, GOLD_TINT } from '../lib/pdfPalette';
 import { FILIAL_DEFAULT, bancoDaUnidade } from '../lib/filiais';
@@ -356,7 +355,6 @@ const ContasReceberViewInner = ({ showToast, filial }: { showToast: any; filial:
 
   const isFormOpen = showForm || !!editItem;
 
-  const formEdicaoRef = useRolarAteFormulario(isFormOpen, editItem?.id);
 
   return (
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col h-full gap-8">
@@ -388,41 +386,39 @@ const ContasReceberViewInner = ({ showToast, filial }: { showToast: any; filial:
       </div>
 
       <AnimatePresence>
-        {isFormOpen && (
-          <motion.div ref={formEdicaoRef} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="shrink-0">
-            <div className="neu-flat rounded-2xl p-6 border border-white/5 flex flex-col gap-4">
-              <h3 className="text-sm font-bold text-gray-200">{editItem ? 'Editar Conta' : 'Nova Conta a Receber'}</h3>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                <FormField label="Descrição *" error={errors.descricao}>
-                  <input className={`neu-input py-2 px-3 rounded-xl text-sm ${errors.descricao ? 'border border-red-500/40' : ''}`}
-                    value={form.descricao} onChange={e => { setForm(f => ({ ...f, descricao: e.target.value })); clearError('descricao'); }}
-                    placeholder="Ex: Serviço prestado" />
-                </FormField>
-                <FormField label="Valor (R$)">
-                  <input type="text" inputMode="numeric" className="neu-input py-2 px-3 rounded-xl text-sm tabular-nums"
-                    value={extras.valor} onChange={e => setExtras(x => ({ ...x, valor: formatBRL(e.target.value) }))} onKeyDown={handleMoneyKeyDown} placeholder="0,00" />
-                </FormField>
-                <FormField label="Vencimento">
-                  <input type="date" className="neu-input py-2 px-3 rounded-xl text-sm"
-                    value={extras.vencimento} onChange={e => setExtras(x => ({ ...x, vencimento: e.target.value }))} />
-                </FormField>
-                <FormField label="Cliente">
-                  <SelectBusca
-                    value={extras.cliente_id}
-                    onChange={v => setExtras(x => ({ ...x, cliente_id: v }))}
-                    placeholder="Nenhum"
-                    permitirVazio="Nenhum"
-                    grupos={gruposDeCadastro(clientes)}
-                  />
-                </FormField>
-              </div>
-              <div className="flex gap-3 justify-end">
-                <button onClick={closeForm} className="neu-button py-2 px-5 rounded-xl text-sm text-gray-400">Cancelar</button>
-                <NeuButtonAccent onClick={handleSave} isLoading={isSaving}><Save size={14} /> {editItem ? 'Atualizar' : 'Salvar'}</NeuButtonAccent>
-              </div>
-            </div>
-          </motion.div>
-        )}
+        <ModalFormulario
+          aberto={isFormOpen}
+          titulo={editItem ? 'Editar Conta' : 'Nova Conta a Receber'}
+          onCancelar={closeForm}
+          acoes={<>
+            <NeuButtonAccent onClick={handleSave} isLoading={isSaving}><Save size={14} /> {editItem ? 'Atualizar' : 'Salvar'}</NeuButtonAccent>
+          </>}
+        >
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <FormField label="Descrição *" error={errors.descricao}>
+              <input className={`neu-input py-2 px-3 rounded-xl text-sm ${errors.descricao ? 'border border-red-500/40' : ''}`}
+                value={form.descricao} onChange={e => { setForm(f => ({ ...f, descricao: e.target.value })); clearError('descricao'); }}
+                placeholder="Ex: Serviço prestado" />
+            </FormField>
+            <FormField label="Valor (R$)">
+              <input type="text" inputMode="numeric" className="neu-input py-2 px-3 rounded-xl text-sm tabular-nums"
+                value={extras.valor} onChange={e => setExtras(x => ({ ...x, valor: formatBRL(e.target.value) }))} onKeyDown={handleMoneyKeyDown} placeholder="0,00" />
+            </FormField>
+            <FormField label="Vencimento">
+              <input type="date" className="neu-input py-2 px-3 rounded-xl text-sm"
+                value={extras.vencimento} onChange={e => setExtras(x => ({ ...x, vencimento: e.target.value }))} />
+            </FormField>
+            <FormField label="Cliente">
+              <SelectBusca
+                value={extras.cliente_id}
+                onChange={v => setExtras(x => ({ ...x, cliente_id: v }))}
+                placeholder="Nenhum"
+                permitirVazio="Nenhum"
+                grupos={gruposDeCadastro(clientes)}
+              />
+            </FormField>
+          </div>
+        </ModalFormulario>
       </AnimatePresence>
 
       {isLoading ? <LoadingSpinner /> : (error || filtered.length === 0) ? <EmptyState error={error} message="Nenhuma conta a receber" /> : (

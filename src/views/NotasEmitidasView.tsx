@@ -5,7 +5,7 @@ import { Search, Plus, Save, FileDown, Receipt, ShoppingBag, Wrench } from 'luci
 import { useFilial } from '../contexts/FilialContext';
 import { useFetchData } from '../hooks/useSupabaseData';
 import { supabase } from '../lib/supabase';
-import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent, StatusBadge } from '../components/ui';
+import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent, StatusBadge, ModalFormulario } from '../components/ui';
 import { HistoricoOperacoes } from '../components/HistoricoOperacoes';
 import { useFormValidation, formatBRL, parseBRL, handleMoneyKeyDown, gerarNotaEmitidaPDF } from '../lib/viewUtils';
 import { hasSetor } from '../lib/rbac';
@@ -209,58 +209,56 @@ const NotasEmitidasViewInner = ({ showToast, filial, profile }: {
       </div>
 
       <AnimatePresence>
-        {showForm && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-            <div className="neu-flat rounded-2xl p-6 border border-white/5 flex flex-col gap-4">
-              <h3 className="text-sm font-bold text-gray-200">Emitir nova nota manualmente</h3>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <FormField label="Tipo *">
-                  <select className="neu-input py-2 px-3 rounded-xl text-sm"
-                    value={extras.tipo}
-                    onChange={e => setExtras(x => ({ ...x, tipo: e.target.value as any }))}>
-                    <option value="NF Produto">NF Produto</option>
-                    <option value="NFS-e Serviço">NFS-e Serviço</option>
-                    <option value="Recibo Simples">Recibo Simples</option>
-                  </select>
-                </FormField>
-                <FormField label="Cliente">
-                  <SelectBusca
-                    value={extras.cliente_id}
-                    onChange={v => setExtras(x => ({ ...x, cliente_id: v }))}
-                    placeholder="Consumidor final"
-                    permitirVazio="Consumidor final"
-                    grupos={gruposDeCadastro(clientes)}
-                  />
-                </FormField>
-                <FormField label="Valor Total (R$) *">
-                  <input type="text" inputMode="numeric"
-                    className="neu-input py-2 px-3 rounded-xl text-sm"
-                    value={extras.valor_total}
-                    onChange={e => setExtras(x => ({ ...x, valor_total: formatBRL(e.target.value) }))}
-                    onKeyDown={handleMoneyKeyDown} placeholder="0,00" />
-                </FormField>
-                <FormField label="Descrição *" error={errors.descricao}>
-                  <textarea rows={3}
-                    className={`neu-input py-2 px-3 rounded-xl text-sm resize-none ${errors.descricao ? 'border border-red-500/40' : ''}`}
-                    value={form.descricao}
-                    onChange={e => { setForm({ descricao: e.target.value }); clearError('descricao'); }}
-                    placeholder={extras.tipo === 'NFS-e Serviço'
-                      ? 'Ex: Manutenção preventiva de notebook Dell + troca de SSD 480GB'
-                      : 'Ex: Venda de 3 unidades do produto X'} />
-                </FormField>
-                <FormField label="Data de emissão">
-                  <input type="date" className="neu-input py-2 px-3 rounded-xl text-sm"
-                    value={extras.data_emissao}
-                    onChange={e => setExtras(x => ({ ...x, data_emissao: e.target.value }))} />
-                </FormField>
-              </div>
-              <div className="flex gap-3 justify-end">
-                <button onClick={closeForm} className="neu-button py-2 px-5 rounded-xl text-sm text-gray-400">Cancelar</button>
-                <NeuButtonAccent onClick={handleEmitir} isLoading={isSaving}><Save size={14} /> Emitir e Baixar PDF</NeuButtonAccent>
-              </div>
-            </div>
-          </motion.div>
-        )}
+        <ModalFormulario
+          aberto={showForm}
+          titulo="Emitir nova nota manualmente"
+          onCancelar={closeForm}
+          acoes={<>
+            <NeuButtonAccent onClick={handleEmitir} isLoading={isSaving}><Save size={14} /> Emitir e Baixar PDF</NeuButtonAccent>
+          </>}
+        >
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <FormField label="Tipo *">
+              <select className="neu-input py-2 px-3 rounded-xl text-sm"
+                value={extras.tipo}
+                onChange={e => setExtras(x => ({ ...x, tipo: e.target.value as any }))}>
+                <option value="NF Produto">NF Produto</option>
+                <option value="NFS-e Serviço">NFS-e Serviço</option>
+                <option value="Recibo Simples">Recibo Simples</option>
+              </select>
+            </FormField>
+            <FormField label="Cliente">
+              <SelectBusca
+                value={extras.cliente_id}
+                onChange={v => setExtras(x => ({ ...x, cliente_id: v }))}
+                placeholder="Consumidor final"
+                permitirVazio="Consumidor final"
+                grupos={gruposDeCadastro(clientes)}
+              />
+            </FormField>
+            <FormField label="Valor Total (R$) *">
+              <input type="text" inputMode="numeric"
+                className="neu-input py-2 px-3 rounded-xl text-sm"
+                value={extras.valor_total}
+                onChange={e => setExtras(x => ({ ...x, valor_total: formatBRL(e.target.value) }))}
+                onKeyDown={handleMoneyKeyDown} placeholder="0,00" />
+            </FormField>
+            <FormField label="Descrição *" error={errors.descricao}>
+              <textarea rows={3}
+                className={`neu-input py-2 px-3 rounded-xl text-sm resize-none ${errors.descricao ? 'border border-red-500/40' : ''}`}
+                value={form.descricao}
+                onChange={e => { setForm({ descricao: e.target.value }); clearError('descricao'); }}
+                placeholder={extras.tipo === 'NFS-e Serviço'
+                  ? 'Ex: Manutenção preventiva de notebook Dell + troca de SSD 480GB'
+                  : 'Ex: Venda de 3 unidades do produto X'} />
+            </FormField>
+            <FormField label="Data de emissão">
+              <input type="date" className="neu-input py-2 px-3 rounded-xl text-sm"
+                value={extras.data_emissao}
+                onChange={e => setExtras(x => ({ ...x, data_emissao: e.target.value }))} />
+            </FormField>
+          </div>
+        </ModalFormulario>
       </AnimatePresence>
 
       <div className="neu-flat rounded-3xl p-6 border border-white/5 flex flex-col mb-6">

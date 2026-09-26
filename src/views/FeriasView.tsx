@@ -1,11 +1,10 @@
-import { useRolarAteFormulario } from '../hooks/useRolarAteFormulario';
 import React, { useState } from 'react';
 import type { FilialOp } from '../components/FilialSelector';
 import { useFilial } from '../contexts/FilialContext';
 import { motion, AnimatePresence } from 'motion/react';
 import { Plus, Check, X as XIcon, Palmtree, Edit2, Trash2 } from 'lucide-react';
 import { useFetchData, dbInsert, dbUpdate, dbDelete, dbSetStatus } from '../hooks/useSupabaseData';
-import { LoadingSpinner, EmptyState, NeuButtonAccent, CardContador, corDoStatus } from '../components/ui';
+import { LoadingSpinner, EmptyState, NeuButtonAccent, CardContador, corDoStatus, ModalFormulario } from '../components/ui';
 import { useConfirm } from '../contexts/ConfirmContext';
 import type { UserProfile } from '../hooks/useUserProfile';
 import { isConselheiro } from '../lib/rbac';
@@ -26,7 +25,6 @@ const FeriasViewInner = ({ showToast, profile, filial }: { showToast: any; profi
   const [form, setForm] = useState<any>(EMPTY);
   const [saving, setSaving] = useState(false);
 
-  const formEdicaoRef = useRolarAteFormulario(showForm, editId);
   if (loadingF || loadingFn) return <div className="flex-1 flex items-center justify-center"><LoadingSpinner /></div>;
 
   const enriched = ferias.map((f: any) => ({
@@ -157,54 +155,54 @@ const FeriasViewInner = ({ showToast, profile, filial }: { showToast: any; profi
       </div>
 
       <AnimatePresence>
-        {showForm && (
-          <motion.div ref={formEdicaoRef} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            className="neu-flat rounded-3xl p-6 border border-white/5 shrink-0">
-            <h3 className="text-sm font-bold text-gray-300 mb-5">{editId ? 'Editar Férias' : 'Nova Solicitação de Férias'}</h3>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-              <div className="flex flex-col gap-1.5">
-                <label htmlFor="ferias-funcionario" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Funcionário *</label>
-                <SelectBusca
-                  id="ferias-funcionario"
-                  value={form.funcionario_id}
-                  onChange={v => setForm((p: any) => ({ ...p, funcionario_id: v }))}
-                  placeholder="Escolha o funcionário"
-                  grupos={[
-                    { label: 'Sem férias em aberto', opcoes: funcSemFerias.map((f: any) => opcaoFuncionario(f)) },
-                    { label: 'Já com férias em aberto', opcoes: funcComFerias.map((f: any) => {
-                      const ff = feriasEmAberto.get(f.id);
-                      return opcaoFuncionario(f, {
-                        sub: `${dataSimplesBR(ff.data_inicio)}${ff.data_fim ? ` a ${dataSimplesBR(ff.data_fim)}` : ''}`,
-                        tag: { texto: ff.status, tom: 'azul' as const },
-                      });
-                    }) },
-                  ].filter(g => g.opcoes.length > 0)}
-                />
+        <ModalFormulario
+          aberto={showForm}
+          titulo={editId ? 'Editar Férias' : 'Nova Solicitação de Férias'}
+          onCancelar={closeForm}
+          acoes={<>
+            <NeuButtonAccent variant="" onClick={handleSave} disabled={saving}>{saving ? 'Salvando...' : (editId ? 'Salvar Alterações' : 'Solicitar')}</NeuButtonAccent>
+          </>}
+        >
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="flex flex-col gap-1.5">
+              <label htmlFor="ferias-funcionario" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Funcionário *</label>
+              <SelectBusca
+                id="ferias-funcionario"
+                value={form.funcionario_id}
+                onChange={v => setForm((p: any) => ({ ...p, funcionario_id: v }))}
+                placeholder="Escolha o funcionário"
+                grupos={[
+                  { label: 'Sem férias em aberto', opcoes: funcSemFerias.map((f: any) => opcaoFuncionario(f)) },
+                  { label: 'Já com férias em aberto', opcoes: funcComFerias.map((f: any) => {
+                    const ff = feriasEmAberto.get(f.id);
+                    return opcaoFuncionario(f, {
+                      sub: `${dataSimplesBR(ff.data_inicio)}${ff.data_fim ? ` a ${dataSimplesBR(ff.data_fim)}` : ''}`,
+                      tag: { texto: ff.status, tom: 'azul' as const },
+                    });
+                  }) },
+                ].filter(g => g.opcoes.length > 0)}
+              />
+            </div>
+            {[
+              { label: 'Data Início *', k: 'data_inicio', type: 'date' },
+              { label: 'Data Fim', k: 'data_fim', type: 'date' },
+              { label: 'Dias', k: 'dias', type: 'number' },
+            ].map(({ label, k, type }) => (
+              <div key={k} className="flex flex-col gap-1.5">
+                <label htmlFor={`ferias-${k}`} className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">{label}</label>
+                <input id={`ferias-${k}`} type={type} value={form[k]} onChange={e => {
+                  const v = e.target.value;
+                  if (k === 'data_fim') {
+                    const dias = calcDias(form.data_inicio, v);
+                    setForm((p: any) => ({ ...p, data_fim: v, dias: String(dias || p.dias) }));
+                  } else {
+                    setForm((p: any) => ({ ...p, [k]: v }));
+                  }
+                }} className="neu-input rounded-xl px-3 py-2.5 text-sm" />
               </div>
-              {[
-                { label: 'Data Início *', k: 'data_inicio', type: 'date' },
-                { label: 'Data Fim', k: 'data_fim', type: 'date' },
-                { label: 'Dias', k: 'dias', type: 'number' },
-              ].map(({ label, k, type }) => (
-                <div key={k} className="flex flex-col gap-1.5">
-                  <label htmlFor={`ferias-${k}`} className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">{label}</label>
-                  <input id={`ferias-${k}`} type={type} value={form[k]} onChange={e => {
-                    const v = e.target.value;
-                    if (k === 'data_fim') {
-                      const dias = calcDias(form.data_inicio, v);
-                      setForm((p: any) => ({ ...p, data_fim: v, dias: String(dias || p.dias) }));
-                    } else {
-                      setForm((p: any) => ({ ...p, [k]: v }));
-                    }
-                  }} className="neu-input rounded-xl px-3 py-2.5 text-sm" />
-                </div>
-              ))}
-            </div>
-            <div className="flex justify-end mt-5">
-              <NeuButtonAccent variant="" onClick={handleSave} disabled={saving}>{saving ? 'Salvando...' : (editId ? 'Salvar Alterações' : 'Solicitar')}</NeuButtonAccent>
-            </div>
-          </motion.div>
-        )}
+            ))}
+          </div>
+        </ModalFormulario>
       </AnimatePresence>
 
       <div className="neu-flat rounded-3xl p-6 border border-white/5 shrink-0">

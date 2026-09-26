@@ -1,4 +1,3 @@
-import { useRolarAteFormulario } from '../hooks/useRolarAteFormulario';
 import React, { useState, useEffect, useMemo } from 'react';
 import type { FilialOp } from '../components/FilialSelector';
 import { useFilial } from '../contexts/FilialContext';
@@ -10,7 +9,7 @@ import { numeroRequisicao } from '../lib/documentos';
 import { HistoricoOperacoes } from '../components/HistoricoOperacoes';
 import { useFetchData } from '../hooks/useSupabaseData';
 import { supabase } from '../lib/supabase';
-import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent, StatusBadge, UrgenciaBadge, Pagination, SelecioneUnidade, AbaComContador, type CorAba } from '../components/ui';
+import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent, StatusBadge, UrgenciaBadge, Pagination, SelecioneUnidade, AbaComContador, type CorAba, ModalFormulario } from '../components/ui';
 import { useFormValidation, formatQtd, parseQtd, handleQtdKeyDown, qtdBR } from '../lib/viewUtils';
 import { UNIDADES_FRACIONARIAS, normalizarUnidade, pluralEmbalagem } from '../lib/unidades';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
@@ -374,7 +373,6 @@ Ela volta para 'Pendente' e sai da fila de Compras — o gerente decide de novo 
 
   const isFormOpen = !!editItem;
 
-  const formEdicaoRef = useRolarAteFormulario(isFormOpen, editItem?.id);
 
   return (
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col gap-6">
@@ -405,113 +403,108 @@ Ela volta para 'Pendente' e sai da fila de Compras — o gerente decide de novo 
       </div>
 
       <AnimatePresence>
-        {isFormOpen && (
-          <motion.div ref={formEdicaoRef} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="shrink-0">
-            <div className="neu-flat rounded-2xl p-6 border border-white/5 flex flex-col gap-4">
-              <h3 className="text-sm font-bold text-gray-200">
-                {editItem?.status === 'Aprovado' ? 'Corrigir requisição aprovada' : 'Corrigir requisição'}
-              </h3>
-
-              {editItem && (
-                <>
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    <FormField label="Item solicitado *" error={errors.item}>
-                      <SelectBusca
-                        value={produtoSel}
-                        onChange={v => handleProdutoChange(v)}
-                        placeholder="Escolha o produto"
-                        grupos={[
-                          { label: 'Catálogo', opcoes: produtosOrdenados.map((p: any) => opcaoProduto(p)) },
-                          { label: 'Fora do catálogo', opcoes: [{ value: ITEM_OUTRO, label: 'Outro — digitar manualmente' }] },
-                        ]}
-                      />
-                      {produtoSel === ITEM_OUTRO && (
-                        <input
-                          className={`neu-input py-2 px-3 rounded-xl text-sm mt-2 ${errors.item ? 'border border-red-500/40' : ''}`}
-                          value={form.item}
-                          onChange={e => { setForm(f => ({ ...f, item: e.target.value })); clearError('item'); }}
-                          placeholder="Descreva o item solicitado"
-                          autoFocus
-                        />
-                      )}
-                      {produtoSel && produtoSel !== ITEM_OUTRO && (
-                        <ProdutoResumo produto={produtosOrdenados.find((p: any) => p.id === produtoSel)} />
-                      )}
-                    </FormField>
-                    {/* MIGR 582. Com produto do catálogo a marca é a do
-                        cadastro (a RPC carimba de lá); em texto livre é o que
-                        o solicitante pediu, e Compras pode precisar do ajuste
-                        que faz o item ser encontrável. */}
-                    {produtoSel && produtoSel !== ITEM_OUTRO ? (
-                      <FormField label="Marca">
-                        <div className="neu-pressed py-2 px-3 rounded-xl text-sm text-gray-300">
-                          {produtosOrdenados.find((p: any) => p.id === produtoSel)?.marca || '—'}
-                        </div>
-                      </FormField>
-                    ) : (
-                      <FormField label="Marca">
-                        <input className="neu-input py-2 px-3 rounded-xl text-sm"
-                          value={form.marca}
-                          onChange={e => setForm(f => ({ ...f, marca: e.target.value }))}
-                          placeholder="Marca (opcional)" />
-                      </FormField>
+        <ModalFormulario
+          aberto={isFormOpen}
+          titulo={editItem?.status === 'Aprovado' ? 'Corrigir requisição aprovada' : 'Corrigir requisição'}
+          onCancelar={closeForm}
+          acoes={<>
+            <NeuButtonAccent onClick={handleSave} isLoading={isSaving}>
+              <Save size={14} /> Atualizar
+            </NeuButtonAccent>
+          </>}
+        >
+          {editItem && (
+            <>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                <FormField label="Item solicitado *" error={errors.item}>
+                  <SelectBusca
+                    value={produtoSel}
+                    onChange={v => handleProdutoChange(v)}
+                    placeholder="Escolha o produto"
+                    grupos={[
+                      { label: 'Catálogo', opcoes: produtosOrdenados.map((p: any) => opcaoProduto(p)) },
+                      { label: 'Fora do catálogo', opcoes: [{ value: ITEM_OUTRO, label: 'Outro — digitar manualmente' }] },
+                    ]}
+                  />
+                  {produtoSel === ITEM_OUTRO && (
+                    <input
+                      className={`neu-input py-2 px-3 rounded-xl text-sm mt-2 ${errors.item ? 'border border-red-500/40' : ''}`}
+                      value={form.item}
+                      onChange={e => { setForm(f => ({ ...f, item: e.target.value })); clearError('item'); }}
+                      placeholder="Descreva o item solicitado"
+                      autoFocus
+                    />
+                  )}
+                  {produtoSel && produtoSel !== ITEM_OUTRO && (
+                    <ProdutoResumo produto={produtosOrdenados.find((p: any) => p.id === produtoSel)} />
+                  )}
+                </FormField>
+                {/* MIGR 582. Com produto do catálogo a marca é a do
+                    cadastro (a RPC carimba de lá); em texto livre é o que
+                    o solicitante pediu, e Compras pode precisar do ajuste
+                    que faz o item ser encontrável. */}
+                {produtoSel && produtoSel !== ITEM_OUTRO ? (
+                  <FormField label="Marca">
+                    <div className="neu-pressed py-2 px-3 rounded-xl text-sm text-gray-300">
+                      {produtosOrdenados.find((p: any) => p.id === produtoSel)?.marca || '—'}
+                    </div>
+                  </FormField>
+                ) : (
+                  <FormField label="Marca">
+                    <input className="neu-input py-2 px-3 rounded-xl text-sm"
+                      value={form.marca}
+                      onChange={e => setForm(f => ({ ...f, marca: e.target.value }))}
+                      placeholder="Marca (opcional)" />
+                  </FormField>
+                )}
+                {/* Solicitante e setor vêm de quem abriu a requisição
+                    (migr. 283) — Compras corrige o item e a quantidade, não
+                    a autoria do pedido. */}
+                <FormField label="Solicitante">
+                  <div className="neu-pressed py-2 px-3 rounded-xl text-sm text-gray-300">
+                    {editItem?.solicitante ?? '—'}
+                    {editItem?.setor_solicitante && (
+                      <span className="text-[10px] text-gray-500 ml-2 uppercase tracking-widest">{editItem.setor_solicitante}</span>
                     )}
-                    {/* Solicitante e setor vêm de quem abriu a requisição
-                        (migr. 283) — Compras corrige o item e a quantidade, não
-                        a autoria do pedido. */}
-                    <FormField label="Solicitante">
-                      <div className="neu-pressed py-2 px-3 rounded-xl text-sm text-gray-300">
-                        {editItem?.solicitante ?? '—'}
-                        {editItem?.setor_solicitante && (
-                          <span className="text-[10px] text-gray-500 ml-2 uppercase tracking-widest">{editItem.setor_solicitante}</span>
-                        )}
-                      </div>
-                    </FormField>
-                    {/* A unidade é a que o solicitante escolheu na requisição —
-                        Compras corrige a quantidade, não a medida. Fração só se a
-                        unidade for fracionária (migr. 439). */}
-                    <FormField label={`Quantidade (${normalizarUnidade(editItem?.unidade)})`}>
-                      <input type="text" inputMode="decimal" className="neu-input py-2 px-3 rounded-xl text-sm tabular-nums"
-                        value={extras.qtd}
-                        onChange={e => setExtras(x => ({ ...x, qtd: formatQtd(e.target.value, editFrac) }))}
-                        onKeyDown={handleQtdKeyDown(editFrac)} />
-                      {/* Migr. 590: o pedido pode ter nascido em fardo — negociar
-                          "manda 610, o fornecedor aceita" é legítimo, mas quem
-                          digita precisa saber que está saindo do fardo fechado.
-                          Ficando múltiplo do fator, o documento continua contando
-                          em fardo; saindo, o gatilho apaga o rótulo sozinho. */}
-                      {editItem?.embalagem_nome && editItem?.qtd_embalagens != null ? (
-                        <p className="text-[10px] text-gray-500 mt-1 leading-snug">
-                          Pedido em <span className="text-gray-400">{qtdBR(editItem.qtd_embalagens)} {pluralEmbalagem(editItem.embalagem_nome, Number(editItem.qtd_embalagens))} de {qtdBR(editItem.embalagem_fator)}</span>.
-                          Digite em {normalizarUnidade(editItem.unidade)}: múltiplo de {qtdBR(editItem.embalagem_fator)} continua contando em {editItem.embalagem_nome.toLowerCase()}.
-                        </p>
-                      ) : null}
-                    </FormField>
-                    <FormField label="Urgência">
-                      <select className="neu-input py-2 px-3 rounded-xl text-sm"
-                        value={extras.urgencia} onChange={e => setExtras(x => ({ ...x, urgencia: e.target.value }))}>
-                        <option>Normal</option>
-                        <option>Alta</option>
-                        <option>Urgente</option>
-                      </select>
-                    </FormField>
-                    <FormField label="Centro de Custo">
-                      <input className="neu-input py-2 px-3 rounded-xl text-sm"
-                        value={extras.centro_custo} onChange={e => setExtras(x => ({ ...x, centro_custo: e.target.value }))}
-                        placeholder="Ex: TI, Marketing" />
-                    </FormField>
                   </div>
-                  <div className="flex gap-3 justify-end">
-                    <button onClick={closeForm} className="neu-button py-2 px-5 rounded-xl text-sm text-gray-400">Cancelar</button>
-                    <NeuButtonAccent onClick={handleSave} isLoading={isSaving}>
-                      <Save size={14} /> Atualizar
-                    </NeuButtonAccent>
-                  </div>
-                </>
-              )}
-            </div>
-          </motion.div>
-        )}
+                </FormField>
+                {/* A unidade é a que o solicitante escolheu na requisição —
+                    Compras corrige a quantidade, não a medida. Fração só se a
+                    unidade for fracionária (migr. 439). */}
+                <FormField label={`Quantidade (${normalizarUnidade(editItem?.unidade)})`}>
+                  <input type="text" inputMode="decimal" className="neu-input py-2 px-3 rounded-xl text-sm tabular-nums"
+                    value={extras.qtd}
+                    onChange={e => setExtras(x => ({ ...x, qtd: formatQtd(e.target.value, editFrac) }))}
+                    onKeyDown={handleQtdKeyDown(editFrac)} />
+                  {/* Migr. 590: o pedido pode ter nascido em fardo — negociar
+                      "manda 610, o fornecedor aceita" é legítimo, mas quem
+                      digita precisa saber que está saindo do fardo fechado.
+                      Ficando múltiplo do fator, o documento continua contando
+                      em fardo; saindo, o gatilho apaga o rótulo sozinho. */}
+                  {editItem?.embalagem_nome && editItem?.qtd_embalagens != null ? (
+                    <p className="text-[10px] text-gray-500 mt-1 leading-snug">
+                      Pedido em <span className="text-gray-400">{qtdBR(editItem.qtd_embalagens)} {pluralEmbalagem(editItem.embalagem_nome, Number(editItem.qtd_embalagens))} de {qtdBR(editItem.embalagem_fator)}</span>.
+                      Digite em {normalizarUnidade(editItem.unidade)}: múltiplo de {qtdBR(editItem.embalagem_fator)} continua contando em {editItem.embalagem_nome.toLowerCase()}.
+                    </p>
+                  ) : null}
+                </FormField>
+                <FormField label="Urgência">
+                  <select className="neu-input py-2 px-3 rounded-xl text-sm"
+                    value={extras.urgencia} onChange={e => setExtras(x => ({ ...x, urgencia: e.target.value }))}>
+                    <option>Normal</option>
+                    <option>Alta</option>
+                    <option>Urgente</option>
+                  </select>
+                </FormField>
+                <FormField label="Centro de Custo">
+                  <input className="neu-input py-2 px-3 rounded-xl text-sm"
+                    value={extras.centro_custo} onChange={e => setExtras(x => ({ ...x, centro_custo: e.target.value }))}
+                    placeholder="Ex: TI, Marketing" />
+                </FormField>
+              </div>
+            </>
+          )}
+        </ModalFormulario>
       </AnimatePresence>
 
       <div className="flex gap-3 flex-wrap" role="tablist">

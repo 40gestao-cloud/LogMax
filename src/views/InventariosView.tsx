@@ -8,7 +8,7 @@ import { Search, Plus, Save, Trash2, CheckCheck, Loader2 } from 'lucide-react';
 import { HistoricoOperacoes } from '../components/HistoricoOperacoes';
 import { useFetchData, dbInsert, dbDelete } from '../hooks/useSupabaseData';
 import { supabase } from '../lib/supabase';
-import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent, StatusBadge, Pagination } from '../components/ui';
+import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent, StatusBadge, Pagination, ModalFormulario } from '../components/ui';
 import { useFormValidation, idsDeProdutosPorTermo } from '../lib/viewUtils';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import { useConfirm } from '../contexts/ConfirmContext';
@@ -153,39 +153,37 @@ const InventariosViewInner = ({ showToast, filial }: { showToast: any; filial: F
       </div>
 
       <AnimatePresence>
-        {showForm && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-            <div className="neu-flat rounded-2xl p-6 border border-white/5 flex flex-col gap-4">
-              <h3 className="text-sm font-bold text-gray-200">Nova Contagem</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <FormField label="Produto *" error={errors.produto_id}><SelectBusca
-                  value={form.produto_id}
-                  onChange={v => { setForm(ff => ({ ...ff, produto_id: v })); clearError('produto_id'); }}
-                  placeholder="Escolha o produto"
-                  grupos={[
-                    { label: 'Sem contagem aberta', opcoes: produtosParaContar.livres.map((p: any) => opcaoProduto(p, { saldo: true })) },
-                    { label: 'Já em contagem — feche o inventário antes', opcoes: produtosParaContar.emContagem.map((p: any) => ({
-                      ...opcaoProduto(p), disabled: true,
-                      tag: { texto: 'Em contagem', tom: 'amarelo' as const },
-                    })) },
-                  ].filter(g => g.opcoes.length > 0)}
-                /></FormField>
-                <FormField label="Qtd Contada *"><input type="number" min="0" className="neu-input py-2 px-3 rounded-xl text-sm" value={extras.qtd_contada} onChange={e => setExtras(x => ({ ...x, qtd_contada: e.target.value }))} placeholder="0" /></FormField>
-                {form.produto_id && (
-                  <div className="neu-pressed rounded-xl px-3 py-2 self-end">
-                    <div className="text-[9px] text-gray-500 uppercase font-bold tracking-widest">Saldo atual no sistema</div>
-                    <div className="text-sm font-black text-gray-200 tabular-nums">{saldoAtualDoForm}</div>
-                    <div className="text-[10px] text-gray-600 mt-0.5">Só referência — o valor oficial é lido no fechamento.</div>
-                  </div>
-                )}
+        <ModalFormulario
+          aberto={showForm}
+          titulo="Nova Contagem"
+          onCancelar={closeForm}
+          acoes={<>
+            <NeuButtonAccent onClick={handleSave} isLoading={isSaving}><Save size={14} /> Salvar</NeuButtonAccent>
+          </>}
+        >
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <FormField label="Produto *" error={errors.produto_id}><SelectBusca
+              value={form.produto_id}
+              onChange={v => { setForm(ff => ({ ...ff, produto_id: v })); clearError('produto_id'); }}
+              placeholder="Escolha o produto"
+              grupos={[
+                { label: 'Sem contagem aberta', opcoes: produtosParaContar.livres.map((p: any) => opcaoProduto(p, { saldo: true })) },
+                { label: 'Já em contagem — feche o inventário antes', opcoes: produtosParaContar.emContagem.map((p: any) => ({
+                  ...opcaoProduto(p), disabled: true,
+                  tag: { texto: 'Em contagem', tom: 'amarelo' as const },
+                })) },
+              ].filter(g => g.opcoes.length > 0)}
+            /></FormField>
+            <FormField label="Qtd Contada *"><input type="number" min="0" className="neu-input py-2 px-3 rounded-xl text-sm" value={extras.qtd_contada} onChange={e => setExtras(x => ({ ...x, qtd_contada: e.target.value }))} placeholder="0" /></FormField>
+            {form.produto_id && (
+              <div className="neu-pressed rounded-xl px-3 py-2 self-end">
+                <div className="text-[9px] text-gray-500 uppercase font-bold tracking-widest">Saldo atual no sistema</div>
+                <div className="text-sm font-black text-gray-200 tabular-nums">{saldoAtualDoForm}</div>
+                <div className="text-[10px] text-gray-600 mt-0.5">Só referência — o valor oficial é lido no fechamento.</div>
               </div>
-              <div className="flex gap-3 justify-end">
-                <button onClick={closeForm} className="neu-button py-2 px-5 rounded-xl text-sm text-gray-400">Cancelar</button>
-                <NeuButtonAccent onClick={handleSave} isLoading={isSaving}><Save size={14} /> Salvar</NeuButtonAccent>
-              </div>
-            </div>
-          </motion.div>
-        )}
+            )}
+          </div>
+        </ModalFormulario>
       </AnimatePresence>
 
       <div className="neu-flat rounded-3xl p-6 border border-white/5 flex flex-col mb-6">

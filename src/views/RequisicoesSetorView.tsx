@@ -13,7 +13,7 @@ import { FluxoCompra } from '../components/FluxoCompra';
 import { BotaoModeloPlanilha } from '../components/BotaoModeloPlanilha';
 import { etapaDaRequisicao } from '../lib/fluxoCompra';
 import { numeroRequisicao } from '../lib/documentos';
-import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent, StatusBadge, UrgenciaBadge, SelecioneUnidade, AbaComContador, SecaoFormulario } from '../components/ui';
+import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent, StatusBadge, UrgenciaBadge, SelecioneUnidade, AbaComContador, SecaoFormulario, ModalFormulario } from '../components/ui';
 import { todayBR } from '../lib/dates';
 import {
   unidadesDeRequisicao, exemploItemRequisicao, UNIDADES_FRACIONARIAS, normalizarUnidade,
@@ -880,496 +880,490 @@ const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: 
       </div>
 
       <AnimatePresence>
-        {showForm && (
-          <motion.div
-            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            className="neu-flat rounded-2xl border border-white/5 shrink-0"
-          >
-            <div className="p-5 flex flex-col gap-5">
-              {/* O tipo é a primeira pergunta porque muda o destino do pedido:
-                  material sai da prateleira (Estoque libera), compra vai para
-                  a fila de cotação (gerente decide). */}
-              <SecaoFormulario titulo="O que você precisa" icon={HelpCircle} cor="amarelo">
-                <div className="flex flex-wrap gap-2">
-                  {([
-                    { id: 'eventual'  as TipoReq, label: 'Compra eventual', hint: 'item fora do catálogo ou serviço', cor: 'bg-yellow-500 border-yellow-600 text-black', sub: 'text-black/70' },
-                    { id: 'reposicao' as TipoReq, label: 'Reposição',       hint: 'item do catálogo que acabou',     cor: 'bg-red-600 border-red-700 text-white',       sub: 'text-white/80' },
-                    { id: 'estoque'   as TipoReq, label: 'Material do estoque', hint: 'retirar do almoxarifado',     cor: 'bg-blue-600 border-blue-700 text-white',     sub: 'text-white/80' },
-                  ]).map(op => (
-                    <button
-                      key={op.id}
-                      onClick={() => { setTipo(op.id); setErros({}); }}
-                      aria-pressed={tipo === op.id}
-                      className={`flex-1 min-w-[180px] text-left py-2.5 px-4 rounded-xl border transition ${op.cor} ${
-                        tipo === op.id
-                          ? 'ring-2 ring-offset-2 ring-offset-[color:var(--color-bg-base,#000)] ring-white/70'
-                          : 'opacity-45 hover:opacity-75'
-                      }`}
-                    >
-                      <span className="block text-sm font-extrabold">{op.label}</span>
-                      <span className={`block text-[11px] mt-0.5 ${op.sub}`}>{op.hint}</span>
-                    </button>
+        <ModalFormulario
+          aberto={showForm}
+          largura="xl"
+          titulo="Nova Requisição"
+          onCancelar={closeForm}
+          acoes={<>
+            <NeuButtonAccent onClick={tipo === 'estoque' ? handleEnviarEstoque : handleEnviar} isLoading={saving}>
+              <Send size={15} />
+              {tipo === 'estoque'
+                ? 'Enviar para o Estoque'
+                : tipo === 'reposicao'
+                  ? (repo.size > 1 ? `Repor ${repo.size} itens` : 'Enviar reposição')
+                  : itens.length > 1 ? `Enviar ${itens.length} itens` : 'Enviar para Compras'}
+            </NeuButtonAccent>
+          </>}
+        >
+          {/* O tipo é a primeira pergunta porque muda o destino do pedido:
+              material sai da prateleira (Estoque libera), compra vai para
+              a fila de cotação (gerente decide). */}
+          <SecaoFormulario titulo="O que você precisa" icon={HelpCircle} cor="amarelo">
+            <div className="flex flex-wrap gap-2">
+              {([
+                { id: 'eventual'  as TipoReq, label: 'Compra eventual', hint: 'item fora do catálogo ou serviço', cor: 'bg-yellow-500 border-yellow-600 text-black', sub: 'text-black/70' },
+                { id: 'reposicao' as TipoReq, label: 'Reposição',       hint: 'item do catálogo que acabou',     cor: 'bg-red-600 border-red-700 text-white',       sub: 'text-white/80' },
+                { id: 'estoque'   as TipoReq, label: 'Material do estoque', hint: 'retirar do almoxarifado',     cor: 'bg-blue-600 border-blue-700 text-white',     sub: 'text-white/80' },
+              ]).map(op => (
+                <button
+                  key={op.id}
+                  onClick={() => { setTipo(op.id); setErros({}); }}
+                  aria-pressed={tipo === op.id}
+                  className={`flex-1 min-w-[180px] text-left py-2.5 px-4 rounded-xl border transition ${op.cor} ${
+                    tipo === op.id
+                      ? 'ring-2 ring-offset-2 ring-offset-[color:var(--color-bg-base,#000)] ring-white/70'
+                      : 'opacity-45 hover:opacity-75'
+                  }`}
+                >
+                  <span className="block text-sm font-extrabold">{op.label}</span>
+                  <span className={`block text-[11px] mt-0.5 ${op.sub}`}>{op.hint}</span>
+                </button>
+              ))}
+            </div>
+          </SecaoFormulario>
+
+          {tipo === 'estoque' ? (
+            <SecaoFormulario titulo="Material do estoque" icon={Package} cor="azul">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <FormField label="Produto *" error={erros.produto_id}>
+                <SelectBusca
+                  value={estoqueForm.produto_id}
+                  onChange={v => { setEstoqueForm(f => ({ ...f, produto_id: v })); setErros({}); }}
+                  placeholder="Escolha o produto em estoque"
+                  grupos={([
+                    { label: 'Uso e consumo', lista: produtosEmEstoque.filter((p: any) => !ehVendavel(p.tipo)) },
+                    { label: 'Mercadoria da loja (consumo próprio)', lista: produtosEmEstoque.filter((p: any) => ehVendavel(p.tipo)) },
+                  ]).filter(g => g.lista.length > 0).map(g => ({
+                    label: g.label,
+                    opcoes: g.lista.map((p: any) => opcaoProduto(p, { saldo: true })),
+                  }))}
+                />
+              </FormField>
+
+              {/* A unidade é a do produto escolhido, não uma escolha à
+                  parte: quem pede queijo do almoxarifado pede em KG porque
+                  é assim que o queijo está lá. */}
+              <FormField label={`Quantidade${unidadeEstoqueSel ? ` (${unidadeEstoqueSel})` : ''}`} error={erros.qtd_estoque}>
+                <input
+                  type="text" inputMode="decimal"
+                  className={`neu-input py-2 px-3 rounded-xl text-sm tabular-nums ${erros.qtd_estoque ? 'border border-red-500/40' : ''}`}
+                  value={estoqueForm.qtd}
+                  onChange={e => setEstoqueForm(f => ({ ...f, qtd: formatQtd(e.target.value, estoqueFrac) }))}
+                  onKeyDown={handleQtdKeyDown(estoqueFrac)}
+                />
+              </FormField>
+
+              <FormField label="Destino / uso">
+                <input
+                  className="neu-input py-2 px-3 rounded-xl text-sm"
+                  placeholder="Ex.: loja, escritório, evento de sábado"
+                  value={estoqueForm.destino}
+                  onChange={e => setEstoqueForm(f => ({ ...f, destino: e.target.value }))}
+                />
+              </FormField>
+
+              {/* Migr. 442. Este campo é o que faz a resma aparecer no DRE:
+                  o material sai do estoque valorizado pelo custo médio e
+                  vira despesa no centro de custo escolhido aqui. Sem ele o
+                  gasto existe, mas entra como "Não classificado". */}
+              <FormField label="Centro de custo">
+                <select
+                  className="neu-input py-2 px-3 rounded-xl text-sm"
+                  value={estoqueForm.centro_custo_id}
+                  onChange={e => setEstoqueForm(f => ({ ...f, centro_custo_id: e.target.value }))}
+                >
+                  <option value="">Não informar</option>
+                  {centrosOrdenados.map((c: any) => (
+                    <option key={c.id} value={c.id}>{c.nome}</option>
                   ))}
-                </div>
-              </SecaoFormulario>
+                </select>
+              </FormField>
+            </div>
+            </SecaoFormulario>
+          ) : (
+          <>
+          <SecaoFormulario titulo="Prazo e prioridade" icon={CalendarClock} cor="azul">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <FormField label="Necessário até *" error={erros.data_necessidade}>
+              <input
+                type="date"
+                className={`neu-input py-2 px-3 rounded-xl text-sm ${erros.data_necessidade ? 'border border-red-500/40' : ''}`}
+                value={cab.data_necessidade}
+                onChange={e => setCab(c => ({ ...c, data_necessidade: e.target.value }))}
+              />
+            </FormField>
 
-              {tipo === 'estoque' ? (
-                <SecaoFormulario titulo="Material do estoque" icon={Package} cor="azul">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <FormField label="Produto *" error={erros.produto_id}>
-                    <SelectBusca
-                      value={estoqueForm.produto_id}
-                      onChange={v => { setEstoqueForm(f => ({ ...f, produto_id: v })); setErros({}); }}
-                      placeholder="Escolha o produto em estoque"
-                      grupos={([
-                        { label: 'Uso e consumo', lista: produtosEmEstoque.filter((p: any) => !ehVendavel(p.tipo)) },
-                        { label: 'Mercadoria da loja (consumo próprio)', lista: produtosEmEstoque.filter((p: any) => ehVendavel(p.tipo)) },
-                      ]).filter(g => g.lista.length > 0).map(g => ({
-                        label: g.label,
-                        opcoes: g.lista.map((p: any) => opcaoProduto(p, { saldo: true })),
-                      }))}
-                    />
-                  </FormField>
+            <FormField label="Urgência">
+              <select
+                className="neu-input py-2 px-3 rounded-xl text-sm"
+                value={cab.urgencia}
+                onChange={e => setCab(c => ({ ...c, urgencia: e.target.value }))}
+              >
+                {['Normal', 'Alta', 'Urgente'].map(u => <option key={u} value={u}>{u}</option>)}
+              </select>
+            </FormField>
 
-                  {/* A unidade é a do produto escolhido, não uma escolha à
-                      parte: quem pede queijo do almoxarifado pede em KG porque
-                      é assim que o queijo está lá. */}
-                  <FormField label={`Quantidade${unidadeEstoqueSel ? ` (${unidadeEstoqueSel})` : ''}`} error={erros.qtd_estoque}>
-                    <input
-                      type="text" inputMode="decimal"
-                      className={`neu-input py-2 px-3 rounded-xl text-sm tabular-nums ${erros.qtd_estoque ? 'border border-red-500/40' : ''}`}
-                      value={estoqueForm.qtd}
-                      onChange={e => setEstoqueForm(f => ({ ...f, qtd: formatQtd(e.target.value, estoqueFrac) }))}
-                      onKeyDown={handleQtdKeyDown(estoqueFrac)}
-                    />
-                  </FormField>
+            <FormField label="Centro de custo">
+              <select
+                className="neu-input py-2 px-3 rounded-xl text-sm"
+                value={cab.centro_custo}
+                onChange={e => setCab(c => ({ ...c, centro_custo: e.target.value }))}
+              >
+                <option value="">Não informar</option>
+                {centrosOrdenados.map((c: any) => (
+                  <option key={c.id} value={c.nome}>{c.nome}</option>
+                ))}
+              </select>
+            </FormField>
+          </div>
+          </SecaoFormulario>
 
-                  <FormField label="Destino / uso">
-                    <input
-                      className="neu-input py-2 px-3 rounded-xl text-sm"
-                      placeholder="Ex.: loja, escritório, evento de sábado"
-                      value={estoqueForm.destino}
-                      onChange={e => setEstoqueForm(f => ({ ...f, destino: e.target.value }))}
-                    />
-                  </FormField>
+          {tipo === 'reposicao' ? (
+            <SecaoFormulario titulo="Itens a repor" icon={ListChecks} cor="vermelho"
+              extra={repo.size > 0 ? `${repo.size} selecionado${repo.size === 1 ? '' : 's'}` : 'nenhum selecionado'}>
+            <div className="flex flex-col gap-2">
+              <span className="text-[11px] text-gray-400">Marque no catálogo o que precisa repor.</span>
 
-                  {/* Migr. 442. Este campo é o que faz a resma aparecer no DRE:
-                      o material sai do estoque valorizado pelo custo médio e
-                      vira despesa no centro de custo escolhido aqui. Sem ele o
-                      gasto existe, mas entra como "Não classificado". */}
-                  <FormField label="Centro de custo">
-                    <select
-                      className="neu-input py-2 px-3 rounded-xl text-sm"
-                      value={estoqueForm.centro_custo_id}
-                      onChange={e => setEstoqueForm(f => ({ ...f, centro_custo_id: e.target.value }))}
-                    >
-                      <option value="">Não informar</option>
-                      {centrosOrdenados.map((c: any) => (
-                        <option key={c.id} value={c.id}>{c.nome}</option>
-                      ))}
-                    </select>
-                  </FormField>
-                </div>
-                </SecaoFormulario>
-              ) : (
-              <>
-              <SecaoFormulario titulo="Prazo e prioridade" icon={CalendarClock} cor="azul">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <FormField label="Necessário até *" error={erros.data_necessidade}>
+              <div className="flex flex-wrap gap-2 items-center">
+                <div className="relative flex-1 min-w-[200px]">
+                  <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
                   <input
-                    type="date"
-                    className={`neu-input py-2 px-3 rounded-xl text-sm ${erros.data_necessidade ? 'border border-red-500/40' : ''}`}
-                    value={cab.data_necessidade}
-                    onChange={e => setCab(c => ({ ...c, data_necessidade: e.target.value }))}
+                    className="neu-input py-2 pl-9 pr-3 rounded-xl text-sm w-full"
+                    placeholder="Buscar por nome ou código…"
+                    value={buscaCat}
+                    onChange={e => setBuscaCat(e.target.value)}
                   />
-                </FormField>
-
-                <FormField label="Urgência">
-                  <select
-                    className="neu-input py-2 px-3 rounded-xl text-sm"
-                    value={cab.urgencia}
-                    onChange={e => setCab(c => ({ ...c, urgencia: e.target.value }))}
-                  >
-                    {['Normal', 'Alta', 'Urgente'].map(u => <option key={u} value={u}>{u}</option>)}
-                  </select>
-                </FormField>
-
-                <FormField label="Centro de custo">
-                  <select
-                    className="neu-input py-2 px-3 rounded-xl text-sm"
-                    value={cab.centro_custo}
-                    onChange={e => setCab(c => ({ ...c, centro_custo: e.target.value }))}
-                  >
-                    <option value="">Não informar</option>
-                    {centrosOrdenados.map((c: any) => (
-                      <option key={c.id} value={c.nome}>{c.nome}</option>
-                    ))}
-                  </select>
-                </FormField>
-              </div>
-              </SecaoFormulario>
-
-              {tipo === 'reposicao' ? (
-                <SecaoFormulario titulo="Itens a repor" icon={ListChecks} cor="vermelho"
-                  extra={repo.size > 0 ? `${repo.size} selecionado${repo.size === 1 ? '' : 's'}` : 'nenhum selecionado'}>
-                <div className="flex flex-col gap-2">
-                  <span className="text-[11px] text-gray-400">Marque no catálogo o que precisa repor.</span>
-
-                  <div className="flex flex-wrap gap-2 items-center">
-                    <div className="relative flex-1 min-w-[200px]">
-                      <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
-                      <input
-                        className="neu-input py-2 pl-9 pr-3 rounded-xl text-sm w-full"
-                        placeholder="Buscar por nome ou código…"
-                        value={buscaCat}
-                        onChange={e => setBuscaCat(e.target.value)}
-                      />
-                    </div>
-                    {/* O ponto de pedido é a razão de existir da reposição —
-                        merece ser um clique, não um filtro que se monta na mão. */}
-                    <button
-                      onClick={() => setSoAbaixoMin(v => !v)}
-                      className={`py-2 px-3 rounded-xl text-[11px] font-bold border transition-colors ${
-                        soAbaixoMin
-                          ? 'bg-red-500/15 border-red-500/30 text-red-400'
-                          : 'neu-button border-transparent text-gray-400 hover:text-gray-200'
-                      }`}
-                    >
-                      No mínimo ou abaixo ({qtdAbaixoMin})
-                    </button>
-                  </div>
-
-                  {erros.repo && <span className="text-[10px] text-red-500 font-semibold">{erros.repo}</span>}
-
-                  {/* max-h menor abaixo de sm (plano mobile, item 1.7):
-                      a caixa e rolagem-dentro-de-rolagem por natureza (e uma
-                      lista com busca e checkbox, nao da pra virar select de
-                      valor unico), entao a correcao possivel e encolher a
-                      area presa pelo gesto, nao elimina-la. */}
-                  <div className={`neu-pressed rounded-xl max-h-56 sm:max-h-72 overflow-y-auto main-scrollbar divide-y divide-white/5 ${erros.repo ? 'border border-red-500/40' : ''}`}>
-                    {catalogoRepo.length === 0 ? (
-                      <p className="text-xs text-gray-500 p-4 text-center">
-                        {soAbaixoMin ? 'Nenhum item no mínimo agora.' : 'Nenhum produto encontrado.'}
-                      </p>
-                    ) : catalogoRepo.map((p: any) => {
-                      const marcado = repo.has(p.id);
-                      return (
-                        <div key={p.id} className={`flex items-center gap-3 px-3 py-2 ${marcado ? 'bg-accent/5' : ''}`}>
-                          <button
-                            onClick={() => toggleRepo(p.id)}
-                            className={`w-4 h-4 rounded flex items-center justify-center border shrink-0 transition-colors ${
-                              marcado ? 'bg-accent border-accent' : 'border-white/20 hover:border-white/40'
-                            }`}
-                          >
-                            {marcado && <Check size={11} className="text-black" />}
-                          </button>
-                          <button onClick={() => toggleRepo(p.id)} className="flex-1 min-w-0 text-left">
-                            <span className="block text-xs font-semibold text-gray-200 truncate">{p.nome}</span>
-                            <span className="block text-[10px] text-gray-500">
-                              {p.codigo ? `${p.codigo} · ` : ''}saldo {qtdBR(p.saldo)}
-                              {p.minimo > 0 ? ` · mínimo ${qtdBR(p.minimo)}` : ''}
-                              {' '}{p.unidade ?? 'un'}
-                              {/* Migr. 589: dizer como o item é comprado antes
-                                  de marcar. Quem não vê o fardo aqui pede 20
-                                  unidades quando queria 20 fardos. */}
-                              {embalagemDoProduto(p) && (
-                                <span className="text-gray-600"> · {rotuloEmbalagem(embalagemDoProduto(p), p.unidade)}</span>
-                              )}
-                            </span>
-                          </button>
-                          {p.abaixoMin && (
-                            <span className="px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider bg-red-500/15 text-red-400 shrink-0">
-                              No mínimo
-                            </span>
-                          )}
-                          {marcado && (() => {
-                            // Migr. 589: só oferece "em fardo" quem tem
-                            // embalagem cadastrada. Sem ela o botão não aparece
-                            // — e o cadastro é onde se resolve isso.
-                            const emb = embalagemDoProduto(p);
-                            const emFardo = !!emb && repoEmb.has(p.id);
-                            // Em fardo a quantidade é inteira: fornecedor não
-                            // abre fardo, e a RPC recusa 2,5 (mesma régua).
-                            const frac = emFardo ? false : ehFracionaria(p.unidade);
-                            const digitado = parseQtd(repo.get(p.id) ?? '1');
-                            return (
-                              <div className="flex items-center gap-2 shrink-0">
-                                {emb && (
-                                  <div className="neu-pressed rounded-lg p-0.5 flex text-[9px] font-bold uppercase tracking-wider">
-                                    {[
-                                      { modo: false, txt: normalizarUnidade(p.unidade) },
-                                      { modo: true,  txt: emb.nome },
-                                    ].map(op => (
-                                      <button key={String(op.modo)}
-                                        onClick={() => {
-                                          setModoRepo(p.id, op.modo);
-                                          // Trocar de medida remascara: "2,5" em
-                                          // KG não sobrevive à virada para fardo.
-                                          setQtdRepo(p.id, formatQtd(repo.get(p.id) ?? '1', op.modo ? false : ehFracionaria(p.unidade)));
-                                        }}
-                                        title={op.modo
-                                          ? `Pedir em ${emb.nome.toLowerCase()} — ${rotuloEmbalagem(emb, p.unidade)}`
-                                          : `Pedir na unidade solta (${rotuloUnidade(p.unidade)})`}
-                                        className={`px-1.5 py-0.5 rounded transition-colors ${
-                                          (op.modo === emFardo) ? 'bg-accent text-black' : 'text-gray-500 hover:text-gray-300'
-                                        }`}>
-                                        {op.txt}
-                                      </button>
-                                    ))}
-                                  </div>
-                                )}
-                                <div className="w-24 shrink-0">
-                                  <input
-                                    type="text" inputMode="decimal"
-                                    className="neu-input py-1 px-2 rounded-lg text-xs w-full tabular-nums"
-                                    value={repo.get(p.id) ?? '1'}
-                                    onChange={e => setQtdRepo(p.id, formatQtd(e.target.value, frac))}
-                                    onKeyDown={handleQtdKeyDown(frac)}
-                                    // Sem artigo: "caixa" é feminino e "fardo"
-                                    // masculino, e a lista tem os dois.
-                                    title={emFardo
-                                      ? `Quantidade a repor, em ${pluralEmbalagem(emb!.nome, 2).toLowerCase()}`
-                                      : `Quantidade a repor (${normalizarUnidade(p.unidade)})`}
-                                  />
-                                  {/* A conta aparece ANTES de enviar: é ela que
-                                      o aluno precisa aprender a fazer, e vê-la
-                                      é o que evita pedir 20 unidades achando
-                                      que pediu 20 fardos. */}
-                                  {emFardo && digitado > 0 && (
-                                    <span className="block text-[9px] text-accent/90 text-right mt-0.5 tabular-nums leading-tight">
-                                      = {qtdBR(digitado * emb!.fator)} {normalizarUnidade(p.unidade)}
-                                    </span>
-                                  )}
-                                </div>
-                              </div>
-                            );
-                          })()}
-                        </div>
-                      );
-                    })}
-                  </div>
                 </div>
-                </SecaoFormulario>
-              ) : (
-              <>
-              {/* Itens: texto livre. O catálogo é sugestão, não obrigação. */}
-              <SecaoFormulario titulo="Itens solicitados" icon={ListChecks} cor="vermelho"
-                extra={`${itens.length} ite${itens.length === 1 ? 'm' : 'ns'}`}>
-              <div className="flex flex-col gap-2">
+                {/* O ponto de pedido é a razão de existir da reposição —
+                    merece ser um clique, não um filtro que se monta na mão. */}
+                <button
+                  onClick={() => setSoAbaixoMin(v => !v)}
+                  className={`py-2 px-3 rounded-xl text-[11px] font-bold border transition-colors ${
+                    soAbaixoMin
+                      ? 'bg-red-500/15 border-red-500/30 text-red-400'
+                      : 'neu-button border-transparent text-gray-400 hover:text-gray-200'
+                  }`}
+                >
+                  No mínimo ou abaixo ({qtdAbaixoMin})
+                </button>
+              </div>
 
-                {itens.map((row, i) => (
-                  <div key={row.uid} className="flex flex-col gap-1.5 neu-pressed rounded-xl p-3 border border-white/5">
-                    <div className="flex flex-wrap xl:flex-nowrap gap-2 items-start">
-                      <div className="w-full xl:w-auto xl:flex-1 xl:min-w-[180px]">
-                        <input
-                          className={`neu-input py-2 px-3 rounded-xl text-sm w-full ${erros[`item_${i}`] ? 'border border-red-500/40' : ''}`}
-                          placeholder={`Nome do produto — ${exemploItemRequisicao(filial)}`}
-                          value={row.item}
-                          onChange={e => updateLinha(i, { item: e.target.value })}
-                        />
-                        {erros[`item_${i}`] && (
-                          <span className="text-[10px] text-red-500 font-semibold">{erros[`item_${i}`]}</span>
-                        )}
-                        {/* Já está no catálogo? Ver `noCatalogoParecidos`. */}
-                        {(() => {
-                          const servico = row.unidade === 'SV';
-                          const parecidos = noCatalogoParecidos(row.item, servico);
-                          if (parecidos.length === 0) return null;
-                          // Serviço com o nome já idêntico ao do catálogo está
-                          // certo como está — Compras reconhece sozinho.
-                          if (servico && parecidos[0].s === 'igual') {
-                            return (
-                              <p className="mt-1 text-[10px] text-emerald-400/80">
-                                Serviço do catálogo — Compras vai reconhecer pelo nome.
-                              </p>
-                            );
-                          }
-                          return (
-                            <div className="mt-1.5 rounded-lg border border-amber-400/25 bg-amber-400/5 px-2.5 py-2">
-                              <p className="text-[11px] text-amber-200/90 leading-snug">
-                                {servico
-                                  ? 'O catálogo já tem serviço parecido.'
-                                  : parecidos[0].s === 'igual' ? 'Este produto já está no catálogo.' : 'O catálogo já tem item parecido.'}
-                              </p>
-                              <div className="flex flex-col gap-1 mt-1.5">
-                                {parecidos.map(({ p }) => (
-                                  <div key={p.id} className="flex items-center justify-between gap-2">
-                                    <span className="text-[11px] text-gray-300 truncate">
-                                      {p.nome}
-                                      {p.codigo && <span className="text-gray-500"> · {p.codigo}</span>}
-                                    </span>
-                                    {(servico || podeReporMercadoria || !ehVendavel(p.tipo)) && <button type="button"
-                                      onClick={() => servico ? updateLinha(i, { item: p.nome }) : moverParaReposicao(i, p)}
-                                      className="shrink-0 text-[10px] font-bold text-accent underline hover:text-accent/80">
-                                      {servico ? 'É este — usar o nome' : 'É este — pedir por Reposição'}
-                                    </button>}
-                                  </div>
+              {erros.repo && <span className="text-[10px] text-red-500 font-semibold">{erros.repo}</span>}
+
+              {/* max-h menor abaixo de sm (plano mobile, item 1.7):
+                  a caixa e rolagem-dentro-de-rolagem por natureza (e uma
+                  lista com busca e checkbox, nao da pra virar select de
+                  valor unico), entao a correcao possivel e encolher a
+                  area presa pelo gesto, nao elimina-la. */}
+              <div className={`neu-pressed rounded-xl max-h-56 sm:max-h-72 overflow-y-auto main-scrollbar divide-y divide-white/5 ${erros.repo ? 'border border-red-500/40' : ''}`}>
+                {catalogoRepo.length === 0 ? (
+                  <p className="text-xs text-gray-500 p-4 text-center">
+                    {soAbaixoMin ? 'Nenhum item no mínimo agora.' : 'Nenhum produto encontrado.'}
+                  </p>
+                ) : catalogoRepo.map((p: any) => {
+                  const marcado = repo.has(p.id);
+                  return (
+                    <div key={p.id} className={`flex items-center gap-3 px-3 py-2 ${marcado ? 'bg-accent/5' : ''}`}>
+                      <button
+                        onClick={() => toggleRepo(p.id)}
+                        className={`w-4 h-4 rounded flex items-center justify-center border shrink-0 transition-colors ${
+                          marcado ? 'bg-accent border-accent' : 'border-white/20 hover:border-white/40'
+                        }`}
+                      >
+                        {marcado && <Check size={11} className="text-black" />}
+                      </button>
+                      <button onClick={() => toggleRepo(p.id)} className="flex-1 min-w-0 text-left">
+                        <span className="block text-xs font-semibold text-gray-200 truncate">{p.nome}</span>
+                        <span className="block text-[10px] text-gray-500">
+                          {p.codigo ? `${p.codigo} · ` : ''}saldo {qtdBR(p.saldo)}
+                          {p.minimo > 0 ? ` · mínimo ${qtdBR(p.minimo)}` : ''}
+                          {' '}{p.unidade ?? 'un'}
+                          {/* Migr. 589: dizer como o item é comprado antes
+                              de marcar. Quem não vê o fardo aqui pede 20
+                              unidades quando queria 20 fardos. */}
+                          {embalagemDoProduto(p) && (
+                            <span className="text-gray-600"> · {rotuloEmbalagem(embalagemDoProduto(p), p.unidade)}</span>
+                          )}
+                        </span>
+                      </button>
+                      {p.abaixoMin && (
+                        <span className="px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider bg-red-500/15 text-red-400 shrink-0">
+                          No mínimo
+                        </span>
+                      )}
+                      {marcado && (() => {
+                        // Migr. 589: só oferece "em fardo" quem tem
+                        // embalagem cadastrada. Sem ela o botão não aparece
+                        // — e o cadastro é onde se resolve isso.
+                        const emb = embalagemDoProduto(p);
+                        const emFardo = !!emb && repoEmb.has(p.id);
+                        // Em fardo a quantidade é inteira: fornecedor não
+                        // abre fardo, e a RPC recusa 2,5 (mesma régua).
+                        const frac = emFardo ? false : ehFracionaria(p.unidade);
+                        const digitado = parseQtd(repo.get(p.id) ?? '1');
+                        return (
+                          <div className="flex items-center gap-2 shrink-0">
+                            {emb && (
+                              <div className="neu-pressed rounded-lg p-0.5 flex text-[9px] font-bold uppercase tracking-wider">
+                                {[
+                                  { modo: false, txt: normalizarUnidade(p.unidade) },
+                                  { modo: true,  txt: emb.nome },
+                                ].map(op => (
+                                  <button key={String(op.modo)}
+                                    onClick={() => {
+                                      setModoRepo(p.id, op.modo);
+                                      // Trocar de medida remascara: "2,5" em
+                                      // KG não sobrevive à virada para fardo.
+                                      setQtdRepo(p.id, formatQtd(repo.get(p.id) ?? '1', op.modo ? false : ehFracionaria(p.unidade)));
+                                    }}
+                                    title={op.modo
+                                      ? `Pedir em ${emb.nome.toLowerCase()} — ${rotuloEmbalagem(emb, p.unidade)}`
+                                      : `Pedir na unidade solta (${rotuloUnidade(p.unidade)})`}
+                                    className={`px-1.5 py-0.5 rounded transition-colors ${
+                                      (op.modo === emFardo) ? 'bg-accent text-black' : 'text-gray-500 hover:text-gray-300'
+                                    }`}>
+                                    {op.txt}
+                                  </button>
                                 ))}
                               </div>
+                            )}
+                            <div className="w-24 shrink-0">
+                              <input
+                                type="text" inputMode="decimal"
+                                className="neu-input py-1 px-2 rounded-lg text-xs w-full tabular-nums"
+                                value={repo.get(p.id) ?? '1'}
+                                onChange={e => setQtdRepo(p.id, formatQtd(e.target.value, frac))}
+                                onKeyDown={handleQtdKeyDown(frac)}
+                                // Sem artigo: "caixa" é feminino e "fardo"
+                                // masculino, e a lista tem os dois.
+                                title={emFardo
+                                  ? `Quantidade a repor, em ${pluralEmbalagem(emb!.nome, 2).toLowerCase()}`
+                                  : `Quantidade a repor (${normalizarUnidade(p.unidade)})`}
+                              />
+                              {/* A conta aparece ANTES de enviar: é ela que
+                                  o aluno precisa aprender a fazer, e vê-la
+                                  é o que evita pedir 20 unidades achando
+                                  que pediu 20 fardos. */}
+                              {emFardo && digitado > 0 && (
+                                <span className="block text-[9px] text-accent/90 text-right mt-0.5 tabular-nums leading-tight">
+                                  = {qtdBR(digitado * emb!.fator)} {normalizarUnidade(p.unidade)}
+                                </span>
+                              )}
                             </div>
-                          );
-                        })()}
-                      </div>
-                      <div className="flex-1 min-w-[140px] xl:flex-none xl:w-44">
-                        <input
-                          list="sugestoes-marcas"
-                          className="neu-input py-2 px-3 rounded-xl text-sm w-full"
-                          placeholder="Marca (opcional)"
-                          value={row.marca}
-                          onChange={e => updateLinha(i, { marca: e.target.value })}
-                        />
-                      </div>
-                      {/* Quantidade + em quê: numa unidade de medida, ou numa
-                          embalagem fechada "com N" unidades (migr. 591). Com
-                          embalagem, a qtd conta embalagens e não aceita vírgula. */}
-                      <div className="flex gap-2 items-start">
-                        <input
-                          type="text" inputMode="decimal"
-                          title={erros[`qtd_${i}`] ?? 'Quantidade'}
-                          className={`neu-input py-2 px-3 rounded-xl text-sm w-20 tabular-nums ${erros[`qtd_${i}`] ? 'border border-red-500/60' : ''}`}
-                          value={row.qtd}
-                          onChange={e => updateLinha(i, { qtd: formatQtd(e.target.value, !row.embalagem && ehFracionaria(row.unidade)) })}
-                          onKeyDown={handleQtdKeyDown(!row.embalagem && ehFracionaria(row.unidade))}
-                        />
-                        <select
-                          className="neu-input py-2 px-2 rounded-xl text-sm w-32 shrink-0"
-                          value={row.embalagem ? `${EMB_PREFIX}${row.embalagem}` : row.unidade}
-                          onChange={e => {
-                            const v = e.target.value;
-                            if (v.startsWith(EMB_PREFIX)) {
-                              const base = unidadesBaseReq.includes(row.unidade) ? row.unidade : 'UN';
-                              updateLinha(i, {
-                                embalagem: v.slice(EMB_PREFIX.length), unidade: base,
-                                fator: row.embalagem ? row.fator : '',
-                                qtd: formatQtd(row.qtd, false),
-                              });
-                            } else {
-                              updateLinha(i, {
-                                unidade: v, embalagem: '', fator: '',
-                                qtd: formatQtd(row.qtd, ehFracionaria(v)),
-                              });
-                            }
-                          }}
-                        >
-                          <optgroup label="Unidade">
-                            {[...unidadesReq, ...(unidadesReq.includes(row.unidade) ? [] : [row.unidade])].map(u => (
-                              <option key={u} value={u}>{rotuloUnidade(u)}</option>
-                            ))}
-                          </optgroup>
-                          <optgroup label="Embalagem fechada">
-                            {EMBALAGENS_COMPRA.map(emb => (
-                              <option key={emb} value={`${EMB_PREFIX}${emb}`}>{emb.charAt(0) + emb.slice(1).toLowerCase()}</option>
-                            ))}
-                          </optgroup>
-                        </select>
-                        {row.embalagem && (
-                          <>
-                            <span className="text-xs text-gray-400 py-2 shrink-0">com</span>
-                            <input
-                              type="text" inputMode="decimal"
-                              className={`neu-input py-2 px-2 rounded-xl text-sm w-16 tabular-nums ${erros[`fator_${i}`] ? 'border border-red-500/40' : ''}`}
-                              title={`Quantas ${normalizarUnidade(row.unidade)} vêm em cada ${row.embalagem.toLowerCase()}`}
-                              placeholder="?"
-                              value={row.fator}
-                              onChange={e => updateLinha(i, { fator: formatQtd(e.target.value, ehFracionaria(row.unidade)) })}
-                              onKeyDown={handleQtdKeyDown(ehFracionaria(row.unidade))}
-                            />
-                            <select
-                              className="neu-input py-2 px-2 rounded-xl text-sm w-20 shrink-0"
-                              value={row.unidade}
-                              onChange={e => updateLinha(i, { unidade: e.target.value, fator: formatQtd(row.fator, ehFracionaria(e.target.value)) })}
-                            >
-                              {unidadesBaseReq.map(u => <option key={u} value={u}>{u}</option>)}
-                            </select>
-                          </>
-                        )}
-                      </div>
-                      <button
-                        onClick={() => removeLinha(i)}
-                        disabled={itens.length <= 1}
-                        title="Remover item"
-                        className="action-btn-delete disabled:opacity-30 mt-1"
-                      >
-                        <Trash2 size={12} />
-                      </button>
+                          </div>
+                        );
+                      })()}
                     </div>
-
-                    {/* A conta à vista, antes de enviar (migr. 591) — e o erro
-                        da declaração incompleta no mesmo lugar. */}
-                    {erros[`qtd_${i}`] && (
-                      <span className="text-[10px] text-red-500 font-semibold">{erros[`qtd_${i}`]}</span>
-                    )}
-                    {row.embalagem && (erros[`fator_${i}`] ? (
-                      <span className="text-[10px] text-red-500 font-semibold">{erros[`fator_${i}`]}</span>
-                    ) : parseQtd(row.fator) > 1 && parseQtd(row.qtd) > 0 ? (
-                      <span className="text-[10px] text-accent/90 tabular-nums">
-                        {qtdBR(row.qtd)} {pluralEmbalagem(row.embalagem, parseQtd(row.qtd))} × {qtdBR(row.fator)} ={' '}
-                        <span className="font-bold">{qtdBR(parseQtd(row.qtd) * parseQtd(row.fator))} {normalizarUnidade(row.unidade)}</span>
-                      </span>
-                    ) : null)}
-
-                    {mostraJustItem && (
-                      <div className="pl-3 border-l-2 border-accent/30 ml-1">
-                        <input
-                          className={`neu-input py-2 px-3 rounded-xl text-xs w-full ${erros[`just_${i}`] ? 'border border-red-500/40' : ''}`}
-                          placeholder="Motivo deste item (vazio = usa a justificativa geral)"
-                          value={row.justificativa}
-                          onChange={e => updateLinha(i, { justificativa: e.target.value })}
-                        />
-                        {erros[`just_${i}`] && (
-                          <span className="text-[10px] text-red-500 font-semibold">{erros[`just_${i}`]}</span>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                ))}
-                <button onClick={addLinha} className="btn-solido btn-solido--amarelo self-start">
-                  <Plus size={13} /> Adicionar item
-                </button>
-              </div>
-              </SecaoFormulario>
-
-              <SecaoFormulario titulo="Justificativa" icon={MessageSquareText} cor="verde">
-              <FormField
-                label={mostraJustItem ? `Justificativa geral${cabJustObrigatoria ? ' *' : ''}` : 'Justificativa *'}
-                error={erros.justificativa}
-              >
-                <textarea
-                  rows={2}
-                  className={`neu-input py-2 px-3 rounded-xl text-sm resize-none ${erros.justificativa ? 'border border-red-500/40' : ''}`}
-                  placeholder="Por que a empresa precisa disto?"
-                  value={cab.justificativa}
-                  onChange={e => setCab(c => ({ ...c, justificativa: e.target.value }))}
-                />
-                {itens.length > 1 && (
-                  <button type="button" onClick={toggleJustPorItem}
-                    className="self-start mt-1 text-[11px] font-bold text-accent hover:underline">
-                    {justPorItem ? 'Usar a mesma justificativa para todos' : 'Justificar item por item'}
-                  </button>
-                )}
-              </FormField>
-              </SecaoFormulario>
-              </>
-              )}
-              </>
-              )}
-
-              <div className="flex gap-3 justify-end">
-                <button onClick={closeForm} className="neu-button py-2 px-5 rounded-xl text-sm font-bold text-gray-400">
-                  Cancelar
-                </button>
-                <NeuButtonAccent onClick={tipo === 'estoque' ? handleEnviarEstoque : handleEnviar} isLoading={saving}>
-                  <Send size={15} />
-                  {tipo === 'estoque'
-                    ? 'Enviar para o Estoque'
-                    : tipo === 'reposicao'
-                      ? (repo.size > 1 ? `Repor ${repo.size} itens` : 'Enviar reposição')
-                      : itens.length > 1 ? `Enviar ${itens.length} itens` : 'Enviar para Compras'}
-                </NeuButtonAccent>
+                  );
+                })}
               </div>
             </div>
-          </motion.div>
-        )}
+            </SecaoFormulario>
+          ) : (
+          <>
+          {/* Itens: texto livre. O catálogo é sugestão, não obrigação. */}
+          <SecaoFormulario titulo="Itens solicitados" icon={ListChecks} cor="vermelho"
+            extra={`${itens.length} ite${itens.length === 1 ? 'm' : 'ns'}`}>
+          <div className="flex flex-col gap-2">
+
+            {itens.map((row, i) => (
+              <div key={row.uid} className="flex flex-col gap-1.5 neu-pressed rounded-xl p-3 border border-white/5">
+                <div className="flex flex-wrap xl:flex-nowrap gap-2 items-start">
+                  <div className="w-full xl:w-auto xl:flex-1 xl:min-w-[180px]">
+                    <input
+                      className={`neu-input py-2 px-3 rounded-xl text-sm w-full ${erros[`item_${i}`] ? 'border border-red-500/40' : ''}`}
+                      placeholder={`Nome do produto — ${exemploItemRequisicao(filial)}`}
+                      value={row.item}
+                      onChange={e => updateLinha(i, { item: e.target.value })}
+                    />
+                    {erros[`item_${i}`] && (
+                      <span className="text-[10px] text-red-500 font-semibold">{erros[`item_${i}`]}</span>
+                    )}
+                    {/* Já está no catálogo? Ver `noCatalogoParecidos`. */}
+                    {(() => {
+                      const servico = row.unidade === 'SV';
+                      const parecidos = noCatalogoParecidos(row.item, servico);
+                      if (parecidos.length === 0) return null;
+                      // Serviço com o nome já idêntico ao do catálogo está
+                      // certo como está — Compras reconhece sozinho.
+                      if (servico && parecidos[0].s === 'igual') {
+                        return (
+                          <p className="mt-1 text-[10px] text-emerald-400/80">
+                            Serviço do catálogo — Compras vai reconhecer pelo nome.
+                          </p>
+                        );
+                      }
+                      return (
+                        <div className="mt-1.5 rounded-lg border border-amber-400/25 bg-amber-400/5 px-2.5 py-2">
+                          <p className="text-[11px] text-amber-200/90 leading-snug">
+                            {servico
+                              ? 'O catálogo já tem serviço parecido.'
+                              : parecidos[0].s === 'igual' ? 'Este produto já está no catálogo.' : 'O catálogo já tem item parecido.'}
+                          </p>
+                          <div className="flex flex-col gap-1 mt-1.5">
+                            {parecidos.map(({ p }) => (
+                              <div key={p.id} className="flex items-center justify-between gap-2">
+                                <span className="text-[11px] text-gray-300 truncate">
+                                  {p.nome}
+                                  {p.codigo && <span className="text-gray-500"> · {p.codigo}</span>}
+                                </span>
+                                {(servico || podeReporMercadoria || !ehVendavel(p.tipo)) && <button type="button"
+                                  onClick={() => servico ? updateLinha(i, { item: p.nome }) : moverParaReposicao(i, p)}
+                                  className="shrink-0 text-[10px] font-bold text-accent underline hover:text-accent/80">
+                                  {servico ? 'É este — usar o nome' : 'É este — pedir por Reposição'}
+                                </button>}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    })()}
+                  </div>
+                  <div className="flex-1 min-w-[140px] xl:flex-none xl:w-44">
+                    <input
+                      list="sugestoes-marcas"
+                      className="neu-input py-2 px-3 rounded-xl text-sm w-full"
+                      placeholder="Marca (opcional)"
+                      value={row.marca}
+                      onChange={e => updateLinha(i, { marca: e.target.value })}
+                    />
+                  </div>
+                  {/* Quantidade + em quê: numa unidade de medida, ou numa
+                      embalagem fechada "com N" unidades (migr. 591). Com
+                      embalagem, a qtd conta embalagens e não aceita vírgula. */}
+                  <div className="flex gap-2 items-start">
+                    <input
+                      type="text" inputMode="decimal"
+                      title={erros[`qtd_${i}`] ?? 'Quantidade'}
+                      className={`neu-input py-2 px-3 rounded-xl text-sm w-20 tabular-nums ${erros[`qtd_${i}`] ? 'border border-red-500/60' : ''}`}
+                      value={row.qtd}
+                      onChange={e => updateLinha(i, { qtd: formatQtd(e.target.value, !row.embalagem && ehFracionaria(row.unidade)) })}
+                      onKeyDown={handleQtdKeyDown(!row.embalagem && ehFracionaria(row.unidade))}
+                    />
+                    <select
+                      className="neu-input py-2 px-2 rounded-xl text-sm w-32 shrink-0"
+                      value={row.embalagem ? `${EMB_PREFIX}${row.embalagem}` : row.unidade}
+                      onChange={e => {
+                        const v = e.target.value;
+                        if (v.startsWith(EMB_PREFIX)) {
+                          const base = unidadesBaseReq.includes(row.unidade) ? row.unidade : 'UN';
+                          updateLinha(i, {
+                            embalagem: v.slice(EMB_PREFIX.length), unidade: base,
+                            fator: row.embalagem ? row.fator : '',
+                            qtd: formatQtd(row.qtd, false),
+                          });
+                        } else {
+                          updateLinha(i, {
+                            unidade: v, embalagem: '', fator: '',
+                            qtd: formatQtd(row.qtd, ehFracionaria(v)),
+                          });
+                        }
+                      }}
+                    >
+                      <optgroup label="Unidade">
+                        {[...unidadesReq, ...(unidadesReq.includes(row.unidade) ? [] : [row.unidade])].map(u => (
+                          <option key={u} value={u}>{rotuloUnidade(u)}</option>
+                        ))}
+                      </optgroup>
+                      <optgroup label="Embalagem fechada">
+                        {EMBALAGENS_COMPRA.map(emb => (
+                          <option key={emb} value={`${EMB_PREFIX}${emb}`}>{emb.charAt(0) + emb.slice(1).toLowerCase()}</option>
+                        ))}
+                      </optgroup>
+                    </select>
+                    {row.embalagem && (
+                      <>
+                        <span className="text-xs text-gray-400 py-2 shrink-0">com</span>
+                        <input
+                          type="text" inputMode="decimal"
+                          className={`neu-input py-2 px-2 rounded-xl text-sm w-16 tabular-nums ${erros[`fator_${i}`] ? 'border border-red-500/40' : ''}`}
+                          title={`Quantas ${normalizarUnidade(row.unidade)} vêm em cada ${row.embalagem.toLowerCase()}`}
+                          placeholder="?"
+                          value={row.fator}
+                          onChange={e => updateLinha(i, { fator: formatQtd(e.target.value, ehFracionaria(row.unidade)) })}
+                          onKeyDown={handleQtdKeyDown(ehFracionaria(row.unidade))}
+                        />
+                        <select
+                          className="neu-input py-2 px-2 rounded-xl text-sm w-20 shrink-0"
+                          value={row.unidade}
+                          onChange={e => updateLinha(i, { unidade: e.target.value, fator: formatQtd(row.fator, ehFracionaria(e.target.value)) })}
+                        >
+                          {unidadesBaseReq.map(u => <option key={u} value={u}>{u}</option>)}
+                        </select>
+                      </>
+                    )}
+                  </div>
+                  <button
+                    onClick={() => removeLinha(i)}
+                    disabled={itens.length <= 1}
+                    title="Remover item"
+                    className="action-btn-delete disabled:opacity-30 mt-1"
+                  >
+                    <Trash2 size={12} />
+                  </button>
+                </div>
+
+                {/* A conta à vista, antes de enviar (migr. 591) — e o erro
+                    da declaração incompleta no mesmo lugar. */}
+                {erros[`qtd_${i}`] && (
+                  <span className="text-[10px] text-red-500 font-semibold">{erros[`qtd_${i}`]}</span>
+                )}
+                {row.embalagem && (erros[`fator_${i}`] ? (
+                  <span className="text-[10px] text-red-500 font-semibold">{erros[`fator_${i}`]}</span>
+                ) : parseQtd(row.fator) > 1 && parseQtd(row.qtd) > 0 ? (
+                  <span className="text-[10px] text-accent/90 tabular-nums">
+                    {qtdBR(row.qtd)} {pluralEmbalagem(row.embalagem, parseQtd(row.qtd))} × {qtdBR(row.fator)} ={' '}
+                    <span className="font-bold">{qtdBR(parseQtd(row.qtd) * parseQtd(row.fator))} {normalizarUnidade(row.unidade)}</span>
+                  </span>
+                ) : null)}
+
+                {mostraJustItem && (
+                  <div className="pl-3 border-l-2 border-accent/30 ml-1">
+                    <input
+                      className={`neu-input py-2 px-3 rounded-xl text-xs w-full ${erros[`just_${i}`] ? 'border border-red-500/40' : ''}`}
+                      placeholder="Motivo deste item (vazio = usa a justificativa geral)"
+                      value={row.justificativa}
+                      onChange={e => updateLinha(i, { justificativa: e.target.value })}
+                    />
+                    {erros[`just_${i}`] && (
+                      <span className="text-[10px] text-red-500 font-semibold">{erros[`just_${i}`]}</span>
+                    )}
+                  </div>
+                )}
+              </div>
+            ))}
+            <button onClick={addLinha} className="btn-solido btn-solido--amarelo self-start">
+              <Plus size={13} /> Adicionar item
+            </button>
+          </div>
+          </SecaoFormulario>
+
+          <SecaoFormulario titulo="Justificativa" icon={MessageSquareText} cor="verde">
+          <FormField
+            label={mostraJustItem ? `Justificativa geral${cabJustObrigatoria ? ' *' : ''}` : 'Justificativa *'}
+            error={erros.justificativa}
+          >
+            <textarea
+              rows={2}
+              className={`neu-input py-2 px-3 rounded-xl text-sm resize-none ${erros.justificativa ? 'border border-red-500/40' : ''}`}
+              placeholder="Por que a empresa precisa disto?"
+              value={cab.justificativa}
+              onChange={e => setCab(c => ({ ...c, justificativa: e.target.value }))}
+            />
+            {itens.length > 1 && (
+              <button type="button" onClick={toggleJustPorItem}
+                className="self-start mt-1 text-[11px] font-bold text-accent hover:underline">
+                {justPorItem ? 'Usar a mesma justificativa para todos' : 'Justificar item por item'}
+              </button>
+            )}
+          </FormField>
+          </SecaoFormulario>
+          </>
+          )}
+          </>
+          )}
+        </ModalFormulario>
       </AnimatePresence>
 
       {/* Formulário aberto tampa a lista: as abas ("Para corrigir", "Pendentes")

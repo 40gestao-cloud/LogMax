@@ -5,7 +5,7 @@ import {
   Eye, EyeOff, FolderTree, Percent,
 } from 'lucide-react';
 import { useFetchData, dbInsert, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
-import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent, FilialBadge } from '../components/ui';
+import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent, FilialBadge, ModalFormulario } from '../components/ui';
 import { ImagemUploader } from '../components/ImagemCadastro';
 import { uploadImagem, removerImagem, CATEGORIA_IMAGEM_BUCKET } from '../lib/imagemCadastro';
 import { useConfirm } from '../contexts/ConfirmContext';
@@ -237,86 +237,90 @@ function InlineForm({ initial, onSave, onCancel, saving, comMargem, comSubcatego
   };
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }}
-      onKeyDown={e => {
-        if (e.key === 'Escape') { onCancel(); return; }
-        // Enter salva só a partir de um campo de texto. Sem esta checagem, o
-        // Enter num swatch de cor ou num botão de emoji disparava o clique do
-        // botão E o save junto, pelo bubbling — quem navega por teclado salvava
-        // a categoria ao escolher o ícone.
-        const alvo = e.target as HTMLElement;
-        // No campo de subcategorias o Enter vira etiqueta, não salva.
-        if (alvo.dataset.etiqueta) return;
-        const ehCampoTexto = alvo.tagName === 'INPUT'
-          && !['color', 'file', 'checkbox', 'radio'].includes((alvo as HTMLInputElement).type);
-        if (e.key === 'Enter' && !e.shiftKey && ehCampoTexto) { e.preventDefault(); void handleSubmit(); }
-      }}
-      className="neu-flat border border-accent/25 rounded-xl overflow-hidden"
+    <ModalFormulario
+      aberto
+      titulo={titulo}
+      onCancelar={onCancel}
+      acoes={
+        <NeuButtonAccent onClick={handleSubmit} disabled={!podeSalvar} className="flex items-center gap-1.5 text-sm">
+          {saving ? '…' : <><Save size={13} /> Salvar</>}
+        </NeuButtonAccent>
+      }
     >
-      <div className="px-4 py-2 border-b border-white/5 flex items-center justify-between">
-        <p className="text-[10px] font-bold text-accent uppercase tracking-widest">{titulo}</p>
-        <button onClick={onCancel} className="modal-close-btn" title="Fechar (Esc)">
-          <X size={16} />
-        </button>
-      </div>
+      <div
+        onKeyDown={e => {
+          if (e.key === 'Escape') { onCancel(); return; }
+          // Enter salva só a partir de um campo de texto. Sem esta checagem, o
+          // Enter num swatch de cor ou num botão de emoji disparava o clique do
+          // botão E o save junto, pelo bubbling — quem navega por teclado salvava
+          // a categoria ao escolher o ícone.
+          const alvo = e.target as HTMLElement;
+          // No campo de subcategorias o Enter vira etiqueta, não salva.
+          if (alvo.dataset.etiqueta) return;
+          const ehCampoTexto = alvo.tagName === 'INPUT'
+            && !['color', 'file', 'checkbox', 'radio'].includes((alvo as HTMLInputElement).type);
+          if (e.key === 'Enter' && !e.shiftKey && ehCampoTexto) { e.preventDefault(); void handleSubmit(); }
+        }}
+        className="grid grid-cols-1 md:grid-cols-2 gap-5 items-start"
+      >
+        <div className="space-y-4">
+          <div className="rounded-xl px-3 py-2.5 flex items-center gap-3"
+            style={{ background: `${f.cor}12`, border: `1px solid ${f.cor}33` }}>
+            <CatThumb imagem_url={previewUrl} icone={f.icone} cor={f.cor} size={40} />
+            <p className="text-sm font-bold text-gray-100 truncate min-w-0">{f.nome.trim() || 'Nome da categoria'}</p>
+          </div>
 
-      <div className="p-4 space-y-4">
-        <div className="rounded-xl px-3 py-2.5 flex items-center gap-3"
-          style={{ background: `${f.cor}12`, border: `1px solid ${f.cor}33` }}>
-          <CatThumb imagem_url={previewUrl} icone={f.icone} cor={f.cor} size={40} />
-          <p className="text-sm font-bold text-gray-100 truncate min-w-0">{f.nome.trim() || 'Nome da categoria'}</p>
-        </div>
+          <FormField label="Nome *" error={duplicado ? 'Já existe um registro com este nome.' : undefined}>
+            <input className={`neu-input py-2 px-3 rounded-xl w-full text-sm ${nomeTravado ? 'opacity-60 cursor-not-allowed' : ''}`} value={f.nome}
+              readOnly={nomeTravado}
+              onChange={e => { if (!nomeTravado) setF(p => ({ ...p, nome: e.target.value })); }}
+              placeholder="Ex: Mercearia, Bebidas, Smartphones…" autoFocus={!nomeTravado} />
+            {nomeTravado && (
+              <span className="text-[10px] text-gray-500">Nome da lista padrão — não muda.</span>
+            )}
+          </FormField>
 
-        <FormField label="Nome *" error={duplicado ? 'Já existe um registro com este nome.' : undefined}>
-          <input className={`neu-input w-full text-sm ${nomeTravado ? 'opacity-60 cursor-not-allowed' : ''}`} value={f.nome}
-            readOnly={nomeTravado}
-            onChange={e => { if (!nomeTravado) setF(p => ({ ...p, nome: e.target.value })); }}
-            placeholder="Ex: Mercearia, Bebidas, Smartphones…" autoFocus={!nomeTravado} />
-          {nomeTravado && (
-            <span className="text-[10px] text-gray-500">Nome da lista padrão — não muda.</span>
+          {comMargem && (
+            /* Com o custo preenchido, o cadastro de produto sugere o preço a partir daqui. */
+            <FormField label="Markup-alvo">
+              <div className="relative">
+                <input className="neu-input py-2 pl-3 pr-9 rounded-xl w-full text-sm" inputMode="decimal" value={f.margem_alvo}
+                  onChange={e => setF(p => ({ ...p, margem_alvo: e.target.value.replace(/[^0-9,.]/g, '') }))}
+                  placeholder="Vazio = preço livre" />
+                <Percent size={13} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-600 pointer-events-none" />
+              </div>
+            </FormField>
           )}
-        </FormField>
 
-        {comMargem && (
-          /* Com o custo preenchido, o cadastro de produto sugere o preço a partir daqui. */
-          <FormField label="Markup-alvo">
-            <div className="relative">
-              <input className="neu-input w-full text-sm pr-9" inputMode="decimal" value={f.margem_alvo}
-                onChange={e => setF(p => ({ ...p, margem_alvo: e.target.value.replace(/[^0-9,.]/g, '') }))}
-                placeholder="Vazio = preço livre" />
-              <Percent size={13} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-600 pointer-events-none" />
-            </div>
-          </FormField>
-        )}
+          {comSubcategorias && (
+            <FormField label="Subcategorias">
+              <div className="neu-input w-full flex flex-wrap items-center gap-1.5 !py-1.5">
+                {subs.map(nome => (
+                  /* A etiqueta inteira é o botão de tirar: alvo maior que o "x"
+                     sozinho, e o nome dentro diz o que sai. */
+                  <button key={nome} type="button" onClick={() => setSubs(p => p.filter(x => x !== nome))}
+                    title={`Tirar "${nome}"`}
+                    className="inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-md text-gray-200 hover:brightness-125"
+                    style={{ background: `${f.cor}1f`, border: `1px solid ${f.cor}55` }}>
+                    {nome}
+                    <X size={11} className="text-gray-400" />
+                  </button>
+                ))}
+                <input data-etiqueta="1" value={subTexto}
+                  onChange={e => setSubTexto(e.target.value)}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); addSub(subTexto); }
+                    else if (e.key === 'Backspace' && !subTexto && subs.length) setSubs(p => p.slice(0, -1));
+                  }}
+                  onBlur={() => addSub(subTexto)}
+                  placeholder={subs.length ? 'Mais uma…' : 'Ex: Massas — Enter para adicionar'}
+                  className="flex-1 min-w-[10rem] bg-transparent outline-none text-sm py-1" />
+              </div>
+            </FormField>
+          )}
 
-        {comSubcategorias && (
-          <FormField label="Subcategorias">
-            <div className="neu-input w-full flex flex-wrap items-center gap-1.5 !py-1.5">
-              {subs.map(nome => (
-                /* A etiqueta inteira é o botão de tirar: alvo maior que o "x"
-                   sozinho, e o nome dentro diz o que sai. */
-                <button key={nome} type="button" onClick={() => setSubs(p => p.filter(x => x !== nome))}
-                  title={`Tirar "${nome}"`}
-                  className="inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-md text-gray-200 hover:brightness-125"
-                  style={{ background: `${f.cor}1f`, border: `1px solid ${f.cor}55` }}>
-                  {nome}
-                  <X size={11} className="text-gray-400" />
-                </button>
-              ))}
-              <input data-etiqueta="1" value={subTexto}
-                onChange={e => setSubTexto(e.target.value)}
-                onKeyDown={e => {
-                  if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); addSub(subTexto); }
-                  else if (e.key === 'Backspace' && !subTexto && subs.length) setSubs(p => p.slice(0, -1));
-                }}
-                onBlur={() => addSub(subTexto)}
-                placeholder={subs.length ? 'Mais uma…' : 'Ex: Massas — Enter para adicionar'}
-                className="flex-1 min-w-[10rem] bg-transparent outline-none text-sm py-1" />
-            </div>
-          </FormField>
-        )}
-
+          <p className="text-[10px] text-gray-600 hidden sm:block">Enter salva · Esc cancela</p>
+        </div>
         <div className="rounded-xl border border-white/5 p-3 space-y-3">
           <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Aparência</p>
 
@@ -337,15 +341,7 @@ function InlineForm({ initial, onSave, onCancel, saving, comMargem, comSubcatego
           </FormField>
         </div>
       </div>
-
-      <div className="px-4 py-3 border-t border-white/5 flex gap-2 justify-end items-center">
-        <span className="text-[10px] text-gray-600 mr-auto hidden sm:block">Enter salva · Esc cancela</span>
-        <button onClick={onCancel} className="neu-button px-3 py-1.5 text-sm rounded-lg text-gray-400">Cancelar</button>
-        <NeuButtonAccent onClick={handleSubmit} disabled={!podeSalvar} className="flex items-center gap-1.5 text-sm">
-          {saving ? '…' : <><Save size={13} /> Salvar</>}
-        </NeuButtonAccent>
-      </div>
-    </motion.div>
+    </ModalFormulario>
   );
 }
 

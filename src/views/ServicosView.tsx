@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Search, Edit2, Trash2, Plus, Save, Tag } from 'lucide-react';
 import { useFilial } from '../contexts/FilialContext';
 import { useFetchData, dbInsert, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
-import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent, StatusBadge } from '../components/ui';
+import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent, StatusBadge, ModalFormulario } from '../components/ui';
 import { formatBRL, parseBRL, handleMoneyKeyDown } from '../lib/viewUtils';
 import { useConfirm } from '../contexts/ConfirmContext';
 import { MatrizConsolidado } from '../components/MatrizConsolidado';
@@ -401,148 +401,137 @@ export const ServicosView = ({ showToast, onNavigate }: { showToast: any; onNavi
       )}
 
       <AnimatePresence>
-        {showForm && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 flex items-center justify-center p-4"
-            style={{ background: 'rgba(0,0,0,0.72)', backdropFilter: 'blur(6px)' }}>
-            <motion.div initial={{ scale: 0.95, y: 12 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.96 }}
-              className="neu-flat rounded-3xl w-full max-w-2xl p-6 flex flex-col gap-4 border border-white/5 max-h-[90vh] overflow-y-auto"
-              style={{ background: 'var(--color-bg-base)' }}>
-              <div className="flex items-center justify-between">
-                <h3 className="text-base font-black text-accent">{editItem ? 'Editar serviço' : 'Novo serviço'} — {filial}</h3>
-                <button onClick={closeForm} className="text-xs text-gray-500 hover:text-white">Fechar</button>
-              </div>
+        <ModalFormulario
+          aberto={showForm}
+          titulo={`${editItem ? 'Editar serviço' : 'Novo serviço'} — ${filial}`}
+          onCancelar={closeForm}
+          acoes={<>
+            <NeuButtonAccent onClick={handleSave} isLoading={isSaving}>
+              <Save size={14} /> {editItem ? 'Atualizar' : 'Salvar'}
+            </NeuButtonAccent>
+          </>}
+        >
+          <div className="flex flex-wrap items-center gap-5">
+            <FormField label="Imagem do serviço">
+              <ImagemUploader
+                imagemUrl={form.imagem_url} rotulo="imagem"
+                onPreview={handleImagemPreview} onClear={handleImagemClear} />
+            </FormField>
+            <div className="pt-4">
+              <LogoCadastro imagemUrl={form.imagem_url} nome={form.nome} size={44} ajuste="cover" />
+            </div>
+          </div>
 
-              <div className="flex flex-wrap items-center gap-5">
-                <FormField label="Imagem do serviço">
-                  <ImagemUploader
-                    imagemUrl={form.imagem_url} rotulo="imagem"
-                    onPreview={handleImagemPreview} onClear={handleImagemClear} />
-                </FormField>
-                <div className="pt-4">
-                  <LogoCadastro imagemUrl={form.imagem_url} nome={form.nome} size={44} ajuste="cover" />
-                </div>
-              </div>
+          {/* A natureza decide se o serviço é vendável ou comprável. */}
+          <div>
+            <p className="text-[10px] text-gray-600 uppercase tracking-widest font-bold mb-3">Natureza</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {NATUREZAS_SERVICO.map(n => (
+                <button key={n} type="button"
+                  onClick={() => setForm(f => ({ ...f, natureza: n }))}
+                  className={`text-left p-3 rounded-xl border transition-colors ${
+                    normalizarNatureza(form.natureza) === n
+                      ? 'neu-pressed border-accent/40'
+                      : 'neu-button border-transparent'}`}>
+                  <span className={`block text-xs font-bold ${
+                    normalizarNatureza(form.natureza) === n ? 'text-accent' : 'text-gray-300'}`}>
+                    {NATUREZA_LABEL[n]}
+                  </span>
+                  <span className="block text-[10px] text-gray-500 leading-snug mt-1">
+                    {NATUREZA_AJUDA[n]}
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
 
-              {/* A natureza decide se o serviço é vendável ou comprável. */}
-              <div>
-                <p className="text-[10px] text-gray-600 uppercase tracking-widest font-bold mb-3">Natureza</p>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  {NATUREZAS_SERVICO.map(n => (
-                    <button key={n} type="button"
-                      onClick={() => setForm(f => ({ ...f, natureza: n }))}
-                      className={`text-left p-3 rounded-xl border transition-colors ${
-                        normalizarNatureza(form.natureza) === n
-                          ? 'neu-pressed border-accent/40'
-                          : 'neu-button border-transparent'}`}>
-                      <span className={`block text-xs font-bold ${
-                        normalizarNatureza(form.natureza) === n ? 'text-accent' : 'text-gray-300'}`}>
-                        {NATUREZA_LABEL[n]}
-                      </span>
-                      <span className="block text-[10px] text-gray-500 leading-snug mt-1">
-                        {NATUREZA_AJUDA[n]}
-                      </span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <FormField label="Código *" error={errors.codigo}>
-                  <input className={`neu-input py-2 px-3 rounded-xl text-sm ${errors.codigo ? 'border border-red-500/40' : ''}`}
-                    value={form.codigo} onChange={e => setForm(f => ({ ...f, codigo: e.target.value }))}
-                    placeholder={filial === 'TechMax' ? 'Ex: SRV-TL-001' : filial === 'MaxLook' ? 'Ex: SRV-AJ-001' : 'Ex: SRV-001'} />
-                </FormField>
-                <FormField label="Nome do serviço *" error={errors.nome}>
-                  <input className={`neu-input py-2 px-3 rounded-xl text-sm ${errors.nome ? 'border border-red-500/40' : ''}`}
-                    value={form.nome} onChange={e => setForm(f => ({ ...f, nome: e.target.value }))}
-                    placeholder={filial === 'TechMax' ? 'Ex: Troca de tela iPhone 12' : filial === 'MaxLook' ? 'Ex: Ajuste de bainha calça jeans' : 'Ex: Instalação'} />
-                  {nomeDaRequisicaoRef.current !== null && !mesmoNomeDaRequisicao && (
-                    <p className="text-[10px] mt-1 text-amber-300">
-                      O pedido só reconhece “{nomeDaRequisicaoRef.current}”, o nome da requisição.
-                    </p>
-                  )}
-                </FormField>
-                <FormField label={NATUREZA_VALOR_LABEL[normalizarNatureza(form.natureza)]} error={errors.valor}>
-                  <input type="text" inputMode="numeric" onKeyDown={handleMoneyKeyDown}
-                    className={`neu-input py-2 px-3 rounded-xl text-sm tabular-nums ${errors.valor ? 'border border-red-500/40' : ''}`}
-                    value={form.valor} onChange={e => setForm(f => ({ ...f, valor: formatBRL(parseBRL(e.target.value)) }))}
-                    placeholder="0,00" />
-                </FormField>
-                <FormField label="Status">
-                  <select className="neu-input py-2 px-3 rounded-xl text-sm"
-                    value={form.status} onChange={e => setForm(f => ({ ...f, status: e.target.value }))}>
-                    <option value="Ativo">Ativo</option>
-                    <option value="Inativo">Inativo</option>
-                  </select>
-                </FormField>
-              </div>
-
-              {/* Atributos nicho — MaxLook e TechMax. SuperMax fica sem seção extra. */}
-              {atrDefs.length > 0 && (
-                <div className="mt-2 pt-4 border-t border-white/5">
-                  <div className="flex items-center gap-2 mb-3">
-                    <Tag size={12} className="text-accent" />
-                    <p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">
-                      {filial === 'MaxLook' ? 'Detalhes do serviço (Ateliê)'
-                        : filial === 'TechMax' ? 'Detalhes da OS (Assistência)'
-                        : 'Detalhes do serviço'}
-                    </p>
-                  </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    {atrDefs.map(d => {
-                      const errKey = `atr_${d.key}`;
-                      const err = errors[errKey];
-                      const val = form.atributos?.[d.key] ?? '';
-                      const setAtr = (v: any) => {
-                        setForm(f => ({ ...f, atributos: { ...(f.atributos ?? {}), [d.key]: v } }));
-                        setErrors(ev => ({ ...ev, [errKey]: '' }));
-                      };
-                      if (d.type === 'bool') {
-                        return (
-                          <label key={d.key}
-                            className={`flex items-center gap-3 cursor-pointer neu-flat rounded-xl px-4 py-3 border border-white/5 ${d.wide ? 'sm:col-span-2' : ''}`}>
-                            <input type="checkbox" checked={!!val}
-                              onChange={e => setAtr(e.target.checked)}
-                              className="accent-accent w-4 h-4" />
-                            <span className="text-xs font-bold text-gray-200">{d.label}</span>
-                          </label>
-                        );
-                      }
-                      if (d.type === 'select' && d.options) {
-                        return (
-                          <FormField key={d.key} label={d.label} error={err}>
-                            <select className={`neu-input py-2 px-3 rounded-xl text-sm ${err ? 'border border-red-500/40' : ''}`}
-                              value={String(val)} onChange={e => setAtr(e.target.value)}>
-                              <option value="">— Selecione —</option>
-                              {d.options.map(o => <option key={o} value={o}>{o}</option>)}
-                            </select>
-                          </FormField>
-                        );
-                      }
-                      return (
-                        <FormField key={d.key} label={d.label} error={err}>
-                          <input className={`neu-input py-2 px-3 rounded-xl text-sm ${err ? 'border border-red-500/40' : ''}`}
-                            type={d.type === 'number' ? 'number' : 'text'}
-                            inputMode={d.type === 'number' ? 'numeric' : undefined}
-                            value={String(val)} onChange={e => setAtr(e.target.value)}
-                            placeholder={d.placeholder} />
-                        </FormField>
-                      );
-                    })}
-                  </div>
-                </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <FormField label="Código *" error={errors.codigo}>
+              <input className={`neu-input py-2 px-3 rounded-xl text-sm ${errors.codigo ? 'border border-red-500/40' : ''}`}
+                value={form.codigo} onChange={e => setForm(f => ({ ...f, codigo: e.target.value }))}
+                placeholder={filial === 'TechMax' ? 'Ex: SRV-TL-001' : filial === 'MaxLook' ? 'Ex: SRV-AJ-001' : 'Ex: SRV-001'} />
+            </FormField>
+            <FormField label="Nome do serviço *" error={errors.nome}>
+              <input className={`neu-input py-2 px-3 rounded-xl text-sm ${errors.nome ? 'border border-red-500/40' : ''}`}
+                value={form.nome} onChange={e => setForm(f => ({ ...f, nome: e.target.value }))}
+                placeholder={filial === 'TechMax' ? 'Ex: Troca de tela iPhone 12' : filial === 'MaxLook' ? 'Ex: Ajuste de bainha calça jeans' : 'Ex: Instalação'} />
+              {nomeDaRequisicaoRef.current !== null && !mesmoNomeDaRequisicao && (
+                <p className="text-[10px] mt-1 text-amber-300">
+                  O pedido só reconhece “{nomeDaRequisicaoRef.current}”, o nome da requisição.
+                </p>
               )}
+            </FormField>
+            <FormField label={NATUREZA_VALOR_LABEL[normalizarNatureza(form.natureza)]} error={errors.valor}>
+              <input type="text" inputMode="numeric" onKeyDown={handleMoneyKeyDown}
+                className={`neu-input py-2 px-3 rounded-xl text-sm tabular-nums ${errors.valor ? 'border border-red-500/40' : ''}`}
+                value={form.valor} onChange={e => setForm(f => ({ ...f, valor: formatBRL(parseBRL(e.target.value)) }))}
+                placeholder="0,00" />
+            </FormField>
+            <FormField label="Status">
+              <select className="neu-input py-2 px-3 rounded-xl text-sm"
+                value={form.status} onChange={e => setForm(f => ({ ...f, status: e.target.value }))}>
+                <option value="Ativo">Ativo</option>
+                <option value="Inativo">Inativo</option>
+              </select>
+            </FormField>
+          </div>
 
-              <div className="flex justify-end gap-3 pt-4">
-                <button onClick={closeForm} className="neu-button py-2 px-4 rounded-xl text-sm text-gray-400">Cancelar</button>
-                <NeuButtonAccent onClick={handleSave} isLoading={isSaving}>
-                  <Save size={14} /> {editItem ? 'Atualizar' : 'Salvar'}
-                </NeuButtonAccent>
+          {/* Atributos nicho — MaxLook e TechMax. SuperMax fica sem seção extra. */}
+          {atrDefs.length > 0 && (
+            <div className="mt-2 pt-4 border-t border-white/5">
+              <div className="flex items-center gap-2 mb-3">
+                <Tag size={12} className="text-accent" />
+                <p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">
+                  {filial === 'MaxLook' ? 'Detalhes do serviço (Ateliê)'
+                    : filial === 'TechMax' ? 'Detalhes da OS (Assistência)'
+                    : 'Detalhes do serviço'}
+                </p>
               </div>
-            </motion.div>
-          </motion.div>
-        )}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {atrDefs.map(d => {
+                  const errKey = `atr_${d.key}`;
+                  const err = errors[errKey];
+                  const val = form.atributos?.[d.key] ?? '';
+                  const setAtr = (v: any) => {
+                    setForm(f => ({ ...f, atributos: { ...(f.atributos ?? {}), [d.key]: v } }));
+                    setErrors(ev => ({ ...ev, [errKey]: '' }));
+                  };
+                  if (d.type === 'bool') {
+                    return (
+                      <label key={d.key}
+                        className={`flex items-center gap-3 cursor-pointer neu-flat rounded-xl px-4 py-3 border border-white/5 ${d.wide ? 'sm:col-span-2' : ''}`}>
+                        <input type="checkbox" checked={!!val}
+                          onChange={e => setAtr(e.target.checked)}
+                          className="accent-accent w-4 h-4" />
+                        <span className="text-xs font-bold text-gray-200">{d.label}</span>
+                      </label>
+                    );
+                  }
+                  if (d.type === 'select' && d.options) {
+                    return (
+                      <FormField key={d.key} label={d.label} error={err}>
+                        <select className={`neu-input py-2 px-3 rounded-xl text-sm ${err ? 'border border-red-500/40' : ''}`}
+                          value={String(val)} onChange={e => setAtr(e.target.value)}>
+                          <option value="">— Selecione —</option>
+                          {d.options.map(o => <option key={o} value={o}>{o}</option>)}
+                        </select>
+                      </FormField>
+                    );
+                  }
+                  return (
+                    <FormField key={d.key} label={d.label} error={err}>
+                      <input className={`neu-input py-2 px-3 rounded-xl text-sm ${err ? 'border border-red-500/40' : ''}`}
+                        type={d.type === 'number' ? 'number' : 'text'}
+                        inputMode={d.type === 'number' ? 'numeric' : undefined}
+                        value={String(val)} onChange={e => setAtr(e.target.value)}
+                        placeholder={d.placeholder} />
+                    </FormField>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </ModalFormulario>
       </AnimatePresence>
     </motion.div>
   );

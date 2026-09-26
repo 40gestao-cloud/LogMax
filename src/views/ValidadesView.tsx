@@ -29,8 +29,7 @@ import { SelectBusca } from '../components/SelectBusca';
 import { opcaoProduto } from '../lib/opcoesSelect';
 import {
   LoadingSpinner, EmptyState, FormField, NeuButtonAccent,
-  Pagination, SelecioneUnidade, FilaDeTrabalho,
-} from '../components/ui';
+  Pagination, SelecioneUnidade, FilaDeTrabalho, ModalFormulario } from '../components/ui';
 
 type Situacao = 'Vencido' | 'Vence em 7 dias' | 'Vence em 30 dias' | 'OK' | 'Encerrado';
 
@@ -239,61 +238,58 @@ const ValidadesViewInner = ({ showToast, filial }: { showToast: any; filial: Fil
       ]} />
 
       <AnimatePresence>
-        {showForm && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-            <div className="neu-flat rounded-2xl p-6 border border-white/5 flex flex-col gap-4">
-              {/* O caminho normal é o lote no recebimento; aqui entra o que já estava na prateleira. */}
-              <h3 className="text-sm font-bold text-gray-200">Novo lote</h3>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                <FormField label="Produto *">
-                  <SelectBusca
-                    value={form.produto_id}
-                    onChange={v => {
-                      // A ficha sugere hoje + validade_dias (migr. 360); continua editável.
-                      const prod = produtos.find((p: any) => p.id === v);
-                      const sugerida = prod ? vencimentoPrevisto(prod, hoje) : null;
-                      setForm(ff => ({ ...ff, produto_id: v, vencimento: sugerida ?? ff.vencimento }));
-                    }}
-                    placeholder="Escolha o produto"
-                    opcoes={[...produtos].sort((a: any, b: any) => String(a.nome).localeCompare(String(b.nome), 'pt-BR'))
-                      .map((p: any) => opcaoProduto(p, { saldo: true }))}
-                  />
-                </FormField>
-                <FormField label="Lote">
-                  <input className="neu-input py-2 px-3 rounded-xl text-sm" value={form.lote}
-                    onChange={e => setForm(f => ({ ...f, lote: e.target.value }))} placeholder="Ex: L-2026-08" />
-                </FormField>
-                <FormField label="Validade *">
-                  <input type="date" className="neu-input py-2 px-3 rounded-xl text-sm" value={form.vencimento}
-                    onChange={e => setForm(f => ({ ...f, vencimento: e.target.value }))} />
-                  {(() => {
-                    const prod = produtos.find((p: any) => p.id === form.produto_id);
-                    if (!prod) return null;
-                    const dias = validadeDias(prod);
-                    if (dias !== null) {
-                      return <p className="text-[10px] text-gray-500 mt-1">{dias} dia(s) a partir de hoje</p>;
-                    }
-                    if (ehPerecivel(prod)) {
-                      return <p className="text-[10px] text-amber-400/90 mt-1">Informe a data</p>;
-                    }
-                    return null;
-                  })()}
-                </FormField>
-                {/* Frios e laticínios são loteados a peso — 12,5 KG de queijo é
-                    um lote (migr. 439). A unidade é a do produto escolhido. */}
-                <FormField label={`Quantidade *${unidadeSel ? ` (${unidadeSel})` : ''}`}>
-                  <input type="text" inputMode="decimal" className="neu-input py-2 px-3 rounded-xl text-sm tabular-nums" value={form.qtd}
-                    onChange={e => setForm(f => ({ ...f, qtd: formatQtd(e.target.value, loteFrac) }))}
-                    onKeyDown={handleQtdKeyDown(loteFrac)} placeholder="0" />
-                </FormField>
-              </div>
-              <div className="flex gap-3 justify-end">
-                <button onClick={fecharForm} className="neu-button py-2 px-5 rounded-xl text-sm text-gray-400">Cancelar</button>
-                <NeuButtonAccent onClick={salvarLote} isLoading={saving}><Save size={14} /> Registrar</NeuButtonAccent>
-              </div>
-            </div>
-          </motion.div>
-        )}
+        <ModalFormulario
+          aberto={showForm}
+          titulo="Novo lote"
+          onCancelar={fecharForm}
+          acoes={<>
+            <NeuButtonAccent onClick={salvarLote} isLoading={saving}><Save size={14} /> Registrar</NeuButtonAccent>
+          </>}
+        >
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <FormField label="Produto *">
+              <SelectBusca
+                value={form.produto_id}
+                onChange={v => {
+                  // A ficha sugere hoje + validade_dias (migr. 360); continua editável.
+                  const prod = produtos.find((p: any) => p.id === v);
+                  const sugerida = prod ? vencimentoPrevisto(prod, hoje) : null;
+                  setForm(ff => ({ ...ff, produto_id: v, vencimento: sugerida ?? ff.vencimento }));
+                }}
+                placeholder="Escolha o produto"
+                opcoes={[...produtos].sort((a: any, b: any) => String(a.nome).localeCompare(String(b.nome), 'pt-BR'))
+                  .map((p: any) => opcaoProduto(p, { saldo: true }))}
+              />
+            </FormField>
+            <FormField label="Lote">
+              <input className="neu-input py-2 px-3 rounded-xl text-sm" value={form.lote}
+                onChange={e => setForm(f => ({ ...f, lote: e.target.value }))} placeholder="Ex: L-2026-08" />
+            </FormField>
+            <FormField label="Validade *">
+              <input type="date" className="neu-input py-2 px-3 rounded-xl text-sm" value={form.vencimento}
+                onChange={e => setForm(f => ({ ...f, vencimento: e.target.value }))} />
+              {(() => {
+                const prod = produtos.find((p: any) => p.id === form.produto_id);
+                if (!prod) return null;
+                const dias = validadeDias(prod);
+                if (dias !== null) {
+                  return <p className="text-[10px] text-gray-500 mt-1">{dias} dia(s) a partir de hoje</p>;
+                }
+                if (ehPerecivel(prod)) {
+                  return <p className="text-[10px] text-amber-400/90 mt-1">Informe a data</p>;
+                }
+                return null;
+              })()}
+            </FormField>
+            {/* Frios e laticínios são loteados a peso — 12,5 KG de queijo é
+                um lote (migr. 439). A unidade é a do produto escolhido. */}
+            <FormField label={`Quantidade *${unidadeSel ? ` (${unidadeSel})` : ''}`}>
+              <input type="text" inputMode="decimal" className="neu-input py-2 px-3 rounded-xl text-sm tabular-nums" value={form.qtd}
+                onChange={e => setForm(f => ({ ...f, qtd: formatQtd(e.target.value, loteFrac) }))}
+                onKeyDown={handleQtdKeyDown(loteFrac)} placeholder="0" />
+            </FormField>
+          </div>
+        </ModalFormulario>
       </AnimatePresence>
 
       <div className="flex flex-wrap gap-2 shrink-0">

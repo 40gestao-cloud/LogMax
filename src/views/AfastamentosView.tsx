@@ -6,7 +6,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Plus, X, Trash2, Calendar, CheckCircle2, ExternalLink, FileText, AlertTriangle, Gavel, ShieldCheck, Clock, Ban } from 'lucide-react';
 import { useFetchData, dbInsert, dbDelete, dbUpdate } from '../hooks/useSupabaseData';
 import { supabase } from '../lib/supabase';
-import { LoadingSpinner, EmptyState, NeuButtonAccent, CardContador, type TomContador } from '../components/ui';
+import { LoadingSpinner, EmptyState, NeuButtonAccent, CardContador, type TomContador, ModalFormulario } from '../components/ui';
 import { hasSetor } from '../lib/rbac';
 import { useConfirm } from '../contexts/ConfirmContext';
 import { usePontoCorteTurma } from '../hooks/useJornadaTurma';
@@ -307,88 +307,82 @@ const AfastamentosViewInner = ({ showToast, profile, filial }: { showToast: any;
       </div>
 
       <AnimatePresence>
-        {showForm && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            className="neu-flat rounded-3xl p-6 border border-white/5 shrink-0">
-            <div className="flex items-center justify-between mb-5">
-              <h3 className="text-sm font-bold text-gray-300">Novo Afastamento</h3>
-              <button onClick={resetForm} className="modal-close-btn"><X size={16} /></button>
+        <ModalFormulario
+          aberto={showForm}
+          titulo="Novo Afastamento"
+          onCancelar={resetForm}
+          acoes={<>
+            <NeuButtonAccent variant="" onClick={handleSave} disabled={saving}>
+              {saving ? 'Salvando...' : 'Salvar e aplicar no ponto'}
+            </NeuButtonAccent>
+          </>}
+        >
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div className="flex flex-col gap-1.5 lg:col-span-2">
+              <label htmlFor="afast-func" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Colaborador *</label>
+              <SelectBusca
+                id="afast-func"
+                value={form.funcionario_id}
+                onChange={v => setForm(f => ({ ...f, funcionario_id: v }))}
+                placeholder="Escolha o colaborador"
+                grupos={[
+                  { label: 'Trabalhando', opcoes: colaboradoresParaAfastar.livres.map((f: any) => opcaoFuncionario(f)) },
+                  { label: 'Já com afastamento em aberto', opcoes: colaboradoresParaAfastar.afastados.map((f: any) => {
+                    const a = afastamentoVigente.get(f.id)!;
+                    return opcaoFuncionario(f, {
+                      sub: `${a.tipo} até ${dataSimplesBR(a.data_fim)}`,
+                      tag: a.status === 'Pendente' ? { texto: 'Aguardando decisão', tom: 'amarelo' as const } : { texto: 'Afastado', tom: 'roxo' as const },
+                    });
+                  }) },
+                ].filter(g => g.opcoes.length > 0)}
+              />
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              <div className="flex flex-col gap-1.5 lg:col-span-2">
-                <label htmlFor="afast-func" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Colaborador *</label>
-                <SelectBusca
-                  id="afast-func"
-                  value={form.funcionario_id}
-                  onChange={v => setForm(f => ({ ...f, funcionario_id: v }))}
-                  placeholder="Escolha o colaborador"
-                  grupos={[
-                    { label: 'Trabalhando', opcoes: colaboradoresParaAfastar.livres.map((f: any) => opcaoFuncionario(f)) },
-                    { label: 'Já com afastamento em aberto', opcoes: colaboradoresParaAfastar.afastados.map((f: any) => {
-                      const a = afastamentoVigente.get(f.id)!;
-                      return opcaoFuncionario(f, {
-                        sub: `${a.tipo} até ${dataSimplesBR(a.data_fim)}`,
-                        tag: a.status === 'Pendente' ? { texto: 'Aguardando decisão', tom: 'amarelo' as const } : { texto: 'Afastado', tom: 'roxo' as const },
-                      });
-                    }) },
-                  ].filter(g => g.opcoes.length > 0)}
-                />
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <label htmlFor="afast-tipo" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Tipo *</label>
-                <select id="afast-tipo" value={form.tipo}
-                  onChange={e => setForm(f => ({ ...f, tipo: e.target.value as Tipo }))}
-                  className="neu-input rounded-xl px-3 py-2.5 text-sm">
-                  {TIPOS.map(t => <option key={t} value={t}>{t}</option>)}
-                </select>
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <label htmlFor="afast-ini" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Início *</label>
-                <input id="afast-ini" type="date" value={form.data_inicio}
-                  onChange={e => setForm(f => ({ ...f, data_inicio: e.target.value }))}
-                  className="neu-input rounded-xl px-3 py-2.5 text-sm" />
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <label htmlFor="afast-fim" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Fim *</label>
-                <input id="afast-fim" type="date" value={form.data_fim}
-                  onChange={e => setForm(f => ({ ...f, data_fim: e.target.value }))}
-                  className="neu-input rounded-xl px-3 py-2.5 text-sm" />
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Período</label>
-                <div className="neu-pressed rounded-xl px-3 py-2.5 text-sm text-gray-300 tabular-nums">
-                  {diasNoPeriodo(form.data_inicio, form.data_fim)} dia(s)
-                </div>
-              </div>
-              <div className="flex flex-col gap-1.5 lg:col-span-3">
-                <label htmlFor="afast-descricao" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Motivo / Observação</label>
-                <input id="afast-descricao" type="text" value={form.descricao}
-                  onChange={e => setForm(f => ({ ...f, descricao: e.target.value }))}
-                  className="neu-input rounded-xl px-3 py-2.5 text-sm"
-                  placeholder="Ex.: CID Z76 (consulta de rotina); receita anexa" />
-              </div>
-              <div className="flex flex-col gap-1.5 lg:col-span-3">
-                <label htmlFor="afast-link" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Link do documento (Drive, foto do atestado)</label>
-                <input id="afast-link" type="url" value={form.link_documento}
-                  onChange={e => setForm(f => ({ ...f, link_documento: e.target.value }))}
-                  className="neu-input rounded-xl px-3 py-2.5 text-sm" placeholder="https://..." />
+            <div className="flex flex-col gap-1.5">
+              <label htmlFor="afast-tipo" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Tipo *</label>
+              <select id="afast-tipo" value={form.tipo}
+                onChange={e => setForm(f => ({ ...f, tipo: e.target.value as Tipo }))}
+                className="neu-input rounded-xl px-3 py-2.5 text-sm">
+                {TIPOS.map(t => <option key={t} value={t}>{t}</option>)}
+              </select>
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <label htmlFor="afast-ini" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Início *</label>
+              <input id="afast-ini" type="date" value={form.data_inicio}
+                onChange={e => setForm(f => ({ ...f, data_inicio: e.target.value }))}
+                className="neu-input rounded-xl px-3 py-2.5 text-sm" />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <label htmlFor="afast-fim" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Fim *</label>
+              <input id="afast-fim" type="date" value={form.data_fim}
+                onChange={e => setForm(f => ({ ...f, data_fim: e.target.value }))}
+                className="neu-input rounded-xl px-3 py-2.5 text-sm" />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Período</label>
+              <div className="neu-pressed rounded-xl px-3 py-2.5 text-sm text-gray-300 tabular-nums">
+                {diasNoPeriodo(form.data_inicio, form.data_fim)} dia(s)
               </div>
             </div>
-            <p className="text-[10px] text-gray-500 mt-3 leading-relaxed">
-              <AlertTriangle size={10} className="inline mr-1 text-yellow-400" />
-              Ao salvar, o ponto eletrônico dos dias do período será marcado como <strong className="text-gray-300">Justificado</strong> automaticamente. Dias que já têm outro afastamento ativo são preservados.
-              O registro nasce <strong className="text-gray-300">Pendente</strong> e, até a Matriz aprovar, esses dias continuam descontando como falta na folha. Período máximo: 365 dias.
-            </p>
-            <div className="flex justify-end gap-2 mt-4">
-              <button onClick={resetForm} className="neu-button rounded-xl px-4 py-2 text-xs font-bold uppercase tracking-widest text-gray-400 hover:text-white">
-                Cancelar
-              </button>
-              <NeuButtonAccent variant="" onClick={handleSave} disabled={saving}>
-                {saving ? 'Salvando...' : 'Salvar e aplicar no ponto'}
-              </NeuButtonAccent>
+            <div className="flex flex-col gap-1.5 lg:col-span-3">
+              <label htmlFor="afast-descricao" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Motivo / Observação</label>
+              <input id="afast-descricao" type="text" value={form.descricao}
+                onChange={e => setForm(f => ({ ...f, descricao: e.target.value }))}
+                className="neu-input rounded-xl px-3 py-2.5 text-sm"
+                placeholder="Ex.: CID Z76 (consulta de rotina); receita anexa" />
             </div>
-          </motion.div>
-        )}
+            <div className="flex flex-col gap-1.5 lg:col-span-3">
+              <label htmlFor="afast-link" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Link do documento (Drive, foto do atestado)</label>
+              <input id="afast-link" type="url" value={form.link_documento}
+                onChange={e => setForm(f => ({ ...f, link_documento: e.target.value }))}
+                className="neu-input rounded-xl px-3 py-2.5 text-sm" placeholder="https://..." />
+            </div>
+          </div>
+          <p className="text-[10px] text-gray-500 mt-3 leading-relaxed">
+            <AlertTriangle size={10} className="inline mr-1 text-yellow-400" />
+            Ao salvar, o ponto eletrônico dos dias do período será marcado como <strong className="text-gray-300">Justificado</strong> automaticamente. Dias que já têm outro afastamento ativo são preservados.
+            O registro nasce <strong className="text-gray-300">Pendente</strong> e, até a Matriz aprovar, esses dias continuam descontando como falta na folha. Período máximo: 365 dias.
+          </p>
+        </ModalFormulario>
       </AnimatePresence>
 
       <div className="neu-flat rounded-3xl p-6 border border-white/5 shrink-0">

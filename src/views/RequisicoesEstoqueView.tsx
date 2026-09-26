@@ -1,4 +1,3 @@
-import { useRolarAteFormulario } from '../hooks/useRolarAteFormulario';
 import { MenuMais, ItemMenu } from '../components/MenuMais';
 import React, { useState } from 'react';
 import type { FilialOp } from '../components/FilialSelector';
@@ -8,7 +7,7 @@ import { Search, Edit2, Save, RotateCcw } from 'lucide-react';
 import { HistoricoOperacoes } from '../components/HistoricoOperacoes';
 import { useFetchData, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
 import { supabase } from '../lib/supabase';
-import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent, StatusBadge, SelecioneUnidade } from '../components/ui';
+import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent, StatusBadge, SelecioneUnidade, ModalFormulario } from '../components/ui';
 import { useFormValidation } from '../lib/viewUtils';
 import { useConfirm } from '../contexts/ConfirmContext';
 import { FiltroSolicitante, chaveSolicitante } from '../components/FiltroSolicitante';
@@ -79,7 +78,6 @@ const RequisicoesEstoqueViewInner = ({ showToast, profile, filial }: { showToast
 
   const isFormOpen = !!editItem;
 
-  const formEdicaoRef = useRolarAteFormulario(isFormOpen, editItem?.id);
 
   return (
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col h-full gap-8">
@@ -93,41 +91,39 @@ const RequisicoesEstoqueViewInner = ({ showToast, profile, filial }: { showToast
         </div>
       </div>
       <AnimatePresence>
-        {isFormOpen && (
-          <motion.div ref={formEdicaoRef} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-            <div className="neu-flat rounded-2xl p-6 border border-white/5 flex flex-col gap-4">
-              <h3 className="text-sm font-bold text-gray-200">Editar Requisição</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <FormField label="Produto *" error={errors.produto_id}>
-                  <SelectBusca
-                    value={form.produto_id}
-                    onChange={v => { setForm(f => ({ ...f, produto_id: v })); clearError('produto_id'); }}
-                    placeholder="Escolha o produto"
-                    opcoes={produtos.map((p: any) => opcaoProduto(p))}
-                  />
-                </FormField>
-                <FormField label="Solicitante">
-                  <div className="neu-pressed py-2 px-3 rounded-xl text-sm text-gray-300">
-                    {editItem?.solicitante ?? '—'}
-                    {editItem?.setor_solicitante && (
-                      <span className="text-[10px] text-gray-500 ml-2 uppercase tracking-widest">{editItem.setor_solicitante}</span>
-                    )}
-                  </div>
-                </FormField>
-                <FormField label="Quantidade">
-                  <input type="number" className="neu-input py-2 px-3 rounded-xl text-sm" value={extras.qtd} onChange={e => setExtras(x => ({ ...x, qtd: e.target.value }))} placeholder="1" />
-                </FormField>
-                <FormField label="Destino">
-                  <input className="neu-input py-2 px-3 rounded-xl text-sm" value={extras.destino} onChange={e => setExtras(x => ({ ...x, destino: e.target.value }))} placeholder="Ex: Setor de Produção" />
-                </FormField>
+        <ModalFormulario
+          aberto={isFormOpen}
+          titulo="Editar Requisição"
+          onCancelar={closeForm}
+          acoes={<>
+            <NeuButtonAccent onClick={handleSave} isLoading={isSaving}><Save size={14} /> Atualizar</NeuButtonAccent>
+          </>}
+        >
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <FormField label="Produto *" error={errors.produto_id}>
+              <SelectBusca
+                value={form.produto_id}
+                onChange={v => { setForm(f => ({ ...f, produto_id: v })); clearError('produto_id'); }}
+                placeholder="Escolha o produto"
+                opcoes={produtos.map((p: any) => opcaoProduto(p))}
+              />
+            </FormField>
+            <FormField label="Solicitante">
+              <div className="neu-pressed py-2 px-3 rounded-xl text-sm text-gray-300">
+                {editItem?.solicitante ?? '—'}
+                {editItem?.setor_solicitante && (
+                  <span className="text-[10px] text-gray-500 ml-2 uppercase tracking-widest">{editItem.setor_solicitante}</span>
+                )}
               </div>
-              <div className="flex gap-3 justify-end">
-                <button onClick={closeForm} className="neu-button py-2 px-5 rounded-xl text-sm text-gray-400">Cancelar</button>
-                <NeuButtonAccent onClick={handleSave} isLoading={isSaving}><Save size={14} /> Atualizar</NeuButtonAccent>
-              </div>
-            </div>
-          </motion.div>
-        )}
+            </FormField>
+            <FormField label="Quantidade">
+              <input type="number" className="neu-input py-2 px-3 rounded-xl text-sm" value={extras.qtd} onChange={e => setExtras(x => ({ ...x, qtd: e.target.value }))} placeholder="1" />
+            </FormField>
+            <FormField label="Destino">
+              <input className="neu-input py-2 px-3 rounded-xl text-sm" value={extras.destino} onChange={e => setExtras(x => ({ ...x, destino: e.target.value }))} placeholder="Ex: Setor de Produção" />
+            </FormField>
+          </div>
+        </ModalFormulario>
       </AnimatePresence>
       <div className="neu-flat rounded-3xl p-6 border border-white/5 flex flex-col mb-6">
         <div className="overflow-x-auto main-scrollbar">

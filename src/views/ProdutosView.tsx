@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { createPortal } from 'react-dom';
 import { todayBR } from '../lib/dates';
 import type { FilialOp } from '../components/FilialSelector';
 import { useFilial } from '../contexts/FilialContext';
@@ -12,7 +11,7 @@ import { useColarImagemGlobal } from '../components/ColarImagem';
 import { BotaoModeloPlanilha } from '../components/BotaoModeloPlanilha';
 import { ImportarProdutosModal } from '../components/ImportarProdutosModal';
 import { useFetchData, dbInsert, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
-import { LoadingSpinner, EmptyState, FormField, ExportButton, NeuButtonAccent, Pagination, ProdutoThumb } from '../components/ui';
+import { LoadingSpinner, EmptyState, FormField, ExportButton, NeuButtonAccent, Pagination, ProdutoThumb, ModalFormulario } from '../components/ui';
 import { SelectBusca, type SelectBuscaGrupo } from '../components/SelectBusca';
 import type { UserProfile } from '../hooks/useUserProfile';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
@@ -1878,14 +1877,6 @@ const ProdutosViewInner = ({ showToast, filial, profile, onNavigate }: { showToa
       </div>
   );
 
-  // `editItem?.id` na dependência cobre trocar de produto com o form aberto.
-  const formRef = useRef<HTMLDivElement | null>(null);
-  useEffect(() => {
-    if (!isFormOpen) return;
-    requestAnimationFrame(() => {
-      formRef.current?.querySelector<HTMLInputElement>('input, select')?.focus();
-    });
-  }, [isFormOpen, editItem?.id]);
 
   // Heartbeat da reserva de código (migr. 498). A reserva vale 30 minutos, e a
   // ficha longa (grade da MaxLook, garantia/IMEI da TechMax) leva mais que isso
@@ -1990,184 +1981,152 @@ const ProdutosViewInner = ({ showToast, filial, profile, onNavigate }: { showToa
         </div>
       </div>
 
-      {/* Formulário em modal por cima da sidebar: aberto no fluxo da página
-          ele ficava espremido ao lado dela e virava uma pilha de seções. Portal
-          no body porque a view anima com transform, e `fixed` dentro de
-          transform se prende à view em vez da tela. z-40 deixa o toast (z-50)
-          por cima, que é onde a validação avisa o que falta. */}
-      {createPortal(
-      <AnimatePresence>
-        {isFormOpen && (
-          <motion.div
-            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4">
-            <motion.div ref={formRef} role="dialog" aria-modal="true"
-              aria-label={editItem ? 'Editar Produto' : 'Novo Produto'}
-              initial={{ scale: 0.98, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.98, opacity: 0 }}
-              className="neu-flat rounded-3xl border border-white/10 w-full max-w-[1800px] max-h-full flex flex-col overflow-hidden">
-              <header className="flex items-center justify-between gap-3 px-5 py-3 border-b border-white/10 shrink-0">
-                <h3 className="text-sm font-bold text-gray-200 truncate">
-                  {editItem ? 'Editar Produto' : 'Novo Produto'}
-                  {editItem && <span className="text-gray-500 font-normal ml-2">{editItem.nome}</span>}
-                </h3>
-                <div className="flex items-center gap-2 shrink-0">
-                  <button onClick={closeForm} className="neu-button py-2 px-5 rounded-xl text-sm text-gray-400">Cancelar</button>
-                  <NeuButtonAccent onClick={handleSave} isLoading={isSaving} disabled={origemSemOpcoes}><Save size={14} /> {editItem ? 'Atualizar' : 'Salvar'}</NeuButtonAccent>
-                </div>
-              </header>
+      <ModalFormulario
+        aberto={isFormOpen}
+        largura="xl"
+        titulo={editItem ? 'Editar Produto' : 'Novo Produto'}
+        subtitulo={editItem?.nome}
+        onCancelar={closeForm}
+        acoes={<NeuButtonAccent onClick={handleSave} isLoading={isSaving} disabled={origemSemOpcoes}><Save size={14} /> {editItem ? 'Atualizar' : 'Salvar'}</NeuButtonAccent>}
+        lateral={<>
+          <SecaoImagens
+            capaObrigatoria={ehVendavel(extras.tipo)}
+            enviarImagemSlot={enviarImagemSlot}
+            extrasErrors={extrasErrors}
+            form={form}
+            handleImagemChange={handleImagemChange}
+            handleRemoverImagem={handleRemoverImagem}
+            imagemInputRefs={imagemInputRefs}
+            imagemUploading={imagemUploading}
+            imagens={imagens}
+            imagensAviso={imagensAviso}
+          />
 
-              {/* No desktop cada coluna rola sozinha: a de imagens fica parada
-                  enquanto os campos descem. No celular as duas empilham e rola
-                  o conjunto. */}
-              <div className="flex-1 min-h-0 overflow-y-auto lg:overflow-hidden main-scrollbar flex flex-col lg:flex-row">
-                  <div className="@container flex-1 min-w-0 flex flex-col gap-5 p-3 sm:p-5 lg:overflow-y-auto main-scrollbar [&>*]:shrink-0">
-                    {/* Correção devolvida pela direção (migr. 502). Primeira coisa do
-                        formulário porque é a razão de o aluno estar nesta tela: sem o
-                        motivo à vista, "corrija o produto" não diz o que corrigir. */}
-                    {editItem?.correcao_pendente && (
-                      <div className="neu-pressed rounded-xl p-4 border border-amber-400/30 flex flex-col gap-2">
-                        <span className="text-[10px] font-black text-amber-400 uppercase tracking-widest">
-                          Precisa de correção
-                        </span>
-                        <p className="text-xs text-gray-200 leading-relaxed">{editItem.correcao_motivo}</p>
-                        <p className="text-[10px] text-gray-500 leading-snug">
-                          A direção desfez uma movimentação deste produto — o saldo já foi estornado.
-                          Corrija o que está apontado acima e salve. Quando estiver certo, encerre a
-                          pendência no botão ao lado.
-                        </p>
-                        {podeEncerrarCorrecao ? (
-                          <button type="button" onClick={encerrarCorrecao} disabled={encerrandoCorrecao}
-                            className="neu-button py-1.5 px-3 rounded-lg text-[11px] font-bold text-emerald-400 hover:bg-emerald-400/10 transition-colors self-start disabled:opacity-50">
-                            {encerrandoCorrecao ? 'Encerrando...' : 'Correção concluída'}
-                          </button>
-                        ) : (
-                          // Não é falta de permissão de tela: é segregação. Quem
-                          // encerra é quem fez, o gerente da unidade ou a direção.
-                          <p className="text-[10px] text-gray-500 leading-snug">
-                            Quem encerra esta pendência é quem fez a movimentação, o gerente da unidade
-                            ou a direção.
-                          </p>
-                        )}
-                      </div>
-                    )}
-
-                    <SecaoIdentificacao
-                      campoTipo={campoTipo}
-                      aposGrade={camposPatrimonio}
-                      errors={errors}
-                      clearError={clearError}
-                      categoriasProduto={categoriasProduto}
-                      subcategoriasProduto={subcategoriasProduto}
-                      atrLivre={atrLivre}
-                      categoriasDaFilial={categoriasDaFilial}
-                      codigoReservado={codigoReservado}
-                      escolherOrigem={escolherOrigem}
-                      exProd={exProd}
-                      extras={extras}
-                      extrasErrors={extrasErrors}
-                      filial={filial}
-                      form={form}
-                      fornecedoresOrdenados={fornecedoresOrdenados}
-                      gruposOrigem={gruposOrigem}
-                      itemCompradoSel={itemCompradoSel}
-                      itensComprados={itensComprados}
-                      reqsProntas={reqsProntas}
-                      emImplantacao={emImplantacao}
-                      modoOrigem={modoOrigem}
-                      setModoOrigem={setModoOrigem}
-                      liberarCodigo={liberarCodigo}
-                      mostraPesoConteudo={mostraPesoConteudo}
-                      nomeDestravado={nomeDestravado}
-                      origemExigida={origemExigida}
-                      origemOferecida={origemOferecida}
-                      origemSemOpcoes={origemSemOpcoes}
-                      reservaOrigem={reservaOrigem}
-                      setAtrLivre={setAtrLivre}
-                      setCodigoReservado={setCodigoReservado}
-                      setExtras={setExtras}
-                      setExtrasErrors={setExtrasErrors}
-                      setForm={setForm}
-                      setNomeDestravado={setNomeDestravado}
-                      sugerindoCodigo={sugerindoCodigo}
-                      sugerirCodigo={sugerirCodigo}
-                    />
-
-                    <SecaoPrecos
-                      custoDaCotacao={reqVinculo?.custoPrevisto != null
-                        && extras.preco_custo !== ''
-                        && extras.preco_custo === formatBRL(reqVinculo.custoPrevisto)}
-                      errors={errors}
-                      clearError={clearError}
-                      custoObrigatorio={custoObrigatorio}
-                      editItem={editItem}
-                      extras={extras}
-                      extrasErrors={extrasErrors}
-                      form={form}
-                      margemAoVivo={margemAoVivo}
-                      markupAoVivo={markupAoVivo}
-                      markupCategoria={markupCategoria}
-                      precoAbaixoDoCusto={precoAbaixoDoCusto}
-                      precoSugerido={precoSugerido}
-                      setExtras={setExtras}
-                      setExtrasErrors={setExtrasErrors}
-                      setForm={setForm}
-                    />
-
-                    <SecaoEstoque
-                      aplicarCorrecaoSaldo={aplicarCorrecaoSaldo}
-                      corrigindoSaldo={corrigindoSaldo}
-                      editItem={editItem}
-                      ehProfessor={ehProfessor}
-                      extras={extras}
-                      extrasErrors={extrasErrors}
-                      filial={filial}
-                      fracionario={fracionario}
-                      mostraPesoConteudo={mostraPesoConteudo}
-                      mostraSaldoAbertura={mostraSaldoAbertura}
-                      motivoSaldo={motivoSaldo}
-                      origemEscolhida={!!itemCompradoSel && itemCompradoSel !== SEM_COMPRA}
-                      saldoAtual={saldoAtual}
-                      saldoCorrigido={saldoCorrigido}
-                      salvandoSaldo={salvandoSaldo}
-                      setCorrigindoSaldo={setCorrigindoSaldo}
-                      setExtras={setExtras}
-                      setExtrasErrors={setExtrasErrors}
-                      setMotivoSaldo={setMotivoSaldo}
-                      setSaldoCorrigido={setSaldoCorrigido}
-                      unidadeTravada={unidadeTravada}
-                    />
-                  </div>
-
-                  {/* Imagens e etiqueta numa coluna à parte: eram os blocos mais
-                      altos da pilha e não conversam com os campos do lado. */}
-                  <aside className="@container w-full lg:w-80 shrink-0 flex flex-col gap-5 p-3 sm:p-5 pt-0 sm:pt-0 lg:pt-5 lg:pl-0 lg:overflow-y-auto main-scrollbar [&>*]:shrink-0">
-                    <SecaoImagens
-                      capaObrigatoria={ehVendavel(extras.tipo)}
-                      enviarImagemSlot={enviarImagemSlot}
-                      extrasErrors={extrasErrors}
-                      form={form}
-                      handleImagemChange={handleImagemChange}
-                      handleRemoverImagem={handleRemoverImagem}
-                      imagemInputRefs={imagemInputRefs}
-                      imagemUploading={imagemUploading}
-                      imagens={imagens}
-                      imagensAviso={imagensAviso}
-                    />
-
-                    <SecaoEtiqueta
-                      downloadLabelFor={downloadLabelFor}
-                      eanNorm={eanNorm}
-                      eanPreviewRef={eanPreviewRef}
-                      extras={extras}
-                      form={form}
-                    />
-                  </aside>
-              </div>
-            </motion.div>
-          </motion.div>
+          <SecaoEtiqueta
+            downloadLabelFor={downloadLabelFor}
+            eanNorm={eanNorm}
+            eanPreviewRef={eanPreviewRef}
+            extras={extras}
+            form={form}
+          />
+        </>}
+      >
+        {/* Correção devolvida pela direção (migr. 502). Primeira coisa do
+            formulário porque é a razão de o aluno estar nesta tela: sem o
+            motivo à vista, "corrija o produto" não diz o que corrigir. */}
+        {editItem?.correcao_pendente && (
+          <div className="neu-pressed rounded-xl p-4 border border-amber-400/30 flex flex-col gap-2">
+            <span className="text-[10px] font-black text-amber-400 uppercase tracking-widest">
+              Precisa de correção
+            </span>
+            <p className="text-xs text-gray-200 leading-relaxed">{editItem.correcao_motivo}</p>
+            <p className="text-[10px] text-gray-500 leading-snug">
+              A direção desfez uma movimentação deste produto — o saldo já foi estornado.
+              Corrija o que está apontado acima e salve. Quando estiver certo, encerre a
+              pendência no botão ao lado.
+            </p>
+            {podeEncerrarCorrecao ? (
+              <button type="button" onClick={encerrarCorrecao} disabled={encerrandoCorrecao}
+                className="neu-button py-1.5 px-3 rounded-lg text-[11px] font-bold text-emerald-400 hover:bg-emerald-400/10 transition-colors self-start disabled:opacity-50">
+                {encerrandoCorrecao ? 'Encerrando...' : 'Correção concluída'}
+              </button>
+            ) : (
+              // Não é falta de permissão de tela: é segregação. Quem
+              // encerra é quem fez, o gerente da unidade ou a direção.
+              <p className="text-[10px] text-gray-500 leading-snug">
+                Quem encerra esta pendência é quem fez a movimentação, o gerente da unidade
+                ou a direção.
+              </p>
+            )}
+          </div>
         )}
-      </AnimatePresence>,
-      document.body)}
+
+        <SecaoIdentificacao
+          campoTipo={campoTipo}
+          aposGrade={camposPatrimonio}
+          errors={errors}
+          clearError={clearError}
+          categoriasProduto={categoriasProduto}
+          subcategoriasProduto={subcategoriasProduto}
+          atrLivre={atrLivre}
+          categoriasDaFilial={categoriasDaFilial}
+          codigoReservado={codigoReservado}
+          escolherOrigem={escolherOrigem}
+          exProd={exProd}
+          extras={extras}
+          extrasErrors={extrasErrors}
+          filial={filial}
+          form={form}
+          fornecedoresOrdenados={fornecedoresOrdenados}
+          gruposOrigem={gruposOrigem}
+          itemCompradoSel={itemCompradoSel}
+          itensComprados={itensComprados}
+          reqsProntas={reqsProntas}
+          emImplantacao={emImplantacao}
+          modoOrigem={modoOrigem}
+          setModoOrigem={setModoOrigem}
+          liberarCodigo={liberarCodigo}
+          mostraPesoConteudo={mostraPesoConteudo}
+          nomeDestravado={nomeDestravado}
+          origemExigida={origemExigida}
+          origemOferecida={origemOferecida}
+          origemSemOpcoes={origemSemOpcoes}
+          reservaOrigem={reservaOrigem}
+          setAtrLivre={setAtrLivre}
+          setCodigoReservado={setCodigoReservado}
+          setExtras={setExtras}
+          setExtrasErrors={setExtrasErrors}
+          setForm={setForm}
+          setNomeDestravado={setNomeDestravado}
+          sugerindoCodigo={sugerindoCodigo}
+          sugerirCodigo={sugerirCodigo}
+        />
+
+        <SecaoPrecos
+          custoDaCotacao={reqVinculo?.custoPrevisto != null
+            && extras.preco_custo !== ''
+            && extras.preco_custo === formatBRL(reqVinculo.custoPrevisto)}
+          errors={errors}
+          clearError={clearError}
+          custoObrigatorio={custoObrigatorio}
+          editItem={editItem}
+          extras={extras}
+          extrasErrors={extrasErrors}
+          form={form}
+          margemAoVivo={margemAoVivo}
+          markupAoVivo={markupAoVivo}
+          markupCategoria={markupCategoria}
+          precoAbaixoDoCusto={precoAbaixoDoCusto}
+          precoSugerido={precoSugerido}
+          setExtras={setExtras}
+          setExtrasErrors={setExtrasErrors}
+          setForm={setForm}
+        />
+
+        <SecaoEstoque
+          aplicarCorrecaoSaldo={aplicarCorrecaoSaldo}
+          corrigindoSaldo={corrigindoSaldo}
+          editItem={editItem}
+          ehProfessor={ehProfessor}
+          extras={extras}
+          extrasErrors={extrasErrors}
+          filial={filial}
+          fracionario={fracionario}
+          mostraPesoConteudo={mostraPesoConteudo}
+          mostraSaldoAbertura={mostraSaldoAbertura}
+          motivoSaldo={motivoSaldo}
+          origemEscolhida={!!itemCompradoSel && itemCompradoSel !== SEM_COMPRA}
+          saldoAtual={saldoAtual}
+          saldoCorrigido={saldoCorrigido}
+          salvandoSaldo={salvandoSaldo}
+          setCorrigindoSaldo={setCorrigindoSaldo}
+          setExtras={setExtras}
+          setExtrasErrors={setExtrasErrors}
+          setMotivoSaldo={setMotivoSaldo}
+          setSaldoCorrigido={setSaldoCorrigido}
+          unidadeTravada={unidadeTravada}
+        />
+      </ModalFormulario>
 
       {/* Tabela */}
       {isLoading ? <LoadingSpinner /> : (error || filtered.length === 0) ? <EmptyState error={error} /> : (

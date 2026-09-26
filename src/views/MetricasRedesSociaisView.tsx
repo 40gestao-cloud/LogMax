@@ -4,7 +4,7 @@ import { motion } from 'motion/react';
 import { Instagram, Plus, Trash2, TrendingUp, TrendingDown, Loader2, Link2, ExternalLink, Check, CalendarDays, BarChart3, Music2 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useFetchData } from '../hooks/useSupabaseData';
-import { LoadingSpinner, EmptyState, NeuButtonAccent, CardContador, SecaoFormulario, AbaColorida, type CorAba } from '../components/ui';
+import { LoadingSpinner, EmptyState, NeuButtonAccent, CardContador, SecaoFormulario, AbaColorida, type CorAba, ModalFormulario } from '../components/ui';
 import { useConfirm } from '../contexts/ConfirmContext';
 import { hasSetor } from '../lib/rbac';
 import { useFilial } from '../contexts/FilialContext';
@@ -232,55 +232,52 @@ export function MetricasRedesSociaisView({ showToast, profile }: { showToast: an
       </div>
 
       {/* Formulário */}
-      {showForm && (
-        <div className="neu-flat rounded-2xl p-6 border border-white/5 flex flex-col gap-4">
-          <h3 className="text-sm font-bold text-gray-200">Novo Registro</h3>
-
-          <SecaoFormulario titulo="Plataforma e data" icon={CalendarDays} cor="amarelo">
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              {/* Filial — só aparece no modo Matriz consolidado, onde não há
-                  uma unidade ativa implícita pra gravar o registro. */}
-              {!filialAtiva && (
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-[10px] font-bold uppercase tracking-widest text-gray-500">Filial *</label>
-                  <select value={filialForm} onChange={e => setFilialForm(e.target.value)} className="neu-input rounded-xl px-3 py-2 text-sm">
-                    <option value="">— Selecione —</option>
-                    {FILIAIS_HOLDING.map(f => <option key={f} value={f}>{f}</option>)}
-                  </select>
-                </div>
-              )}
+      <ModalFormulario
+        aberto={showForm}
+        titulo="Novo Registro"
+        onCancelar={() => { setShowForm(false); setForm({ ...EMPTY_FORM }); setFilialForm(''); }}
+        acoes={<>
+          <NeuButtonAccent onClick={salvar} isLoading={saving} disabled={!filialAtiva && !filialForm}>
+            <Check size={14} /> Salvar
+          </NeuButtonAccent>
+        </>}
+      >
+        <SecaoFormulario titulo="Plataforma e data" icon={CalendarDays} cor="amarelo">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            {/* Filial — só aparece no modo Matriz consolidado, onde não há
+                uma unidade ativa implícita pra gravar o registro. */}
+            {!filialAtiva && (
               <div className="flex flex-col gap-1.5">
-                <label className="text-[10px] font-bold uppercase tracking-widest text-gray-500">Plataforma</label>
-                <div className="flex gap-2">
-                  {PLATAFORMAS.map(p => (
-                    <AbaColorida key={p} label={p} icon={PLAT_ICONE[p]} cor={PLAT_COR[p]}
-                      ativa={form.plataforma === p}
-                      onClick={() => setForm(f => ({ ...f, plataforma: p }))} />
-                  ))}
-                </div>
+                <label className="text-[10px] font-bold uppercase tracking-widest text-gray-500">Filial *</label>
+                <select value={filialForm} onChange={e => setFilialForm(e.target.value)} className="neu-input rounded-xl px-3 py-2 text-sm">
+                  <option value="">— Selecione —</option>
+                  {FILIAIS_HOLDING.map(f => <option key={f} value={f}>{f}</option>)}
+                </select>
               </div>
-              <div className="flex flex-col gap-1.5">
-                <label className="text-[10px] font-bold uppercase tracking-widest text-gray-500">Data</label>
-                <input type="date" value={form.data_registro} onChange={e => setForm(f => ({ ...f, data_registro: e.target.value }))} className="neu-input rounded-xl px-3 py-2 text-sm" />
+            )}
+            <div className="flex flex-col gap-1.5">
+              <label className="text-[10px] font-bold uppercase tracking-widest text-gray-500">Plataforma</label>
+              <div className="flex gap-2">
+                {PLATAFORMAS.map(p => (
+                  <AbaColorida key={p} label={p} icon={PLAT_ICONE[p]} cor={PLAT_COR[p]}
+                    ativa={form.plataforma === p}
+                    onClick={() => setForm(f => ({ ...f, plataforma: p }))} />
+                ))}
               </div>
             </div>
-          </SecaoFormulario>
-
-          <SecaoFormulario titulo="Métricas do dia" icon={BarChart3} cor="verde">
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
-              {METRICAS.map(campoMetrica)}
+            <div className="flex flex-col gap-1.5">
+              <label className="text-[10px] font-bold uppercase tracking-widest text-gray-500">Data</label>
+              <input type="date" value={form.data_registro} onChange={e => setForm(f => ({ ...f, data_registro: e.target.value }))} className="neu-input rounded-xl px-3 py-2 text-sm" />
             </div>
-          </SecaoFormulario>
-
-          <div className="flex gap-3 justify-end">
-            <button onClick={() => { setShowForm(false); setForm({ ...EMPTY_FORM }); setFilialForm(''); }}
-              className="neu-button py-2 px-5 rounded-xl text-sm text-gray-400">Cancelar</button>
-            <NeuButtonAccent onClick={salvar} isLoading={saving} disabled={!filialAtiva && !filialForm}>
-              <Check size={14} /> Salvar
-            </NeuButtonAccent>
           </div>
-        </div>
-      )}
+        </SecaoFormulario>
+
+        <SecaoFormulario titulo="Métricas do dia" icon={BarChart3} cor="verde">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
+            {METRICAS.map(campoMetrica)}
+          </div>
+        </SecaoFormulario>
+      </ModalFormulario>
 
       {/* Links das redes sociais — 1 por plataforma, configurado uma vez por
           filial (não redigitado a cada registro de métrica). Só em modo filial. */}
