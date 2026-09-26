@@ -616,7 +616,7 @@ export const DocumentosView = ({ showToast, profile }: { showToast: any; profile
       )}
 
       <div className={`grid grid-cols-2 gap-4 shrink-0 ${podePublicar && !ehAdmin ? 'lg:grid-cols-4' : 'lg:grid-cols-3'}`}>
-        <CardContador label="Documentos" value={resumo.total} tom="neutro" />
+        <CardContador label="Documentos" value={resumo.total} tom="azul" />
         <CardContador label="Publicados" value={resumo.publicados} tom="verde"
           onClick={() => setFiltro(f => f === 'publicados' ? 'todos' : 'publicados')} ativo={filtro === 'publicados'} />
         {podePublicar && (

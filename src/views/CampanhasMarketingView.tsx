@@ -4,9 +4,9 @@ import React, { useMemo, useState } from 'react';
 import type { FilialOp } from '../components/FilialSelector';
 import { useFilial } from '../contexts/FilialContext';
 import { motion, AnimatePresence } from 'motion/react';
-import { Plus, X, Trash2, Edit3, TrendingUp, TrendingDown, Target, Calendar, DollarSign, Package, Send, CheckCircle, XCircle, Search } from 'lucide-react';
+import { Plus, X, Trash2, Edit3, TrendingUp, TrendingDown, Target, Calendar, DollarSign, Package, Send, CheckCircle, XCircle, Search, Megaphone, CalendarClock } from 'lucide-react';
 import { useFetchData, dbInsert, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
-import { LoadingSpinner, EmptyState, NeuButtonAccent, CardContador, type TomContador, corDoStatus } from '../components/ui';
+import { LoadingSpinner, EmptyState, NeuButtonAccent, CardContador, SecaoFormulario, type TomContador, corDoStatus } from '../components/ui';
 import { formatBRL, parseBRL, handleMoneyKeyDown } from '../lib/viewUtils';
 import { hasSetor } from '../lib/rbac';
 import { supabase } from '../lib/supabase';
@@ -378,10 +378,10 @@ const CampanhasMarketingViewInner = ({ showToast, profile, filial }: { showToast
   const receitaTotal   = (roi ?? []).reduce((s: number, r: RoiRow) => s + Number(r.receita || 0), 0);
 
   const kpis = [
-    { tom: 'neutro' as TomContador, label: 'Total de Campanhas',  value: String(campanhas.length) },
+    { tom: 'azul' as TomContador, label: 'Total de Campanhas',  value: String(campanhas.length) },
     { tom: 'verde' as TomContador, label: 'Ativas',              value: String(ativas) },
     { tom: 'amarelo' as TomContador, label: 'Orçamento × Gasto',   value: `${fmtBRL(gastoTotal)} / ${fmtBRL(orcamentoTotal)}` },
-    { tom: 'dourado' as TomContador, label: 'Receita Atribuída',   value: fmtBRL(receitaTotal) },
+    { tom: 'roxo' as TomContador, label: 'Receita Atribuída',   value: fmtBRL(receitaTotal) },
   ];
 
   return (
@@ -431,7 +431,9 @@ const CampanhasMarketingViewInner = ({ showToast, profile, filial }: { showToast
                 <h3 className="text-sm font-bold text-gray-300">{editing ? 'Editar Campanha' : 'Nova Campanha'}</h3>
                 <button onClick={resetForm} className="modal-close-btn"><X size={16} /></button>
               </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              <div className="flex flex-col gap-4">
+              <SecaoFormulario titulo="Identificação" icon={Megaphone} cor="amarelo">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 <div className="flex flex-col gap-1.5 lg:col-span-2">
                   <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Nome *</label>
                   <input type="text" value={form.nome} onChange={e => setForm(f => ({ ...f, nome: e.target.value }))}
@@ -445,6 +447,14 @@ const CampanhasMarketingViewInner = ({ showToast, profile, filial }: { showToast
                   </select>
                 </div>
                 <div className="flex flex-col gap-1.5">
+                  <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Unidade</label>
+                  <div className="neu-pressed rounded-xl px-3 py-2.5 text-sm text-accent font-semibold border border-white/5">{filial}</div>
+                </div>
+              </div>
+              </SecaoFormulario>
+              <SecaoFormulario titulo="Período e orçamento" icon={CalendarClock} cor="azul">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div className="flex flex-col gap-1.5">
                   <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Início *</label>
                   <input type="date" value={form.data_inicio} onChange={e => setForm(f => ({ ...f, data_inicio: e.target.value }))}
                     className="neu-input rounded-xl px-3 py-2.5 text-sm" />
@@ -455,27 +465,29 @@ const CampanhasMarketingViewInner = ({ showToast, profile, filial }: { showToast
                     className="neu-input rounded-xl px-3 py-2.5 text-sm" />
                 </div>
                 <div className="flex flex-col gap-1.5">
-                  <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Unidade</label>
-                  <div className="neu-pressed rounded-xl px-3 py-2.5 text-sm text-accent font-semibold border border-white/5">{filial}</div>
-                </div>
-                <div className="flex flex-col gap-1.5">
                   <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Orçamento (R$)</label>
                   <input type="text" inputMode="numeric" value={form.orcamento}
                     onChange={e => setForm(f => ({ ...f, orcamento: formatBRL(e.target.value) }))}
                     onKeyDown={handleMoneyKeyDown}
                     className="neu-input rounded-xl px-3 py-2.5 text-sm" placeholder="0,00" />
                 </div>
-                <div className="flex flex-col gap-1.5 lg:col-span-3">
+              </div>
+              </SecaoFormulario>
+              <SecaoFormulario titulo="Objetivo e descrição" icon={Target} cor="verde">
+              <div className="grid grid-cols-1 gap-4">
+                <div className="flex flex-col gap-1.5 ">
                   <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Objetivo</label>
                   <input type="text" value={form.objetivo} onChange={e => setForm(f => ({ ...f, objetivo: e.target.value }))}
                     className="neu-input rounded-xl px-3 py-2.5 text-sm" placeholder="Ex: aumentar ticket médio em 15%" />
                 </div>
-                <div className="flex flex-col gap-1.5 lg:col-span-3">
+                <div className="flex flex-col gap-1.5 ">
                   <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Descrição</label>
                   <textarea value={form.descricao} rows={2} onChange={e => setForm(f => ({ ...f, descricao: e.target.value }))}
                     className="neu-input rounded-xl px-3 py-2.5 text-sm resize-none"
                     placeholder="Detalhes pra equipe (canais, peças, calendário, etc.)" />
                 </div>
+              </div>
+              </SecaoFormulario>
               </div>
               <div className="flex justify-end gap-2 mt-5">
                 <button onClick={resetForm} className="neu-button rounded-xl px-4 py-2 text-xs font-bold uppercase tracking-widest text-gray-400 hover:text-white">Cancelar</button>

@@ -89,10 +89,10 @@ export const RelatoriosVendasView = ({ showToast: _showToast }: any) => {
   };
 
   const kpis = [
-    { tom: 'neutro' as TomContador, label: 'Orçamentos Emitidos', value: totalOrcamentos, sub: 'no total', warn: false },
+    { tom: 'azul' as TomContador, label: 'Orçamentos Emitidos', value: totalOrcamentos, sub: 'no total', warn: false },
     { tom: 'amarelo' as TomContador, label: 'Pedidos em Aberto', value: pedidosAbertos, sub: 'em andamento', warn: pedidosAbertos > 0 },
     { tom: 'verde' as TomContador, label: 'Vendas Concluídas', value: vendasConcluidas.length, sub: 'no total', warn: false },
-    { tom: 'dourado' as TomContador, label: 'Valor Total Vendido', value: `R$ ${valorTotalVendido.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, sub: 'acumulado', warn: false },
+    { tom: 'roxo' as TomContador, label: 'Valor Total Vendido', value: `R$ ${valorTotalVendido.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, sub: 'acumulado', warn: false },
   ];
 
   return (

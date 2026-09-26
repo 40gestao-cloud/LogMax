@@ -101,10 +101,10 @@ export const RelatoriosComprasView = ({ showToast: _showToast }: any) => {
   };
 
   const kpis = [
-    { tom: 'neutro' as TomContador, label: 'Total Requisições', value: totalReq, sub: 'registradas', warn: false },
+    { tom: 'verde' as TomContador, label: 'Total Requisições', value: totalReq, sub: 'registradas', warn: false },
     { tom: 'amarelo' as TomContador, label: 'Pendentes de Aprovação', value: pendentesReq, sub: 'aguardando', warn: pendentesReq > 0 },
     { tom: 'azul' as TomContador, label: 'Pedidos em Aberto', value: pedidosAbertos, sub: 'em andamento', warn: false },
-    { tom: 'dourado' as TomContador, label: 'Valor Total em Pedidos', value: `R$ ${valorTotalPedidos.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, sub: 'acumulado', warn: false },
+    { tom: 'roxo' as TomContador, label: 'Valor Total em Pedidos', value: `R$ ${valorTotalPedidos.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, sub: 'acumulado', warn: false },
   ];
 
   return (

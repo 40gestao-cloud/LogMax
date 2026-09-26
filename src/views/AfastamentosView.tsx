@@ -276,7 +276,7 @@ const AfastamentosViewInner = ({ showToast, profile, filial }: { showToast: any;
     .reduce((s: number, a: any) => s + diasNoPeriodo(a.data_inicio, a.data_fim), 0);
 
   const kpis = [
-    { tom: 'neutro' as TomContador, label: 'Total',                value: afastamentos.length, warn: false },
+    { tom: 'verde' as TomContador, label: 'Total',                value: afastamentos.length, warn: false },
     { tom: 'azul' as TomContador, label: 'Vigentes hoje',        value: ativosHoje,          warn: false },
     { tom: 'amarelo' as TomContador, label: 'Aguardando Matriz',    value: aguardandoMatriz,    warn: aguardandoMatriz > 0 },
     { tom: 'roxo' as TomContador, label: 'Dias afastados (mês)', value: totalDiasMes,        warn: false },

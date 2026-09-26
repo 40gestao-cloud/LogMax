@@ -2679,8 +2679,8 @@ export function MatrizCapitalView({
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <CardContador label="Capital consolidado" value={BRL(totalCapital)} tom="dourado" sub="3 unidades operacionais" />
-        <CardContador label="Saldo livre total" value={BRL(totalSaldo)} tom={totalSaldo < 0 ? 'vermelho' : 'verde'} />
+        <CardContador label="Capital consolidado" value={BRL(totalCapital)} tom="azul" sub="3 unidades operacionais" />
+        <CardContador label="Saldo livre total" value={BRL(totalSaldo)} tom={totalSaldo < 0 ? 'laranja' : 'verde'} />
         <CardContador label="Empréstimos pendentes" value={pendentesCount} tom="amarelo"
           onClick={pendentesCount > 0 ? () => setTab('emprestimos') : undefined} />
         <CardContador label="Unidades bloqueadas" value={bloqueadasCount} tom="vermelho"

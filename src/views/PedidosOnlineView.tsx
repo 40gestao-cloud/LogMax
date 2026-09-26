@@ -394,7 +394,7 @@ const PedidosOnlineInner = ({ showToast, profile, filial }: { showToast: any; pr
 
   const kpis = [
     { tom: 'amarelo' as TomContador, label: 'Na fila',        value: novos.length,        warn: novos.length > 0 },
-    { tom: 'dourado' as TomContador, label: 'Valor em fila',  value: brl(emFila),         warn: false },
+    { tom: 'roxo' as TomContador, label: 'Valor em fila',  value: brl(emFila),         warn: false },
     { tom: 'verde' as TomContador, label: 'Confirmados',    value: confirmados.length,  warn: false },
     { tom: 'azul' as TomContador, label: 'Na vitrine',     value: publicados.length,   warn: publicados.length === 0 },
     { tom: cfg?.aberta ? 'verde' : 'vermelho' as TomContador, label: 'Loja',           value: cfg?.aberta ? 'Aberta' : 'Fechada', warn: !cfg?.aberta },

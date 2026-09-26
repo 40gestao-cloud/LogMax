@@ -2,12 +2,12 @@ import React, { useState, useEffect, useMemo } from 'react';
 import type { FilialOp } from '../components/FilialSelector';
 import { useFilial } from '../contexts/FilialContext';
 import { motion, AnimatePresence } from 'motion/react';
-import { Plus, X, Clock, CheckCircle2, XCircle, Archive, FileDown, Sheet, Trash2, ImagePlus, ExternalLink, Send, Edit3, Sparkles, Copy, Loader2, Search, Maximize2, Presentation, ChevronDown } from 'lucide-react';
+import { Plus, X, Clock, CheckCircle2, XCircle, Archive, FileDown, Sheet, Trash2, ImagePlus, ExternalLink, Send, Edit3, Sparkles, Copy, Loader2, Search, Maximize2, Presentation, ChevronDown, Package, DollarSign, CalendarClock, Megaphone } from 'lucide-react';
 import { useFetchData, dbInsert, dbDelete } from '../hooks/useSupabaseData';
 import { supabase } from '../lib/supabase';
 import { notificarSetor } from '../lib/notificar';
 import { freshToken, lerJsonDaApi } from '../lib/authFetch';
-import { LoadingSpinner, EmptyState, NeuButtonAccent, ExportButton, CardContador, type TomContador, corDoStatus } from '../components/ui';
+import { LoadingSpinner, EmptyState, NeuButtonAccent, ExportButton, CardContador, SecaoFormulario, type TomContador, corDoStatus } from '../components/ui';
 import { exportToPDF, exportToExcel, formatBRL, parseBRL, handleMoneyKeyDown } from '../lib/viewUtils';
 import { ehPrestado } from '../lib/naturezaServico';
 import {
@@ -311,11 +311,11 @@ const PromocoesMarketingViewInner = ({ showToast, profile, filial }: { showToast
   const encerradas = promocoes.filter((p: any) => p.status === 'Encerrada' || p.status === 'Expirada').length;
 
   const kpis = [
-    { tom: 'neutro' as TomContador, label: 'Total de Campanhas',     value: promocoes.length, warn: false },
+    { tom: 'azul' as TomContador, label: 'Total de Campanhas',     value: promocoes.length, warn: false },
     { tom: 'amarelo' as TomContador, label: 'Com o Financeiro',       value: comFinanceiro,    warn: comFinanceiro > 0 },
     { tom: 'laranja' as TomContador, label: 'Com o gerente',          value: comGerente,       warn: comGerente > 0 },
     { tom: 'verde' as TomContador, label: 'Em Vigor',               value: aprovadas,        warn: false },
-    { tom: 'neutro' as TomContador, label: 'Encerradas',             value: encerradas,       warn: false },
+    { tom: 'roxo' as TomContador, label: 'Encerradas',             value: encerradas,       warn: false },
   ];
 
   const handleProductChange = (id: string) => {
@@ -684,7 +684,9 @@ const PromocoesMarketingViewInner = ({ showToast, profile, filial }: { showToast
               <h3 className="text-sm font-bold text-gray-300">Nova Proposta de Promoção</h3>
               <button onClick={() => setShowForm(false)} className="w-7 h-7 neu-button rounded-lg flex items-center justify-center text-gray-500 hover:text-white"><X size={14} /></button>
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div className="flex flex-col gap-4">
+            <SecaoFormulario titulo="Produto ou serviço" icon={Package} cor="amarelo">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="flex flex-col gap-1.5">
                 <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Produto</label>
                 <SearchableSelect
@@ -703,6 +705,10 @@ const PromocoesMarketingViewInner = ({ showToast, profile, filial }: { showToast
                   placeholder="Digite para buscar serviço…"
                 />
               </div>
+            </div>
+            </SecaoFormulario>
+            <SecaoFormulario titulo="Preços" icon={DollarSign} cor="vermelho">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div className="flex flex-col gap-1.5">
                 <label htmlFor="promo-preco-atual" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Preço de Venda Atual</label>
                 <input id="promo-preco-atual" type="text" value={form.preco_atual} readOnly
@@ -720,6 +726,10 @@ const PromocoesMarketingViewInner = ({ showToast, profile, filial }: { showToast
                   onKeyDown={handleMoneyKeyDown}
                   className="neu-input rounded-xl px-3 py-2.5 text-sm" placeholder="0,00" />
               </div>
+            </div>
+            </SecaoFormulario>
+            <SecaoFormulario titulo="Período" icon={CalendarClock} cor="azul">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="flex flex-col gap-1.5">
                 <label htmlFor="promo-data-inicio" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Início da Campanha</label>
                 <input id="promo-data-inicio" type="date" value={form.data_inicio} onChange={e => setForm((f: any) => ({ ...f, data_inicio: e.target.value }))}
@@ -731,6 +741,10 @@ const PromocoesMarketingViewInner = ({ showToast, profile, filial }: { showToast
                   className="neu-input rounded-xl px-3 py-2.5 text-sm" />
                 <span className="text-[10px] text-gray-500">É o prazo que devolve o preço: sem ele a promoção nunca encerra.</span>
               </div>
+            </div>
+            </SecaoFormulario>
+            <SecaoFormulario titulo="Descrição e campanha" icon={Megaphone} cor="verde">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="flex flex-col gap-1.5">
                 <label htmlFor="promo-descricao" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Descrição da Promoção</label>
                 <input id="promo-descricao" type="text" value={form.descricao} onChange={e => setForm((f: any) => ({ ...f, descricao: e.target.value }))}
@@ -749,6 +763,8 @@ const PromocoesMarketingViewInner = ({ showToast, profile, filial }: { showToast
                     ))}
                 </select>
               </div>
+            </div>
+            </SecaoFormulario>
             </div>
             <div className="flex justify-between items-center mt-5 gap-2">
               <button

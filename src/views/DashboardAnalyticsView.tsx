@@ -297,7 +297,7 @@ export const DashboardAnalyticsView = ({ profile }: { profile?: UserProfile | nu
           sub={`${filteredCP.length} lançamento(s)`} onClick={alternar('despesa')} ativo={expandedKpi === 'despesa'} />
         <CardContador label="Saldo" value={BRL(saldoPeriodo)} tom={saldoPeriodo < 0 ? 'vermelho' : 'azul'}
           sub="Receita − despesas" />
-        <CardContador label="Pedidos de compra" value={filteredPed.length} tom="neutro"
+        <CardContador label="Pedidos de compra" value={filteredPed.length} tom="azul"
           sub={ordensNovas > 0 ? `${ordensNovas} hoje` : 'Nenhum hoje'} onClick={alternar('ordens')} ativo={expandedKpi === 'ordens'} />
         <CardContador label="Estoque crítico" value={estoqueCriticoN} tom="laranja"
           sub="No mínimo ou abaixo" onClick={alternar('estoque')} ativo={expandedKpi === 'estoque'} />

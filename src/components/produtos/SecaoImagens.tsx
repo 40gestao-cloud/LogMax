@@ -1,7 +1,7 @@
 import type React from 'react';
 import { AlertTriangle, ImagePlus, Loader2, X as XIcon } from 'lucide-react';
 import { ColarImagem } from '../ColarImagem';
-import { ProdutoThumb } from '../ui';
+import { ProdutoThumb, SecaoFormulario } from '../ui';
 import { PRODUTO_IMAGEM_ACCEPT, PRODUTO_IMAGEM_MAX_SLOTS, PRODUTO_IMAGEM_RES_IDEAL } from '../../lib/produtoImagem';
 import { type FormProduto } from './produtoFormComum';
 
@@ -24,11 +24,8 @@ export function SecaoImagens({
 }) {
   return (
     <>
-      {/* Imagens do produto — capa + até 2 extras */}
-      <div>
-        <p className="text-[10px] text-gray-600 uppercase tracking-widest font-bold mb-3 flex items-center gap-2">
-          <ImagePlus size={12} /> Imagens do produto (até {PRODUTO_IMAGEM_MAX_SLOTS}){capaObrigatoria ? " — capa obrigatória *" : ""}
-        </p>
+      <SecaoFormulario titulo="Imagens do produto" icon={ImagePlus} cor="laranja"
+        extra={`Até ${PRODUTO_IMAGEM_MAX_SLOTS}${capaObrigatoria ? ' · capa obrigatória *' : ''}`}>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           {imagens.map((url, slotIdx) => (
             <div key={slotIdx}
@@ -51,11 +48,11 @@ export function SecaoImagens({
                   type="button"
                   onClick={() => imagemInputRefs.current[slotIdx]?.click()}
                   disabled={imagemUploading === slotIdx}
-                  className="neu-button py-1.5 px-3 rounded-xl text-[11px] font-bold text-gray-300 hover:text-accent transition-colors flex items-center gap-1.5 disabled:opacity-60 disabled:cursor-not-allowed"
+                  className="btn-solido btn-solido--laranja !py-1.5 !px-3 !text-[11px]"
                 >
                   {imagemUploading === slotIdx
                     ? <><Loader2 size={11} className="animate-spin" /> Enviando...</>
-                    : <><ImagePlus size={11} /> {url ? 'Trocar' : 'Selecionar'}</>}
+                    : <><ImagePlus size={11} /> {url ? 'Trocar' : 'Adicionar'}</>}
                 </button>
                 {url && imagemUploading !== slotIdx && (
                   <button
@@ -87,7 +84,7 @@ export function SecaoImagens({
         <p className="text-[11px] text-gray-500 mt-2">
           JPG, PNG ou WEBP · mínimo {PRODUTO_IMAGEM_RES_IDEAL} px · Ctrl+V cola a imagem copiada
         </p>
-      </div>
+      </SecaoFormulario>
     </>
   );
 }

@@ -1,10 +1,10 @@
 import { CondicaoCompra } from '../components/CondicaoCompra';
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Plus, Save, Check, X, ShoppingBag, MessageSquare, Send, Loader2, Search, GitCompare, Award, RotateCcw, Ban, CornerUpLeft, Pencil, AlertTriangle, Copy } from 'lucide-react';
+import { Plus, Save, Check, X, ShoppingBag, MessageSquare, Send, Loader2, Search, GitCompare, Award, RotateCcw, Ban, CornerUpLeft, Pencil, AlertTriangle, Copy, Package, Truck, DollarSign, CalendarClock, MessageSquareText } from 'lucide-react';
 import { HistoricoOperacoes } from '../components/HistoricoOperacoes';
 import { useFetchData, dbInsert, dbUpdate } from '../hooks/useSupabaseData';
-import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent, StatusBadge, Pagination, SelecioneUnidade, FilaDeTrabalho, TextoModal, AbaComContador } from '../components/ui';
+import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent, StatusBadge, Pagination, SelecioneUnidade, FilaDeTrabalho, TextoModal, AbaComContador, SecaoFormulario } from '../components/ui';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import { todayBR } from '../lib/dates';
 import { useFormValidation, formatBRL, parseBRL, handleMoneyKeyDown, qtdBR } from '../lib/viewUtils';
@@ -219,50 +219,51 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode, onNavigate }: { s
   const [errosExtras, setErrosExtras] = useState<{ valor_total?: string; validade?: string }>({});
   const { errors, validate, clearError, setErrors } = useFormValidation(form);
 
-  // Trava de trabalho (migr. 537) — chave é requisição+fornecedor, não a
-  // requisição inteira: dois alunos cotando fornecedores DIFERENTES para o
-  // mesmo item seguem em paralelo (é a comparação de preço que a tela existe
-  // para fazer); a chave composta só impede os dois cotando o MESMO
-  // fornecedor, que é trabalho repetido.
-  const chaveReserva = form.requisicao_id && form.fornecedor_id
-    ? `${form.requisicao_id}:${form.fornecedor_id}` : null;
+  // Trava de trabalho (migr. 537) — a chave é o ITEM (a requisição), não mais
+  // requisição+fornecedor: o professor não quer dois alunos apresentando
+  // cotação do mesmo item, nem escolhendo fornecedores diferentes. A reserva
+  // nasce assim que o item é escolhido, antes até do fornecedor.
+  const chaveReserva = form.requisicao_id || null;
   const reserva = useReservaTrabalho('cotacao', chaveReserva, filial);
 
-  // Quem mais está cotando cada fornecedor NESTA requisição — para travar as
-  // opções do select antes do clique, não só depois. Consulta simples (não é
-  // o hook de cima, que só cuida da chave ATIVA) e realtime por requisição.
-  const [reservasDaReq, setReservasDaReq] = useState<Record<string, { usuario_id: string; usuario_nome: string }>>({});
+  // Quem está cotando cada item AGORA — para travar as opções no próprio
+  // dropdown de requisição, antes do clique, não só depois de escolher. A
+  // chave da reserva virou o id puro da requisição, então aqui é só ler tudo
+  // que está ativo no escopo 'cotacao', sem prefixo.
+  const [reservasPorItem, setReservasPorItem] = useState<Record<string, { usuario_id: string; usuario_nome: string }>>({});
   useEffect(() => {
-    if (!supabase || !form.requisicao_id) { setReservasDaReq({}); return; }
-    const prefixo = `${form.requisicao_id}:`;
+    // Só com o formulário aberto e por unidade: é o único lugar que pinta o
+    // cadeado. Ligado a tela inteira, cada reserva de qualquer aluno faria a
+    // turma toda reler a tabela ao mesmo tempo (a manada de 15/09).
+    if (!supabase || !showForm || !filial) { setReservasPorItem({}); return; }
     // Evento, vencimento e janela de releitura moram em `acompanharReservas`:
     // renovação de colega não relê, e o cadeado vencido some pela conferência
     // local do prazo, sem F5.
     const acompanhamento = acompanharReservas<ReservaLinha>({
-      nome: 'cotacao_reservas',
+      nome: 'cotacao_reservas_itens',
       ler: async () => {
         // `expira_em > agora` é obrigatório: a reserva morre pelo relógio, e
         // relógio não emite evento. Sem este filtro, quem fechou o notebook
-        // deixaria o fornecedor travado na tela dos colegas para sempre — e
+        // deixaria o item travado na tela dos colegas para sempre — e
         // travado é mentira, porque o banco liberaria a reserva na hora.
         const { data, error } = await supabase!.from('trabalho_reservas')
           .select(RESERVA_COLUNAS)
           .eq('escopo', 'cotacao')
-          .like('chave', `${prefixo}%`)
+          .eq('filial', filial)
           .gt('expira_em', new Date().toISOString());
         return error ? null : (data ?? []) as ReservaLinha[];
       },
-      relevante: r => r.escopo === 'cotacao' && String(r.chave ?? '').startsWith(prefixo),
+      relevante: r => r.escopo === 'cotacao' && r.filial === filial,
       aoMudar: linhas => {
         const mapa: Record<string, { usuario_id: string; usuario_nome: string }> = {};
         for (const r of linhas) {
-          mapa[String(r.chave).slice(prefixo.length)] = { usuario_id: r.usuario_id, usuario_nome: r.usuario_nome };
+          mapa[String(r.chave)] = { usuario_id: r.usuario_id, usuario_nome: r.usuario_nome };
         }
-        setReservasDaReq(mapa);
+        setReservasPorItem(mapa);
       },
     });
     return () => acompanhamento.parar();
-  }, [form.requisicao_id]);
+  }, [showForm, filial]);
 
   // A requisição do formulário aberto. O `data_necessidade` dela é o alvo do
   // prazo que o fornecedor promete — sem ele na tela, a data da proposta era
@@ -694,10 +695,11 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode, onNavigate }: { s
     forn: fornecedores.find((f: any) => f.id === c.fornecedor_id),
   }));
 
-  // Agrupa cotações por requisição para mostrar propostas concorrentes.
-  // Boa prática de compras: coletar >=3 propostas por requisição antes de
-  // aprovar. Trata Cancelado/Negado como propostas históricas — aparecem
-  // no modal de comparação, mas não contam pro aviso soft.
+  // Agrupa cotações por requisição — histórico (inclusive de antes desta
+  // regra, quando um item podia levar mais de uma proposta) para o modal de
+  // comparação e para "Gerar pedidos". Cotação hoje é de um aluno só por
+  // item (o dropdown de "Nova Cotação" tira da lista quem já tem proposta
+  // viva), mas o mapa segue geral porque dado antigo pode ter mais de uma.
   const propostasPorRequisicao = useMemo(() => {
     const map = new Map<string, any[]>();
     todasCotacoes.forEach((c: any) => {
@@ -712,8 +714,6 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode, onNavigate }: { s
     });
     return map;
   }, [todasCotacoes, requisicoes, fornecedores]);
-  const contarVivos = (reqId: string) =>
-    (propostasPorRequisicao.get(reqId) ?? []).filter((c: any) => STATUS_VIVOS.has(c.status)).length;
 
   // Fornecedores que JÁ têm proposta viva nesta requisição (migr. 538). É
   // situação diferente do cadeado da 537: aquele é "alguém está digitando
@@ -760,13 +760,16 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode, onNavigate }: { s
   // `useOpcoesEstaveis`). Fornecedor leva junto as duas travas porque elas é
   // que mudam o texto do <option> — congelar só o array de nomes deixaria o
   // rótulo "🔒 fulano está cotando" aparecendo e sumindo com o popup aberto.
-  const selReq = useOpcoesEstaveis(requisicoesParaCotar);
+  const opcoesReq = useMemo(
+    () => ({ ...requisicoesParaCotar, reservas: reservasPorItem }),
+    [requisicoesParaCotar, reservasPorItem]);
+  const selReq = useOpcoesEstaveis(opcoesReq);
   const opcoesPJ = useMemo(
-    () => ({ grupos: fornecedoresPJ, jaCotados: fornecedoresJaCotados, reservas: reservasDaReq }),
-    [fornecedoresPJ, fornecedoresJaCotados, reservasDaReq]);
+    () => ({ grupos: fornecedoresPJ, jaCotados: fornecedoresJaCotados }),
+    [fornecedoresPJ, fornecedoresJaCotados]);
   const opcoesPF = useMemo(
-    () => ({ grupos: fornecedoresPF, jaCotados: fornecedoresJaCotados, reservas: reservasDaReq }),
-    [fornecedoresPF, fornecedoresJaCotados, reservasDaReq]);
+    () => ({ grupos: fornecedoresPF, jaCotados: fornecedoresJaCotados }),
+    [fornecedoresPF, fornecedoresJaCotados]);
   const selPJ = useOpcoesEstaveis(opcoesPJ);
   const selPF = useOpcoesEstaveis(opcoesPF);
 
@@ -848,18 +851,8 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode, onNavigate }: { s
     // O select já vem com a opção travada, mas o banco é quem decide de
     // verdade: sem esta checagem no Salvar, o cadeado da tela é decoração.
     if (reserva.travado) {
-      showToast(`${reserva.dono?.usuario_nome} já está cotando este fornecedor para esta requisição.`, 'error');
+      showToast(`${reserva.dono?.usuario_nome} já está cotando este item.`, 'error');
       return;
-    }
-    // Aviso soft: recomendado ter >=3 propostas por requisição antes do envio.
-    // Bloqueio hard atrapalharia compra urgente; então só confirma.
-    const vivosAtuais = contarVivos(form.requisicao_id);
-    if (vivosAtuais < 2) {
-      const ordinal = vivosAtuais === 0 ? '1ª' : '2ª';
-      const ok = await confirm(
-        `Esta será a ${ordinal} proposta para esta requisição. Boa prática de compras é coletar pelo menos 3 propostas antes de enviar ao Financeiro. Deseja enviar assim mesmo?`
-      );
-      if (!ok) return;
     }
     setIsSaving(true);
     showToast('Enviando cotação ao Financeiro...', 'info', false);
@@ -886,7 +879,7 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode, onNavigate }: { s
       });
       inserirCotacaoLocal(saved ?? { id: Date.now(), ...form, ...extras, status: 'Aguardando Financeiro' });
       closeForm();
-      showToast('Cotação enviada. O Financeiro decide em Financeiro → Aprovações de cotação; enquanto isso dá para cadastrar outra proposta para a mesma requisição.', 'success', true);
+      showToast('Cotação enviada. O Financeiro decide em Financeiro → Aprovações de cotação.', 'success', true);
 
       // Notifica setor financeiro.
       await notificarSetor({
@@ -1707,8 +1700,9 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode, onNavigate }: { s
                       Todas as requisições aprovadas já têm proposta.
                     </p>
                   )}
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    <FormField label="Requisição *" error={errors.requisicao_id}>
+                  <SecaoFormulario titulo="Item a cotar" icon={Package} cor="amarelo">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <FormField label="Requisição *" error={errors.requisicao_id} className="md:col-span-2">
                       <SelectBusca
                         value={form.requisicao_id}
                         error={undefined}
@@ -1716,21 +1710,36 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode, onNavigate }: { s
                         onAbrir={selReq.handlers.onMouseDown}
                         onFechar={selReq.soltar}
                         onChange={v => { selReq.soltar(); setForm(f => ({ ...f, requisicao_id: v })); clearError('requisicao_id'); }}
-                        grupos={[
-                          { label: 'Ainda sem cotação', opcoes: selReq.opcoes.pendentes.map(({ r }) => ({
-                            value: r.id, label: r.item ?? '—', sub: rotuloQtdReq(r), hint: numeroRequisicao(r),
-                          })) },
-                          // Aprovada num grupo só dela: o motivo é o do grupo, e
-                          // repetir a frase em cada linha virava ruído.
-                          { label: 'Já cotadas — pode cotar de novo', opcoes: selReq.opcoes.cotadas.filter(x => !x.aprovada).map(({ r, vivas }) => ({
-                            value: r.id, label: r.item ?? '—', sub: rotuloQtdReq(r), hint: numeroRequisicao(r),
-                            tag: { texto: `${vivas} proposta${vivas === 1 ? '' : 's'}`, tom: 'azul' as const },
-                          })) },
-                          { label: 'Aprovadas — gere o pedido', opcoes: selReq.opcoes.cotadas.filter(x => x.aprovada).map(({ r }) => ({
-                            value: r.id, label: r.item ?? '—', sub: rotuloQtdReq(r), hint: numeroRequisicao(r),
-                            tag: { texto: 'Aprovada', tom: 'verde' as const }, disabled: true,
-                          })) },
-                        ].filter(g => g.opcoes.length > 0)}
+                        grupos={(() => {
+                          // Quem mais está cotando este item AGORA (reserva de
+                          // outro aluno) trava a opção antes do clique — o
+                          // professor não quer dois alunos apresentando
+                          // cotação do mesmo item.
+                          const emUsoPorOutro = (id: string) => {
+                            const res = selReq.opcoes.reservas[id];
+                            return res && res.usuario_id !== profile.id ? res : null;
+                          };
+                          // Item com proposta viva (mesmo devolvida/em correção)
+                          // some da lista — cotação é de um aluno só, não uma
+                          // rodada de comparação entre vários. Rejeitada/negada
+                          // não conta como viva (STATUS_VIVOS): o item volta
+                          // para "Ainda sem cotação" e outro aluno pode pegar.
+                          return [
+                            { label: 'Ainda sem cotação', tom: 'vermelho' as const, opcoes: selReq.opcoes.pendentes.map(({ r }) => {
+                              const res = emUsoPorOutro(r.id);
+                              return {
+                                value: r.id, label: r.item ?? '—', sub: rotuloQtdReq(r), hint: numeroRequisicao(r),
+                                tag: res ? { texto: 'Em uso', tom: 'amarelo' as const } : null,
+                                disabled: !!res,
+                                motivo: res ? `${res.usuario_nome} está cotando este item agora` : null,
+                              };
+                            }) },
+                            { label: 'Aprovadas — gere o pedido', tom: 'verde' as const, opcoes: selReq.opcoes.cotadas.filter(x => x.aprovada).map(({ r }) => ({
+                              value: r.id, label: r.item ?? '—', sub: rotuloQtdReq(r), hint: numeroRequisicao(r),
+                              tag: { texto: 'Aprovada', tom: 'verde' as const }, disabled: true,
+                            })) },
+                          ].filter(g => g.opcoes.length > 0);
+                        })()}
                       />
                       {/* A lista suspensa não deixa selecionar texto: o nome do
                           produto escolhido aparece aqui, copiável, para o aluno
@@ -1760,31 +1769,51 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode, onNavigate }: { s
                         );
                       })()}
                     </FormField>
+                    {/* Quantidade não é digitada aqui: ela é da requisição.
+                        Mostrar em cinza tira a conta da cabeça do comprador e
+                        deixa claro sobre quantas unidades o preço incide. */}
+                    {reqSelecionada && (
+                      <FormField label="Quantidade solicitada">
+                        <div className="neu-pressed py-2 px-3 rounded-xl text-sm text-gray-300 tabular-nums">
+                          {temQtd ? `${qtdBR(qtdReq)} ${unidadeReq}` : '—'}
+                          {/* Migr. 589: em que embalagem o setor pediu. O
+                              fornecedor fala nessa medida, e é ela que o
+                              comprador tem na frente ao telefone. */}
+                          {embReq && (
+                            <span className="block text-[10px] text-accent/90 mt-0.5">
+                              {qtdBR(embReq.qtd)} {pluralEmbalagem(embReq.nome, embReq.qtd)} de {qtdBR(embReq.fator)} {unidadeReq}
+                            </span>
+                          )}
+                        </div>
+                      </FormField>
+                    )}
+                  </div>
+                  </SecaoFormulario>
+
+                  <SecaoFormulario titulo="Fornecedor" icon={Truck} cor="vermelho">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <FormField label="Fornecedor PJ" error={errors.fornecedor_id}>
                       <SelectBusca
                         value={form.fornecedor_tipo === 'Empresa' ? form.fornecedor_id : ''}
                         placeholder="Escolha o fornecedor PJ"
+                        disabled={reserva.travado}
                         onAbrir={selPJ.handlers.onMouseDown}
                         onFechar={selPJ.soltar}
                         onChange={v => { selPJ.soltar(); setForm(f => ({ ...f, fornecedor_id: v, fornecedor_tipo: v ? 'Empresa' : '' })); clearError('fornecedor_id'); }}
                         grupos={selPJ.opcoes.grupos.map((g): SelectBuscaGrupo => ({
                           label: g.label,
                           opcoes: g.items.map((f: any) => {
-                            // Duas travas diferentes, e a ordem importa: a
-                            // proposta que já existe é definitiva (o banco
-                            // recusa, migr. 538); a reserva é transitória
-                            // (passa em 3 min, migr. 537).
+                            // Proposta que já existe é definitiva (o banco
+                            // recusa, migr. 538) — a trava de trabalho agora é
+                            // no item inteiro (form.requisicao_id), não mais
+                            // por fornecedor.
                             const jaCotado = selPJ.opcoes.jaCotados.get(f.id);
-                            const res = selPJ.opcoes.reservas[f.id];
-                            const travado = !!res && res.usuario_id !== profile.id;
                             return {
                               value: f.id, label: f.nome ?? '—',
                               sub: [f.cnpj || f.cpf, f.cidade].filter(Boolean).join(' · ') || null,
-                              tag: jaCotado ? { texto: 'Já cotado', tom: 'verde' as const }
-                                : travado ? { texto: 'Em uso', tom: 'amarelo' as const } : null,
-                              disabled: !!jaCotado || travado,
-                              motivo: jaCotado ? `Já tem proposta nesta requisição (${jaCotado})`
-                                : travado ? `${res.usuario_nome} está cotando com este fornecedor` : null,
+                              tag: jaCotado ? { texto: 'Já cotado', tom: 'verde' as const } : null,
+                              disabled: !!jaCotado,
+                              motivo: jaCotado ? `Já tem proposta nesta requisição (${jaCotado})` : null,
                             };
                           }),
                         }))}
@@ -1794,27 +1823,24 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode, onNavigate }: { s
                       <SelectBusca
                         value={form.fornecedor_tipo === 'Pessoa Física' ? form.fornecedor_id : ''}
                         placeholder="Escolha o fornecedor PF"
+                        disabled={reserva.travado}
                         onAbrir={selPF.handlers.onMouseDown}
                         onFechar={selPF.soltar}
                         onChange={v => { selPF.soltar(); setForm(f => ({ ...f, fornecedor_id: v, fornecedor_tipo: v ? 'Pessoa Física' : '' })); clearError('fornecedor_id'); }}
                         grupos={selPF.opcoes.grupos.map((g): SelectBuscaGrupo => ({
                           label: g.label,
                           opcoes: g.items.map((f: any) => {
-                            // Duas travas diferentes, e a ordem importa: a
-                            // proposta que já existe é definitiva (o banco
-                            // recusa, migr. 538); a reserva é transitória
-                            // (passa em 3 min, migr. 537).
+                            // Proposta que já existe é definitiva (o banco
+                            // recusa, migr. 538) — a trava de trabalho agora é
+                            // no item inteiro (form.requisicao_id), não mais
+                            // por fornecedor.
                             const jaCotado = selPF.opcoes.jaCotados.get(f.id);
-                            const res = selPF.opcoes.reservas[f.id];
-                            const travado = !!res && res.usuario_id !== profile.id;
                             return {
                               value: f.id, label: f.nome ?? '—',
                               sub: [f.cnpj || f.cpf, f.cidade].filter(Boolean).join(' · ') || null,
-                              tag: jaCotado ? { texto: 'Já cotado', tom: 'verde' as const }
-                                : travado ? { texto: 'Em uso', tom: 'amarelo' as const } : null,
-                              disabled: !!jaCotado || travado,
-                              motivo: jaCotado ? `Já tem proposta nesta requisição (${jaCotado})`
-                                : travado ? `${res.usuario_nome} está cotando com este fornecedor` : null,
+                              tag: jaCotado ? { texto: 'Já cotado', tom: 'verde' as const } : null,
+                              disabled: !!jaCotado,
+                              motivo: jaCotado ? `Já tem proposta nesta requisição (${jaCotado})` : null,
                             };
                           }),
                         }))}
@@ -1840,8 +1866,8 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode, onNavigate }: { s
                     )}
                     {reserva.travado && (
                       <p className="text-[11px] text-yellow-400 md:col-span-3 -mt-2">
-                        🔒 {reserva.dono?.usuario_nome} já está cotando este fornecedor para esta requisição agora.
-                        Escolha outro fornecedor ou espere.
+                        🔒 {reserva.dono?.usuario_nome} já está cotando este item agora.
+                        Escolha outro item ou espere.
                       </p>
                     )}
                     {/* Histórico de quem foi escolhido, ainda no formulário: o
@@ -1855,24 +1881,11 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode, onNavigate }: { s
                         <SeloDesempenho d={desempenho[form.fornecedor_id]} />
                       </div>
                     )}
-                    {/* Quantidade não é digitada aqui: ela é da requisição.
-                        Mostrar em cinza tira a conta da cabeça do comprador e
-                        deixa claro sobre quantas unidades o preço incide. */}
-                    {reqSelecionada && (
-                      <FormField label="Quantidade solicitada">
-                        <div className="neu-pressed py-2 px-3 rounded-xl text-sm text-gray-300 tabular-nums">
-                          {temQtd ? `${qtdBR(qtdReq)} ${unidadeReq}` : '—'}
-                          {/* Migr. 589: em que embalagem o setor pediu. O
-                              fornecedor fala nessa medida, e é ela que o
-                              comprador tem na frente ao telefone. */}
-                          {embReq && (
-                            <span className="block text-[10px] text-accent/90 mt-0.5">
-                              {qtdBR(embReq.qtd)} {pluralEmbalagem(embReq.nome, embReq.qtd)} de {qtdBR(embReq.fator)} {unidadeReq}
-                            </span>
-                          )}
-                        </div>
-                      </FormField>
-                    )}
+                  </div>
+                  </SecaoFormulario>
+
+                  <SecaoFormulario titulo="Proposta" icon={DollarSign} cor="verde">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     {/* O ÚNICO campo de preço que se digita, na medida em que o
                         fornecedor fala: "R$ 135,00 o fardo" com embalagem
                         fechada (migr. 589), "R$ 4,50 a unidade" sem ela. O
@@ -1914,6 +1927,32 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode, onNavigate }: { s
                         </p>
                       )}
                     </FormField>
+                    {/* Marca (migr. 526). Na eventual é campo da proposta; na
+                        reposição é o que o catálogo já diz, em cinza. */}
+                    {form.requisicao_id && (ehEventual ? (
+                      <FormField label="Marca oferecida">
+                        <input list="marcas-conhecidas" className="neu-input py-2 px-3 rounded-xl text-sm"
+                          value={extras.marca}
+                          onChange={e => setExtras(x => ({ ...x, marca: e.target.value }))}
+                          placeholder="Ex.: Foxton" />
+                        {reqSelecionada?.marca && extras.marca.trim() !== String(reqSelecionada.marca).trim() && (
+                          <p className="text-[10px] text-cyan-400/80 mt-1">
+                            Pedida na requisição: <span className="font-bold">{reqSelecionada.marca}</span>
+                          </p>
+                        )}
+                      </FormField>
+                    ) : (
+                      <FormField label="Marca">
+                        <div className="neu-pressed py-2 px-3 rounded-xl text-sm text-gray-300">
+                          {produtoDaReq?.marca || '—'}
+                        </div>
+                      </FormField>
+                    ))}
+                  </div>
+                  </SecaoFormulario>
+
+                  <SecaoFormulario titulo="Prazo e pagamento" icon={CalendarClock} cor="azul">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <FormField label="Prazo de Entrega">
                       <input type="date" className={`neu-input py-2 px-3 rounded-xl text-sm ${prazoEstoura ? 'border border-red-500/40' : ''}`}
                         value={extras.prazo_entrega} onChange={e => setExtras(x => ({ ...x, prazo_entrega: e.target.value }))} />
@@ -1948,43 +1987,24 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode, onNavigate }: { s
                         {CONDICOES_PAGAMENTO.map(c => <option key={c} value={c}>{c}</option>)}
                       </select>
                     </FormField>
-                    {/* Marca (migr. 526). Na eventual é campo da proposta; na
-                        reposição é o que o catálogo já diz, em cinza. */}
-                    {form.requisicao_id && (ehEventual ? (
-                      <FormField label="Marca oferecida">
-                        <input list="marcas-conhecidas" className="neu-input py-2 px-3 rounded-xl text-sm"
-                          value={extras.marca}
-                          onChange={e => setExtras(x => ({ ...x, marca: e.target.value }))}
-                          placeholder="Ex.: Foxton" />
-                        {reqSelecionada?.marca && extras.marca.trim() !== String(reqSelecionada.marca).trim() && (
-                          <p className="text-[10px] text-cyan-400/80 mt-1">
-                            Pedida na requisição: <span className="font-bold">{reqSelecionada.marca}</span>
-                          </p>
-                        )}
-                      </FormField>
-                    ) : (
-                      <FormField label="Marca">
-                        <div className="neu-pressed py-2 px-3 rounded-xl text-sm text-gray-300">
-                          {produtoDaReq?.marca || '—'}
-                        </div>
-                      </FormField>
-                    ))}
-                    {/* MIGR 583. Proposta real não é só um número: vem com
-                        frete, garantia, prazo de troca. Sem lugar para isso, o
-                        aluno comparava dois preços fingindo que as condições
-                        eram iguais — e é aqui que a diferença dos três nichos
-                        aparece sem precisar de campo por nicho. */}
-                    <FormField label="Condições / observações do fornecedor" className="md:col-span-2">
-                      <textarea maxLength={240}
-                        className="neu-input py-2 px-3 rounded-xl text-sm resize-none campo-cresce"
-                        value={extras.observacao}
-                        onChange={e => setExtras(x => ({ ...x, observacao: e.target.value }))}
-                        placeholder="Ex.: frete incluso; garantia de 12 meses; troca em até 7 dias" />
-                    </FormField>
                   </div>
+                  </SecaoFormulario>
+
+                  {/* MIGR 583. Proposta real não é só um número: vem com
+                      frete, garantia, prazo de troca. Sem lugar para isso, o
+                      aluno comparava dois preços fingindo que as condições
+                      eram iguais — e é aqui que a diferença dos três nichos
+                      aparece sem precisar de campo por nicho. */}
+                  <SecaoFormulario titulo="Condições / observações do fornecedor" icon={MessageSquareText} cor="laranja">
+                    <textarea maxLength={240}
+                      className="neu-input py-2 px-3 rounded-xl text-sm resize-none campo-cresce w-full"
+                      value={extras.observacao}
+                      onChange={e => setExtras(x => ({ ...x, observacao: e.target.value }))}
+                      placeholder="Ex.: frete incluso; garantia de 12 meses; troca em até 7 dias" />
+                  </SecaoFormulario>
                   <div className="flex gap-3 justify-end">
                     <button onClick={closeForm} className="neu-button py-2 px-5 rounded-xl text-sm text-gray-400">Cancelar</button>
-                    <NeuButtonAccent onClick={handleSave} isLoading={isSaving}>
+                    <NeuButtonAccent onClick={handleSave} isLoading={isSaving} disabled={reserva.travado}>
                       <Send size={14} /> Enviar ao Financeiro
                     </NeuButtonAccent>
                   </div>

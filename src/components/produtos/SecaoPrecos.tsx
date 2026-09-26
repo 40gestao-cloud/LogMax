@@ -1,6 +1,6 @@
 import type React from 'react';
-import { Percent, TrendingUp } from 'lucide-react';
-import { FormField } from '../ui';
+import { DollarSign, Percent, TrendingUp } from 'lucide-react';
+import { FormField, SecaoFormulario } from '../ui';
 import { formatBRL, handleMoneyKeyDown } from '../../lib/viewUtils';
 import { corDoMarkup, fmtPct } from '../../lib/precificacao';
 import { ehVendavel } from '../../lib/tipoProduto';
@@ -34,10 +34,7 @@ export function SecaoPrecos({
       {/* Preços. Quem não vende tem só o lado do custo: o que a empresa
           pagou. Preço de venda e margem saem da tela em vez de pedir um
           número inventado (migr. 440). */}
-      <div>
-        <p className="text-[10px] text-gray-600 uppercase tracking-widest font-bold mb-3">
-          {ehVendavel(extras.tipo) ? 'Preços' : 'Valor de aquisição'}
-        </p>
+      <SecaoFormulario titulo={ehVendavel(extras.tipo) ? 'Preços' : 'Valor de aquisição'} icon={DollarSign} cor="vermelho">
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <FormField
             label={extras.tipo === 'patrimonio' ? 'Valor de Aquisição (R$) *'
@@ -119,7 +116,7 @@ export function SecaoPrecos({
           </div>
           )}
         </div>
-      </div>
+      </SecaoFormulario>
     </>
   );
 }

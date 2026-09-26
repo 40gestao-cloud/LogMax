@@ -1,6 +1,6 @@
 import type React from 'react';
 import { AlertCircle, Barcode, Check, FileDown } from 'lucide-react';
-import { NeuButtonAccent } from '../ui';
+import { NeuButtonAccent, SecaoFormulario } from '../ui';
 import { parseBRL } from '../../lib/viewUtils';
 import type { normalizeEan13 } from '../../lib/barcode';
 import { type FormProduto, type ExtrasProduto } from './produtoFormComum';
@@ -21,10 +21,7 @@ export function SecaoEtiqueta({
     <>
       {/* Etiqueta EAN-13 */}
       {extras.ean.replace(/\D/g, '').length > 0 && (
-        <div>
-          <p className="text-[10px] text-gray-600 uppercase tracking-widest font-bold mb-3 flex items-center gap-2">
-            <Barcode size={12} /> Etiqueta EAN-13
-          </p>
+        <SecaoFormulario titulo="Etiqueta EAN-13" icon={Barcode} cor="cinza">
           <div className="neu-pressed rounded-2xl p-4 border border-white/5 flex flex-col sm:flex-row items-center gap-4">
             <div className="bg-white p-3 rounded-lg flex items-center justify-center min-h-[88px]">
               {eanNorm.valid ? (
@@ -65,7 +62,7 @@ export function SecaoEtiqueta({
               </div>
             </div>
           </div>
-        </div>
+        </SecaoFormulario>
       )}
     </>
   );

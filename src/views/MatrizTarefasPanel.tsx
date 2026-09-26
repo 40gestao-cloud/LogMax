@@ -301,13 +301,13 @@ function LandingTipos({ onSelect, competicao, extras, minhaId, podeAvaliar }: {
   return (
     <div className="flex flex-col gap-5">
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <CardContador label="Tarefas" value={loading ? '…' : totalTarefas} tom="dourado" />
+        <CardContador label="Tarefas" value={loading ? '…' : totalTarefas} tom="laranja" />
         <CardContador label="Em avaliação" value={loading ? '…' : porStatus.aberta} tom="verde" />
         <CardContador label="Participantes" value={loading ? '…' : totalParticipantesAbertos} tom="azul" />
         {podeAvaliar ? (
           <CardContador label="Sem sua nota" value={loading ? '…' : totalPendente} tom="amarelo" />
         ) : (
-          <CardContador label="Encerradas" value={loading ? '…' : porStatus.encerrada} tom="neutro" />
+          <CardContador label="Encerradas" value={loading ? '…' : porStatus.encerrada} tom="roxo" />
         )}
       </div>
 

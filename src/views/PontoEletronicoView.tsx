@@ -139,7 +139,7 @@ const PontoEletronicoViewInner = ({ showToast, profile, filial }: { showToast: a
             {[
               // (504) "no mês" no rótulo: o número é do período carregado, e
               // sem dizer isso o card volta a parecer o total de sempre.
-              { tom: 'neutro' as TomContador, label: 'Registros no mês',   value: ponto.length,  valueCls: 'text-gray-100',    borderCls: 'border-white/5' },
+              { tom: 'verde' as TomContador, label: 'Registros no mês',   value: ponto.length,  valueCls: 'text-gray-100',    borderCls: 'border-white/5' },
               { tom: 'vermelho' as TomContador, label: 'Faltas no mês',      value: faltas,        valueCls: faltas > 0 ? 'text-red-400' : 'text-gray-400',   borderCls: faltas > 0 ? 'border-red-500/25' : 'border-white/5' },
               { tom: 'azul' as TomContador, label: 'Horas Extras no mês', value: extras,       valueCls: extras > 0 ? 'text-blue-400' : 'text-gray-400',  borderCls: extras > 0 ? 'border-blue-500/25' : 'border-white/5' },
               { tom: 'amarelo' as TomContador, label: 'Justificados no mês', value: justificados, valueCls: justificados > 0 ? 'text-yellow-400' : 'text-gray-400', borderCls: justificados > 0 ? 'border-yellow-500/25' : 'border-white/5' },

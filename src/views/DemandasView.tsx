@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useFilial } from '../contexts/FilialContext';
-import { LoadingSpinner, EmptyState, FilialBadge } from '../components/ui';
+import { LoadingSpinner, EmptyState, FilialBadge, AbaColorida } from '../components/ui';
 import { isConselheiro } from '../lib/rbac';
 import { metaDoTipo } from '../lib/cicloTarefaTipos';
 import type { UserProfile } from '../hooks/useUserProfile';
@@ -26,38 +26,16 @@ export function DemandasView({ profile, showToast, initialTab = 'metas' }: {
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex items-center gap-1 neu-pressed rounded-xl p-1 self-start flex-wrap">
-        <TabBtn active={aba === 'metas'}    onClick={() => setAba('metas')}
-                icon={<Target size={12} className="text-emerald-300" />}
-                label="Metas Estratégicas" />
-        <TabBtn active={aba === 'padrao'}   onClick={() => setAba('padrao')}
-                icon={<Star size={12} className="text-accent" />}
-                label="Padrão" />
-        <TabBtn active={aba === 'conselho'} onClick={() => setAba('conselho')}
-                icon={<ClipboardList size={12} className="text-amber-300" />}
-                label="Demandas do Conselho" />
+      <div className="flex items-center gap-2 flex-wrap">
+        <AbaColorida ativa={aba === 'metas'}    onClick={() => setAba('metas')}    icon={Target}        cor="verde"   label="Metas Estratégicas" />
+        <AbaColorida ativa={aba === 'padrao'}   onClick={() => setAba('padrao')}   icon={Star}          cor="azul"    label="Padrão" />
+        <AbaColorida ativa={aba === 'conselho'} onClick={() => setAba('conselho')} icon={ClipboardList} cor="roxo"    label="Demandas do Conselho" />
       </div>
 
       {aba === 'metas'    && <MetasView profile={profile} showToast={showToast} />}
       {aba === 'padrao'   && <DemandasPadraoList filial={filialAtiva} showToast={showToast} />}
       {aba === 'conselho' && <DemandasConselhoList profile={profile} filial={filialAtiva} showToast={showToast} />}
     </div>
-  );
-}
-
-function TabBtn({ active, onClick, icon, label }: {
-  active: boolean; onClick: () => void; icon: React.ReactNode; label: string;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      className={`flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-lg transition-all ${
-        active ? 'neu-button text-accent ring-1 ring-accent/30' : 'text-gray-400 hover:text-gray-200'
-      }`}
-    >
-      {icon}
-      <span>{label}</span>
-    </button>
   );
 }
 

@@ -114,7 +114,7 @@ export const GerenciamentoEstoqueView = () => {
     { tom: 'vermelho' as TomContador, label: 'Produtos sem Estoque', value: produtosZerados, sub: 'ativos zerados',       warn: produtosZerados > 0 },
     { tom: 'laranja' as TomContador, label: 'Vencimentos Críticos', value: vencCriticos,    sub: 'próximos ou vencidos', warn: vencCriticos > 0 },
     { tom: 'azul' as TomContador, label: 'Inventários Abertos',  value: invEmAndamento,  sub: 'em andamento',          warn: false },
-    { tom: 'neutro' as TomContador, label: 'Total Movimentações',  value: totalMovMes,     sub: 'registradas',           warn: false },
+    { tom: 'verde' as TomContador, label: 'Total Movimentações',  value: totalMovMes,     sub: 'registradas',           warn: false },
   ];
 
   // Inventários em andamento (até 5)

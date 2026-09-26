@@ -209,7 +209,7 @@ export const FeedbackOrganizacionalView = ({ showToast, profile }: { showToast: 
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col gap-5">
       {/* Contadores = filtro: um clique mostra só a categoria. */}
       <div className="grid grid-cols-3 lg:grid-cols-6 gap-3 shrink-0">
-        <CardContador label="Recebidos" value={total} tom="dourado"
+        <CardContador label="Recebidos" value={total} tom="laranja"
           onClick={() => setFiltroCategoria('')} ativo={!filtroCategoria} />
         {CATEGORIAS.map(c => (
           <CardContador key={c.key} label={c.label} value={porCategoria[c.key] ?? 0} tom={c.tom}

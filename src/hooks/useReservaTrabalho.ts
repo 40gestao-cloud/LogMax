@@ -1,7 +1,7 @@
 // Cadeado de "estou trabalhando nisto agora" — migr. 537.
 //
 // Duas telas usam este hook com chaves diferentes: Cotações (escopo
-// 'cotacao', chave requisição+fornecedor) e Cadastro de Produtos (escopo
+// 'cotacao', chave = id da requisição: um aluno por item) e Cadastro de Produtos (escopo
 // 'cadastro_produto', chave da origem escolhida). O hook não sabe qual é
 // qual — só reserva, renova a cada 60s enquanto a tela está aberta, e solta
 // no unmount ou quando a `chave` muda para outra coisa.

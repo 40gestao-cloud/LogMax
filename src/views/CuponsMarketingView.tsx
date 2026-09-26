@@ -186,7 +186,7 @@ const CuponsMarketingViewInner = ({ showToast, profile, filial }: { showToast: a
   const usosTotais = cupons.reduce((s: number, c: any) => s + Number(c.usos || 0), 0);
 
   const kpis = [
-    { tom: 'neutro' as TomContador, label: 'Total de Cupons', value: String(cupons.length) },
+    { tom: 'dourado' as TomContador, label: 'Total de Cupons', value: String(cupons.length) },
     { tom: 'verde' as TomContador, label: 'Em Vigor',        value: String(ativos) },
     { tom: 'vermelho' as TomContador, label: 'Expirados',       value: String(expirados) },
     { tom: 'azul' as TomContador, label: 'Usos Totais',     value: String(usosTotais) },

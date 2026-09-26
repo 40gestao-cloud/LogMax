@@ -2,13 +2,13 @@ import { useRolarAteFormulario } from '../hooks/useRolarAteFormulario';
 import { MenuMais, ItemMenu } from '../components/MenuMais';
 import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Plus, Save, Trash2, Check, X, Send, MessageSquare, Loader2, ShoppingBag, Clock, FileText, FileDown, Sheet, Eye, AlertTriangle } from 'lucide-react';
+import { Plus, Save, Trash2, Check, X, Send, MessageSquare, Loader2, ShoppingBag, Clock, FileText, FileDown, Sheet, Eye, AlertTriangle, User, ShoppingCart, CreditCard, MessageSquareText, Calculator } from 'lucide-react';
 import { HistoricoOperacoes } from '../components/HistoricoOperacoes';
 import { numeroOrcamento } from '../lib/documentos';
 import { useFetchData, dbInsert, dbUpdate } from '../hooks/useSupabaseData';
 import { useTravaAtualizacao } from '../hooks/useTravaAtualizacao';
 import { ehVendavel } from '../lib/tipoProduto';
-import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent, StatusBadge, Pagination, ExportButton, TextoModal } from '../components/ui';
+import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent, StatusBadge, Pagination, ExportButton, TextoModal, SecaoFormulario } from '../components/ui';
 import { useFormValidation, formatBRL, parseBRL, exportToPDFAgrupado, exportToExcelAgrupado, handleMoneyKeyDown } from '../lib/viewUtils';
 import {
   calcularCondicao, parcelasMaximas, rotuloCondicao, vencimentosPrevistos,
@@ -668,8 +668,9 @@ const OrcamentosViewInner = ({
           <motion.div ref={formEdicaoRef} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="shrink-0">
             <div className="neu-flat rounded-2xl p-6 border border-white/5 flex flex-col gap-4">
               <h3 className="text-sm font-bold text-gray-200">{editItem ? 'Editar Proposta' : 'Nova Proposta'}</h3>
+              <SecaoFormulario titulo="Cliente" icon={User} cor="amarelo">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <FormField label="Cliente *" error={errors.cliente_id}>
+                <FormField label="Cliente *" error={errors.cliente_id} className="md:col-span-2">
                   <SelectBusca
                     value={form.cliente_id}
                     onChange={v => { setForm(f => ({ ...f, cliente_id: v })); clearError('cliente_id'); }}
@@ -686,6 +687,79 @@ const OrcamentosViewInner = ({
                     onChange={e => setForm(f => ({ ...f, validade_dias: e.target.value }))}
                   />
                 </FormField>
+              </div>
+              </SecaoFormulario>
+
+              <SecaoFormulario titulo="Itens da proposta" icon={ShoppingCart} cor="vermelho"
+                extra={`${itens.length} ite${itens.length === 1 ? 'm' : 'ns'}`}>
+              <div className="flex flex-col gap-2">
+                <div className="flex items-center justify-between gap-2 flex-wrap">
+                  <div className="flex items-center gap-2 flex-1">
+                    <input
+                      type="text"
+                      value={produtoBusca}
+                      onChange={e => setProdutoBusca(e.target.value)}
+                      placeholder="Buscar produto por nome ou código..."
+                      className="neu-input py-1.5 px-3 rounded-lg text-xs flex-1"
+                    />
+                    <button onClick={addItem} className="btn-solido btn-solido--amarelo !py-1.5 !px-3 !text-[11px] shrink-0">
+                      <Plus size={11} /> Adicionar item
+                    </button>
+                  </div>
+                </div>
+                {itens.length === 0 ? (
+                  <p className="text-xs text-gray-600 py-3 text-center">Nenhum item ainda — adicione produtos do catálogo.</p>
+                ) : (
+                  <div className="flex flex-col gap-2">
+                    {itens.map((it, idx) => (
+                      <div key={idx} className="grid grid-cols-12 gap-2 items-center neu-pressed rounded-xl p-3">
+                        <SelectBusca
+                          compacto
+                          className="col-span-5"
+                          value={it.produto_id}
+                          onChange={v => escolherProduto(idx, v)}
+                          placeholder="Produto"
+                          opcoes={produtosFiltrados.map((p: any) => ({
+                            ...opcaoProduto(p, { saldo: true }),
+                            tag: p.preco != null ? { texto: `R$ ${formatBRL(Number(p.preco))}`, tom: 'cinza' as const } : null,
+                          }))}
+                        />
+                        <div className="col-span-2">
+                          <input
+                            type="number"
+                            min="1"
+                            className="neu-input py-1.5 px-2 rounded-lg text-xs w-full text-right"
+                            value={it.qtd}
+                            onChange={e => updateItem(idx, { qtd: Math.max(0, Number(e.target.value) || 0) })}
+                            placeholder="Qtd"
+                          />
+                        </div>
+                        <div className="col-span-2">
+                          <input
+                            type="text"
+                            inputMode="numeric"
+                            className="neu-input py-1.5 px-2 rounded-lg text-xs w-full text-right"
+                            value={it.preco_unitario ? formatBRL(it.preco_unitario) : ''}
+                            onChange={e => updateItem(idx, { preco_unitario: parseBRL(formatBRL(e.target.value)) })}
+                            onKeyDown={handleMoneyKeyDown}
+                            placeholder="Preço"
+                          />
+                        </div>
+                        <span className="col-span-2 text-xs font-mono text-accent text-right tabular-nums">
+                          R$ {formatBRL(it.subtotal)}
+                        </span>
+                        <button onClick={() => removeItem(idx)} className="col-span-1 mx-auto action-btn-delete">
+                          <Trash2 size={12} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+              </SecaoFormulario>
+
+              <SecaoFormulario titulo="Pagamento" icon={CreditCard} cor="azul">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <FormField label="Desconto comercial (R$)">
                   <input
                     type="text"
@@ -740,7 +814,7 @@ const OrcamentosViewInner = ({
               {/* Crediário: o dinheiro é da própria loja. Aviso agora, trava na
                   conversão em pedido (migr. 569). */}
               {ehCrediario && (
-                <div className={`rounded-xl p-3 text-xs flex items-start gap-2 border ${
+                <div className={`mt-4 rounded-xl p-3 text-xs flex items-start gap-2 border ${
                   (credito?.vencidos ?? 0) > 0 || estouraLimite
                     ? 'border-red-500/30 bg-red-500/5 text-red-300'
                     : 'border-cyan-500/20 bg-cyan-500/5 text-cyan-300'}`}>
@@ -771,88 +845,23 @@ const OrcamentosViewInner = ({
                   </div>
                 </div>
               )}
+              </SecaoFormulario>
 
-              {/* Itens da proposta */}
-              <div className="flex flex-col gap-2">
-                <div className="flex items-center justify-between gap-2 flex-wrap">
-                  <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Itens da Proposta</span>
-                  <div className="flex items-center gap-2 flex-1 sm:flex-none sm:min-w-[260px]">
-                    <input
-                      type="text"
-                      value={produtoBusca}
-                      onChange={e => setProdutoBusca(e.target.value)}
-                      placeholder="Buscar produto por nome ou código..."
-                      className="neu-input py-1.5 px-3 rounded-lg text-xs flex-1"
-                    />
-                    <button onClick={addItem} className="neu-button py-1.5 px-3 rounded-lg text-[11px] font-bold text-accent flex items-center gap-1 shrink-0">
-                      <Plus size={11} /> Adicionar item
-                    </button>
-                  </div>
-                </div>
-                {itens.length === 0 ? (
-                  <p className="text-xs text-gray-600 py-3 text-center">Nenhum item ainda — adicione produtos do catálogo.</p>
-                ) : (
-                  <div className="flex flex-col gap-2">
-                    {itens.map((it, idx) => (
-                      <div key={idx} className="grid grid-cols-12 gap-2 items-center neu-pressed rounded-xl p-3">
-                        <SelectBusca
-                          compacto
-                          className="col-span-5"
-                          value={it.produto_id}
-                          onChange={v => escolherProduto(idx, v)}
-                          placeholder="Produto"
-                          opcoes={produtosFiltrados.map((p: any) => ({
-                            ...opcaoProduto(p, { saldo: true }),
-                            tag: p.preco != null ? { texto: `R$ ${formatBRL(Number(p.preco))}`, tom: 'cinza' as const } : null,
-                          }))}
-                        />
-                        <div className="col-span-2">
-                          <input
-                            type="number"
-                            min="1"
-                            className="neu-input py-1.5 px-2 rounded-lg text-xs w-full text-right"
-                            value={it.qtd}
-                            onChange={e => updateItem(idx, { qtd: Math.max(0, Number(e.target.value) || 0) })}
-                            placeholder="Qtd"
-                          />
-                        </div>
-                        <div className="col-span-2">
-                          <input
-                            type="text"
-                            inputMode="numeric"
-                            className="neu-input py-1.5 px-2 rounded-lg text-xs w-full text-right"
-                            value={it.preco_unitario ? formatBRL(it.preco_unitario) : ''}
-                            onChange={e => updateItem(idx, { preco_unitario: parseBRL(formatBRL(e.target.value)) })}
-                            onKeyDown={handleMoneyKeyDown}
-                            placeholder="Preço"
-                          />
-                        </div>
-                        <span className="col-span-2 text-xs font-mono text-accent text-right tabular-nums">
-                          R$ {formatBRL(it.subtotal)}
-                        </span>
-                        <button onClick={() => removeItem(idx)} className="col-span-1 mx-auto action-btn-delete">
-                          <Trash2 size={12} />
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              <FormField label="Observações">
+              <SecaoFormulario titulo="Observações" icon={MessageSquareText} cor="laranja">
                 <textarea
-                  className="neu-input py-2 px-3 rounded-xl text-sm min-h-[60px]"
+                  className="neu-input py-2 px-3 rounded-xl text-sm min-h-[60px] w-full"
                   value={extras.observacoes}
                   onChange={e => setExtras(x => ({ ...x, observacoes: e.target.value }))}
                   placeholder="Condições, prazo de entrega, etc."
                 />
-              </FormField>
+              </SecaoFormulario>
 
               {/* Totais — a conta inteira, linha a linha. O aluno tem de ver
                   de onde saiu cada número: mercadoria, o que ele negociou, o
                   que a condição abateu, o que o parcelamento acrescentou, e o
                   que a maquininha vai comer do que a loja recebe. */}
-              <div className="flex flex-col gap-3 border-t border-white/5 pt-3">
+              <SecaoFormulario titulo="Resumo" icon={Calculator} cor="verde">
+              <div className="flex flex-col gap-3">
                 <div className="flex justify-end gap-6 text-xs flex-wrap">
                   <div className="flex flex-col items-end">
                     <span className="text-gray-500 uppercase tracking-widest text-[10px]">Mercadoria</span>
@@ -912,6 +921,7 @@ const OrcamentosViewInner = ({
                   </div>
                 )}
               </div>
+              </SecaoFormulario>
 
               <div className="flex gap-3 justify-end flex-wrap">
                 <button onClick={closeForm} className="neu-button py-2 px-5 rounded-xl text-sm text-gray-400">Cancelar</button>

@@ -139,7 +139,7 @@ export const GerenciamentoRHView = () => {
       {/* KPIs */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 shrink-0">
         <CardContador label="Funcionários Ativos" value={funAtivos} sub={<>de {funcionarios.length} cadastrados</>} tom="verde" />
-        <CardContador label="Folha do Mês" value={<>R$ {totalLiqMes.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</>} sub={<>líquido processado · {anoMes}</>} tom="dourado" />
+        <CardContador label="Folha do Mês" value={<>R$ {totalLiqMes.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</>} sub={<>líquido processado · {anoMes}</>} tom="roxo" />
         <CardContador label="Férias Pendentes" value={ferSolic} sub="aguardando aprovação" tom="amarelo" />
         <CardContador label="Treinamentos Ativos" value={treAndando} sub={<>em andamento</>} tom="azul" />
       </div>

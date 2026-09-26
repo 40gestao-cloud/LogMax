@@ -157,9 +157,9 @@ const SugestoesComprasViewInner = ({ showToast, profile, filial }: any) => {
   const kpis = [
     { tom: 'vermelho' as TomContador, label: 'Estoque Crítico', value: criticos.length, sub: 'produtos zerados', warn: criticos.length > 0 },
     { tom: 'amarelo' as TomContador, label: 'Estoque Baixo', value: baixos.length, sub: 'menos de 10 unid.', warn: baixos.length > 0 },
-    { tom: 'dourado' as TomContador, label: 'Valor Estimado de Recompra', value: `R$ ${valorTotalEst.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`,
+    { tom: 'roxo' as TomContador, label: 'Valor Estimado de Recompra', value: `R$ ${valorTotalEst.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`,
       sub: semCusto > 0 ? `a preço de custo — ${semCusto} item(ns) sem custo ficaram de fora` : 'a preço de custo', warn: false },
-    { tom: 'neutro' as TomContador, label: 'Produtos Monitorados', value: ativos.length, sub: 'ativos no catálogo', warn: false },
+    { tom: 'azul' as TomContador, label: 'Produtos Monitorados', value: ativos.length, sub: 'ativos no catálogo', warn: false },
   ];
 
   return (

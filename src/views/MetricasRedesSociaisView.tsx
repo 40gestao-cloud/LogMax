@@ -1,10 +1,11 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { todayBR } from '../lib/dates';
 import { motion } from 'motion/react';
-import { Instagram, Plus, Trash2, TrendingUp, TrendingDown, Loader2, Link2, ExternalLink, Check } from 'lucide-react';
+import { Instagram, Plus, Trash2, TrendingUp, TrendingDown, Loader2, Link2, ExternalLink, Check, CalendarDays, BarChart3, Music2 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useFetchData } from '../hooks/useSupabaseData';
-import { LoadingSpinner } from '../components/ui';
+import { LoadingSpinner, EmptyState, NeuButtonAccent, CardContador, SecaoFormulario, AbaColorida, type CorAba } from '../components/ui';
+import { useConfirm } from '../contexts/ConfirmContext';
 import { hasSetor } from '../lib/rbac';
 import { useFilial } from '../contexts/FilialContext';
 import { FILIAIS_HOLDING } from '../lib/filiais';
@@ -20,7 +21,18 @@ const PLAT_COLOR: Record<Plataforma, string> = {
 
 const PLAT_ICON: Record<Plataforma, React.ReactNode> = {
   Instagram: <Instagram size={14} />,
-  TikTok:    <span className="text-xs font-black">TT</span>,
+  TikTok:    <Music2 size={14} />,
+};
+
+// Cor de cada plataforma na aba e na caixa da tabela — a mesma nos dois
+// lugares, para o aluno ligar o filtro à caixa sem ler o nome.
+const PLAT_COR: Record<Plataforma, CorAba> = {
+  Instagram: 'roxo',
+  TikTok:    'azul',
+};
+const PLAT_ICONE: Record<Plataforma, any> = {
+  Instagram,
+  TikTok: Music2,
 };
 
 const METRICAS: { key: string; label: string }[] = [
@@ -41,6 +53,8 @@ const EMPTY_FORM = {
   comentarios: '',
 };
 
+const numeroBR = (n: number) => n.toLocaleString('pt-BR');
+
 function variacao(atual: number, anterior: number | undefined): React.ReactNode {
   if (anterior === undefined || anterior === 0) return null;
   const pct = ((atual - anterior) / anterior) * 100;
@@ -57,6 +71,7 @@ export function MetricasRedesSociaisView({ showToast, profile }: { showToast: an
   // dentro de uma unidade via catálogo/cadastro de outra.
   const { data: raw, isLoading, reload } = useFetchData('/api/metricasredessociaisview', filialAtiva ? { filial: filialAtiva } : undefined);
 
+  const confirm = useConfirm();
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({ ...EMPTY_FORM });
   const [saving, setSaving] = useState(false);
@@ -118,6 +133,30 @@ export function MetricasRedesSociaisView({ showToast, profile }: { showToast: an
     return filtroPlat === 'Todas' ? base : base.filter((r: any) => r.plataforma === filtroPlat);
   }, [raw, filialAtiva, filtroPlat]);
 
+  // Resumo do topo: o último registro de cada plataforma (e de cada unidade,
+  // no modo Matriz) é a foto atual da conta — somar todos os registros
+  // contaria o mesmo seguidor a cada dia registrado. Ignora o filtro de
+  // plataforma de propósito: os cards são o panorama, a tabela é o detalhe.
+  const resumo = useMemo(() => {
+    const base = filialAtiva ? raw.filter((r: any) => r.filial === filialAtiva) : raw;
+    const ultimo = new Map<string, any>();
+    for (const r of base as any[]) {
+      const k = `${r.filial}|${r.plataforma}`;
+      const atual = ultimo.get(k);
+      if (!atual || String(r.data_registro) > String(atual.data_registro)) ultimo.set(k, r);
+    }
+    const soma = (plat: Plataforma | null, campo: string) => [...ultimo.values()]
+      .filter(r => !plat || r.plataforma === plat)
+      .reduce((a, r) => a + Number(r[campo] ?? 0), 0);
+    return {
+      insta: soma('Instagram', 'seguidores'),
+      tiktok: soma('TikTok', 'seguidores'),
+      visualizacoes: soma(null, 'visualizacoes'),
+      engajamento: soma(null, 'curtidas') + soma(null, 'comentarios') + soma(null, 'compartilhamentos'),
+      registros: base.length,
+    };
+  }, [raw, filialAtiva]);
+
   async function salvar() {
     if (!supabase || !profile) return;
     const filial = filialAtiva ?? filialForm;
@@ -150,32 +189,103 @@ export function MetricasRedesSociaisView({ showToast, profile }: { showToast: an
 
   async function excluir(id: string) {
     if (!supabase) return;
+    if (!(await confirm('Remover este registro de métricas?'))) return;
     const { error } = await supabase.from('metricas_redes_sociais').update({ ativo: false }).eq('id', id);
     if (error) { showToast?.(error.message, 'error'); return; }
     showToast?.('Registro removido.', 'success');
     reload();
   }
 
+  // Campo numérico do formulário: um só molde para as cinco métricas — antes
+  // eram cinco blocos copiados, cada um com o seu rótulo à mão.
+  const campoMetrica = (m: { key: string; label: string }) => (
+    <div key={m.key} className="flex flex-col gap-1.5">
+      <label className="text-[10px] font-bold uppercase tracking-widest text-gray-500">{m.label}</label>
+      <input type="text" inputMode="numeric" value={(form as any)[m.key]}
+        onChange={e => setForm(f => ({ ...f, [m.key]: e.target.value.replace(/\D/g, '') }))}
+        className="neu-input rounded-xl px-3 py-2 text-sm tabular-nums" placeholder="0" />
+    </div>
+  );
+
   return (
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col gap-6 pb-8">
 
       {/* Cabeçalho */}
       <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Redes Sociais</h2>
-        </div>
-        {podeRegistrar && (
-          <button onClick={() => setShowForm(v => !v)} className="neu-button flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold text-accent">
-            <Plus size={15}/>{showForm ? 'Cancelar' : 'Registrar métricas'}
-          </button>
+        <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">
+          Redes Sociais{filialAtiva ? ` — ${filialAtiva}` : ''}
+        </h2>
+        {podeRegistrar && !showForm && (
+          <NeuButtonAccent onClick={() => setShowForm(true)}>
+            <Plus size={15} /> Registrar métricas
+          </NeuButtonAccent>
         )}
       </div>
+
+      {/* Resumo — a foto atual das contas, cada card com a sua cor. */}
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
+        <CardContador label="Seguidores Instagram" value={numeroBR(resumo.insta)} tom="roxo" />
+        <CardContador label="Seguidores TikTok" value={numeroBR(resumo.tiktok)} tom="azul" />
+        <CardContador label="Visualizações" value={numeroBR(resumo.visualizacoes)} tom="laranja" corFixa sub="último registro" />
+        <CardContador label="Engajamento" value={numeroBR(resumo.engajamento)} tom="verde" sub="curtidas + comentários + compart." />
+        <CardContador label="Registros" value={resumo.registros} tom="dourado" />
+      </div>
+
+      {/* Formulário */}
+      {showForm && (
+        <div className="neu-flat rounded-2xl p-6 border border-white/5 flex flex-col gap-4">
+          <h3 className="text-sm font-bold text-gray-200">Novo Registro</h3>
+
+          <SecaoFormulario titulo="Plataforma e data" icon={CalendarDays} cor="amarelo">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              {/* Filial — só aparece no modo Matriz consolidado, onde não há
+                  uma unidade ativa implícita pra gravar o registro. */}
+              {!filialAtiva && (
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-[10px] font-bold uppercase tracking-widest text-gray-500">Filial *</label>
+                  <select value={filialForm} onChange={e => setFilialForm(e.target.value)} className="neu-input rounded-xl px-3 py-2 text-sm">
+                    <option value="">— Selecione —</option>
+                    {FILIAIS_HOLDING.map(f => <option key={f} value={f}>{f}</option>)}
+                  </select>
+                </div>
+              )}
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[10px] font-bold uppercase tracking-widest text-gray-500">Plataforma</label>
+                <div className="flex gap-2">
+                  {PLATAFORMAS.map(p => (
+                    <AbaColorida key={p} label={p} icon={PLAT_ICONE[p]} cor={PLAT_COR[p]}
+                      ativa={form.plataforma === p}
+                      onClick={() => setForm(f => ({ ...f, plataforma: p }))} />
+                  ))}
+                </div>
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[10px] font-bold uppercase tracking-widest text-gray-500">Data</label>
+                <input type="date" value={form.data_registro} onChange={e => setForm(f => ({ ...f, data_registro: e.target.value }))} className="neu-input rounded-xl px-3 py-2 text-sm" />
+              </div>
+            </div>
+          </SecaoFormulario>
+
+          <SecaoFormulario titulo="Métricas do dia" icon={BarChart3} cor="verde">
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
+              {METRICAS.map(campoMetrica)}
+            </div>
+          </SecaoFormulario>
+
+          <div className="flex gap-3 justify-end">
+            <button onClick={() => { setShowForm(false); setForm({ ...EMPTY_FORM }); setFilialForm(''); }}
+              className="neu-button py-2 px-5 rounded-xl text-sm text-gray-400">Cancelar</button>
+            <NeuButtonAccent onClick={salvar} isLoading={saving} disabled={!filialAtiva && !filialForm}>
+              <Check size={14} /> Salvar
+            </NeuButtonAccent>
+          </div>
+        </div>
+      )}
 
       {/* Links das redes sociais — 1 por plataforma, configurado uma vez por
           filial (não redigitado a cada registro de métrica). Só em modo filial. */}
       {podeRegistrar && filialAtiva && (
-        <div className="neu-flat rounded-3xl border border-white/5 p-5 flex flex-col gap-3">
-          <h3 className="text-sm font-bold text-gray-200 flex items-center gap-2"><Link2 size={14} className="text-accent"/> Links das Redes Sociais — {filialAtiva}</h3>
+        <SecaoFormulario titulo="Links dos perfis" icon={Link2} cor="laranja">
           {linksLoading ? (
             <div className="py-4"><LoadingSpinner /></div>
           ) : (
@@ -196,7 +306,7 @@ export function MetricasRedesSociaisView({ showToast, profile }: { showToast: an
                     <button
                       onClick={() => salvarLink(plat)}
                       disabled={!dirty || savingLink === plat}
-                      className="neu-button w-8 h-8 rounded-lg flex items-center justify-center text-gray-400 hover:text-accent disabled:opacity-30 disabled:cursor-not-allowed shrink-0"
+                      className="btn-solido btn-solido--verde !w-8 !h-8 !p-0 justify-center shrink-0"
                       title="Salvar link"
                     >
                       {savingLink === plat ? <Loader2 size={12} className="animate-spin"/> : <Check size={12}/>}
@@ -206,111 +316,40 @@ export function MetricasRedesSociaisView({ showToast, profile }: { showToast: an
               })}
             </div>
           )}
-        </div>
+        </SecaoFormulario>
       )}
 
-      {/* Formulário */}
-      {showForm && (
-        <div className="neu-flat rounded-3xl border border-accent/20 p-5 flex flex-col gap-4">
-          <h3 className="text-sm font-bold text-gray-200">Novo Registro</h3>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            {/* Filial — só aparece no modo Matriz consolidado, onde não há
-                uma unidade ativa implícita pra gravar o registro. */}
-            {!filialAtiva && (
-              <div className="flex flex-col gap-1.5 col-span-2 sm:col-span-1">
-                <label className="text-[10px] font-bold uppercase tracking-widest text-gray-500">Filial *</label>
-                <select value={filialForm} onChange={e => setFilialForm(e.target.value)} className="neu-input rounded-xl px-3 py-2 text-sm">
-                  <option value="">— Selecione —</option>
-                  {FILIAIS_HOLDING.map(f => <option key={f} value={f}>{f}</option>)}
-                </select>
-              </div>
-            )}
-            {/* Plataforma */}
-            <div className="flex flex-col gap-1.5 col-span-2 sm:col-span-1">
-              <label className="text-[10px] font-bold uppercase tracking-widest text-gray-500">Plataforma</label>
-              <select value={form.plataforma} onChange={e => setForm(f => ({ ...f, plataforma: e.target.value as Plataforma }))} className="neu-input rounded-xl px-3 py-2 text-sm">
-                {PLATAFORMAS.map(p => <option key={p} value={p}>{p}</option>)}
-              </select>
-            </div>
-            {/* Data */}
-            <div className="flex flex-col gap-1.5 col-span-2 sm:col-span-1">
-              <label className="text-[10px] font-bold uppercase tracking-widest text-gray-500">Data</label>
-              <input type="date" value={form.data_registro} onChange={e => setForm(f => ({ ...f, data_registro: e.target.value }))} className="neu-input rounded-xl px-3 py-2 text-sm"/>
-            </div>
-            {/* Seguidores */}
-            <div className="flex flex-col gap-1.5">
-              <label className="text-[10px] font-bold uppercase tracking-widest text-gray-500">Seguidores</label>
-              <input type="number" min="0" value={form.seguidores} onChange={e => setForm(f => ({ ...f, seguidores: e.target.value }))} className="neu-input rounded-xl px-3 py-2 text-sm" placeholder="0"/>
-            </div>
-            {/* Curtidas */}
-            <div className="flex flex-col gap-1.5">
-              <label className="text-[10px] font-bold uppercase tracking-widest text-gray-500">Curtidas</label>
-              <input type="number" min="0" value={form.curtidas} onChange={e => setForm(f => ({ ...f, curtidas: e.target.value }))} className="neu-input rounded-xl px-3 py-2 text-sm" placeholder="0"/>
-            </div>
-            {/* Visualizações */}
-            <div className="flex flex-col gap-1.5">
-              <label className="text-[10px] font-bold uppercase tracking-widest text-gray-500">Visualizações</label>
-              <input type="number" min="0" value={form.visualizacoes} onChange={e => setForm(f => ({ ...f, visualizacoes: e.target.value }))} className="neu-input rounded-xl px-3 py-2 text-sm" placeholder="0"/>
-            </div>
-            {/* Compartilhamentos */}
-            <div className="flex flex-col gap-1.5">
-              <label className="text-[10px] font-bold uppercase tracking-widest text-gray-500">Compartilhamentos</label>
-              <input type="number" min="0" value={form.compartilhamentos} onChange={e => setForm(f => ({ ...f, compartilhamentos: e.target.value }))} className="neu-input rounded-xl px-3 py-2 text-sm" placeholder="0"/>
-            </div>
-            {/* Comentários */}
-            <div className="flex flex-col gap-1.5">
-              <label className="text-[10px] font-bold uppercase tracking-widest text-gray-500">Comentários</label>
-              <input type="number" min="0" value={form.comentarios} onChange={e => setForm(f => ({ ...f, comentarios: e.target.value }))} className="neu-input rounded-xl px-3 py-2 text-sm" placeholder="0"/>
-            </div>
-          </div>
-          <div className="flex justify-end">
-            <button onClick={salvar} disabled={saving || (!filialAtiva && !filialForm)} className="neu-button px-5 py-2 rounded-xl text-sm font-bold text-accent disabled:opacity-50">
-              {saving ? <Loader2 size={14} className="animate-spin"/> : 'Salvar'}
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Filtro por plataforma */}
+      {/* Filtro por plataforma — abas na cor de cada plataforma. */}
       <div className="flex flex-wrap gap-2">
-        {(['Todas', ...PLATAFORMAS] as const).map(p => (
-          <button
-            key={p}
-            onClick={() => setFiltroPlat(p as any)}
-            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${filtroPlat === p ? 'neu-pressed text-accent' : 'neu-button text-gray-400'}`}
-          >
-            {p}
-          </button>
+        <AbaColorida label="Todas" icon={BarChart3} cor="dourado" ativa={filtroPlat === 'Todas'} onClick={() => setFiltroPlat('Todas')} />
+        {PLATAFORMAS.map(p => (
+          <AbaColorida key={p} label={p} icon={PLAT_ICONE[p]} cor={PLAT_COR[p]} ativa={filtroPlat === p} onClick={() => setFiltroPlat(p)} />
         ))}
       </div>
 
-      {/* Tabela */}
+      {/* Uma caixa por plataforma, com a faixa na cor dela */}
       {isLoading ? (
         <div className="flex items-center justify-center py-16"><LoadingSpinner /></div>
       ) : registros.length === 0 ? (
-        <div className="neu-flat rounded-3xl p-10 text-center text-gray-500 text-sm">Nenhum registro encontrado.</div>
+        <EmptyState message="Nenhum registro de métricas ainda." />
       ) : (
-        <div className="flex flex-col gap-3">
+        <div className="flex flex-col gap-4">
           {PLATAFORMAS.filter(p => filtroPlat === 'Todas' || filtroPlat === p).map(plat => {
             const regs = registros.filter((r: any) => r.plataforma === plat);
             if (regs.length === 0) return null;
             const platLink = links[plat];
             return (
-              <div key={plat} className="neu-flat rounded-3xl border border-accent/10 overflow-hidden">
-                {/* Header plataforma — link vem de "Links das Redes Sociais" (só em modo filial) */}
-                <div className="flex items-center gap-2 px-5 py-3 border-b border-white/5">
-                  <span className={PLAT_COLOR[plat]}>{PLAT_ICON[plat]}</span>
-                  <span className={`text-sm font-black ${PLAT_COLOR[plat]}`}>{plat}</span>
-                  <span className="text-xs text-gray-500 ml-1">{regs.length} registros</span>
+              <SecaoFormulario key={plat} titulo={plat} icon={PLAT_ICONE[plat]} cor={PLAT_COR[plat]}
+                extra={<span className="flex items-center gap-3">
+                  {regs.length} registro{regs.length === 1 ? '' : 's'}
                   {platLink && (
                     <a href={platLink} target="_blank" rel="noopener noreferrer"
-                      className="ml-auto flex items-center gap-1 text-[10px] font-bold text-gray-500 hover:text-accent transition-colors">
+                      className="flex items-center gap-1 underline underline-offset-2 hover:opacity-80">
                       <ExternalLink size={11}/> Abrir perfil
                     </a>
                   )}
-                </div>
-                {/* Linhas */}
-                <div className="overflow-x-auto">
+                </span>}>
+                <div className="overflow-x-auto main-scrollbar -m-4 sm:-m-5">
                   <table className="tabela w-full text-xs">
                     <thead>
                       <tr className="border-b border-white/5">
@@ -324,7 +363,10 @@ export function MetricasRedesSociaisView({ showToast, profile }: { showToast: an
                     </thead>
                     <tbody>
                       {regs.map((r: any, i: number) => {
-                        const prev = regs[i + 1];
+                        // Registro anterior da MESMA unidade: no modo Matriz
+                        // a linha de baixo pode ser de outra filial, e a
+                        // variação compararia contas diferentes.
+                        const prev = regs.slice(i + 1).find((x: any) => x.filial === r.filial);
                         const canDel = isAdminCeo || r.registrado_por === profile.id;
                         return (
                           <tr key={r.id} className="border-b border-white/[0.03] hover:bg-white/[0.02] transition-colors">
@@ -333,14 +375,14 @@ export function MetricasRedesSociaisView({ showToast, profile }: { showToast: an
                             {METRICAS.map(m => (
                               <td key={m.key} className="px-4 py-2.5 text-right font-mono text-gray-200">
                                 <div className="flex flex-col items-end">
-                                  <span>{(r[m.key] ?? 0).toLocaleString('pt-BR')}</span>
-                                  {m.key === 'seguidores' && variacao(r.seguidores, prev?.seguidores)}
+                                  <span>{numeroBR(Number(r[m.key] ?? 0))}</span>
+                                  {variacao(Number(r[m.key] ?? 0), prev ? Number(prev[m.key] ?? 0) : undefined)}
                                 </div>
                               </td>
                             ))}
                             <td className="px-3 py-2.5 text-right">
                               {canDel && (
-                                <button onClick={() => excluir(r.id)} className="action-btn-delete">
+                                <button onClick={() => excluir(r.id)} className="action-btn-delete" title="Remover registro">
                                   <Trash2 size={12}/>
                                 </button>
                               )}
@@ -351,7 +393,7 @@ export function MetricasRedesSociaisView({ showToast, profile }: { showToast: an
                     </tbody>
                   </table>
                 </div>
-              </div>
+              </SecaoFormulario>
             );
           })}
         </div>

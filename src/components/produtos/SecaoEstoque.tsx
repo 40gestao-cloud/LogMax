@@ -1,6 +1,6 @@
 import type React from 'react';
-import { Pencil } from 'lucide-react';
-import { FormField } from '../ui';
+import { Boxes, Pencil, Utensils } from 'lucide-react';
+import { FormField, SecaoFormulario } from '../ui';
 import { formatQtd, parseQtd, handleQtdKeyDown, qtdBR } from '../../lib/viewUtils';
 import { EMBALAGENS_COMPRA, UNIDADES_FRACIONARIAS, normalizarUnidade, rotuloUnidade, unidadesDeProduto } from '../../lib/unidades';
 import { ehVendavel, temEstoque } from '../../lib/tipoProduto';
@@ -40,8 +40,8 @@ export function SecaoEstoque({
           não tem estoque mínimo e não gera movimentação. A seção inteira
           sai da tela em vez de pedir zeros (migr. 440). */}
       {temEstoque(extras.tipo) && (
-      <div>
-        <p className="text-[10px] text-gray-600 uppercase tracking-widest font-bold mb-3">Estoque</p>
+      <>
+      <SecaoFormulario titulo="Estoque" icon={Boxes} cor="azul">
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <FormField label="Unidade">
             <select className={`neu-input py-2 px-3 rounded-xl text-sm ${unidadeTravada ? 'opacity-60 cursor-not-allowed' : ''}`}
@@ -255,21 +255,24 @@ export function SecaoEstoque({
               placeholder="0" />
           </FormField>
         </div>
+      </SecaoFormulario>
 
         {/* MaxBank Benefícios só faz sentido no SuperMax (só supermercado
             tem itens elegíveis a vale-alimentação). Fora dele, escondido. */}
         {ehVendavel(extras.tipo) && filial === 'SuperMax' && (
-          <label className="flex items-center gap-3 cursor-pointer neu-flat rounded-xl px-4 py-3 border border-white/5 mt-4">
-            <input type="checkbox" checked={extras.elegivel_beneficios}
-              onChange={e => setExtras(x => ({ ...x, elegivel_beneficios: e.target.checked }))}
-              className="accent-accent w-4 h-4" />
-            <div className="flex flex-col">
-              <span className="text-xs font-bold text-gray-200">Aceita MaxBank Benefícios</span>
-              <span className="text-[10px] text-gray-500">Colaborador pode pagar este item com saldo de benefícios no PDV.</span>
-            </div>
-          </label>
+          <SecaoFormulario titulo="Vale Alimentação / Refeição" icon={Utensils} cor="amarelo">
+            <label className="flex items-center gap-3 cursor-pointer neu-flat rounded-xl px-4 py-3 border border-white/5">
+              <input type="checkbox" checked={extras.elegivel_beneficios}
+                onChange={e => setExtras(x => ({ ...x, elegivel_beneficios: e.target.checked }))}
+                className="accent-accent w-4 h-4" />
+              <div className="flex flex-col">
+                <span className="text-xs font-bold text-gray-200">Aceita MaxBank Benefícios</span>
+                <span className="text-[10px] text-gray-500">Colaborador pode pagar este item com saldo de vale alimentação/refeição no PDV.</span>
+              </div>
+            </label>
+          </SecaoFormulario>
         )}
-      </div>
+      </>
       )}
     </>
   );

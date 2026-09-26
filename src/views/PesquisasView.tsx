@@ -38,10 +38,10 @@ const PesquisasViewInner = ({ showToast, profile, filial }: any) => {
   const encerradas = pesquisas.filter((p: any) => p.status === 'Encerrada').length;
 
   const kpis = [
-    { tom: 'neutro' as TomContador, label: 'Total',       value: pesquisas.length, warn: false },
+    { tom: 'azul' as TomContador, label: 'Total',       value: pesquisas.length, warn: false },
     { tom: 'amarelo' as TomContador, label: 'Rascunho',    value: rascunho,         warn: rascunho > 0 },
     { tom: 'verde' as TomContador, label: 'Ativas',      value: ativas,           warn: false },
-    { tom: 'neutro' as TomContador, label: 'Encerradas',  value: encerradas,       warn: false },
+    { tom: 'roxo' as TomContador, label: 'Encerradas',  value: encerradas,       warn: false },
   ];
 
   const toggleArrayValue = (arr: string[], v: string) =>

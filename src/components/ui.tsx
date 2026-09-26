@@ -319,8 +319,9 @@ export const ExportButton = ({ label, onClick, icon: Icon, variante }: {
 // Card de contador do topo das telas (Funcionários, Relatórios, Marketing…).
 // A cor diz a situação (paleta em .contador--*, index.css) e o número vem
 // centralizado. Tom de alerta (amarelo, laranja, vermelho) com contagem zero
-// cai para o neutro: "0 desligados" não é notícia, e o vermelho só acende
-// quando há o que olhar.
+// fica mais suave, mas mantém a cor: "0 desligados" não é notícia, só que
+// virar cinza fazia a fileira inteira parecer igual (Promoções tinha quatro
+// cards cinza lado a lado) e a cor é a legenda de cada card.
 export type TomContador = 'neutro' | 'verde' | 'amarelo' | 'laranja' | 'vermelho' | 'azul' | 'roxo' | 'dourado';
 const TONS_ALERTA = new Set<TomContador>(['amarelo', 'laranja', 'vermelho']);
 
@@ -333,12 +334,12 @@ export const CardContador = ({ label, value, sub, tom = 'neutro', onClick, ativo
   corFixa?: boolean;
 }) => {
   const zero = value === 0 || value === '0';
-  const efetivo: TomContador = zero && TONS_ALERTA.has(tom) && !corFixa ? 'neutro' : tom;
+  const suave = zero && TONS_ALERTA.has(tom) && !corFixa;
   // O card é container: valor comprido (R$ 106.096,37) encolhe até caber numa
   // linha só, em vez de estourar a borda ou quebrar o "-" do "R$".
   const texto = typeof value === 'string' || typeof value === 'number' ? String(value) : '';
   const fonte = texto.length > 4 ? `min(1.875rem, calc(100cqi / ${(texto.length * 0.64).toFixed(2)}))` : undefined;
-  const cls = `contador contador--${efetivo} @container min-w-0 rounded-2xl px-4 py-5 flex flex-col items-center justify-center text-center gap-1.5`;
+  const cls = `contador contador--${tom}${suave ? ' opacity-60' : ''} @container min-w-0 rounded-2xl px-4 py-5 flex flex-col items-center justify-center text-center gap-1.5`;
   const miolo = (
     <>
       <p className="contador-rotulo text-[10px] uppercase tracking-widest font-bold leading-tight">{label}</p>
@@ -398,6 +399,44 @@ export const AbaComContador = ({ label, n, cor, ativa, onClick, icon: Icon, titl
       className="min-w-[2.75rem] px-3 rounded-xl border border-white/10 bg-white/[0.03] flex items-center justify-center">
       <span className={`text-base font-black tabular-nums ${COR_ABA[cor].numero}`}>{n}</span>
     </div>
+  </div>
+);
+
+// Seção de formulário longo: caixa própria com faixa de título em cor cheia
+// (mesma paleta das abas). Título cinza miúdo solto no fluxo não separava uma
+// área da outra — o aluno não via onde terminava Identificação e começava
+// Preços. Cada seção com uma cor diferente para ser achada de relance.
+export const SecaoFormulario = ({ titulo, icon: Icon, cor, extra, children }: {
+  titulo: React.ReactNode; icon?: any; cor: CorAba; extra?: React.ReactNode; children: React.ReactNode;
+}) => (
+  <section className="rounded-2xl border border-white/10 overflow-hidden">
+    <header className={`${COR_ABA[cor].botao} flex items-center justify-between gap-3 px-4 py-2`}>
+      <h4 className="flex items-center gap-2 text-[11px] font-black uppercase tracking-widest">
+        {Icon && <Icon size={14} className="shrink-0" />}
+        {titulo}
+      </h4>
+      {extra && <span className="text-[10px] font-bold opacity-90 text-right">{extra}</span>}
+    </header>
+    <div className="p-4 sm:p-5">{children}</div>
+  </section>
+);
+
+// Aba colorida sem contador — mesma régua da AbaComContador (cor cheia e
+// parada, nunca cinza), para menus de aba que não têm uma quantidade para
+// mostrar (Central de Avaliação, Demandas). Antes essas abas só ganhavam
+// destaque quando ativas; as outras ficavam cinza-sobre-cinza, sem
+// distinção nem organização visual entre elas.
+export const AbaColorida = ({ label, cor, ativa, onClick, icon: Icon, title }: {
+  label: string; cor: CorAba; ativa: boolean; onClick: () => void;
+  icon?: any; title?: string;
+}) => (
+  <div className="relative flex">
+    <button type="button" role="tab" aria-selected={ativa} title={title} onClick={onClick}
+      className={`btn-solido ${COR_ABA[cor].botao} !py-1.5 !px-3 !text-[11px] uppercase tracking-widest ${ativa ? 'aba-ativa' : ''}`}>
+      {Icon && <Icon size={12} />}
+      {label}
+    </button>
+    {ativa && <span aria-hidden className="absolute left-3 right-3 -bottom-2 h-0.5 rounded-full bg-accent" />}
   </div>
 );
 

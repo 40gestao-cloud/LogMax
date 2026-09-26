@@ -4,14 +4,14 @@ import type { FilialOp } from '../components/FilialSelector';
 import { useFilial } from '../contexts/FilialContext';
 import { MatrizConsolidado } from '../components/MatrizConsolidado';
 import { motion, AnimatePresence } from 'motion/react';
-import { Search, Edit2, Trash2, Plus, Save, FileDown, Sheet, AlertTriangle, Barcode, Grid3x3, Upload } from 'lucide-react';
+import { Search, Edit2, Trash2, Plus, Save, FileDown, Sheet, AlertTriangle, Barcode, Grid3x3, Upload, Layers } from 'lucide-react';
 import { HistoricoOperacoes } from '../components/HistoricoOperacoes';
 import { MenuMais, ItemMenu } from '../components/MenuMais';
 import { useColarImagemGlobal } from '../components/ColarImagem';
 import { BotaoModeloPlanilha } from '../components/BotaoModeloPlanilha';
 import { ImportarProdutosModal } from '../components/ImportarProdutosModal';
 import { useFetchData, dbInsert, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
-import { LoadingSpinner, EmptyState, FormField, ExportButton, NeuButtonAccent, Pagination, ProdutoThumb } from '../components/ui';
+import { LoadingSpinner, EmptyState, FormField, ExportButton, NeuButtonAccent, Pagination, ProdutoThumb, SecaoFormulario } from '../components/ui';
 import { SelectBusca, type SelectBuscaGrupo } from '../components/SelectBusca';
 import type { UserProfile } from '../hooks/useUserProfile';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
@@ -667,43 +667,52 @@ const ProdutosViewInner = ({ showToast, filial, profile, onNavigate }: { showToa
     && reqsProntas.length === 0
     && !emImplantacao;
 
-  // Grupos do SelectBusca de origem. A prioridade que a ordenação antiga
-  // carregava ("cotada primeiro") virou rótulo de grupo — mais legível que
-  // posição numa lista de dezenas — e o fornecedor entra como `hint`: é ele
-  // que faz achar "Sardinha" buscando por "Gomes da Costa".
+  // Grupo do SelectBusca de origem: tudo aqui é produto SEM cadastro — o que
+  // falta cadastrar —, então é um grupo só, em vermelho. De onde o item veio
+  // (cotação aprovada ou já recebido) desce para a segunda linha, junto com
+  // quantidade, requisição e fornecedor; o nome do produto fica sozinho em
+  // destaque. O fornecedor na segunda linha é também o que a busca acha
+  // ("Gomes da Costa" encontra a sardinha).
   const gruposOrigem = useMemo((): SelectBuscaGrupo[] => {
     const cotadas = reqsProntas;
-    const rotuloReq = (i: typeof itensAguardandoPedido[number]) =>
-      `${i.descricao}${i.qtd > 0 ? ` · ${qtdBR(i.qtd)} ${normalizarUnidade(i.unidade)}` : ''} · ${i.numero}`;
-    const grupos: SelectBuscaGrupo[] = [];
-    // NOVO (migr. 537): opção já tomada por outro aluno vem travada, com o
-    // nome do dono — o mesmo cadeado que a Cotação usa para requisição+
-    // fornecedor, aqui por origem de compra.
-    const rotuloTravado = (rotulo: string, valor: string) => {
+    const subReq = (i: typeof itensAguardandoPedido[number]) =>
+      [i.qtd > 0 ? `${qtdBR(i.qtd)} ${normalizarUnidade(i.unidade)}` : null, i.numero, i.fornecedor]
+        .filter(Boolean).join(' · ');
+    // Mesmo tratamento das Cotações (migr. 537): opção já tomada por outro
+    // aluno vem com selo colorido e o motivo embaixo do nome — em vez do
+    // texto emendado no rótulo (🔒 fulano — está cadastrando), que não dava
+    // pra colorir nem buscar separado do nome do produto.
+    const travaDe = (valor: string) => {
       const res = reservasOrigem[chaveDeOrigem(valor)];
-      return res && res.usuario_id !== profile?.id ? `🔒 ${rotulo} — ${res.usuario_nome} está cadastrando` : rotulo;
+      return res && res.usuario_id !== profile?.id ? res : null;
     };
-    if (cotadas.length > 0) {
-      grupos.push({
-        label: `Cotação aprovada pelo Financeiro (${cotadas.length})`,
-        opcoes: cotadas.map(i => ({
-          value: `${REQ_PREFIX}${i.id}`, label: rotuloTravado(rotuloReq(i), `${REQ_PREFIX}${i.id}`),
-          hint: i.fornecedor, disabled: origemTravadaPorOutro(`${REQ_PREFIX}${i.id}`),
-        })),
-      });
-    }
-    // Item comprado mas ainda não recebido não aparece: a ficha do produto
-    // (EAN, peso, validade) está na caixa que ainda não chegou.
-    if (itensComprados.length > 0) {
-      grupos.push({
-        label: `Já chegou e não está no catálogo (${itensComprados.length})`,
-        opcoes: itensComprados.map(i => ({
-          value: i.descricao, label: rotuloTravado(i.descricao, i.descricao),
-          hint: i.fornecedor, disabled: origemTravadaPorOutro(i.descricao),
-        })),
-      });
-    }
-    return grupos;
+    const opcoes = [
+      ...cotadas.map(i => {
+        const valor = `${REQ_PREFIX}${i.id}`;
+        const trava = travaDe(valor);
+        return {
+          value: valor, label: i.descricao, sub: subReq(i) || null,
+          tag: trava ? { texto: 'Em uso', tom: 'amarelo' as const } : null,
+          disabled: !!trava,
+          motivo: trava ? `${trava.usuario_nome} está cadastrando este item agora` : null,
+        };
+      }),
+      // Item comprado mas ainda não recebido não aparece: a ficha do produto
+      // (EAN, peso, validade) está na caixa que ainda não chegou.
+      ...itensComprados.map(i => {
+        const trava = travaDe(i.descricao);
+        return {
+          value: i.descricao, label: i.descricao,
+          sub: ['Já recebido', i.fornecedor].filter(Boolean).join(' · '),
+          tag: trava ? { texto: 'Em uso', tom: 'amarelo' as const } : null,
+          disabled: !!trava,
+          motivo: trava ? `${trava.usuario_nome} está cadastrando este item agora` : null,
+        };
+      }),
+    ];
+    return opcoes.length > 0
+      ? [{ label: 'Sem cadastro — falta cadastrar', tom: 'vermelho', opcoes }]
+      : [];
   }, [reqsProntas, itensComprados, reservasOrigem, profile?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Escolha no SelectBusca de origem. Mesma lógica de antes (era o onChange
@@ -1368,10 +1377,11 @@ const ProdutosViewInner = ({ showToast, filial, profile, onNavigate }: { showToa
     // Categoria carrega o markup-alvo que sugere o preço de venda: não faz
     // sentido exigi-la de quem não vende.
     if (vendavel && !extras.categoria_id) ee.categoria_id = 'Selecione uma categoria';
-    // Fornecedor NÃO é obrigatório (migr. 488): pós-480 o cadastro vem antes
-    // da compra, e quem fornece é a cotação que decide comparando propostas.
-    // Cobrar aqui só produzia nome escolhido no chute — o mesmo defeito que o
-    // preço de custo obrigatório tinha.
+    // Fornecedor obrigatório. A migr. 488 tinha tirado a exigência quando o
+    // cadastro vinha antes da compra; hoje o cadastro nasce da cotação
+    // aprovada, que já traz o fornecedor preenchido (escolherOrigem), e o
+    // professor quer todo produto com fornecedor.
+    if (!extras.fornecedor_id) ee.fornecedor_id = 'Escolha o fornecedor';
     if (custoObrigatorio && !extras.preco_custo.trim()) ee.preco_custo = 'Obrigatório';
     // Custo acima do preço de venda. Em 15/09 a turma da contabilidade lançou os
     // dois campos trocados e o catálogo ficou vendendo com prejuízo por unidade —
@@ -1961,8 +1971,7 @@ const ProdutosViewInner = ({ showToast, filial, profile, onNavigate }: { showToa
                   ainda faz sentido perguntar. Antes eram dois valores e material
                   de consumo não cabia em nenhum — resma de papel virava
                   mercadoria e ia para o caixa. */}
-              <div>
-                <p className="text-[10px] text-gray-600 uppercase tracking-widest font-bold mb-3">Classificação</p>
+              <SecaoFormulario titulo="Classificação" icon={Layers} cor="amarelo">
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                   <FormField label="Tipo *">
                     <select className="neu-input py-2 px-3 rounded-xl text-sm"
@@ -2024,7 +2033,7 @@ const ProdutosViewInner = ({ showToast, filial, profile, onNavigate }: { showToa
                     </FormField>
                   </div>
                 )}
-              </div>
+              </SecaoFormulario>
 
               <SecaoIdentificacao
                 errors={errors}

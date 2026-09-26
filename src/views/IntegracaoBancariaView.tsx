@@ -38,7 +38,7 @@ export const IntegracaoBancariaView = ({ showToast }: any) => {
   const comErro = integracoes.filter((i: any) => i.status === 'Erro').length;
 
   const kpis = [
-    { tom: 'neutro' as TomContador, label: 'Contas Ativas', value: contasAtivas.length, sub: 'cadastradas', warn: false },
+    { tom: 'azul' as TomContador, label: 'Contas Ativas', value: contasAtivas.length, sub: 'cadastradas', warn: false },
     { tom: 'dourado' as TomContador, label: 'Saldo Total', value: `R$ ${saldoTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, sub: 'em todas as contas', warn: false },
     { tom: 'verde' as TomContador, label: 'Importações Processadas', value: processadas, sub: 'com sucesso', warn: false },
     { tom: 'vermelho' as TomContador, label: 'Importações com Erro', value: comErro, sub: 'requerem atenção', warn: comErro > 0 },

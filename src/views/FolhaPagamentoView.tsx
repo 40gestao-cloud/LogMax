@@ -644,7 +644,7 @@ const FolhaPagamentoViewInner = ({ showToast, profile, filial }: { showToast: an
 
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4 shrink-0">
         {[
-          { tom: 'dourado' as TomContador, label: 'Total Bruto', value: `R$ ${totalBruto.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, warn: false },
+          { tom: 'roxo' as TomContador, label: 'Total Bruto', value: `R$ ${totalBruto.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, warn: false },
           { tom: 'vermelho' as TomContador, label: 'Total Descontos', value: `R$ ${totalDesc.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, warn: false },
           { tom: 'verde' as TomContador, label: 'Total Líquido', value: `R$ ${totalLiq.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, warn: false },
           { tom: 'amarelo' as TomContador, label: 'Folhas Pendentes', value: pendentes, warn: pendentes > 0 },

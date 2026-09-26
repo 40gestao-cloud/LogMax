@@ -4,7 +4,7 @@ import { supabase } from '../lib/supabase';
 import { assinarRealtime } from '../lib/realtimeAgrupado';
 import { isConselheiro } from '../lib/rbac';
 import { useFilial } from '../contexts/FilialContext';
-import { LoadingSpinner } from '../components/ui';
+import { LoadingSpinner, AbaColorida } from '../components/ui';
 import type { UserProfile } from '../hooks/useUserProfile';
 import { AvaliacoesView } from './AvaliacoesView';
 import { MatrizAvaliacoesView } from './MatrizAvaliacoesView';
@@ -75,16 +75,16 @@ export function CentralAvaliacaoView({ profile, showToast, initialTab = 'padrao'
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex items-center gap-1 neu-pressed rounded-xl p-1 self-start flex-wrap">
+      <div className="flex items-center gap-2 flex-wrap">
         {modoMatriz && (
-          <TabBtn active={abaEfetiva === 'metas'}  onClick={() => setAba('metas')}  icon={<Target size={12} className="text-emerald-300" />} label="Metas" />
+          <AbaColorida ativa={abaEfetiva === 'metas'} onClick={() => setAba('metas')} icon={Target} cor="verde" label="Metas" />
         )}
-        <TabBtn active={abaEfetiva === 'padrao'} onClick={() => setAba('padrao')} icon={<Star size={12} />} label="Padrão" />
+        <AbaColorida ativa={abaEfetiva === 'padrao'} onClick={() => setAba('padrao')} icon={Star} cor="azul" label="Padrão" />
         {podeAvisos && (
-          <TabBtn active={abaEfetiva === 'avisos'} onClick={() => setAba('avisos')} icon={<Megaphone size={12} className="text-amber-300" />} label="Avisos" />
+          <AbaColorida ativa={abaEfetiva === 'avisos'} onClick={() => setAba('avisos')} icon={Megaphone} cor="amarelo" label="Avisos" />
         )}
         {mostrarCompeticao && (
-          <TabBtn active={abaEfetiva === 'competicao'} onClick={() => setAba('competicao')} icon={<Trophy size={12} className="text-amber-300" />} label="Competição do Conselho" />
+          <AbaColorida ativa={abaEfetiva === 'competicao'} onClick={() => setAba('competicao')} icon={Trophy} cor="roxo" label="Competição do Conselho" />
         )}
       </div>
       {abaEfetiva === 'padrao'   && <AvaliacoesView profile={profile} showToast={showToast} />}
@@ -92,21 +92,5 @@ export function CentralAvaliacaoView({ profile, showToast, initialTab = 'padrao'
       {abaEfetiva === 'avisos'   && podeAvisos && <MatrizAvisosView profile={profile} showToast={showToast} />}
       {abaEfetiva === 'competicao' && mostrarCompeticao && <MatrizAvaliacoesView profile={profile} showToast={showToast} />}
     </div>
-  );
-}
-
-function TabBtn({ active, onClick, icon, label }: {
-  active: boolean; onClick: () => void; icon: React.ReactNode; label: string;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      className={`flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-lg transition-all ${
-        active ? 'neu-button text-accent ring-1 ring-accent/30' : 'text-gray-400 hover:text-gray-200'
-      }`}
-    >
-      {icon}
-      <span>{label}</span>
-    </button>
   );
 }

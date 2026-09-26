@@ -124,7 +124,7 @@ export function MatrizAvisosView({ profile, showToast }: { profile: UserProfile;
           onClick={() => setFiltro(f => f === 'vigentes' ? 'todos' : 'vigentes')} ativo={filtro === 'vigentes'} />
         <CardContador label="Sem ciência" value={resumo.pendentes} tom="amarelo"
           onClick={() => setFiltro('vigentes')} />
-        <CardContador label="Expirados" value={resumo.expirados} tom="neutro"
+        <CardContador label="Expirados" value={resumo.expirados} tom="roxo"
           onClick={() => setFiltro(f => f === 'expirados' ? 'todos' : 'expirados')} ativo={filtro === 'expirados'} />
       </div>
 

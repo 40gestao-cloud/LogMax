@@ -3,7 +3,7 @@ import React, { useMemo, useState } from 'react';
 import type { FilialOp } from '../components/FilialSelector';
 import { useFilial } from '../contexts/FilialContext';
 import { motion, AnimatePresence } from 'motion/react';
-import { Plus, Send, Trash2, ClipboardList, ChevronRight, Search, Check, RotateCcw } from 'lucide-react';
+import { Plus, Send, Trash2, ClipboardList, ChevronRight, Search, Check, RotateCcw, HelpCircle, Package, CalendarClock, ListChecks, MessageSquareText } from 'lucide-react';
 import { useFetchData } from '../hooks/useSupabaseData';
 import { FiltroSolicitante, chaveSolicitante } from '../components/FiltroSolicitante';
 import { useTravaAtualizacao } from '../hooks/useTravaAtualizacao';
@@ -13,7 +13,7 @@ import { FluxoCompra } from '../components/FluxoCompra';
 import { BotaoModeloPlanilha } from '../components/BotaoModeloPlanilha';
 import { etapaDaRequisicao } from '../lib/fluxoCompra';
 import { numeroRequisicao } from '../lib/documentos';
-import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent, StatusBadge, UrgenciaBadge, SelecioneUnidade, AbaComContador } from '../components/ui';
+import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent, StatusBadge, UrgenciaBadge, SelecioneUnidade, AbaComContador, SecaoFormulario } from '../components/ui';
 import { todayBR } from '../lib/dates';
 import {
   unidadesDeRequisicao, exemploItemRequisicao, UNIDADES_FRACIONARIAS, normalizarUnidade,
@@ -889,8 +889,7 @@ const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: 
               {/* O tipo é a primeira pergunta porque muda o destino do pedido:
                   material sai da prateleira (Estoque libera), compra vai para
                   a fila de cotação (gerente decide). */}
-              <div className="flex flex-col gap-2">
-                <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">O que você precisa</span>
+              <SecaoFormulario titulo="O que você precisa" icon={HelpCircle} cor="amarelo">
                 <div className="flex flex-wrap gap-2">
                   {([
                     { id: 'eventual'  as TipoReq, label: 'Compra eventual', hint: 'item fora do catálogo ou serviço', cor: 'bg-yellow-500 border-yellow-600 text-black', sub: 'text-black/70' },
@@ -912,9 +911,10 @@ const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: 
                     </button>
                   ))}
                 </div>
-              </div>
+              </SecaoFormulario>
 
               {tipo === 'estoque' ? (
+                <SecaoFormulario titulo="Material do estoque" icon={Package} cor="azul">
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <FormField label="Produto *" error={erros.produto_id}>
                     <SelectBusca
@@ -970,8 +970,10 @@ const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: 
                     </select>
                   </FormField>
                 </div>
+                </SecaoFormulario>
               ) : (
               <>
+              <SecaoFormulario titulo="Prazo e prioridade" icon={CalendarClock} cor="azul">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <FormField label="Necessário até *" error={erros.data_necessidade}>
                   <input
@@ -1005,19 +1007,13 @@ const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: 
                   </select>
                 </FormField>
               </div>
+              </SecaoFormulario>
 
               {tipo === 'reposicao' ? (
+                <SecaoFormulario titulo="Itens a repor" icon={ListChecks} cor="vermelho"
+                  extra={repo.size > 0 ? `${repo.size} selecionado${repo.size === 1 ? '' : 's'}` : 'nenhum selecionado'}>
                 <div className="flex flex-col gap-2">
-                  <div className="flex items-center justify-between flex-wrap gap-2">
-                    <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">
-                      Catálogo — marque o que precisa repor
-                    </span>
-                    <span className="text-[11px] text-gray-400">
-                      {repo.size > 0
-                        ? <><strong className="text-accent">{repo.size}</strong> selecionado{repo.size === 1 ? '' : 's'}</>
-                        : 'nenhum selecionado'}
-                    </span>
-                  </div>
+                  <span className="text-[11px] text-gray-400">Marque no catálogo o que precisa repor.</span>
 
                   <div className="flex flex-wrap gap-2 items-center">
                     <div className="relative flex-1 min-w-[200px]">
@@ -1153,11 +1149,13 @@ const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: 
                     })}
                   </div>
                 </div>
+                </SecaoFormulario>
               ) : (
               <>
               {/* Itens: texto livre. O catálogo é sugestão, não obrigação. */}
+              <SecaoFormulario titulo="Itens solicitados" icon={ListChecks} cor="vermelho"
+                extra={`${itens.length} ite${itens.length === 1 ? 'm' : 'ns'}`}>
               <div className="flex flex-col gap-2">
-                <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Itens solicitados</span>
 
                 {itens.map((row, i) => (
                   <div key={row.uid} className="flex flex-col gap-1.5 neu-pressed rounded-xl p-3 border border-white/5">
@@ -1325,11 +1323,13 @@ const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: 
                     )}
                   </div>
                 ))}
-                <button onClick={addLinha} className="btn-solido btn-solido--verde self-start">
+                <button onClick={addLinha} className="btn-solido btn-solido--amarelo self-start">
                   <Plus size={13} /> Adicionar item
                 </button>
               </div>
+              </SecaoFormulario>
 
+              <SecaoFormulario titulo="Justificativa" icon={MessageSquareText} cor="verde">
               <FormField
                 label={mostraJustItem ? `Justificativa geral${cabJustObrigatoria ? ' *' : ''}` : 'Justificativa *'}
                 error={erros.justificativa}
@@ -1348,6 +1348,7 @@ const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: 
                   </button>
                 )}
               </FormField>
+              </SecaoFormulario>
               </>
               )}
               </>

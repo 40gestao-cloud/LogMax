@@ -280,7 +280,7 @@ const CalendarioEditorialViewInner = ({ showToast, profile, filial }: any) => {
 
   const kpis = [
     { tom: 'azul' as TomContador, label: 'Próximos 7 dias', value: proximos7, warn: proximos7 === 0 },
-    { tom: 'neutro' as TomContador, label: 'Rascunhos',       value: rascunhos, warn: false },
+    { tom: 'amarelo' as TomContador, label: 'Rascunhos',       value: rascunhos, warn: false },
     { tom: 'roxo' as TomContador, label: 'Agendados',       value: agendados, warn: false },
     { tom: 'verde' as TomContador, label: 'Publicados',      value: publicados, warn: false },
   ];

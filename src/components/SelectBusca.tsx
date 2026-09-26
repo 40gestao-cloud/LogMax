@@ -48,6 +48,10 @@ export type SelectBuscaOpcao = {
 export type SelectBuscaGrupo = {
   label: string;
   opcoes: SelectBuscaOpcao[];
+  /** Cor do cabeçalho do grupo — quando o grupo TEM um significado próprio
+   *  (aprovado = verde, ainda falta = vermelho). Sem isto, cai na cor de
+   *  destaque do tema (o padrão neutro, "isto é um título"). */
+  tom?: TomTag;
 };
 
 /** Remove acento e caixa — mesma normalização usada em RecebimentosView para
@@ -263,10 +267,17 @@ export const SelectBusca = ({
           gruposFiltrados.map((g, gi) => (
             <div key={`${g.label}-${gi}`}>
               {g.label && (
-                <div className="sticky top-0 z-10 px-3 pt-2.5 pb-1.5 flex items-center justify-between gap-2 text-[10px] font-bold text-gray-500 uppercase tracking-widest"
-                  style={{ background: 'var(--color-bg-base)' }}>
+                // Fundo sólido (não só texto cinza): numa lista de grupos
+                // rolando, o cabeçalho cinza-sobre-cinza se perdia igual às
+                // opções — a cor separa "isto é título" de "isto é opção"
+                // antes mesmo de ler a palavra. Grupo com `tom` (aprovado,
+                // ainda falta) usa a cor do próprio significado; sem `tom`
+                // cai na cor de destaque do tema.
+                <div className={`sticky top-0 z-10 px-3 py-1.5 flex items-center justify-between gap-2 text-[10px] font-black uppercase tracking-widest ${
+                  g.tom ? COR_TAG[g.tom] : ''}`}
+                  style={g.tom ? undefined : { background: 'var(--color-accent)', color: 'var(--color-accent-text)' }}>
                   <span className="truncate">{g.label}</span>
-                  <span className="tabular-nums text-gray-600">{g.opcoes.length}</span>
+                  <span className="tabular-nums opacity-70">{g.opcoes.length}</span>
                 </div>
               )}
               {g.opcoes.map(o => {

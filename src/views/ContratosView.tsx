@@ -647,7 +647,7 @@ export const ContratosView = ({ showToast, profile }: { showToast: any; profile:
           onClick={() => setAba('pendentes')} ativo={aba === 'pendentes'} />
         <CardContador label="Vigentes" value={contagem('vigentes')} tom="verde"
           onClick={() => setAba('vigentes')} ativo={aba === 'vigentes'} />
-        <CardContador label="Encerrados" value={contagem('encerrados')} tom="neutro"
+        <CardContador label="Encerrados" value={contagem('encerrados')} tom="roxo"
           onClick={() => setAba('encerrados')} ativo={aba === 'encerrados'} />
       </div>
 

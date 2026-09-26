@@ -796,7 +796,7 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
 
       <div className="grid grid-cols-3 gap-2 sm:gap-4 shrink-0">
         {[
-          { tom: 'neutro' as TomContador, label: 'Total',        value: filteredUsers.length, icon: Users },
+          { tom: 'verde' as TomContador, label: 'Total',        value: filteredUsers.length, icon: Users },
           { tom: 'dourado' as TomContador, label: 'Gerentes',     value: totalGerentes,        icon: Shield },
           { tom: 'azul' as TomContador, label: 'Colaboradores',value: totalColaboradores,    icon: User },
         ].map((k: any) => (

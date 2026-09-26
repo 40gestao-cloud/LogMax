@@ -118,7 +118,7 @@ export const RelatoriosEstoqueView = ({ showToast: _showToast }: any) => {
   };
 
   const kpis = [
-    { tom: 'neutro' as TomContador, label: 'Total Movimentações', value: totalMov, sub: 'registradas', warn: false },
+    { tom: 'roxo' as TomContador, label: 'Total Movimentações', value: totalMov, sub: 'registradas', warn: false },
     { tom: 'verde' as TomContador, label: 'Entradas', value: entradas, sub: 'no histórico', warn: false },
     { tom: 'azul' as TomContador, label: 'Saídas', value: saidas, sub: 'no histórico', warn: false },
     { tom: 'vermelho' as TomContador, label: 'Vencimentos Críticos', value: vencimentosCriticos, sub: 'próximos ou vencidos', warn: vencimentosCriticos > 0 },

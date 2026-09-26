@@ -146,7 +146,7 @@ const FeriasViewInner = ({ showToast, profile, filial }: { showToast: any; profi
           { tom: 'amarelo' as const, label: 'Solicitadas', value: solicitadas, warn: solicitadas > 0 },
           { tom: 'verde' as const, label: 'Aprovadas', value: aprovadas, warn: false },
           { tom: 'azul' as const, label: 'Em Andamento', value: emAndamento, warn: false },
-          { tom: 'neutro' as const, label: 'Concluídas', value: concluidas, warn: false },
+          { tom: 'roxo' as const, label: 'Concluídas', value: concluidas, warn: false },
         ].map((k) => (
           <CardContador key={k.label} label={k.label} value={k.value} tom={k.tom} />
         ))}

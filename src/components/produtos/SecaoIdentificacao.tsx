@@ -1,6 +1,6 @@
 import type React from 'react';
-import { AlertTriangle, ClipboardCheck, FilePlus2, Lock, Pencil, Tag } from 'lucide-react';
-import { FormField } from '../ui';
+import { AlertTriangle, ClipboardCheck, FilePlus2, IdCard, Lock, Pencil, Tag } from 'lucide-react';
+import { FormField, SecaoFormulario } from '../ui';
 import { SelectBusca, type SelectBuscaGrupo } from '../SelectBusca';
 import { formatQtd, handleQtdKeyDown } from '../../lib/viewUtils';
 import { gerarEanInterno } from '../../lib/barcode';
@@ -76,9 +76,7 @@ export function SecaoIdentificacao({
 
   return (
     <>
-      {/* Identificação */}
-      <div>
-        <p className="text-[10px] text-gray-600 uppercase tracking-widest font-bold mb-3">Identificação</p>
+      <SecaoFormulario titulo="Identificação" icon={IdCard} cor="vermelho">
 
         {origemOferecida && (
           <div className="mb-5">
@@ -92,16 +90,21 @@ export function SecaoIdentificacao({
               </div>
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                {/* Estado "disponível, mas ainda não escolhido" é neutro de
+                    propósito: com cor própria (azul/roxo) mesmo sem clicar,
+                    os dois botões pareciam já escolhidos, e o aluno não sabia
+                    que precisava clicar para a lista aparecer. A cor só entra
+                    de verdade — preenchida — depois do clique. */}
                 <button type="button" onClick={escolherCom} disabled={!comDisponivel}
                   className={`rounded-xl px-4 py-3 border flex items-center gap-3 text-left transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
                     modo === 'com'
                       ? 'bg-blue-600 border-blue-500 text-white'
-                      : 'border-blue-500/40 text-blue-400 hover:bg-blue-500/10'}`}>
+                      : 'border-white/10 text-gray-400 hover:border-blue-500/40 hover:text-blue-400 hover:bg-blue-500/5'}`}>
                   <ClipboardCheck size={20} className="shrink-0" />
                   <span className="flex flex-col">
                     <span className="text-sm font-bold">Cadastro com requisição</span>
                     <span className={`text-[11px] ${modo === 'com' ? 'text-blue-100' : 'text-gray-500'}`}>
-                      {comDisponivel ? `${reqsProntas.length + itensComprados.length} aguardando cadastro` : 'Nenhuma aguardando'}
+                      {comDisponivel ? `${reqsProntas.length + itensComprados.length} sem cadastro` : 'Nenhum sem cadastro'}
                     </span>
                   </span>
                 </button>
@@ -110,7 +113,7 @@ export function SecaoIdentificacao({
                   className={`rounded-xl px-4 py-3 border flex items-center gap-3 text-left transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
                     modo === 'sem'
                       ? 'bg-purple-600 border-purple-500 text-white'
-                      : 'border-purple-500/40 text-purple-400 hover:bg-purple-500/10'}`}>
+                      : 'border-white/10 text-gray-400 hover:border-purple-500/40 hover:text-purple-400 hover:bg-purple-500/5'}`}>
                   <FilePlus2 size={20} className="shrink-0" />
                   <span className="flex flex-col">
                     <span className="text-sm font-bold">Cadastro sem requisição</span>
@@ -128,7 +131,7 @@ export function SecaoIdentificacao({
                   value={itemCompradoSel}
                   onChange={escolherOrigem}
                   grupos={gruposOrigem}
-                  placeholder="Buscar requisição aprovada..."
+                  placeholder="Escolha o produto sem cadastro"
                   vazioTexto="Nada encontrado com esse texto."
                   error={extrasErrors.origem_compra}
                   abrirAoMontar={!itemCompradoSel}
@@ -290,16 +293,15 @@ export function SecaoIdentificacao({
               })()}
             </FormField>
           )}
-          {/* Opcional desde a migr. 488: é sugestão para a cotação. */}
-          <FormField label="Fornecedor habitual">
+          <FormField label="Fornecedor *" error={extrasErrors.fornecedor_id}>
             <SelectBusca
               value={extras.fornecedor_id}
               onChange={id => {
                 const nome = fornecedoresOrdenados.find((f: any) => f.id === id)?.nome ?? '';
                 setExtras(x => ({ ...x, fornecedor_id: id, fornecedor: nome }));
+                setExtrasErrors(ev => ({ ...ev, fornecedor_id: '' }));
               }}
-              placeholder="— Ainda não sei —"
-              permitirVazio="— Ainda não sei —"
+              placeholder="Escolha o fornecedor"
               opcoes={fornecedoresOrdenados.map((f: any) => ({
                 value: String(f.id), label: f.nome ?? '—',
                 sub: [f.cnpj || f.cpf, f.cidade].filter(Boolean).join(' · ') || null,
@@ -307,20 +309,16 @@ export function SecaoIdentificacao({
             />
           </FormField>
         </div>
+      </SecaoFormulario>
 
         {/* ── Atributos por nicho (JSONB em produtos.atributos) ──────
-            Só aparece em MaxLook (moda) e TechMax (eletrônico). Cada
-            filial mostra os campos definidos em ATRIBUTOS_PRODUTO. */}
+            Seção própria: cada filial mostra os campos definidos em
+            ATRIBUTOS_PRODUTO (conservação, peça, ficha técnica). */}
         {ehVendavel(extras.tipo) && (ATRIBUTOS_PRODUTO[filial] ?? []).length > 0 && (
-          <div className="mt-6 pt-6 border-t border-white/5">
-            <div className="flex items-center gap-2 mb-3">
-              <Tag size={12} className="text-accent" />
-              <p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">
-                {filial === 'MaxLook' ? 'Detalhes da peça (Boutique)'
-                  : filial === 'SuperMax' ? 'Conservação (Mercearia)'
-                  : 'Ficha técnica (Loja & Assistência)'}
-              </p>
-            </div>
+          <SecaoFormulario icon={Tag} cor="verde"
+            titulo={filial === 'MaxLook' ? 'Detalhes da peça'
+              : filial === 'SuperMax' ? 'Conservação'
+              : 'Ficha técnica'}>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
               {(ATRIBUTOS_PRODUTO[filial] ?? []).map((d) => {
                 // Campo dependente some quando o pai não está na
@@ -451,9 +449,8 @@ export function SecaoIdentificacao({
                 );
               })}
             </div>
-          </div>
+          </SecaoFormulario>
         )}
-      </div>
     </>
   );
 }
