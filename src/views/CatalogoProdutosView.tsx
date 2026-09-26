@@ -1,15 +1,15 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Search, X, Package, Tag, Barcode, Building2, Boxes, AlertCircle, TrendingUp, Lock, Copy, Award, ClipboardList } from 'lucide-react';
+import { Search, X, Package, Tag, Barcode, Building2, Boxes, AlertCircle, TrendingUp, Lock, Copy, Award, ClipboardList, ArrowUpDown, FilterX } from 'lucide-react';
 import { useFetchData } from '../hooks/useSupabaseData';
-import { ehVendavel } from '../lib/tipoProduto';
+import { supabase } from '../lib/supabase';
 import { ATRIBUTOS_PRODUTO, rotuloParaCliente } from '../lib/atributosProduto';
 import { calcMarkup, calcMargem, corDoMarkup, fmtPct } from '../lib/precificacao';
 import {
   LoadingSpinner,
   EmptyState,
   FilialBadge,
-  ProdutoThumb,
+  ImagemProduto,
   Pagination,
 } from '../components/ui';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
@@ -17,6 +17,7 @@ import { formatBRL } from '../lib/viewUtils';
 import { FILIAIS_HOLDING } from '../lib/filiais';
 import { hasSetor, isConselheiro } from '../lib/rbac';
 import { useFilial } from '../contexts/FilialContext';
+import { PAGE_SIZE } from '../hooks/useSupabaseData';
 import type { UserProfile } from '../hooks/useUserProfile';
 
 // Markup e margem vêm de src/lib/precificacao.ts — esta era a segunda cópia
@@ -51,6 +52,24 @@ const formatAtributoValor = (v: any): string => {
 //  - Admin/CEO com filial escolhida no topbar → só produtos daquela filial.
 //  - Gerente/colaborador → travado na própria filial (independente do topbar).
 // A prioridade é: filialAtiva do topbar > profile.filial > 'todas' (só Matriz).
+const ORDENS = {
+  recentes:   { label: 'Mais recentes',  orderBy: 'codigo', ascending: false },
+  nome:       { label: 'Nome (A–Z)',     orderBy: 'nome',   ascending: true },
+  menorPreco: { label: 'Menor preço',    orderBy: 'preco',  ascending: true },
+  maiorPreco: { label: 'Maior preço',    orderBy: 'preco',  ascending: false },
+} as const;
+type Ordem = keyof typeof ORDENS;
+
+// Situação do estoque em cor cheia (mesma régua do StatusBadge): o selo fica
+// em cima da foto, e o translúcido sumia contra ela.
+const estoqueBadge = (p: any) => {
+  const est = Number(p.estoque ?? 0);
+  const min = Number(p.estoque_minimo ?? 0);
+  if (est <= 0) return { label: 'Esgotado', cls: 'bg-red-600 text-white' };
+  if (min > 0 && est <= min) return { label: 'Estoque baixo', cls: 'bg-orange-600 text-white' };
+  return { label: 'Em estoque', cls: 'bg-green-600 text-white' };
+};
+
 const isMatrizViewer = (profile: UserProfile) =>
   !profile.filial || profile.filial === 'Matriz';
 
@@ -76,22 +95,34 @@ export const CatalogoProdutosView = ({ showToast, profile }: { showToast: any; p
   // Reseta pra capa toda vez que um produto diferente é aberto.
   const [imagemAtiva, setImagemAtiva] = useState<string | null>(null);
   useEffect(() => { setImagemAtiva(selecionado?.imagem_url ?? null); }, [selecionado?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  const [ordem, setOrdem] = useState<Ordem>('recentes');
   const debouncedSearch = useDebouncedValue(search, 300);
-  useEffect(() => { setPage(0); }, [debouncedSearch, filialFiltro, categoriaFiltro]);
+  useEffect(() => { setPage(0); }, [debouncedSearch, filialFiltro, categoriaFiltro, ordem]);
+
+  // Tipo, status e categoria vão para o servidor. Eram filtrados no array da
+  // página já carregada: a página vinha com menos cards que o tamanho dela e o
+  // "1–50 de 80" contava linhas que a tela não mostrava. As duas colunas são
+  // NOT NULL com default ('estoque_venda', 'Ativo'), então não há legado nulo.
+  const filtros = useMemo(() => ({
+    tipo: 'estoque_venda',
+    status: 'Ativo',
+    ...(filialFiltro !== 'todas' ? { filial: filialFiltro } : {}),
+    ...(categoriaFiltro !== 'todas' ? { categoria: categoriaFiltro } : {}),
+  }), [filialFiltro, categoriaFiltro]);
 
   const { data, isLoading, totalCount, reload } = useFetchData<any>(
     // Lê pela view mascarada: preco_custo vem NULL para quem não é
     // financeiro/marketing/logística (migração 262). O gate visual
     // `podeVerCusto` abaixo continua valendo — agora com respaldo no servidor.
     '/api/produtoscomcustoview',
-    filialFiltro === 'todas' ? undefined : { filial: filialFiltro },
+    filtros,
     false,
     {
       page,
       searchTerm: debouncedSearch,
-      searchColumns: ['nome', 'codigo', 'categoria', 'ean', 'fornecedor'],
-      orderBy: 'codigo',
-      ascending: false,
+      searchColumns: ['nome', 'codigo', 'categoria', 'ean', 'fornecedor', 'marca'],
+      orderBy: ORDENS[ordem].orderBy,
+      ascending: ORDENS[ordem].ascending,
     }
   );
 
@@ -99,68 +130,65 @@ export const CatalogoProdutosView = ({ showToast, profile }: { showToast: any; p
     profile.role === 'admin' || profile.role === 'ceo' || isConselheiro(profile)
     || hasSetor(profile, 'financeiro') || hasSetor(profile, 'marketing');
 
-  // Catálogo = só itens vendáveis ativos. Patrimônio (tipo='patrimonio') é gestão
-  // contábil, não pertence ao catálogo público.
-  // Ordem: agrupar por filial (FILIAIS_HOLDING fixa a ordem) e dentro de cada
-  // filial mostrar codigo DESC com `numeric: true` (ML-10 > ML-9).
-  const filialRank = (f?: string) => {
-    const idx = (FILIAIS_HOLDING as readonly string[]).indexOf(f ?? '');
-    return idx === -1 ? FILIAIS_HOLDING.length : idx;
-  };
-  const produtosVisiveis = useMemo(
-    () => data.filter((p: any) =>
-      (p.status === 'Ativo' || !p.status) &&
-      ehVendavel(p.tipo) &&
-      (categoriaFiltro === 'todas' || p.categoria === categoriaFiltro)
-    ).slice().sort((a: any, b: any) => {
-      const ra = filialRank(a.filial);
-      const rb = filialRank(b.filial);
-      if (ra !== rb) return ra - rb;
-      return String(b.codigo ?? '').localeCompare(String(a.codigo ?? ''), 'pt-BR', { numeric: true });
-    }),
-    [data, categoriaFiltro]
-  );
-
-  // Categorias do filtro saem só dos itens que o catálogo realmente mostra —
-  // senão categoria exclusiva de patrimônio ou de material de consumo aparece
-  // no dropdown e, ao ser escolhida, devolve lista vazia (o filtro de tipo
-  // acima já removeu os itens).
-  const categorias = useMemo(() => {
-    const set = new Set<string>();
-    data.forEach((p: any) => {
-      if (!ehVendavel(p.tipo)) return;
-      if (p.categoria) set.add(p.categoria);
+  // Categorias do filtro: leitura própria, só da coluna, no escopo da unidade.
+  // Saíam da página carregada — categoria que só existia na página 2 não
+  // aparecia no seletor.
+  const [categorias, setCategorias] = useState<string[]>([]);
+  useEffect(() => {
+    if (!supabase) return;
+    let vivo = true;
+    let q = supabase.from('produtos_com_custo').select('categoria')
+      .eq('tipo', 'estoque_venda').eq('status', 'Ativo').not('categoria', 'is', null);
+    if (filialFiltro !== 'todas') q = q.eq('filial', filialFiltro);
+    q.then(({ data: rows }) => {
+      if (!vivo || !rows) return;
+      const set = new Set<string>(rows.map((r: any) => String(r.categoria)).filter(Boolean));
+      setCategorias(Array.from(set).sort((x, y) => x.localeCompare(y, 'pt-BR')));
     });
-    return Array.from(set).sort((a, b) => a.localeCompare(b, 'pt-BR'));
-  }, [data]);
+    return () => { vivo = false; };
+  }, [filialFiltro]);
+  // Categoria escolhida que não existe na unidade nova volta para "todas".
+  useEffect(() => {
+    if (categoriaFiltro !== 'todas' && categorias.length > 0 && !categorias.includes(categoriaFiltro)) {
+      setCategoriaFiltro('todas');
+    }
+  }, [categorias]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const estoqueBadge = (p: any) => {
-    const est = Number(p.estoque ?? 0);
-    const min = Number(p.estoque_minimo ?? 0);
-    if (est <= 0) return { label: 'Esgotado', cls: 'text-red-500', bg: 'bg-red-500/10' };
-    if (min > 0 && est <= min) return { label: 'Estoque baixo', cls: 'text-yellow-500', bg: 'bg-yellow-500/10' };
-    return { label: 'Em estoque', cls: 'text-emerald-400', bg: 'bg-emerald-500/10' };
-  };
+  const mostrarFilial = filialFiltro === 'todas';
+  const temFiltro = search.trim() !== '' || categoriaFiltro !== 'todas' || ordem !== 'recentes';
+  const limparFiltros = () => { setSearch(''); setCategoriaFiltro('todas'); setOrdem('recentes'); };
+
+  const imagensDo = (p: any): string[] =>
+    [p?.imagem_url, p?.imagem_url_2, p?.imagem_url_3].filter(Boolean);
 
   return (
-    <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col h-full gap-6 overflow-y-auto main-scrollbar pb-6">
-      <div className="flex flex-wrap justify-between items-start gap-3 shrink-0">
-        <div>
-          <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Catálogo de Produtos</h2>
-        </div>
+    <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col h-full gap-5 overflow-y-auto main-scrollbar pb-6">
+      <div className="flex flex-col gap-1 shrink-0">
+        <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Catálogo de Produtos</h2>
+        <p className="text-sm text-gray-500">
+          {totalCount === null
+            ? 'Carregando produtos…'
+            : `${totalCount} ${totalCount === 1 ? 'produto à venda' : 'produtos à venda'} · ${mostrarFilial ? 'todas as unidades' : filialFiltro}`}
+        </p>
       </div>
 
       {/* Filtros */}
-      <div className="flex flex-wrap gap-3 items-center shrink-0">
-        <div className="relative flex-1 min-w-[12rem] max-w-md">
+      <div className="neu-flat rounded-2xl p-3 border border-white/5 flex flex-wrap gap-2.5 items-center shrink-0">
+        <div className="relative flex-1 min-w-[14rem]">
           <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
           <input
             type="text"
-            placeholder="Buscar por nome, código, categoria, EAN..."
-            className="neu-input py-2.5 pl-10 pr-4 rounded-xl text-sm w-full"
+            placeholder="Buscar por nome, código, marca, categoria, EAN..."
+            className="neu-input py-2.5 pl-10 pr-9 rounded-xl text-sm w-full"
             value={search}
             onChange={e => setSearch(e.target.value)}
           />
+          {search && (
+            <button type="button" onClick={() => setSearch('')} aria-label="Limpar busca"
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-200">
+              <X size={14} />
+            </button>
+          )}
         </div>
         {podeVerTodasFiliais ? (
           <select
@@ -187,62 +215,104 @@ export const CatalogoProdutosView = ({ showToast, profile }: { showToast: any; p
           <option value="todas">Todas as categorias</option>
           {categorias.map(c => <option key={c} value={c}>{c}</option>)}
         </select>
+        <div className="relative">
+          <ArrowUpDown size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none" />
+          <select
+            value={ordem}
+            onChange={e => setOrdem(e.target.value as Ordem)}
+            className="neu-input py-2.5 pl-8 pr-3 rounded-xl text-sm"
+            aria-label="Ordenar"
+          >
+            {(Object.keys(ORDENS) as Ordem[]).map(k => <option key={k} value={k}>{ORDENS[k].label}</option>)}
+          </select>
+        </div>
+        {temFiltro && (
+          <button type="button" onClick={limparFiltros}
+            className="text-xs font-bold text-gray-400 hover:text-accent flex items-center gap-1.5 px-2 py-2">
+            <FilterX size={13} /> Limpar
+          </button>
+        )}
       </div>
 
-      {/* Grid de cards */}
-      {isLoading ? (
-        <LoadingSpinner />
-      ) : produtosVisiveis.length === 0 ? (
+      {/* Grade de cards */}
+      {isLoading && data.length === 0 ? (
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-5 gap-4 shrink-0" aria-busy="true">
+          {Array.from({ length: 10 }).map((_, i) => (
+            <div key={i} className="neu-flat rounded-2xl overflow-hidden border border-white/5 animate-pulse">
+              <div className="aspect-square bg-white/[0.04]" />
+              <div className="p-3 flex flex-col gap-2">
+                <div className="h-2.5 w-1/3 rounded bg-white/[0.06]" />
+                <div className="h-3.5 w-4/5 rounded bg-white/[0.06]" />
+                <div className="h-4 w-1/2 rounded bg-white/[0.06] mt-2" />
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : data.length === 0 ? (
         <EmptyState message="Nenhum produto encontrado com os filtros atuais." />
       ) : (
-        <div className="neu-flat rounded-3xl p-5 border border-white/5 flex flex-col gap-4 shrink-0">
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 gap-3">
-            {produtosVisiveis.map((p: any) => {
+        <div className={`flex flex-col gap-4 shrink-0 transition-opacity ${isLoading ? 'opacity-60' : ''}`}>
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-5 gap-4">
+            {data.map((p: any) => {
               const badge = estoqueBadge(p);
+              const n = imagensDo(p).length;
               return (
                 <motion.button
                   key={p.id}
+                  type="button"
                   onClick={() => setSelecionado(p)}
-                  whileTap={{ scale: 0.97 }}
-                  className="neu-button rounded-2xl p-3 flex flex-col gap-2 text-left transition-all border border-transparent hover:border-accent/30"
+                  whileTap={{ scale: 0.98 }}
+                  className="group neu-flat rounded-2xl overflow-hidden flex flex-col text-left border border-white/5 hover:border-accent/40 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
                 >
-                  <div className="flex justify-center">
-                    <ProdutoThumb url={p.imagem_url} size="md" alt={p.nome} />
-                  </div>
-                  <div className="flex flex-col gap-1 min-w-0">
-                    {p.filial && <FilialBadge filial={p.filial} />}
-                    <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest truncate">
-                      {p.codigo || '—'}
+                  <div className="relative aspect-square overflow-hidden neu-pressed flex items-center justify-center text-gray-600">
+                    <Package size={34} strokeWidth={1.25} className="absolute" />
+                    {p.imagem_url && (
+                      <ImagemProduto url={p.imagem_url} alt={p.nome}
+                        className="relative w-full h-full object-cover transition-transform duration-300 group-hover:scale-105" />
+                    )}
+                    <span className={`absolute top-2 right-2 text-[9px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wider shadow ${badge.cls}`}>
+                      {badge.label}
                     </span>
-                    <span className="text-sm font-bold text-gray-200 leading-tight line-clamp-2">
-                      {p.nome}
-                    </span>
-                    {p.marca && (
-                      <span className="text-[10px] text-gray-500 flex items-center gap-1 truncate">
-                        <Award size={9} className="shrink-0" /> {p.marca}
+                    {mostrarFilial && p.filial && (
+                      <span className="absolute top-2 left-2"><FilialBadge filial={p.filial} /></span>
+                    )}
+                    {n > 1 && (
+                      <span className="absolute bottom-2 right-2 text-[9px] font-bold px-1.5 py-0.5 rounded bg-black/60 text-white">
+                        {n} fotos
                       </span>
                     )}
                   </div>
-                  <div className="flex items-end justify-between mt-auto pt-1">
-                    <span className="text-base font-black text-accent tabular-nums">
-                      R$ {formatBRL(Number(p.preco ?? 0))}
+                  <div className="p-3 flex flex-col gap-1 flex-1 min-w-0">
+                    <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest truncate">
+                      {p.codigo || '—'}{p.marca ? ` · ${p.marca}` : ''}
                     </span>
-                    <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${badge.bg} ${badge.cls} uppercase tracking-wider`}>
-                      {badge.label}
+                    <span className="text-sm font-bold text-gray-200 leading-snug line-clamp-2 min-h-[2.5rem]" title={p.nome}>
+                      {p.nome}
+                    </span>
+                    {p.categoria && (
+                      <span className="text-[10px] text-gray-500 flex items-center gap-1 truncate">
+                        <Tag size={9} className="shrink-0" /> {p.categoria}
+                      </span>
+                    )}
+                    <span className="text-lg font-black text-accent tabular-nums mt-auto pt-1">
+                      R$ {formatBRL(Number(p.preco ?? 0))}
                     </span>
                   </div>
                 </motion.button>
               );
             })}
           </div>
-          <Pagination
-            page={page}
-            totalCount={totalCount}
-            isLoading={isLoading}
-            onPrev={() => setPage(p => Math.max(0, p - 1))}
-            onNext={() => setPage(p => p + 1)}
-            onReload={reload}
-          />
+          <div className="neu-flat rounded-2xl px-4 pb-3 border border-white/5">
+            <Pagination
+              page={page}
+              pageSize={PAGE_SIZE}
+              totalCount={totalCount}
+              isLoading={isLoading}
+              onPrev={() => setPage(p => Math.max(0, p - 1))}
+              onNext={() => setPage(p => p + 1)}
+              onReload={reload}
+            />
+          </div>
         </div>
       )}
 
@@ -259,35 +329,42 @@ export const CatalogoProdutosView = ({ showToast, profile }: { showToast: any; p
             <motion.div
               initial={{ scale: 0.94, y: 12 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.96, y: 8 }}
               transition={{ type: 'spring', stiffness: 280, damping: 26 }}
-              className="neu-flat rounded-3xl w-full max-w-2xl p-6 flex flex-col gap-5 border border-white/5 relative max-h-[90vh] overflow-y-auto main-scrollbar"
+              className="neu-flat rounded-3xl w-full max-w-3xl p-6 flex flex-col gap-5 border border-white/5 relative max-h-[90vh] overflow-y-auto main-scrollbar"
               style={{ background: 'var(--color-bg-base)' }}
               onClick={e => e.stopPropagation()}
             >
               <button
                 onClick={() => setSelecionado(null)}
-                className="absolute top-4 right-4 w-8 h-8 neu-button rounded-lg flex items-center justify-center text-gray-400 hover:text-white transition-colors"
+                className="absolute top-4 right-4 z-10 w-8 h-8 neu-button rounded-lg flex items-center justify-center text-gray-400 hover:text-white transition-colors"
                 aria-label="Fechar"
               >
                 <X size={14} />
               </button>
 
               <div className="flex flex-col sm:flex-row gap-5 items-start">
-                <div className="shrink-0 mx-auto sm:mx-0 flex flex-col items-center gap-2">
-                  <ProdutoThumb url={imagemAtiva} size="lg" alt={selecionado.nome} />
-                  {[selecionado.imagem_url, selecionado.imagem_url_2, selecionado.imagem_url_3].filter(Boolean).length > 1 && (
-                    <div className="flex gap-1.5">
-                      {[selecionado.imagem_url, selecionado.imagem_url_2, selecionado.imagem_url_3]
-                        .filter(Boolean)
-                        .map((url: string, i: number) => (
-                          <button
-                            key={i}
-                            type="button"
-                            onClick={() => setImagemAtiva(url)}
-                            className={`rounded-lg overflow-hidden border transition-colors ${imagemAtiva === url ? 'border-accent' : 'border-white/10 opacity-70 hover:opacity-100'}`}
-                          >
-                            <ProdutoThumb url={url} size="xs" alt={`${selecionado.nome} — foto ${i + 1}`} />
-                          </button>
-                        ))}
+                {/* Foto grande: aqui vale a original (é onde se olha o detalhe);
+                    as miniaturas de troca usam a versão leve. */}
+                <div className="w-full sm:w-64 shrink-0 flex flex-col gap-2">
+                  <div className="relative aspect-square rounded-2xl overflow-hidden neu-pressed border border-white/5 flex items-center justify-center text-gray-600">
+                    <Package size={40} strokeWidth={1.25} className="absolute" />
+                    {imagemAtiva && (
+                      <ImagemProduto key={imagemAtiva} url={imagemAtiva} original alt={selecionado.nome}
+                        className="relative w-full h-full object-cover" />
+                    )}
+                  </div>
+                  {imagensDo(selecionado).length > 1 && (
+                    <div className="flex gap-2">
+                      {imagensDo(selecionado).map((url, i) => (
+                        <button
+                          key={url}
+                          type="button"
+                          onClick={() => setImagemAtiva(url)}
+                          aria-label={`Ver foto ${i + 1}`}
+                          className={`w-14 h-14 rounded-lg overflow-hidden border-2 neu-pressed transition ${imagemAtiva === url ? 'border-accent' : 'border-transparent opacity-60 hover:opacity-100'}`}
+                        >
+                          <ImagemProduto url={url} alt={`${selecionado.nome} — foto ${i + 1}`} className="w-full h-full object-cover" />
+                        </button>
+                      ))}
                     </div>
                   )}
                 </div>

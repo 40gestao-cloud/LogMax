@@ -17,6 +17,31 @@ export const PRODUTO_IMAGEM_OUTPUT_MAX_LABEL = '800 KB';
 // Até 3 imagens por produto: capa (slot 1, coluna imagem_url) + 2 extras.
 export const PRODUTO_IMAGEM_MAX_SLOTS = 3;
 
+// Miniatura irmã de cada foto, gravada no mesmo upload: `img1-123.webp` ganha
+// `img1-123.thumb.webp` ao lado. Existe porque o card mostra ~200 px e baixava a
+// original de 1600 px — 42 capas somavam 8 MB numa página do Catálogo. O plano
+// Free da Supabase não tem transformação de imagem (`/render/image`), então a
+// versão pequena precisa existir como arquivo.
+//
+// Não há coluna nova: a URL da miniatura sai da URL da foto por convenção.
+// Foto antiga sem miniatura cai na original pelo onError do componente.
+export const PRODUTO_MINIATURA_LADO = 480;
+const SUFIXO_MINIATURA = '.thumb.webp';
+
+export function urlMiniatura(url: string | null | undefined): string | null {
+  if (!url || !url.includes(`/object/public/${PRODUTO_IMAGEM_BUCKET}/`)) return null;
+  const semQuery = url.split('?')[0];
+  if (semQuery.endsWith(SUFIXO_MINIATURA)) return semQuery;
+  const ponto = semQuery.lastIndexOf('.');
+  if (ponto <= semQuery.lastIndexOf('/')) return null;
+  return semQuery.slice(0, ponto) + SUFIXO_MINIATURA;
+}
+
+// Path é único (leva Date.now()), então o arquivo nunca muda sob o mesmo
+// endereço: pode ficar um ano no cache do navegador. Era 3600 — cada aluno
+// baixava tudo de novo a cada hora.
+const CACHE_IMUTAVEL = '31536000';
+
 const ALLOWED_MIME = new Set(['image/jpeg', 'image/jpg', 'image/png', 'image/webp']);
 const ALLOWED_EXT = new Set(['jpg', 'jpeg', 'png', 'webp']);
 
@@ -102,10 +127,27 @@ export async function uploadImagemProduto(
     .from(PRODUTO_IMAGEM_BUCKET)
     .upload(path, optimized, {
       contentType: optimized.type || `image/${ext}`,
-      cacheControl: '3600',
+      cacheControl: CACHE_IMUTAVEL,
       upsert: false,
     });
   if (upErr) throw new Error(`Falha ao enviar imagem: ${upErr.message}`);
+
+  // Best-effort: sem miniatura a tela usa a original, só mais devagar.
+  try {
+    const mini = await resizeImage(optimized as File, {
+      maxWidth: PRODUTO_MINIATURA_LADO,
+      maxHeight: PRODUTO_MINIATURA_LADO,
+      quality: 0.8,
+      outputMime: 'image/webp',
+      maxBytes: 80 * 1024,
+    });
+    const pathMini = path.slice(0, path.lastIndexOf('.')) + SUFIXO_MINIATURA;
+    await supabase.storage.from(PRODUTO_IMAGEM_BUCKET).upload(pathMini, mini, {
+      contentType: 'image/webp', cacheControl: CACHE_IMUTAVEL, upsert: true,
+    });
+  } catch (e) {
+    console.warn('[produtoImagem] miniatura não gerada:', (e as Error).message);
+  }
 
   const { data: pub } = supabase.storage.from(PRODUTO_IMAGEM_BUCKET).getPublicUrl(path);
   if (!pub?.publicUrl) throw new Error('Imagem enviada, mas a URL pública não foi gerada.');
@@ -118,7 +160,9 @@ export async function removerImagemAntiga(urlAntiga: string | null | undefined):
   if (!supabase) return;
   const path = extrairPathDoBucket(urlAntiga);
   if (!path) return;
-  const { error } = await supabase.storage.from(PRODUTO_IMAGEM_BUCKET).remove([path]);
+  const mini = urlMiniatura(urlAntiga);
+  const pathMini = mini ? extrairPathDoBucket(mini) : null;
+  const { error } = await supabase.storage.from(PRODUTO_IMAGEM_BUCKET).remove(pathMini ? [path, pathMini] : [path]);
   if (error) {
     console.warn('[produtoImagem] falha ao remover imagem antiga:', error.message);
   }

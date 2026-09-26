@@ -3,6 +3,7 @@ import { Search, Loader2, AlertCircle, CheckCircle, RefreshCw } from 'lucide-rea
 import { motion, AnimatePresence } from 'motion/react';
 import { Package, Landmark } from 'lucide-react';
 import { diasDesde } from '../lib/dates';
+import { urlMiniatura } from '../lib/produtoImagem';
 
 // Situação em cor cheia, sem transparência, com uma régua de SIGNIFICADO
 // única no app (Pedidos, Cotações, Requisições, Contas…): verde = deu certo,
@@ -438,6 +439,37 @@ export const FilialBadge = ({ filial }: { filial?: string | null }) => {
 // Aceita tamanhos pré-definidos (`xs` 40px → tabela, `sm` 56px → mobile,
 // `md` 72px → cards PDV, `lg` 96px → preview no formulário). Mantém aspecto
 // quadrado e canto arredondado consistentes com o resto da UI neumorfa.
+// Miniaturas que já falharam nesta sessão (foto antiga, de antes da miniatura
+// existir). Guardar evita pagar o 400 de novo a cada remontagem do card.
+const miniaturaAusente = new Set<string>();
+
+// <img> que tenta a miniatura irmã e cai na original se ela não existir.
+// `original` força a foto grande (zoom do modal).
+export const ImagemProduto = ({ url, alt, className, original = false }: {
+  url: string; alt?: string; className?: string; original?: boolean;
+}) => {
+  const mini = original ? null : urlMiniatura(url);
+  const inicial = mini && !miniaturaAusente.has(mini) ? mini : url;
+  const [src, setSrc] = React.useState(inicial);
+  const [falhou, setFalhou] = React.useState(false);
+  React.useEffect(() => { setSrc(inicial); setFalhou(false); }, [inicial]);
+  if (falhou) return null;
+  return (
+    <img
+      src={src}
+      alt={alt ?? 'Imagem do produto'}
+      loading="lazy"
+      decoding="async"
+      className={className}
+      onError={() => {
+        if (mini && src === mini) { miniaturaAusente.add(mini); setSrc(url); return; }
+        // Se a URL quebrar, some a <img> e o fundo de fallback aparece.
+        setFalhou(true);
+      }}
+    />
+  );
+};
+
 export const ProdutoThumb = ({
   url,
   alt,
@@ -459,18 +491,8 @@ export const ProdutoThumb = ({
   const base = `${dim[size]} ${rounded} shrink-0 overflow-hidden flex items-center justify-center neu-pressed border border-white/5`;
   if (url) {
     return (
-      <div className={base}>
-        <img
-          src={url}
-          alt={alt ?? 'Imagem do produto'}
-          loading="lazy"
-          decoding="async"
-          className="w-full h-full object-cover"
-          onError={(e) => {
-            // Se a URL quebrar, esconde a <img> e o fallback de fundo aparece.
-            (e.currentTarget as HTMLImageElement).style.display = 'none';
-          }}
-        />
+      <div className={`${base} text-gray-600`}>
+        <ImagemProduto url={url} alt={alt} className="w-full h-full object-cover" />
       </div>
     );
   }
