@@ -64,7 +64,7 @@ export function JornadaTurmaFaixa({ profile, showToast }: { profile: UserProfile
             <h3 className="text-sm font-bold text-gray-200">Jornada da turma</h3>
           </div>
           {pendente ? (
-            <span className="flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide border border-[#ca8a04] bg-[#eab308] text-[#0a0a0a]">
+            <span className="flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide border border-[#b91c1c] bg-[#dc2626] text-white">
               <AlertTriangle size={10} /> Configuração pendente
             </span>
           ) : (
