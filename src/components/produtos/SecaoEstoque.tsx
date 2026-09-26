@@ -42,7 +42,7 @@ export function SecaoEstoque({
       {temEstoque(extras.tipo) && (
       <>
       <SecaoFormulario titulo="Estoque" icon={Boxes} cor="azul">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 @xl:grid-cols-2 @4xl:grid-cols-4 @7xl:grid-cols-5 gap-4">
           <FormField label="Unidade">
             <select className={`neu-input py-2 px-3 rounded-xl text-sm ${unidadeTravada ? 'opacity-60 cursor-not-allowed' : ''}`}
               disabled={unidadeTravada}
@@ -136,7 +136,7 @@ export function SecaoEstoque({
             const temConteudo = mostraPesoConteudo && conte > 0 && !!extras.peso_unidade;
             if (!temEmb && !temConteudo) return null;
             return (
-              <div className="sm:col-span-2 lg:col-span-4 neu-pressed rounded-xl px-3 py-2 text-xs text-gray-300 flex flex-wrap gap-x-5 gap-y-1">
+              <div className="col-span-full neu-pressed rounded-xl px-3 py-2 text-xs text-gray-300 flex flex-wrap gap-x-5 gap-y-1">
                 {temEmb && (
                   <span>1 <span className="font-bold text-accent">{extras.embalagem_compra}</span> = <span className="font-bold">{qtdBR(fator)} {un}</span></span>
                 )}

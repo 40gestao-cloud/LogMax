@@ -26,10 +26,10 @@ export function SecaoImagens({
     <>
       <SecaoFormulario titulo="Imagens do produto" icon={ImagePlus} cor="laranja"
         extra={`Até ${PRODUTO_IMAGEM_MAX_SLOTS}${capaObrigatoria ? ' · capa obrigatória *' : ''}`}>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <div className="grid grid-cols-2 @lg:grid-cols-3 gap-3">
           {imagens.map((url, slotIdx) => (
             <div key={slotIdx}
-              className={`neu-pressed rounded-2xl p-3 border flex flex-col items-center gap-2 ${
+              className={`neu-pressed rounded-2xl p-3 border flex flex-col items-center gap-2 ${slotIdx === 0 ? 'col-span-2 @lg:col-span-1' : ''} ${
                 slotIdx === 0 && extrasErrors.imagens ? 'border-red-500/40' : 'border-white/5'
               }`}>
               <ProdutoThumb url={url} size="lg" alt={slotIdx === 0 ? (form.nome || 'Produto') : `${form.nome || 'Produto'} — foto ${slotIdx + 1}`} />

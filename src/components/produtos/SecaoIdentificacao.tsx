@@ -15,8 +15,10 @@ import { OUTRO, SEM_COMPRA, type FormProduto, type ExtrasProduto } from './produ
 // Seção do formulário de ProdutosView: o estado é da view e desce com o
 // mesmo nome que tem lá.
 export function SecaoIdentificacao({
-  errors, clearError, categoriasProduto, subcategoriasProduto, atrLivre, categoriasDaFilial, codigoReservado, emImplantacao, escolherOrigem, exProd, extras, extrasErrors, filial, form, fornecedoresOrdenados, gruposOrigem, itemCompradoSel, itensComprados, liberarCodigo, modoOrigem, mostraPesoConteudo, nomeDestravado, origemExigida, origemOferecida, origemSemOpcoes, reqsProntas, reservaOrigem, setAtrLivre, setCodigoReservado, setExtras, setExtrasErrors, setForm, setModoOrigem, setNomeDestravado, sugerindoCodigo, sugerirCodigo,
+  campoTipo, aposGrade, errors, clearError, categoriasProduto, subcategoriasProduto, atrLivre, categoriasDaFilial, codigoReservado, emImplantacao, escolherOrigem, exProd, extras, extrasErrors, filial, form, fornecedoresOrdenados, gruposOrigem, itemCompradoSel, itensComprados, liberarCodigo, modoOrigem, mostraPesoConteudo, nomeDestravado, origemExigida, origemOferecida, origemSemOpcoes, reqsProntas, reservaOrigem, setAtrLivre, setCodigoReservado, setExtras, setExtrasErrors, setForm, setModoOrigem, setNomeDestravado, sugerindoCodigo, sugerirCodigo,
 }: {
+  campoTipo?: React.ReactNode;
+  aposGrade?: React.ReactNode;
   errors: Partial<Record<keyof FormProduto, string>>;
   clearError: (key: keyof FormProduto) => void;
   categoriasProduto: any[];
@@ -78,8 +80,11 @@ export function SecaoIdentificacao({
     <>
       <SecaoFormulario titulo="Identificação" icon={IdCard} cor="vermelho">
 
+        {/* Tipo vem antes da origem: ele decide se a origem ainda se pergunta. */}
         {origemOferecida && (
-          <div className="mb-5">
+          <div className="mb-5 flex flex-col @4xl:flex-row gap-4">
+          <div className="@4xl:w-60 shrink-0">{campoTipo}</div>
+          <div className="flex-1 min-w-0">
             <p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-2">
               Origem deste cadastro{origemExigida ? ' *' : ''}
             </p>
@@ -89,7 +94,7 @@ export function SecaoIdentificacao({
                 <span className="font-bold">Requisições &gt; Do Setor &gt; Compra eventual</span>.
               </div>
             ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+              <div className="grid grid-cols-1 @xl:grid-cols-2 gap-3 @6xl:max-w-3xl">
                 {/* Estado "disponível, mas ainda não escolhido" é neutro de
                     propósito: com cor própria (azul/roxo) mesmo sem clicar,
                     os dois botões pareciam já escolhidos, e o aluno não sabia
@@ -126,7 +131,7 @@ export function SecaoIdentificacao({
               </div>
             )}
             {modo === 'com' && comDisponivel && (
-              <div className="mt-3 lg:w-1/2">
+              <div className="mt-3 @4xl:w-1/2">
                 <SelectBusca
                   value={itemCompradoSel}
                   onChange={escolherOrigem}
@@ -148,11 +153,13 @@ export function SecaoIdentificacao({
               </p>
             )}
           </div>
+          </div>
         )}
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 @xl:grid-cols-2 @4xl:grid-cols-4 @7xl:grid-cols-5 gap-4">
+          {!origemOferecida && campoTipo}
           {mostraNome && (
-            <div className="sm:col-span-2">
+            <div className="@xl:col-span-2">
               <FormField label="Nome do produto *" error={errors.nome}>
                 {/* Travado quando a requisição preencheu: o nome do catálogo é o
                     que sai na etiqueta e no PDV, e "Refinar" destrava. */}
@@ -309,6 +316,7 @@ export function SecaoIdentificacao({
             />
           </FormField>
         </div>
+        {aposGrade}
       </SecaoFormulario>
 
         {/* ── Atributos por nicho (JSONB em produtos.atributos) ──────
@@ -319,7 +327,7 @@ export function SecaoIdentificacao({
             titulo={filial === 'MaxLook' ? 'Detalhes da peça'
               : filial === 'SuperMax' ? 'Conservação'
               : 'Ficha técnica'}>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+            <div className="grid grid-cols-1 @xl:grid-cols-2 @4xl:grid-cols-4 @7xl:grid-cols-5 gap-3">
               {(ATRIBUTOS_PRODUTO[filial] ?? []).map((d) => {
                 // Campo dependente some quando o pai não está na
                 // resposta que o libera — era assim que "Validade
@@ -344,7 +352,7 @@ export function SecaoIdentificacao({
                 if (d.type === 'bool') {
                   return (
                     <label key={d.key}
-                      className={`flex items-center gap-3 cursor-pointer neu-flat rounded-xl px-4 py-3 border border-white/5 ${d.wide ? 'sm:col-span-2' : ''}`}>
+                      className={`flex items-center gap-3 cursor-pointer neu-flat rounded-xl px-4 py-3 border border-white/5 ${d.wide ? '@xl:col-span-2' : ''}`}>
                       <input type="checkbox" checked={!!val}
                         onChange={e => {
                           const marcado = e.target.checked;
@@ -370,7 +378,7 @@ export function SecaoIdentificacao({
                 }
                 if (d.type === 'textarea') {
                   return (
-                    <div key={d.key} className={d.wide ? 'sm:col-span-2' : ''}>
+                    <div key={d.key} className={d.wide ? '@xl:col-span-2' : ''}>
                       <FormField label={rotuloAtributo(d)} error={err}>
                         <textarea rows={3}
                           className={`neu-input py-2 px-3 rounded-xl text-sm resize-none ${err ? 'border border-red-500/40' : ''}`}
@@ -389,7 +397,7 @@ export function SecaoIdentificacao({
                   const naLista = (d.options as readonly string[]).includes(v);
                   const emOutro = !!d.livre && (atrLivre.has(d.key) || (v !== '' && !naLista));
                   return (
-                    <div key={d.key} className={d.wide ? 'sm:col-span-2' : ''}>
+                    <div key={d.key} className={d.wide ? '@xl:col-span-2' : ''}>
                       <FormField label={rotuloAtributo(d)} error={err}>
                         <select className={`neu-input py-2 px-3 rounded-xl text-sm ${err ? 'border border-red-500/40' : ''}`}
                           value={emOutro ? OUTRO : v}
@@ -437,7 +445,7 @@ export function SecaoIdentificacao({
                   );
                 }
                 return (
-                  <div key={d.key} className={d.wide ? 'sm:col-span-2' : ''}>
+                  <div key={d.key} className={d.wide ? '@xl:col-span-2' : ''}>
                     <FormField label={rotuloAtributo(d)} error={err}>
                       <input className={`neu-input py-2 px-3 rounded-xl text-sm ${err ? 'border border-red-500/40' : ''}`}
                         value={String(val)} inputMode={d.soDigitos ? 'numeric' : undefined}

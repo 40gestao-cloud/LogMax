@@ -35,7 +35,7 @@ export function SecaoPrecos({
           pagou. Preço de venda e margem saem da tela em vez de pedir um
           número inventado (migr. 440). */}
       <SecaoFormulario titulo={ehVendavel(extras.tipo) ? 'Preços' : 'Valor de aquisição'} icon={DollarSign} cor="vermelho">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 @xl:grid-cols-2 @4xl:grid-cols-4 @7xl:grid-cols-5 gap-4">
           <FormField
             label={extras.tipo === 'patrimonio' ? 'Valor de Aquisição (R$) *'
               : extras.tipo === 'consumo'       ? 'Custo Unitário (R$) *'

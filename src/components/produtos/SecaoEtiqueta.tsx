@@ -22,7 +22,7 @@ export function SecaoEtiqueta({
       {/* Etiqueta EAN-13 */}
       {extras.ean.replace(/\D/g, '').length > 0 && (
         <SecaoFormulario titulo="Etiqueta EAN-13" icon={Barcode} cor="cinza">
-          <div className="neu-pressed rounded-2xl p-4 border border-white/5 flex flex-col sm:flex-row items-center gap-4">
+          <div className="neu-pressed rounded-2xl p-4 border border-white/5 flex flex-col @lg:flex-row items-center gap-4">
             <div className="bg-white p-3 rounded-lg flex items-center justify-center min-h-[88px]">
               {eanNorm.valid ? (
                 <canvas ref={eanPreviewRef} />
