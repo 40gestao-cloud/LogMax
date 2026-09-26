@@ -311,7 +311,7 @@ const PromocoesMarketingViewInner = ({ showToast, profile, filial }: { showToast
   const encerradas = promocoes.filter((p: any) => p.status === 'Encerrada' || p.status === 'Expirada').length;
 
   const kpis = [
-    { tom: 'azul' as TomContador, label: 'Total de Campanhas',     value: promocoes.length, warn: false },
+    { tom: 'azul' as TomContador, label: 'Total de Promoções',     value: promocoes.length, warn: false },
     { tom: 'amarelo' as TomContador, label: 'Com o Financeiro',       value: comFinanceiro,    warn: comFinanceiro > 0 },
     { tom: 'laranja' as TomContador, label: 'Com o gerente',          value: comGerente,       warn: comGerente > 0 },
     { tom: 'verde' as TomContador, label: 'Em Vigor',               value: aprovadas,        warn: false },
