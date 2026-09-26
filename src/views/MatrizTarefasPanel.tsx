@@ -1073,6 +1073,27 @@ function ModalAvaliarParticipante({ participante, tarefa, avals, minhaId, podeAv
     if (ok) onFechar();
   }
 
+  const cor = FILIAL_COR[participante.filial] ?? { bg: '#52525b', texto: '#fff' };
+  const notaNum = nota.trim() === '' ? null : Number(nota);
+
+  // Faixa única para os estados em que não se dá nota: um ícone e uma frase.
+  const Faixa = ({ tom, icon, children }: { tom: 'amarelo' | 'vermelho' | 'neutro'; icon: React.ReactNode; children: React.ReactNode }) => (
+    <div className={`rounded-xl px-3 py-2.5 flex items-center gap-2.5 text-xs ${
+      tom === 'amarelo' ? 'bg-yellow-400/10 text-yellow-200 border border-yellow-400/25'
+      : tom === 'vermelho' ? 'bg-red-600/10 text-red-200 border border-red-500/25'
+      : 'bg-white/[0.04] text-gray-400 border border-white/5'}`}>
+      <span className="shrink-0">{icon}</span>
+      <span className="leading-snug">{children}</span>
+    </div>
+  );
+
+  const botaoExcluir = minha && podeAvaliar && (
+    <button onClick={excluir} disabled={excluindo || salvando} className="btn-solido btn-solido--vermelho">
+      {excluindo ? <Loader2 size={13} className="animate-spin" /> : <Trash2 size={13} />}
+      Excluir minha nota
+    </button>
+  );
+
   return (
     <motion.div
       initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
@@ -1081,198 +1102,173 @@ function ModalAvaliarParticipante({ participante, tarefa, avals, minhaId, podeAv
     >
       <motion.div
         initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }}
-        className="neu-flat rounded-2xl border border-accent/20 p-5 sm:p-6 w-full max-w-lg my-6 flex flex-col gap-4"
+        className="neu-flat rounded-3xl border border-white/10 w-full max-w-lg my-6 flex flex-col overflow-hidden"
+        style={{ background: 'var(--color-bg-base)' }}
         onClick={e => e.stopPropagation()}
       >
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <h3 className="text-xl font-black text-gray-100 truncate">{participante.nome_snapshot}</h3>
-            <div className="flex items-center gap-2 mt-1 flex-wrap">
-              <span className={`text-[10px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full ${CENTRAL_FILIAL_TONE[participante.filial]}`}>
-                {participante.filial}
-              </span>
-              <span className="text-xs text-gray-500 truncate">{tarefa.nome}</span>
+        {/* Cabeçalho: quem é, de onde, em qual tarefa — e a nota em destaque. */}
+        <div className="p-5 flex items-center gap-4 border-b border-white/5">
+          <span className="w-14 h-14 shrink-0 rounded-2xl flex items-center justify-center text-lg font-black"
+            style={{ background: cor.bg, color: cor.texto }}>
+            {iniciais(participante.nome_snapshot)}
+          </span>
+          <div className="min-w-0 flex-1">
+            <h3 className="text-lg font-black text-gray-100 leading-tight truncate">{participante.nome_snapshot}</h3>
+            <div className="flex items-center gap-x-2 gap-y-1 mt-1 flex-wrap">
+              <FilialBadge filial={participante.filial} />
+              <span className="text-xs text-gray-500">{tarefa.nome}</span>
             </div>
           </div>
-          <button onClick={onFechar} className="shrink-0 modal-close-btn">
+          <div className="shrink-0 text-right">
+            {revelado ? (
+              <>
+                <div className={`text-3xl font-black tabular-nums leading-none ${media !== null ? 'text-amber-400' : 'text-gray-700'}`}>
+                  {media !== null ? media.toFixed(1) : '—'}
+                </div>
+                <div className="text-[10px] uppercase tracking-widest font-bold text-gray-500 mt-1">
+                  {notas.length > 0 ? `${notas.length} nota${notas.length === 1 ? '' : 's'}` : 'sem nota'}
+                </div>
+              </>
+            ) : (
+              <div className="flex flex-col items-end gap-1 text-gray-500" title="As notas dos outros conselheiros aparecem quando a tarefa for encerrada.">
+                <EyeOff size={22} />
+                <span className="text-[10px] uppercase tracking-widest font-bold">Selada</span>
+              </div>
+            )}
+          </div>
+          <button onClick={onFechar} className="shrink-0 modal-close-btn self-start" aria-label="Fechar">
             <X size={16} />
           </button>
         </div>
 
-        {revelado ? (
-          <div className="neu-pressed rounded-xl px-4 py-3 flex items-center justify-between">
-            <span className="text-[11px] uppercase tracking-widest font-bold text-gray-500">Média do conselho</span>
-            <span className="text-2xl font-mono font-black text-amber-300 tabular-nums">
-              {media !== null
-                ? <>{media.toFixed(1)}<span className="text-gray-500 text-sm">/10</span></>
-                : <span className="text-gray-600 text-sm">sem nota</span>}
-            </span>
-          </div>
-        ) : (
-          <div className="neu-pressed rounded-xl px-4 py-3 flex items-start gap-3">
-            <EyeOff size={16} className="text-gray-500 shrink-0 mt-0.5" />
-            <p className="text-xs text-gray-400 leading-snug">
-              Voto selado: as notas dos outros conselheiros — e a média — aparecem
-              <b className="text-gray-300"> quando esta tarefa for encerrada</b>. Cada um julga sem ver o
-              julgamento do outro; é o que impede efeito manada no placar.
-            </p>
-          </div>
-        )}
-
-        {/* `!desligado` primeiro: sem isso o form de nota ganharia do ramo
-            de desligado abaixo, e o conselheiro digitaria uma nota que a
-            RPC recusa (migr. 364). */}
-        {podeAvaliar && !desligado ? (
-          <>
-            <div className="flex flex-col gap-3">
-              <div className="flex flex-col gap-1">
-                <label className="text-[11px] uppercase tracking-widest text-gray-500 font-bold">Sua nota (0-10)</label>
-                <input
-                  autoFocus
-                  type="number" min={0} max={10} step={0.5}
-                  value={nota}
-                  onChange={e => { setNota(e.target.value); setErro(null); }}
-                  placeholder="0-10"
-                  className="neu-input w-28 py-2.5 px-3 text-lg font-mono font-black rounded-lg text-gray-100"
-                />
-                <p className="text-[10px] text-gray-500 leading-snug mt-0.5">
-                  5 entregou o combinado · 8 superou · 10 referência
-                </p>
-              </div>
-              <div className="flex flex-col gap-1">
-                <label className="text-[11px] uppercase tracking-widest text-gray-500 font-bold">Comentário (opcional)</label>
-                <textarea
-                  value={comentario}
-                  onChange={e => { setComentario(e.target.value); setErro(null); }}
-                  rows={3}
-                  placeholder="O que sustenta essa nota? Só o conselho lê."
-                  className="neu-input w-full py-2 px-3 text-sm rounded-lg text-gray-100"
-                />
-              </div>
-            </div>
-
-            {erro && <p className="text-xs text-red-400">{erro}</p>}
-
-            <div className="flex items-center gap-2 flex-wrap">
-              {minha && (
-                <button
-                  onClick={excluir}
-                  disabled={excluindo || salvando}
-                  className="btn-shimmer btn-shimmer--glass-red"
-                >
-                  {excluindo ? <Loader2 size={11} className="animate-spin" /> : <Trash2 size={11} />}
-                  Excluir minha avaliação
-                </button>
-              )}
-              <div className="flex items-center gap-2 ml-auto">
-                <button
-                  onClick={onFechar}
-                  className="text-[10px] font-bold uppercase tracking-widest px-3 py-2 rounded-lg neu-button text-gray-400 hover:text-white"
-                >
-                  Cancelar
-                </button>
-                <button
-                  onClick={() => salvar(false)}
-                  disabled={salvando || excluindo}
-                  className="flex items-center gap-1.5 text-[11px] font-bold px-4 py-2 rounded-lg neu-button text-accent hover:ring-1 hover:ring-accent/40 transition-all disabled:opacity-50"
-                >
-                  {salvando ? <Loader2 size={12} className="animate-spin" /> : <Check size={12} />}
-                  {minha ? 'Atualizar' : 'Salvar'}
-                </button>
-                {proximo && (
-                  <button
-                    onClick={() => salvar(true)}
-                    disabled={salvando || excluindo}
-                    title={`Salvar e abrir ${proximo.nome_snapshot}`}
-                    className="flex items-center gap-1.5 text-[11px] font-bold px-4 py-2 rounded-lg bg-accent/15 text-accent border border-accent/40 hover:bg-accent/25 transition-all disabled:opacity-50"
-                  >
-                    Salvar e próximo <ChevronRight size={13} />
-                  </button>
-                )}
-              </div>
-            </div>
-          </>
-        ) : desligado ? (
-          <div className="flex flex-col gap-3">
-            <p className="text-xs text-red-400/90">
-              Participante desligado — saiu da filial e não recebe mais nota nesta
-              competição. As notas que ele já tinha continuam registradas, mas
-              deixaram de contar no placar da filial.
-            </p>
-            {/* Bloquear nota NOVA não pode bloquear desfazer a que já existe:
-                o avaliador continua dono da avaliação dele. `remover_avaliacao_matriz`
-                não recusa desligado — só exige a tarefa aberta. */}
-            {minha && podeAvaliar && (
-              <div>
-                <button
-                  onClick={excluir}
-                  disabled={excluindo || salvando}
-                  className="btn-shimmer btn-shimmer--glass-red"
-                >
-                  {excluindo ? <Loader2 size={11} className="animate-spin" /> : <Trash2 size={11} />}
-                  Excluir minha avaliação
-                </button>
-                <p className="text-[10px] text-gray-500 mt-1.5">
-                  A nota dele já não conta no placar nem no seu contador — excluir
-                  só limpa o registro.
-                </p>
-              </div>
-            )}
-          </div>
-        ) : tarefa.status === 'rascunho' ? (
-          <p className="text-xs text-amber-300/90">
-            Esta tarefa ainda não foi liberada para notas. Admin, CEO ou quem criou a tarefa precisa
-            clicar em "Permitir notas" — só então o conselho avalia.
-          </p>
-        ) : !emAndamento && tarefa.status !== 'encerrada' ? (
-          <p className="text-xs text-amber-300/90">
-            A competição saiu de "em andamento" e não aceita mais nota — nem nova, nem alteração da
-            que já está registrada. O que foi avaliado até aqui continua valendo no placar.
-          </p>
-        ) : (
-          <p className="text-xs text-gray-500">
-            {tarefa.status === 'encerrada'
-              ? 'Tarefa encerrada — as notas estão congeladas e visíveis abaixo.'
-              : 'Modo leitura — só CEO e conselheiros da Matriz dão nota.'}
-          </p>
-        )}
-
-        {revelado && (
-          <div className="pt-3 border-t border-white/5 flex flex-col gap-2">
-            <p className="text-[11px] uppercase tracking-widest font-bold text-gray-500">
-              Avaliações do conselho ({outras.length + (minha ? 1 : 0)})
-            </p>
-            {outras.length === 0 && !minha ? (
-              <p className="text-xs text-gray-600 italic">Ninguém avaliou este participante ainda.</p>
-            ) : (
+        <div className="p-5 flex flex-col gap-4">
+          {/* `!desligado` primeiro: sem isso o form de nota ganharia do ramo
+              de desligado abaixo, e o conselheiro digitaria uma nota que a
+              RPC recusa (migr. 364). */}
+          {podeAvaliar && !desligado ? (
+            <>
               <div className="flex flex-col gap-2">
-                {minha && <LinhaAvaliacao aval={minha} sou />}
-                {outras.map(a => <LinhaAvaliacao key={a.id} aval={a} />)}
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-[11px] uppercase tracking-widest text-gray-500 font-bold">Sua nota</span>
+                  <input
+                    type="number" min={0} max={10} step={0.5}
+                    value={nota}
+                    onChange={e => { setNota(e.target.value); setErro(null); }}
+                    placeholder="—"
+                    aria-label="Nota com meio ponto"
+                    title="Para meio ponto, digite aqui (ex.: 7,5)"
+                    className="neu-input w-20 py-1.5 px-2 text-center text-base font-black rounded-lg text-gray-100"
+                  />
+                </div>
+                <div className="grid grid-cols-11 gap-1">
+                  {Array.from({ length: 11 }, (_, i) => i).map(i => {
+                    const ativo = notaNum !== null && Math.floor(notaNum) === i;
+                    return (
+                      <button key={i} type="button" onClick={() => { setNota(String(i)); setErro(null); }}
+                        className={`h-9 rounded-lg text-sm font-black tabular-nums transition-colors ${
+                          ativo ? 'btn-solido--dourado' : 'neu-pressed text-gray-400 hover:text-gray-100'}`}>
+                        {i}
+                      </button>
+                    );
+                  })}
+                </div>
+                <div className="flex justify-between text-[10px] text-gray-600 px-0.5">
+                  <span>0 não entregou</span><span>5 o combinado</span><span>8 superou</span><span>10 referência</span>
+                </div>
               </div>
-            )}
-          </div>
-        )}
+
+              <textarea
+                value={comentario}
+                onChange={e => { setComentario(e.target.value); setErro(null); }}
+                rows={3}
+                placeholder="Comentário (opcional) — só o conselho lê"
+                className="neu-input w-full py-2.5 px-3 text-sm rounded-xl text-gray-100 resize-none"
+              />
+
+              {erro && <Faixa tom="vermelho" icon={<X size={13} />}>{erro}</Faixa>}
+
+              <div className="flex items-center gap-2 flex-wrap">
+                {botaoExcluir}
+                <div className="flex items-center gap-2 ml-auto">
+                  <button onClick={() => salvar(false)} disabled={salvando || excluindo} className="btn-solido btn-solido--verde">
+                    {salvando ? <Loader2 size={13} className="animate-spin" /> : <Check size={13} />}
+                    {minha ? 'Atualizar' : 'Salvar'}
+                  </button>
+                  {proximo && (
+                    <button onClick={() => salvar(true)} disabled={salvando || excluindo}
+                      title={`Salvar e abrir ${proximo.nome_snapshot}`} className="btn-solido btn-solido--dourado">
+                      Salvar e próximo <ChevronRight size={13} />
+                    </button>
+                  )}
+                </div>
+              </div>
+            </>
+          ) : desligado ? (
+            <>
+              <Faixa tom="vermelho" icon={<Lock size={13} />}>
+                Desligado — não recebe mais nota. As notas que já tinha saíram do placar da filial.
+              </Faixa>
+              {/* Bloquear nota NOVA não pode bloquear desfazer a que já existe:
+                  `remover_avaliacao_matriz` não recusa desligado. */}
+              {botaoExcluir && <div>{botaoExcluir}</div>}
+            </>
+          ) : tarefa.status === 'rascunho' ? (
+            <Faixa tom="amarelo" icon={<Lock size={13} />}>
+              Notas ainda bloqueadas — falta clicar em "Permitir notas" na tarefa.
+            </Faixa>
+          ) : !emAndamento && tarefa.status !== 'encerrada' ? (
+            <Faixa tom="amarelo" icon={<Lock size={13} />}>
+              A competição não aceita mais nota. O que já foi dado continua valendo.
+            </Faixa>
+          ) : tarefa.status === 'encerrada' ? (
+            <Faixa tom="neutro" icon={<Lock size={13} />}>Tarefa encerrada — notas congeladas.</Faixa>
+          ) : (
+            <Faixa tom="neutro" icon={<EyeOff size={13} />}>Você acompanha — quem dá nota é o CEO e o conselho.</Faixa>
+          )}
+
+          {revelado && (
+            <div className="flex flex-col gap-2">
+              <span className="text-[11px] uppercase tracking-widest font-bold text-gray-500">
+                Avaliações do conselho · {outras.length + (minha ? 1 : 0)}
+              </span>
+              {outras.length === 0 && !minha ? (
+                <div className="rounded-xl border border-dashed border-white/10 py-5 flex flex-col items-center gap-1.5 text-gray-600">
+                  <Star size={18} />
+                  <span className="text-xs">Ninguém avaliou ainda</span>
+                </div>
+              ) : (
+                <div className="flex flex-col divide-y divide-white/5 rounded-xl border border-white/5 overflow-hidden">
+                  {minha && <LinhaAvaliacao aval={minha} sou />}
+                  {outras.map(a => <LinhaAvaliacao key={a.id} aval={a} />)}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
       </motion.div>
     </motion.div>
   );
 }
 
 function LinhaAvaliacao({ aval, sou }: { aval: AvaliacaoParticipante; sou?: boolean }) {
+  const nome = aval.avaliador?.nome ?? 'Avaliador';
+  const foraDaMedia = aval.avaliador?.role === 'admin';
   return (
-    <div className="flex items-start gap-2 text-[13px]">
-      <span className="font-mono font-black text-amber-300 tabular-nums w-10 shrink-0">
-        {aval.nota != null ? Number(aval.nota).toFixed(1) : <span className="text-gray-600">—</span>}
+    <div className="flex items-start gap-3 px-3 py-2.5">
+      <span className="w-8 h-8 shrink-0 rounded-full bg-zinc-700 text-gray-200 flex items-center justify-center text-[10px] font-black">
+        {iniciais(nome)}
       </span>
-      <div className="min-w-0">
-        <span className="text-gray-300">{aval.avaliador?.nome ?? 'Avaliador'}</span>
-        {sou && <span className="text-accent"> (você)</span>}
-        {aval.avaliador?.role === 'admin' && (
-          <span className="text-[10px] uppercase tracking-widest text-gray-500 font-bold ml-1.5">
-            admin · fora da média
-          </span>
-        )}
-        {aval.comentario && <p className="text-gray-500 break-words">{aval.comentario}</p>}
+      <div className="min-w-0 flex-1">
+        <div className="text-sm text-gray-200">
+          {nome}{sou && <span className="text-accent"> · você</span>}
+          {foraDaMedia && <span className="text-[10px] uppercase tracking-widest text-gray-500 font-bold ml-1.5">fora da média</span>}
+        </div>
+        {aval.comentario && <p className="text-xs text-gray-400 break-words mt-0.5">{aval.comentario}</p>}
       </div>
+      <span className={`shrink-0 text-sm font-black tabular-nums px-2 py-0.5 rounded ${
+        aval.nota != null ? (foraDaMedia ? 'bg-zinc-700 text-gray-300' : 'bg-amber-500 text-black') : 'text-gray-600'}`}>
+        {aval.nota != null ? Number(aval.nota).toFixed(1) : '—'}
+      </span>
     </div>
   );
 }
