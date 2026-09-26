@@ -955,12 +955,14 @@ const FrequenciaTrabalhoViewInner = ({ showToast, profile, filial, embedded }: a
                     // Justificado vindo de afastamento (bloqueado) não vira estado
                     // de botão — a coluna inteira fica somente-leitura logo abaixo.
                     const freqStatus = bloqueado ? undefined : freq?.status;
-                    const currentStatus: StatusFreq = edit?.status ?? freqStatus ?? 'Presente';
+                    // Sem registro e sem rascunho, nada aceso: pré-acender
+                    // "Presente" fazia a linha parecer lançada (com o botão
+                    // sólido, a grade inteira dizia que todo mundo veio).
+                    const currentStatus: StatusFreq | undefined = edit?.status ?? freqStatus;
                     const currentJust = edit?.justificativa ?? freq?.justificativa ?? '';
                     const currentEntrada = edit?.entrada ?? freq?.entrada ?? '';
                     const isDirty = !!edit;
                     const isSaving = saving[func.id] ?? false;
-                    const cfg = STATUS_CONFIG[currentStatus];
 
                     return (
                       <tr key={func.id} className="border-b border-white/5 hover:bg-white/5 transition-colors">
