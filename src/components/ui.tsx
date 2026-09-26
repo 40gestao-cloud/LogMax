@@ -278,8 +278,8 @@ export const FilaDeTrabalho = ({ itens }: { itens: { label: string; count: numbe
   );
 };
 
-export const FormField = ({ label, error, children }: { label: string; error?: string; children: React.ReactNode }) => (
-  <div className="flex flex-col gap-1.5">
+export const FormField = ({ label, error, children, className = '' }: { label: string; error?: string; children: React.ReactNode; className?: string }) => (
+  <div className={`flex flex-col gap-1.5 ${className}`}>
     <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">{label}</label>
     {children}
     {error && (

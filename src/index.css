@@ -528,6 +528,19 @@ textarea,
   -webkit-touch-callout: default;
 }
 
+/* Caixa de texto que cresce com o conteúdo (e com o placeholder, quando
+   vazia), sem barra de rolagem. Nasce da altura de um input para alinhar na
+   grade do formulário. Era uma textarea de 42px fixos: o próprio exemplo não
+   cabia e aparecia a barra. */
+.campo-cresce {
+  field-sizing: content;
+  min-height: 42px;
+  max-height: 12rem;
+  overflow-y: auto;
+  scrollbar-width: none;
+}
+.campo-cresce::-webkit-scrollbar { display: none; }
+
 /* ── Global dark-mode overrides for Tailwind gray classes ──
    Tons Tailwind crus de gray-500/600/700 ficam quase invisíveis em fundo
    escuro (queixa de baixo contraste em 2026-06-10). Subimos cada tom 1

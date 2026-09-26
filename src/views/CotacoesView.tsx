@@ -1974,9 +1974,9 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode, onNavigate }: { s
                         aluno comparava dois preços fingindo que as condições
                         eram iguais — e é aqui que a diferença dos três nichos
                         aparece sem precisar de campo por nicho. */}
-                    <FormField label="Condições / observações do fornecedor">
+                    <FormField label="Condições / observações do fornecedor" className="md:col-span-2">
                       <textarea maxLength={240}
-                        className="neu-input py-2 px-3 rounded-xl text-sm resize-none h-[42px] md:col-span-2"
+                        className="neu-input py-2 px-3 rounded-xl text-sm resize-none campo-cresce"
                         value={extras.observacao}
                         onChange={e => setExtras(x => ({ ...x, observacao: e.target.value }))}
                         placeholder="Ex.: frete incluso; garantia de 12 meses; troca em até 7 dias" />
@@ -2561,7 +2561,7 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode, onNavigate }: { s
                 <div className="sm:col-span-3">
                   <FormField label="Condições / observações do fornecedor">
                     <textarea maxLength={240}
-                      className="neu-input py-2 px-3 rounded-xl text-sm resize-none h-[42px] w-full"
+                      className="neu-input py-2 px-3 rounded-xl text-sm resize-none campo-cresce w-full"
                       value={correcaoForm.observacao}
                       onChange={e => setCorrecaoForm(x => ({ ...x, observacao: e.target.value }))}
                       placeholder="Ex.: frete incluso; garantia de 12 meses" />
