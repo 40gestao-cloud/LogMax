@@ -786,7 +786,7 @@ const FrequenciaTrabalhoViewInner = ({ showToast, profile, filial, embedded }: a
           <AlertTriangle size={14} className="text-amber-400 shrink-0 mt-0.5" />
           <span>
             <b>{fmtData(dataSelecionada)} não é dia de aula desta turma.</b> Confira a data antes de lançar — se houve
-            reposição, cadastre como aula extra em “Configurar dias e horários”.
+            reposição, a Matriz cadastra como aula extra em Sessões Gerais › Recursos Humanos › Registro de Ponto.
           </span>
         </div>
       )}

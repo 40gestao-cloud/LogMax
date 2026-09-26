@@ -116,8 +116,9 @@ const PontoEletronicoViewInner = ({ showToast, profile, filial }: { showToast: a
         </h2>
       </div>
 
-      {/* Dias e horários da turma — cada turma é um projeto, então é uma jornada só. */}
-      <JornadaTurmaFaixa profile={profile} showToast={showToast} />
+      {/* Dias e horários da turma — cada turma é um projeto, então é uma jornada só,
+          e ela é da Matriz: dentro de uma filial a faixa não aparece. */}
+      {modoMatriz && <JornadaTurmaFaixa profile={profile} showToast={showToast} />}
 
       {/* Tab switcher */}
       <div className="flex gap-1 neu-pressed rounded-2xl p-1 w-fit border border-white/5 shrink-0">
