@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Clock, Trash2, ClipboardList, ListChecks, FileDown } from 'lucide-react';
 import { FrequenciaTrabalhoView } from './FrequenciaTrabalhoView';
 import { FrequenciaRelatorioTab } from './FrequenciaRelatorioTab';
+import { JornadaTurmaFaixa } from './JornadaTurmaConfig';
 import { useFetchData } from '../hooks/useSupabaseData';
 import { supabase } from '../lib/supabase';
 import { LoadingSpinner, EmptyState, FilialBadge, CardContador, type TomContador, corDoStatus } from '../components/ui';
@@ -114,6 +115,9 @@ const PontoEletronicoViewInner = ({ showToast, profile, filial }: { showToast: a
           Registro de Ponto{filial ? ` — ${filial}` : ''}
         </h2>
       </div>
+
+      {/* Dias e horários da turma — cada turma é um projeto, então é uma jornada só. */}
+      <JornadaTurmaFaixa profile={profile} showToast={showToast} />
 
       {/* Tab switcher */}
       <div className="flex gap-1 neu-pressed rounded-2xl p-1 w-fit border border-white/5 shrink-0">

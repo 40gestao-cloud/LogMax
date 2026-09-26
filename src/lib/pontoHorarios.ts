@@ -16,20 +16,17 @@ export const PONTO_HORARIOS = {
   saida:   pick(import.meta.env.VITE_PONTO_SAIDA,   DEFAULTS.saida),
 } as const;
 
-const minutos = (hhmm: string): number => {
-  const [h, m] = hhmm.split(':').map(Number);
-  return h * 60 + m;
-};
-
 /**
- * Jornada diária da turma, em horas (saída − entrada).
- *
- * O expediente aqui é de ~4h, não 8 — é turma de docência. A folha derivava
- * tudo de 8h/220h até a migr. 290: falta acertava por acaso (dois erros que se
- * cancelavam), atraso descontava metade e hora extra nunca disparava.
- *
- * Fonte única do número, para a tela e o banco não discordarem: a RPC calcula
- * o mesmo a partir dos horários que esta constante alimenta.
+ * Saída da turma gravada no banco (`ponto_jornada`), espelhada aqui pelo
+ * `useJornadaTurma`. Existe para o `sessaoGuard`, que roda síncrono e antes do
+ * login — não dá para esperar o banco. Vazio = vale o env.
  */
-export const PONTO_JORNADA_HORAS =
-  Math.max((minutos(PONTO_HORARIOS.saida) - minutos(PONTO_HORARIOS.entrada)) / 60, 0);
+export const CHAVE_SAIDA_TURMA = 'logmax:saidaTurma';
+
+export function saidaDaTurma(): string {
+  try {
+    const v = (localStorage.getItem(CHAVE_SAIDA_TURMA) ?? '').trim();
+    if (/^\d{1,2}:\d{2}$/.test(v)) return v;
+  } catch { /* modo privado */ }
+  return PONTO_HORARIOS.saida;
+}

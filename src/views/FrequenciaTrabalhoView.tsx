@@ -4,11 +4,11 @@ import { useFilial } from '../contexts/FilialContext';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   CheckCircle2, XCircle, Clock, X, User, Search, Save, Loader2, MessageSquarePlus, Building2, FileCheck, Lock, Trash2, Eraser,
+  AlertTriangle,
 } from 'lucide-react';
 import { useConfirm } from '../contexts/ConfirmContext';
 import { useFetchData } from '../hooks/useSupabaseData';
-import { PONTO_JORNADA_HORAS } from '../lib/pontoHorarios';
-import { useJornadaTurma, usePontoCorteTurma } from '../hooks/useJornadaTurma';
+import { useJornadaTurma, usePontoCorteTurma, horasDaJornada, useDiasLetivos } from '../hooks/useJornadaTurma';
 import { useAuth } from '../hooks/useAuth';
 import { supabase } from '../lib/supabase';
 import { todayBR } from '../lib/dates';
@@ -446,10 +446,10 @@ const FrequenciaTrabalhoViewInner = ({ showToast, profile, filial, embedded }: a
       p_observacao:     edit.justificativa.trim() || null,
       // Jornada da turma (migr. 290). Sem isso o dia gravaria a jornada
       // padrão da manhã mesmo numa turma da tarde.
-      p_horas:          PONTO_JORNADA_HORAS,
+      p_horas:          horasDaJornada(jornada),
     });
     if (error) throw error;
-  }, [dataSelecionada, jornada.entrada]);
+  }, [dataSelecionada, jornada]);
 
   const handleSave = useCallback(async (func: Funcionario) => {
     if (!supabase || !canEdit) return;
@@ -629,14 +629,20 @@ const FrequenciaTrabalhoViewInner = ({ showToast, profile, filial, embedded }: a
     return m;
   }, [frequencias]);
 
-  // Dias cobrados: só dias úteis (seg–sex) já passados ou hoje.
+  // Dias com aula da turma no período (configurados no Registro de Ponto).
+  const diasLetivos = useDiasLetivos(diasPeriodo[0], diasPeriodo[diasPeriodo.length - 1], jornada);
+  const diaSemAula = filtro === 'dia' && diasLetivos !== null && !diasLetivos.has(dataSelecionada);
+
+  // Dias cobrados: os dias de aula da turma já passados ou hoje. Sem os dias
+  // definidos, cai no seg–sex de antes.
   const diasCobrados = useMemo(
     () => diasPeriodo.filter(d => {
       if (d > today) return false;
+      if (diasLetivos) return diasLetivos.has(d);
       const dow = new Date(d + 'T12:00:00').getDay();
       return dow >= 1 && dow <= 5;
     }),
-    [diasPeriodo, today],
+    [diasPeriodo, today, diasLetivos],
   );
 
   // Cumprimento por unidade: quantos lançamentos existem vs. quantos deveriam existir.
@@ -774,6 +780,17 @@ const FrequenciaTrabalhoViewInner = ({ showToast, profile, filial, embedded }: a
         </div>
       </div>
 
+      {/* Lançar em dia sem aula faz o dia contar como letivo para a turma toda. */}
+      {diaSemAula && (
+        <div className="flex items-start gap-2 rounded-2xl border border-amber-500/30 bg-amber-500/5 px-4 py-3 text-xs text-amber-200 shrink-0">
+          <AlertTriangle size={14} className="text-amber-400 shrink-0 mt-0.5" />
+          <span>
+            <b>{fmtData(dataSelecionada)} não é dia de aula desta turma.</b> Confira a data antes de lançar — se houve
+            reposição, cadastre como aula extra em “Configurar dias e horários”.
+          </span>
+        </div>
+      )}
+
       {/* Resumo cards */}
       {filtro === 'dia' && (
         <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 shrink-0">
@@ -794,7 +811,7 @@ const FrequenciaTrabalhoViewInner = ({ showToast, profile, filial, embedded }: a
             <h3 className="text-sm font-bold text-gray-300">Cumprimento do Registro por Unidade</h3>
           </div>
           <p className="text-[11px] text-gray-500 mb-4">
-            {diasCobrados.length} dia(s) útil(eis) até hoje no período · esperado = funcionários ativos × dias úteis
+            {diasCobrados.length} dia(s) de aula até hoje no período · esperado = funcionários ativos × dias de aula
           </p>
           <div className="overflow-x-auto main-scrollbar">
             <table className="tabela w-full text-left border-collapse min-w-[560px]">

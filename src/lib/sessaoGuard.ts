@@ -20,7 +20,7 @@
 // comum do lab (o aluno fecha o app e vai embora).
 
 import { todayBR } from './dates';
-import { PONTO_HORARIOS } from './pontoHorarios';
+import { saidaDaTurma } from './pontoHorarios';
 
 /** Ociosidade tolerada antes do logout automático. */
 export const IDLE_MS = 15 * 60 * 1000;
@@ -126,13 +126,13 @@ export function consumirMotivoSaida(): MotivoSaida | null {
 /**
  * Epoch (ms) do fim do turno de hoje: horário de saída da turma + margem.
  *
- * Cada turma tem seu projeto Vercel, então `VITE_PONTO_SAIDA` já é o fim do
- * turno daquela turma. Acre é UTC-5 fixo (sem horário de verão), então somar 5h
+ * Cada turma tem seu projeto Vercel, então a saída configurada no Registro de
+ * Ponto (ou `VITE_PONTO_SAIDA`, enquanto não configurar) é o fim do turno dela. Acre é UTC-5 fixo (sem horário de verão), então somar 5h
  * converte o horário local em UTC sem depender de biblioteca de fuso.
  */
 function fimDoTurnoHoje(): number {
   const [ano, mes, dia] = todayBR().split('-').map(Number);
-  const [hora, min] = PONTO_HORARIOS.saida.split(':').map(Number);
+  const [hora, min] = saidaDaTurma().split(':').map(Number);
   return Date.UTC(ano, mes - 1, dia, hora + 5, min + MARGEM_FIM_TURNO_MIN);
 }
 
