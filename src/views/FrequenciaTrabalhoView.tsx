@@ -344,6 +344,10 @@ const FrequenciaTrabalhoViewInner = ({ showToast, profile, filial, embedded }: a
   // Modal de justificativa: a coluna virou botão porque o input de uma linha
   // não cabia um motivo escrito de verdade — digitava-se três palavras e olhe lá.
   const [justModal, setJustModal] = useState<{ func: Funcionario; texto: string } | null>(null);
+  // Horário de chegada do atraso: pedido num modal ao escolher "Atraso" (o
+  // campo solto na linha empurrava os botões). `justificativa` vai junto para
+  // não se perder ao gravar o rascunho.
+  const [atrasoModal, setAtrasoModal] = useState<{ func: Funcionario; hora: string; justificativa: string } | null>(null);
 
   const canEdit = hasSetor(profile, 'rh') || profile?.role === 'admin' || profile?.role === 'ceo' || profile?.role === 'gerente' || isConselheiro(profile);
   // Excluir registro é do professor, e só dele (migr. 635 — a RPC e a policy
@@ -1006,7 +1010,7 @@ const FrequenciaTrabalhoViewInner = ({ showToast, profile, filial, embedded }: a
                               <span className="text-[11px] font-semibold">Afastamento</span>
                             </div>
                           ) : (
-                            <div className="flex flex-nowrap items-center justify-center gap-1">
+                            <div className="flex flex-col items-center">
                               <div className="flex flex-nowrap items-center justify-center gap-1">
                                 {STATUSES.map(s => {
                                   const sc = STATUS_CONFIG[s];
@@ -1017,6 +1021,10 @@ const FrequenciaTrabalhoViewInner = ({ showToast, profile, filial, embedded }: a
                                     <button
                                       key={s}
                                       onClick={() => {
+                                        if (s === 'Presente com Atraso') {
+                                          setAtrasoModal({ func, hora: currentEntrada || jornada.entrada, justificativa: currentJust });
+                                          return;
+                                        }
                                         setEdit(func.id, { status: s, justificativa: currentJust, entrada: currentEntrada });
                                         // Justificada exige motivo: abrir o modal aqui
                                         // poupa o clique extra na coluna ao lado.
@@ -1031,25 +1039,13 @@ const FrequenciaTrabalhoViewInner = ({ showToast, profile, filial, embedded }: a
                                     >
                                       <Ic size={14} />
                                       <span className="hidden sm:inline">{STATUS_LABEL[s]}</span>
+                                      {s === 'Presente com Atraso' && active && currentEntrada && (
+                                        <span className="tabular-nums font-black">{currentEntrada}</span>
+                                      )}
                                     </button>
                                   );
                                 })}
                               </div>
-                              {/* Vaga do horário reservada em toda linha: sem ela os
-                                  botões da linha em atraso andavam para o lado e
-                                  saíam da coluna das outras. */}
-                              <span className="w-[5.5rem] ml-1 shrink-0">
-                                {currentStatus === 'Presente com Atraso' && (
-                                  <input
-                                    type="time"
-                                    value={currentEntrada}
-                                    onChange={e => setEdit(func.id, { status: 'Presente com Atraso', justificativa: currentJust, entrada: e.target.value })}
-                                    title={`Horário de entrada — alvo da turma: ${jornada.entrada}`}
-                                    aria-label="Horário de entrada"
-                                    className="neu-input h-9 px-2 rounded-xl text-xs font-bold tabular-nums w-full border border-yellow-400/60"
-                                  />
-                                )}
-                              </span>
                             </div>
                           )}
                         </td>
@@ -1275,6 +1271,63 @@ const FrequenciaTrabalhoViewInner = ({ showToast, profile, filial, embedded }: a
             </motion.div>
           </motion.div>
         )}
+      </AnimatePresence>
+
+      {/* Modal do horário de chegada (Atraso) */}
+      <AnimatePresence>
+        {atrasoModal && (() => {
+          const confirmar = () => {
+            if (!atrasoModal.hora) return;
+            setEdit(atrasoModal.func.id, { status: 'Presente com Atraso', justificativa: atrasoModal.justificativa, entrada: atrasoModal.hora });
+            setAtrasoModal(null);
+          };
+          const depoisDoAlvo = atrasoModal.hora > jornada.entrada;
+          return (
+            <motion.div
+              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+              className="fixed inset-0 z-50 flex items-center justify-center p-4"
+              style={{ background: 'rgba(0,0,0,0.6)' }}
+              onClick={() => setAtrasoModal(null)}
+            >
+              <motion.div
+                initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }}
+                className="neu-flat rounded-3xl border border-white/10 max-w-sm w-full overflow-hidden"
+                style={{ background: 'var(--color-bg-base)' }}
+                onClick={e => e.stopPropagation()}
+              >
+                <div className="p-5 flex items-center gap-3 border-b border-white/5">
+                  <span className="w-11 h-11 shrink-0 rounded-xl bg-yellow-400 text-black flex items-center justify-center">
+                    <Clock size={20} />
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <h3 className="text-base font-black text-gray-100 leading-tight">Horário de chegada</h3>
+                    <p className="text-xs text-gray-500 truncate">{atrasoModal.func.nome} · {fmtData(dataSelecionada)}</p>
+                  </div>
+                  <button onClick={() => setAtrasoModal(null)} className="modal-close-btn shrink-0" aria-label="Fechar"><X size={16} /></button>
+                </div>
+                <form className="p-5 flex flex-col gap-4" onSubmit={e => { e.preventDefault(); confirmar(); }}>
+                  <input
+                    type="time"
+                    autoFocus
+                    value={atrasoModal.hora}
+                    onChange={e => setAtrasoModal(m => (m ? { ...m, hora: e.target.value } : m))}
+                    className="neu-input w-full py-3 px-4 rounded-xl text-3xl font-black text-center tabular-nums"
+                  />
+                  <p className={`text-xs text-center ${depoisDoAlvo ? 'text-gray-500' : 'text-amber-400'}`}>
+                    Entrada da turma: <b className="text-gray-300">{jornada.entrada}</b>
+                    {!depoisDoAlvo && atrasoModal.hora && ' — esse horário não é atraso'}
+                  </p>
+                  <div className="flex justify-end gap-2">
+                    <button type="button" onClick={() => setAtrasoModal(null)} className="btn-solido btn-solido--preto">Cancelar</button>
+                    <button type="submit" disabled={!atrasoModal.hora} className="btn-solido btn-solido--amarelo">
+                      <Clock size={13} /> Registrar atraso
+                    </button>
+                  </div>
+                </form>
+              </motion.div>
+            </motion.div>
+          );
+        })()}
       </AnimatePresence>
 
       {/* Modal histórico do funcionário */}
