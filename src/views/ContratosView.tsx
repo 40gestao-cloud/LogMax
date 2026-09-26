@@ -22,7 +22,7 @@ import {
 import { supabase } from '../lib/supabase';
 import { formatDataHoraBR, todayBR } from '../lib/dates';
 import { formatBRL, parseBRL, handleMoneyKeyDown } from '../lib/viewUtils';
-import { LoadingSpinner, EmptyState, NeuButtonAccent, corDoStatus, CardContador, FilialBadge } from '../components/ui';
+import { LoadingSpinner, EmptyState, NeuButtonAccent, corDoStatus, CardContador, FilialBadge, ModalFormulario } from '../components/ui';
 import { useConfirm } from '../contexts/ConfirmContext';
 import { usePrompt } from '../contexts/PromptContext';
 import { useFilial } from '../contexts/FilialContext';
@@ -219,99 +219,88 @@ function ModalContrato({
   const campo = 'neu-pressed rounded-xl px-3 py-2.5 text-sm text-gray-100 bg-transparent outline-none w-full';
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={onClose}>
-      <motion.div
-        initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}
-        exit={{ opacity: 0, scale: 0.95 }} transition={{ duration: 0.18 }}
-        className="neu-flat rounded-3xl p-6 w-full max-w-lg border border-accent/20 flex flex-col gap-3 max-h-[92vh] overflow-y-auto"
-        onClick={e => e.stopPropagation()}
-      >
-        <div className="flex items-center justify-between">
-          <h2 className="text-base font-bold text-gray-100">
-            {editando ? 'Editar rascunho' : pai ? 'Novo aditivo' : 'Novo contrato'}
-          </h2>
-          <button onClick={onClose} className="modal-close-btn"><X size={16} /></button>
+    <ModalFormulario
+      aberto
+      titulo={editando ? 'Editar rascunho' : pai ? 'Novo aditivo' : 'Novo contrato'}
+      onCancelar={onClose}
+      cancelarDesabilitado={salvando}
+      acoes={<>
+        <button onClick={() => salvar(false)} disabled={salvando}
+          className="neu-button rounded-xl px-4 py-2 text-xs font-black uppercase tracking-widest text-gray-300 hover:text-gray-100 flex items-center gap-2 disabled:opacity-50">
+          {salvando ? <Loader2 size={13} className="animate-spin" /> : <FileText size={13} />}
+          Salvar rascunho
+        </button>
+        <NeuButtonAccent onClick={() => salvar(true)} isLoading={salvando}>Assinar e enviar</NeuButtonAccent>
+      </>}
+    >
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-x-5 gap-y-3 items-start">
+        <div className="flex flex-col gap-3">
+            <div className="flex flex-col gap-1">
+              <label className={label}>Título *</label>
+              <input className={campo} value={titulo} onChange={e => setTitulo(e.target.value)}
+                placeholder="Ex.: Prestação de serviço de manutenção" />
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="flex flex-col gap-1">
+                <label className={label}>Parte A (você)</label>
+                <div className="neu-pressed rounded-xl px-3 py-2.5 text-sm text-gray-300">{minhaParte}</div>
+              </div>
+              <div className="flex flex-col gap-1">
+                <label className={label}>Parte B *</label>
+                {pai || editando ? (
+                  <div className="neu-pressed rounded-xl px-3 py-2.5 text-sm text-gray-300">{parteB}</div>
+                ) : (
+                  <select className={campo} value={parteB} onChange={e => setParteB(e.target.value as Parte)}>
+                    <option value="">Escolha…</option>
+                    {outrasPartes.map(p => <option key={p} value={p}>{p}</option>)}
+                  </select>
+                )}
+              </div>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="flex flex-col gap-1">
+                <label className={label}>Valor (R$)</label>
+                <input className={campo} type="text" inputMode="numeric" placeholder="0,00"
+                  value={valor} onChange={e => setValor(formatBRL(e.target.value))} onKeyDown={handleMoneyKeyDown} />
+              </div>
+              <div className="flex flex-col gap-1">
+                <label className={label}>Início</label>
+                <input className={campo} type="date" value={inicio} onChange={e => setInicio(e.target.value)} />
+              </div>
+              <div className="flex flex-col gap-1">
+                <label className={label}>Fim</label>
+                <input className={campo} type="date" value={fim} onChange={e => setFim(e.target.value)} />
+              </div>
+            </div>
         </div>
-
-        <div className="flex flex-col gap-1">
-          <label className={label}>Título *</label>
-          <input className={campo} value={titulo} onChange={e => setTitulo(e.target.value)}
-            placeholder="Ex.: Prestação de serviço de manutenção" />
+        <div className="flex flex-col gap-3">
+            <div className="flex flex-col gap-1">
+              <label className={label}>Objeto</label>
+              <textarea className={`${campo} resize-none`} rows={2} value={objeto} onChange={e => setObjeto(e.target.value)}
+                placeholder="O que uma parte entrega à outra." />
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className={label}>Condições</label>
+              <textarea className={`${campo} resize-none`} rows={2} value={condicoes} onChange={e => setCondicoes(e.target.value)}
+                placeholder="Ex.: pagamento mensal até o dia 10, reajuste anual pelo IPCA." />
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className={label}>Arquivo {editando ? '' : '*'}</label>
+              <input ref={inputRef} type="file" className="hidden"
+                accept=".pdf,.docx,.doc,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/msword"
+                onChange={e => escolher(e.target.files?.[0] ?? null)} />
+              <button onClick={() => inputRef.current?.click()}
+                className="neu-pressed rounded-xl px-3 py-3 text-sm text-gray-300 flex items-center gap-2 hover:text-gray-100">
+                <Upload size={14} className="text-accent shrink-0" />
+                <span className="truncate">
+                  {arquivo ? `${arquivo.name} · ${tamanhoLegivel(arquivo.size)}`
+                    : editando ? `${doc!.arquivo_nome} — trocar` : 'PDF ou Word · até 10 MB'}
+                </span>
+              </button>
+            </div>
         </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <div className="flex flex-col gap-1">
-            <label className={label}>Parte A (você)</label>
-            <div className="neu-pressed rounded-xl px-3 py-2.5 text-sm text-gray-300">{minhaParte}</div>
-          </div>
-          <div className="flex flex-col gap-1">
-            <label className={label}>Parte B *</label>
-            {pai || editando ? (
-              <div className="neu-pressed rounded-xl px-3 py-2.5 text-sm text-gray-300">{parteB}</div>
-            ) : (
-              <select className={campo} value={parteB} onChange={e => setParteB(e.target.value as Parte)}>
-                <option value="">Escolha…</option>
-                {outrasPartes.map(p => <option key={p} value={p}>{p}</option>)}
-              </select>
-            )}
-          </div>
-        </div>
-
-        <div className="flex flex-col gap-1">
-          <label className={label}>Objeto</label>
-          <textarea className={`${campo} resize-none`} rows={2} value={objeto} onChange={e => setObjeto(e.target.value)}
-            placeholder="O que uma parte entrega à outra." />
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-          <div className="flex flex-col gap-1">
-            <label className={label}>Valor (R$)</label>
-            <input className={campo} type="text" inputMode="numeric" placeholder="0,00"
-              value={valor} onChange={e => setValor(formatBRL(e.target.value))} onKeyDown={handleMoneyKeyDown} />
-          </div>
-          <div className="flex flex-col gap-1">
-            <label className={label}>Início</label>
-            <input className={campo} type="date" value={inicio} onChange={e => setInicio(e.target.value)} />
-          </div>
-          <div className="flex flex-col gap-1">
-            <label className={label}>Fim</label>
-            <input className={campo} type="date" value={fim} onChange={e => setFim(e.target.value)} />
-          </div>
-        </div>
-
-        <div className="flex flex-col gap-1">
-          <label className={label}>Condições</label>
-          <textarea className={`${campo} resize-none`} rows={2} value={condicoes} onChange={e => setCondicoes(e.target.value)}
-            placeholder="Ex.: pagamento mensal até o dia 10, reajuste anual pelo IPCA." />
-        </div>
-
-        <div className="flex flex-col gap-1">
-          <label className={label}>Arquivo {editando ? '' : '*'}</label>
-          <input ref={inputRef} type="file" className="hidden"
-            accept=".pdf,.docx,.doc,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/msword"
-            onChange={e => escolher(e.target.files?.[0] ?? null)} />
-          <button onClick={() => inputRef.current?.click()}
-            className="neu-pressed rounded-xl px-3 py-3 text-sm text-gray-300 flex items-center gap-2 hover:text-gray-100">
-            <Upload size={14} className="text-accent shrink-0" />
-            <span className="truncate">
-              {arquivo ? `${arquivo.name} · ${tamanhoLegivel(arquivo.size)}`
-                : editando ? `${doc!.arquivo_nome} — trocar` : 'PDF ou Word · até 10 MB'}
-            </span>
-          </button>
-        </div>
-
-        <div className="flex items-center gap-2 pt-1">
-          <button onClick={() => salvar(false)} disabled={salvando}
-            className="flex-1 neu-button rounded-xl px-3 py-3 text-xs font-black uppercase tracking-widest text-gray-300 hover:text-gray-100 flex items-center justify-center gap-2 disabled:opacity-50">
-            {salvando ? <Loader2 size={13} className="animate-spin" /> : <FileText size={13} />}
-            Salvar rascunho
-          </button>
-          <div className="flex-1">
-            <NeuButtonAccent onClick={() => salvar(true)} isLoading={salvando}>Assinar e enviar</NeuButtonAccent>
-          </div>
-        </div>
-      </motion.div>
-    </div>
+      </div>
+    </ModalFormulario>
   );
 }
 

@@ -1636,122 +1636,110 @@ const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: 
           RPC: corrigir e consertar o pedido, nao troca-lo por outro documento. */}
       <AnimatePresence>
         {corrigindo && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4"
-            onClick={() => !reenviando && setCorrigindo(null)}>
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95, y: 10 }} animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.96 }} onClick={e => e.stopPropagation()}
-              className="neu-flat rounded-3xl p-6 border border-white/10 w-full max-w-xl max-h-[90vh] overflow-y-auto">
-              <h3 className="text-sm font-bold text-gray-300 mb-1">
-                Corrigir e reenviar
-                {corrigindo.numero
-                  ? <span className="text-accent ml-2 font-credencial text-xs">{corrigindo.numero}</span>
-                  : <span className="text-accent ml-2 text-xs">{corrigindo.item}</span>}
-              </h3>
-              <div className="neu-pressed rounded-xl p-3 border border-amber-400/20 my-4">
-                <span className="text-[10px] text-amber-300/90 uppercase tracking-widest font-bold block mb-1">
-                  {corrigindo.tipo === 'estoque' ? 'O que pediram para consertar' : 'O que o gerente pediu para consertar'}
-                </span>
-                <span className="text-xs text-gray-200">{corrigindo.correcaoMotivo || '—'}</span>
-              </div>
+          <ModalFormulario
+            aberto
+            titulo="Corrigir e reenviar"
+            subtitulo={corrigindo.numero || corrigindo.item}
+            onCancelar={() => setCorrigindo(null)}
+            cancelarDesabilitado={reenviando}
+            acoes={<>
+              <NeuButtonAccent onClick={handleReenviar} isLoading={reenviando}>
+                Reenviar para quem decide
+              </NeuButtonAccent>
+            </>}
+          >
+            <div className="neu-pressed rounded-xl p-3 border border-amber-400/20 my-4">
+              <span className="text-[10px] text-amber-300/90 uppercase tracking-widest font-bold block mb-1">
+                {corrigindo.tipo === 'estoque' ? 'O que pediram para consertar' : 'O que o gerente pediu para consertar'}
+              </span>
+              <span className="text-xs text-gray-200">{corrigindo.correcaoMotivo || '—'}</span>
+            </div>
 
-              {corrigindo.tipo === 'estoque' ? (
-                <div className="flex flex-col gap-3">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <FormField label="Quantidade *">
-                      <input type="text" inputMode="decimal"
-                        className="neu-input py-2 px-3 rounded-xl text-sm tabular-nums w-full"
-                        value={corrFormEstoque.qtd}
-                        onChange={e => setCorrFormEstoque(f => ({ ...f, qtd: formatQtd(e.target.value, ehFracionaria(corrigindo.unidade)) }))}
-                        onKeyDown={handleQtdKeyDown(ehFracionaria(corrigindo.unidade))} />
-                    </FormField>
-                    <FormField label="Destino">
-                      <input className="neu-input py-2 px-3 rounded-xl text-sm w-full"
-                        value={corrFormEstoque.destino}
-                        onChange={e => setCorrFormEstoque(f => ({ ...f, destino: e.target.value }))} />
-                    </FormField>
-                  </div>
-                </div>
-              ) : (
+            {corrigindo.tipo === 'estoque' ? (
               <div className="flex flex-col gap-3">
-                {corrEhEventual && (
-                  <FormField label="Marca">
-                    <input list="sugestoes-marcas" className="neu-input py-2 px-3 rounded-xl text-sm w-full"
-                      value={corrForm.marca}
-                      onChange={e => setCorrForm(f => ({ ...f, marca: e.target.value }))}
-                      placeholder="Marca (opcional)" />
-                  </FormField>
-                )}
-                <FormField label={corrEhReposicao ? 'Item (do catálogo)' : 'Item *'}>
-                  <input className={`neu-input py-2 px-3 rounded-xl text-sm w-full ${corrEhReposicao ? 'opacity-60 cursor-not-allowed' : ''}`}
-                    value={corrForm.item} readOnly={corrEhReposicao} disabled={corrEhReposicao}
-                    onChange={e => setCorrForm(f => ({ ...f, item: e.target.value }))} />
-                </FormField>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <FormField label="Quantidade *">
                     <input type="text" inputMode="decimal"
                       className="neu-input py-2 px-3 rounded-xl text-sm tabular-nums w-full"
-                      value={corrForm.qtd}
-                      onChange={e => setCorrForm(f => ({ ...f, qtd: formatQtd(e.target.value, corrFrac) }))}
-                      onKeyDown={handleQtdKeyDown(corrFrac)} />
-                    {/* A quantidade aqui é sempre na unidade (migr. 590). */}
-                    {corrigindo?.embNome && corrigindo?.embFator ? (
-                      <p className="text-[10px] text-gray-500 mt-1">
-                        Pedido: {qtdBR(corrigindo.qtdEmb)} {pluralEmbalagem(corrigindo.embNome, Number(corrigindo.qtdEmb)).toLowerCase()} com {qtdBR(corrigindo.embFator)}. Digite em {normalizarUnidade(corrForm.unidade)}.
-                      </p>
-                    ) : null}
+                      value={corrFormEstoque.qtd}
+                      onChange={e => setCorrFormEstoque(f => ({ ...f, qtd: formatQtd(e.target.value, ehFracionaria(corrigindo.unidade)) }))}
+                      onKeyDown={handleQtdKeyDown(ehFracionaria(corrigindo.unidade))} />
                   </FormField>
-                  <FormField label="Unidade">
-                    <select className={`neu-input py-2 px-3 rounded-xl text-sm w-full ${corrEhReposicao ? 'opacity-60 cursor-not-allowed' : ''}`}
-                      value={corrForm.unidade} disabled={corrEhReposicao}
-                      onChange={e => setCorrForm(f => ({ ...f, unidade: e.target.value }))}>
-                      {[...unidadesReqTodas, ...(unidadesReqTodas.includes(corrForm.unidade) ? [] : [corrForm.unidade])]
-                        .map(u => <option key={u} value={u}>{rotuloUnidade(u)}</option>)}
-                    </select>
-                  </FormField>
-                  <FormField label="Necessário até">
-                    <input type="date" className="neu-input py-2 px-3 rounded-xl text-sm w-full"
-                      value={corrForm.data_necessidade}
-                      onChange={e => setCorrForm(f => ({ ...f, data_necessidade: e.target.value }))} />
-                  </FormField>
-                  <FormField label="Urgência">
-                    <select className="neu-input py-2 px-3 rounded-xl text-sm w-full"
-                      value={corrForm.urgencia}
-                      onChange={e => setCorrForm(f => ({ ...f, urgencia: e.target.value }))}>
-                      {['Normal', 'Alta', 'Urgente'].map(u => <option key={u} value={u}>{u}</option>)}
-                    </select>
+                  <FormField label="Destino">
+                    <input className="neu-input py-2 px-3 rounded-xl text-sm w-full"
+                      value={corrFormEstoque.destino}
+                      onChange={e => setCorrFormEstoque(f => ({ ...f, destino: e.target.value }))} />
                   </FormField>
                 </div>
-                <FormField label="Centro de custo">
-                  <select className="neu-input py-2 px-3 rounded-xl text-sm w-full"
-                    value={corrForm.centro_custo}
-                    onChange={e => setCorrForm(f => ({ ...f, centro_custo: e.target.value }))}>
-                    <option value="">Não informar</option>
-                    {centrosOrdenados.map((c: any) => (
-                      <option key={c.id} value={c.nome}>{c.nome}</option>
-                    ))}
+              </div>
+            ) : (
+            <div className="flex flex-col gap-3">
+              {corrEhEventual && (
+                <FormField label="Marca">
+                  <input list="sugestoes-marcas" className="neu-input py-2 px-3 rounded-xl text-sm w-full"
+                    value={corrForm.marca}
+                    onChange={e => setCorrForm(f => ({ ...f, marca: e.target.value }))}
+                    placeholder="Marca (opcional)" />
+                </FormField>
+              )}
+              <FormField label={corrEhReposicao ? 'Item (do catálogo)' : 'Item *'}>
+                <input className={`neu-input py-2 px-3 rounded-xl text-sm w-full ${corrEhReposicao ? 'opacity-60 cursor-not-allowed' : ''}`}
+                  value={corrForm.item} readOnly={corrEhReposicao} disabled={corrEhReposicao}
+                  onChange={e => setCorrForm(f => ({ ...f, item: e.target.value }))} />
+              </FormField>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <FormField label="Quantidade *">
+                  <input type="text" inputMode="decimal"
+                    className="neu-input py-2 px-3 rounded-xl text-sm tabular-nums w-full"
+                    value={corrForm.qtd}
+                    onChange={e => setCorrForm(f => ({ ...f, qtd: formatQtd(e.target.value, corrFrac) }))}
+                    onKeyDown={handleQtdKeyDown(corrFrac)} />
+                  {/* A quantidade aqui é sempre na unidade (migr. 590). */}
+                  {corrigindo?.embNome && corrigindo?.embFator ? (
+                    <p className="text-[10px] text-gray-500 mt-1">
+                      Pedido: {qtdBR(corrigindo.qtdEmb)} {pluralEmbalagem(corrigindo.embNome, Number(corrigindo.qtdEmb)).toLowerCase()} com {qtdBR(corrigindo.embFator)}. Digite em {normalizarUnidade(corrForm.unidade)}.
+                    </p>
+                  ) : null}
+                </FormField>
+                <FormField label="Unidade">
+                  <select className={`neu-input py-2 px-3 rounded-xl text-sm w-full ${corrEhReposicao ? 'opacity-60 cursor-not-allowed' : ''}`}
+                    value={corrForm.unidade} disabled={corrEhReposicao}
+                    onChange={e => setCorrForm(f => ({ ...f, unidade: e.target.value }))}>
+                    {[...unidadesReqTodas, ...(unidadesReqTodas.includes(corrForm.unidade) ? [] : [corrForm.unidade])]
+                      .map(u => <option key={u} value={u}>{rotuloUnidade(u)}</option>)}
                   </select>
                 </FormField>
-                <FormField label="Justificativa">
-                  <textarea className="neu-input py-2 px-3 rounded-xl text-sm resize-none h-20 w-full"
-                    value={corrForm.justificativa}
-                    onChange={e => setCorrForm(f => ({ ...f, justificativa: e.target.value }))} />
+                <FormField label="Necessário até">
+                  <input type="date" className="neu-input py-2 px-3 rounded-xl text-sm w-full"
+                    value={corrForm.data_necessidade}
+                    onChange={e => setCorrForm(f => ({ ...f, data_necessidade: e.target.value }))} />
+                </FormField>
+                <FormField label="Urgência">
+                  <select className="neu-input py-2 px-3 rounded-xl text-sm w-full"
+                    value={corrForm.urgencia}
+                    onChange={e => setCorrForm(f => ({ ...f, urgencia: e.target.value }))}>
+                    {['Normal', 'Alta', 'Urgente'].map(u => <option key={u} value={u}>{u}</option>)}
+                  </select>
                 </FormField>
               </div>
-              )}
-
-              <div className="flex justify-end gap-2 mt-5">
-                <button onClick={() => setCorrigindo(null)} disabled={reenviando}
-                  className="px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-widest neu-button text-gray-400 disabled:opacity-50">
-                  Cancelar
-                </button>
-                <NeuButtonAccent onClick={handleReenviar} isLoading={reenviando}>
-                  Reenviar para quem decide
-                </NeuButtonAccent>
-              </div>
-            </motion.div>
-          </motion.div>
+              <FormField label="Centro de custo">
+                <select className="neu-input py-2 px-3 rounded-xl text-sm w-full"
+                  value={corrForm.centro_custo}
+                  onChange={e => setCorrForm(f => ({ ...f, centro_custo: e.target.value }))}>
+                  <option value="">Não informar</option>
+                  {centrosOrdenados.map((c: any) => (
+                    <option key={c.id} value={c.nome}>{c.nome}</option>
+                  ))}
+                </select>
+              </FormField>
+              <FormField label="Justificativa">
+                <textarea className="neu-input py-2 px-3 rounded-xl text-sm resize-none h-20 w-full"
+                  value={corrForm.justificativa}
+                  onChange={e => setCorrForm(f => ({ ...f, justificativa: e.target.value }))} />
+              </FormField>
+            </div>
+            )}
+          </ModalFormulario>
         )}
       </AnimatePresence>
     </motion.div>

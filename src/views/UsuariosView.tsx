@@ -1026,6 +1026,7 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
           titulo="Novo Usuário"
           subtitulo={'Login no LogMax, com ou sem ficha no RH.'}
           onCancelar={fecharNovo}
+          cancelarDesabilitado={saving}
           acoes={<>
             <NeuButtonAccent onClick={handleSave} disabled={saving || !form.nome || !form.email || form.password.length < 6}>
               {saving ? 'Criando...' : 'Criar Usuário'}
@@ -1660,167 +1661,136 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
       {/* Modal de edição */}
       <AnimatePresence>
         {editingUser && editForm && (
-          <motion.div
-            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4"
-            onClick={() => !editSaving && closeEdit()}>
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95, y: 10 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 10 }}
-              onClick={e => e.stopPropagation()}
-              className="neu-flat rounded-3xl border border-white/10 w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden">
-
-              <div className="flex items-center justify-between gap-3 px-6 pt-6 pb-4 border-b border-white/5 shrink-0">
-                <div className="flex items-center gap-3 min-w-0">
-                  {editingUser.foto_url
-                    ? <img src={editingUser.foto_url} alt="" className="w-10 h-10 rounded-full object-cover shrink-0" />
-                    : <div className="w-10 h-10 rounded-full bg-gray-700 flex items-center justify-center text-sm font-bold text-gray-300 shrink-0">{(editingUser.nome?.[0] ?? '?').toUpperCase()}</div>}
-                  <div className="min-w-0">
-                    <h3 className="text-base font-bold text-gray-200 truncate">Editar Usuário <span className="text-accent">— {editingUser.nome}</span></h3>
-                    <div className="flex items-center gap-1.5 mt-0.5">
-                      <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wide border border-current/25 ${roleCls(editingUser.role)}`}>
-                        {ROLE_LABEL[editingUser.role] ?? editingUser.role}
-                      </span>
-                      <span className="text-[10px] text-gray-500">{filialLabel(editingUser.filial)}</span>
-                    </div>
-                  </div>
+          <ModalFormulario
+            aberto
+            titulo="Editar Usuário"
+            subtitulo={<>— {editingUser.nome} <span className={`ml-1 px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wide border border-current/25 ${roleCls(editingUser.role)}`}>{ROLE_LABEL[editingUser.role] ?? editingUser.role}</span> <span className="text-[10px]">{filialLabel(editingUser.filial)}</span></>}
+            onCancelar={closeEdit}
+            cancelarDesabilitado={editSaving}
+            acoes={<>
+              <NeuButtonAccent onClick={handleSaveEdit} disabled={editSaving || !editForm.nome || !editForm.email}>
+                {editSaving ? 'Salvando...' : 'Salvar Alterações'}
+              </NeuButtonAccent>
+            </>}
+          >
+              <SecaoForm icon={User} titulo="Identificação">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <CampoForm id="user-edit-nome" label="Nome completo *">
+                    <input id="user-edit-nome" type="text" value={editForm.nome}
+                      onChange={e => setEditForm((p: any) => ({ ...p, nome: e.target.value }))}
+                      className="neu-input rounded-xl px-3 py-2.5 text-sm" />
+                  </CampoForm>
+                  <CampoForm id="user-edit-email" label="E-mail de login *">
+                    <input id="user-edit-email" type="email" value={editForm.email}
+                      onChange={e => setEditForm((p: any) => ({ ...p, email: e.target.value }))}
+                      className="neu-input rounded-xl px-3 py-2.5 text-sm" />
+                  </CampoForm>
                 </div>
-                <button onClick={closeEdit} className="modal-close-btn"><X size={16} /></button>
-              </div>
+              </SecaoForm>
 
-              <div className="px-6 py-5 overflow-y-auto main-scrollbar flex-1 min-h-0 flex flex-col gap-6">
-
-                <SecaoForm icon={User} titulo="Identificação">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <CampoForm id="user-edit-nome" label="Nome completo *">
-                      <input id="user-edit-nome" type="text" value={editForm.nome}
-                        onChange={e => setEditForm((p: any) => ({ ...p, nome: e.target.value }))}
-                        className="neu-input rounded-xl px-3 py-2.5 text-sm" />
-                    </CampoForm>
-                    <CampoForm id="user-edit-email" label="E-mail de login *">
-                      <input id="user-edit-email" type="email" value={editForm.email}
-                        onChange={e => setEditForm((p: any) => ({ ...p, email: e.target.value }))}
-                        className="neu-input rounded-xl px-3 py-2.5 text-sm" />
-                    </CampoForm>
-                  </div>
-                </SecaoForm>
-
-                {/* Trocar a senha de OUTRA pessoa é só do admin; a própria,
-                    qualquer um. O backend recusa igual. */}
-                {(isAdmin || editingUser.id === callerProfile.id) && (
-                  <SecaoForm icon={KeyRound} titulo="Senha de acesso" dica="Deixe em branco para manter a atual.">
-                    <div className="flex gap-2">
-                      <div className="relative flex-1">
-                        <input id="user-edit-password" aria-label="Nova senha" type={editShowPass ? 'text' : 'password'} value={editForm.password}
-                          autoComplete="new-password" placeholder="Nova senha (opcional)"
-                          onChange={e => setEditForm((p: any) => ({ ...p, password: e.target.value }))}
-                          className="neu-input rounded-xl px-3 py-2.5 pr-16 text-sm w-full font-mono" />
-                        <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-2">
-                          {editForm.password && editShowPass && (
-                            <button type="button" onClick={() => copiarSenha(editForm.password)} title="Copiar senha"
-                              className="text-gray-500 hover:text-accent"><Copy size={13} /></button>
-                          )}
-                          <button type="button" onClick={() => setEditShowPass(v => !v)} title={editShowPass ? 'Ocultar' : 'Mostrar'}
-                            className="text-gray-500 hover:text-gray-300">
-                            {editShowPass ? <EyeOff size={14} /> : <Eye size={14} />}
-                          </button>
-                        </div>
+              {/* Trocar a senha de OUTRA pessoa é só do admin; a própria,
+                  qualquer um. O backend recusa igual. */}
+              {(isAdmin || editingUser.id === callerProfile.id) && (
+                <SecaoForm icon={KeyRound} titulo="Senha de acesso" dica="Deixe em branco para manter a atual.">
+                  <div className="flex gap-2">
+                    <div className="relative flex-1">
+                      <input id="user-edit-password" aria-label="Nova senha" type={editShowPass ? 'text' : 'password'} value={editForm.password}
+                        autoComplete="new-password" placeholder="Nova senha (opcional)"
+                        onChange={e => setEditForm((p: any) => ({ ...p, password: e.target.value }))}
+                        className="neu-input rounded-xl px-3 py-2.5 pr-16 text-sm w-full font-mono" />
+                      <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-2">
+                        {editForm.password && editShowPass && (
+                          <button type="button" onClick={() => copiarSenha(editForm.password)} title="Copiar senha"
+                            className="text-gray-500 hover:text-accent"><Copy size={13} /></button>
+                        )}
+                        <button type="button" onClick={() => setEditShowPass(v => !v)} title={editShowPass ? 'Ocultar' : 'Mostrar'}
+                          className="text-gray-500 hover:text-gray-300">
+                          {editShowPass ? <EyeOff size={14} /> : <Eye size={14} />}
+                        </button>
                       </div>
                     </div>
-                  </SecaoForm>
-                )}
-
-                <SecaoForm icon={Briefcase} titulo="Cargo e lotação">
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                    <CampoForm id="user-edit-role" label="Cargo">
-                      <select id="user-edit-role" value={editForm.role}
-                        onChange={e => setEditForm((p: any) => ({ ...p, role: e.target.value }))}
-                        disabled={!isGlobal}
-                        className="neu-input rounded-xl px-3 py-2.5 text-sm disabled:opacity-50">
-                        {roleOptions.map(r => <option key={r} value={r}>{ROLE_LABEL[r]}</option>)}
-                        {/* Cargo fora do conjunto editável continua visível, como leitura. */}
-                        {!roleOptions.includes(editForm.role) && (
-                          <option value={editForm.role}>{ROLE_LABEL[editForm.role] ?? editForm.role}</option>
-                        )}
-                      </select>
-                    </CampoForm>
-                    <CampoForm id="user-edit-setor" label="Setor">
-                      <select id="user-edit-setor" value={editForm.setor}
-                        onChange={e => setEditForm((p: any) => ({ ...p, setor: e.target.value }))}
-                        disabled={roleEscopoGlobal(editForm.role)}
-                        className="neu-input rounded-xl px-3 py-2.5 text-sm disabled:opacity-50">
-                        {SETORES_SELECIONAVEIS.map(s => <option key={s} value={s}>{SETOR_LABEL[s]}</option>)}
-                        {roleEscopoGlobal(editForm.role) && <option value="all">{SETOR_LABEL.all}</option>}
-                      </select>
-                    </CampoForm>
-                    {/* Colaborador/gerente não vão para a Matriz (o FilialContext
-                        barra o login); gerente não-global fica na própria unidade. */}
-                    <CampoForm id="user-edit-filial" label="Unidade">
-                      <select id="user-edit-filial" value={editForm.filial}
-                        onChange={e => setEditForm((p: any) => ({ ...p, filial: e.target.value }))}
-                        disabled={isGerente && !isGlobal}
-                        className="neu-input rounded-xl px-3 py-2.5 text-sm disabled:opacity-50">
-                        {isGlobal && <option value={SEM_ALOCACAO}>Sem alocação</option>}
-                        {(isGerente && !isGlobal ? [callerProfile.filial] : filiaisParaRole(editForm.role)).map(f => (
-                          <option key={f} value={f}>{f}</option>
-                        ))}
-                      </select>
-                    </CampoForm>
                   </div>
-                  {editForm.filial === SEM_ALOCACAO && (
-                    <p className="text-[10px] text-amber-400/80 leading-relaxed">
-                      Sem unidade, o aluno vê "Filial não configurada" ao entrar até você alocá-lo.
-                    </p>
-                  )}
                 </SecaoForm>
+              )}
 
-                {isGlobal && !roleEscopoGlobal(editForm.role) && (
-                  <SecaoForm icon={Layers} titulo="Acesso a outros setores" dica="Somam ao setor principal, sem mudar o cargo.">
-                    <SetoresExtras setor={editForm.setor} value={editForm.setores_extras ?? []}
-                      onChange={v => setEditForm((p: any) => ({ ...p, setores_extras: v }))} />
-                  </SecaoForm>
+              <SecaoForm icon={Briefcase} titulo="Cargo e lotação">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  <CampoForm id="user-edit-role" label="Cargo">
+                    <select id="user-edit-role" value={editForm.role}
+                      onChange={e => setEditForm((p: any) => ({ ...p, role: e.target.value }))}
+                      disabled={!isGlobal}
+                      className="neu-input rounded-xl px-3 py-2.5 text-sm disabled:opacity-50">
+                      {roleOptions.map(r => <option key={r} value={r}>{ROLE_LABEL[r]}</option>)}
+                      {/* Cargo fora do conjunto editável continua visível, como leitura. */}
+                      {!roleOptions.includes(editForm.role) && (
+                        <option value={editForm.role}>{ROLE_LABEL[editForm.role] ?? editForm.role}</option>
+                      )}
+                    </select>
+                  </CampoForm>
+                  <CampoForm id="user-edit-setor" label="Setor">
+                    <select id="user-edit-setor" value={editForm.setor}
+                      onChange={e => setEditForm((p: any) => ({ ...p, setor: e.target.value }))}
+                      disabled={roleEscopoGlobal(editForm.role)}
+                      className="neu-input rounded-xl px-3 py-2.5 text-sm disabled:opacity-50">
+                      {SETORES_SELECIONAVEIS.map(s => <option key={s} value={s}>{SETOR_LABEL[s]}</option>)}
+                      {roleEscopoGlobal(editForm.role) && <option value="all">{SETOR_LABEL.all}</option>}
+                    </select>
+                  </CampoForm>
+                  {/* Colaborador/gerente não vão para a Matriz (o FilialContext
+                      barra o login); gerente não-global fica na própria unidade. */}
+                  <CampoForm id="user-edit-filial" label="Unidade">
+                    <select id="user-edit-filial" value={editForm.filial}
+                      onChange={e => setEditForm((p: any) => ({ ...p, filial: e.target.value }))}
+                      disabled={isGerente && !isGlobal}
+                      className="neu-input rounded-xl px-3 py-2.5 text-sm disabled:opacity-50">
+                      {isGlobal && <option value={SEM_ALOCACAO}>Sem alocação</option>}
+                      {(isGerente && !isGlobal ? [callerProfile.filial] : filiaisParaRole(editForm.role)).map(f => (
+                        <option key={f} value={f}>{f}</option>
+                      ))}
+                    </select>
+                  </CampoForm>
+                </div>
+                {editForm.filial === SEM_ALOCACAO && (
+                  <p className="text-[10px] text-amber-400/80 leading-relaxed">
+                    Sem unidade, o aluno vê "Filial não configurada" ao entrar até você alocá-lo.
+                  </p>
                 )}
+              </SecaoForm>
 
-                {isGlobal && editForm.role === 'gerente' && (
-                  <SecaoForm icon={ShieldCheck} titulo="Permissões do gerente">
-                    <div className="flex flex-col gap-2">
-                      <Alternador titulo="Acesso de Conselheiro"
-                        descricao="Visão global, igual a Admin/CEO, sem mudar de cargo."
-                        ligado={!!editForm.is_conselheiro}
-                        onChange={() => setEditForm((p: any) => ({ ...p, is_conselheiro: !p.is_conselheiro }))} />
-                      <Alternador titulo="Módulo Usuários na sidebar"
-                        descricao="Desligado, o item Usuários some do menu deste gerente."
-                        ligado={!!editForm.pode_acessar_usuarios}
-                        onChange={() => setEditForm((p: any) => ({ ...p, pode_acessar_usuarios: !p.pode_acessar_usuarios }))} />
-                    </div>
-                  </SecaoForm>
-                )}
+              {isGlobal && !roleEscopoGlobal(editForm.role) && (
+                <SecaoForm icon={Layers} titulo="Acesso a outros setores" dica="Somam ao setor principal, sem mudar o cargo.">
+                  <SetoresExtras setor={editForm.setor} value={editForm.setores_extras ?? []}
+                    onChange={v => setEditForm((p: any) => ({ ...p, setores_extras: v }))} />
+                </SecaoForm>
+              )}
 
-                {isAdmin && (
-                  <SecaoForm icon={Link2} titulo="Vínculo com o RH" dica="Ficha de funcionário ligada a esta conta.">
-                    <SelectBusca
-                      value={editForm.funcionario_id}
-                      onChange={v => setEditForm((p: any) => ({ ...p, funcionario_id: v }))}
-                      placeholder="Sem vínculo"
-                      permitirVazio="Sem vínculo"
-                      opcoes={funcionariosLivres(editForm.filial, vinculoDe(editingUser)).map((f: any) => opcaoFuncionario(f))}
-                    />
-                  </SecaoForm>
-                )}
-              </div>
+              {isGlobal && editForm.role === 'gerente' && (
+                <SecaoForm icon={ShieldCheck} titulo="Permissões do gerente">
+                  <div className="flex flex-col gap-2">
+                    <Alternador titulo="Acesso de Conselheiro"
+                      descricao="Visão global, igual a Admin/CEO, sem mudar de cargo."
+                      ligado={!!editForm.is_conselheiro}
+                      onChange={() => setEditForm((p: any) => ({ ...p, is_conselheiro: !p.is_conselheiro }))} />
+                    <Alternador titulo="Módulo Usuários na sidebar"
+                      descricao="Desligado, o item Usuários some do menu deste gerente."
+                      ligado={!!editForm.pode_acessar_usuarios}
+                      onChange={() => setEditForm((p: any) => ({ ...p, pode_acessar_usuarios: !p.pode_acessar_usuarios }))} />
+                  </div>
+                </SecaoForm>
+              )}
 
-              <div className="flex items-center justify-end gap-2 px-6 py-4 border-t border-white/5 shrink-0">
-                <button onClick={closeEdit} disabled={editSaving}
-                  className="px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-widest neu-button text-gray-400 hover:text-gray-200 disabled:opacity-50">
-                  Cancelar
-                </button>
-                <NeuButtonAccent onClick={handleSaveEdit} disabled={editSaving || !editForm.nome || !editForm.email}>
-                  {editSaving ? 'Salvando...' : 'Salvar Alterações'}
-                </NeuButtonAccent>
-              </div>
-            </motion.div>
-          </motion.div>
+              {isAdmin && (
+                <SecaoForm icon={Link2} titulo="Vínculo com o RH" dica="Ficha de funcionário ligada a esta conta.">
+                  <SelectBusca
+                    value={editForm.funcionario_id}
+                    onChange={v => setEditForm((p: any) => ({ ...p, funcionario_id: v }))}
+                    placeholder="Sem vínculo"
+                    permitirVazio="Sem vínculo"
+                    opcoes={funcionariosLivres(editForm.filial, vinculoDe(editingUser)).map((f: any) => opcaoFuncionario(f))}
+                  />
+                </SecaoForm>
+              )}
+          </ModalFormulario>
         )}
       </AnimatePresence>
     </motion.div>

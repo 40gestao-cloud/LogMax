@@ -6,7 +6,7 @@ import { MenuMais, ItemMenu } from '../components/MenuMais';
 import { useFetchData } from '../hooks/useSupabaseData';
 import { supabase } from '../lib/supabase';
 import { setorLabel } from '../lib/setores';
-import { LoadingSpinner, EmptyState, NeuButtonAccent, CardContador, type TomContador, corDoStatus } from '../components/ui';
+import { LoadingSpinner, EmptyState, NeuButtonAccent, CardContador, type TomContador, corDoStatus, ModalFormulario } from '../components/ui';
 import { useConfirm } from '../contexts/ConfirmContext';
 import { GOLD, GOLD_DARK, BLACK } from '../lib/pdfPalette';
 
@@ -41,7 +41,6 @@ export const MetasView = ({ showToast, profile }: any) => {
   const isGerente = profile?.role === 'gerente';
 
   const [showFormMeta, setShowFormMeta] = useState(false);
-  const formMetaRef = useRef<HTMLDivElement>(null);
   const [formMeta, setFormMeta] = useState(EMPTY_META);
   const [savingMeta, setSavingMeta] = useState(false);
   const [editMetaId, setEditMetaId] = useState<string | null>(null);
@@ -129,7 +128,6 @@ export const MetasView = ({ showToast, profile }: any) => {
       hora_fim:    m.hora_fim ?? '',
     });
     setShowFormMeta(true);
-    requestAnimationFrame(() => formMetaRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
   };
 
   const fecharFormMeta = () => {
@@ -313,7 +311,7 @@ export const MetasView = ({ showToast, profile }: any) => {
       {/* Botão criar */}
       {podeCriarMeta && (
         <div className="flex justify-end shrink-0">
-          <NeuButtonAccent variant="" onClick={() => { if (showFormMeta) fecharFormMeta(); else { setEditMetaId(null); setFormMeta(EMPTY_META); setShowFormMeta(true); requestAnimationFrame(() => formMetaRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })); } }}>
+          <NeuButtonAccent variant="" onClick={() => { if (showFormMeta) fecharFormMeta(); else { setEditMetaId(null); setFormMeta(EMPTY_META); setShowFormMeta(true); } }}>
             <Plus size={14} />{showFormMeta ? 'Cancelar' : 'Nova Meta Estratégica'}
           </NeuButtonAccent>
         </div>
@@ -321,81 +319,75 @@ export const MetasView = ({ showToast, profile }: any) => {
 
       {/* Form Meta Estratégica */}
       <AnimatePresence>
-        {showFormMeta && podeCriarMeta && (
-          <motion.div ref={formMetaRef} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            className="neu-flat rounded-3xl p-6 border border-white/5 shrink-0 scroll-mt-4">
-            <div className="flex items-center justify-between mb-5">
-              <h3 className="text-sm font-bold text-gray-300">{editMetaId ? 'Editar Meta Estratégica' : 'Nova Meta Estratégica'}</h3>
-              {!editMetaId && (
-                <span className="text-[10px] bg-gray-700/50 text-gray-400 px-2.5 py-1 rounded-lg border border-white/5">
-                  Salva como Rascunho — publique quando quiser enviar aos gerentes
-                </span>
-              )}
+        <ModalFormulario
+          aberto={!!(showFormMeta && podeCriarMeta)}
+          titulo={editMetaId ? 'Editar Meta Estratégica' : 'Nova Meta Estratégica'}
+          subtitulo={!editMetaId && 'Salva como Rascunho — publique quando quiser enviar aos gerentes'}
+          onCancelar={fecharFormMeta}
+          acoes={<>
+            <NeuButtonAccent variant="" onClick={editMetaId ? handleEditarMeta : handleCriarMeta} disabled={savingMeta}>
+              {savingMeta ? 'Salvando...' : (editMetaId ? 'Salvar Alterações' : 'Salvar Rascunho')}
+            </NeuButtonAccent>
+          </>}
+        >
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div className="flex flex-col gap-1.5 lg:col-span-2">
+              <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Título *</label>
+              <input value={formMeta.titulo}
+                onChange={e => setFormMeta(p => ({ ...p, titulo: e.target.value }))}
+                placeholder="Ex.: Aumentar vendas Q3"
+                className="neu-input rounded-xl px-3 py-2.5 text-sm" />
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              <div className="flex flex-col gap-1.5 lg:col-span-2">
-                <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Título *</label>
-                <input value={formMeta.titulo}
-                  onChange={e => setFormMeta(p => ({ ...p, titulo: e.target.value }))}
-                  placeholder="Ex.: Aumentar vendas Q3"
-                  className="neu-input rounded-xl px-3 py-2.5 text-sm" />
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Nota (pontuação)</label>
-                <input type="number" step="0.1" min="0" value={formMeta.nota}
-                  onChange={e => setFormMeta(p => ({ ...p, nota: e.target.value }))}
-                  placeholder="Ex.: 10"
-                  className="neu-input rounded-xl px-3 py-2.5 text-sm" />
-              </div>
-              <div className="flex flex-col gap-1.5 lg:col-span-2">
-                <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Descrição</label>
-                <textarea value={formMeta.descricao}
-                  onChange={e => setFormMeta(p => ({ ...p, descricao: e.target.value }))}
-                  placeholder="Detalhes, critérios, contexto..."
-                  rows={3}
-                  className="neu-input rounded-xl px-3 py-2.5 text-sm resize-none" />
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Setor alvo</label>
-                <select value={formMeta.setor}
-                  onChange={e => setFormMeta(p => ({ ...p, setor: e.target.value }))}
-                  className="neu-input rounded-xl px-3 py-2.5 text-sm">
-                  <option value="">Todos os setores</option>
-                  {SETORES.map(s => <option key={s} value={s}>{labelSetorOpcao(s)}</option>)}
-                </select>
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Data de início *</label>
-                <input type="date" value={formMeta.data_inicio}
-                  onChange={e => setFormMeta(p => ({ ...p, data_inicio: e.target.value }))}
-                  className="neu-input rounded-xl px-3 py-2.5 text-sm" />
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Horário de início</label>
-                <input type="time" value={formMeta.hora_inicio}
-                  onChange={e => setFormMeta(p => ({ ...p, hora_inicio: e.target.value }))}
-                  className="neu-input rounded-xl px-3 py-2.5 text-sm" />
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Data de fim *</label>
-                <input type="date" value={formMeta.data_fim}
-                  onChange={e => setFormMeta(p => ({ ...p, data_fim: e.target.value }))}
-                  className="neu-input rounded-xl px-3 py-2.5 text-sm" />
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Horário de fim</label>
-                <input type="time" value={formMeta.hora_fim}
-                  onChange={e => setFormMeta(p => ({ ...p, hora_fim: e.target.value }))}
-                  className="neu-input rounded-xl px-3 py-2.5 text-sm" />
-              </div>
+            <div className="flex flex-col gap-1.5">
+              <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Nota (pontuação)</label>
+              <input type="number" step="0.1" min="0" value={formMeta.nota}
+                onChange={e => setFormMeta(p => ({ ...p, nota: e.target.value }))}
+                placeholder="Ex.: 10"
+                className="neu-input rounded-xl px-3 py-2.5 text-sm" />
             </div>
-            <div className="flex justify-end mt-5">
-              <NeuButtonAccent variant="" onClick={editMetaId ? handleEditarMeta : handleCriarMeta} disabled={savingMeta}>
-                {savingMeta ? 'Salvando...' : (editMetaId ? 'Salvar Alterações' : 'Salvar Rascunho')}
-              </NeuButtonAccent>
+            <div className="flex flex-col gap-1.5 lg:col-span-2">
+              <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Descrição</label>
+              <textarea value={formMeta.descricao}
+                onChange={e => setFormMeta(p => ({ ...p, descricao: e.target.value }))}
+                placeholder="Detalhes, critérios, contexto..."
+                rows={3}
+                className="neu-input rounded-xl px-3 py-2.5 text-sm resize-none" />
             </div>
-          </motion.div>
-        )}
+            <div className="flex flex-col gap-1.5">
+              <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Setor alvo</label>
+              <select value={formMeta.setor}
+                onChange={e => setFormMeta(p => ({ ...p, setor: e.target.value }))}
+                className="neu-input rounded-xl px-3 py-2.5 text-sm">
+                <option value="">Todos os setores</option>
+                {SETORES.map(s => <option key={s} value={s}>{labelSetorOpcao(s)}</option>)}
+              </select>
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Data de início *</label>
+              <input type="date" value={formMeta.data_inicio}
+                onChange={e => setFormMeta(p => ({ ...p, data_inicio: e.target.value }))}
+                className="neu-input rounded-xl px-3 py-2.5 text-sm" />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Horário de início</label>
+              <input type="time" value={formMeta.hora_inicio}
+                onChange={e => setFormMeta(p => ({ ...p, hora_inicio: e.target.value }))}
+                className="neu-input rounded-xl px-3 py-2.5 text-sm" />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Data de fim *</label>
+              <input type="date" value={formMeta.data_fim}
+                onChange={e => setFormMeta(p => ({ ...p, data_fim: e.target.value }))}
+                className="neu-input rounded-xl px-3 py-2.5 text-sm" />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Horário de fim</label>
+              <input type="time" value={formMeta.hora_fim}
+                onChange={e => setFormMeta(p => ({ ...p, hora_fim: e.target.value }))}
+                className="neu-input rounded-xl px-3 py-2.5 text-sm" />
+            </div>
+          </div>
+        </ModalFormulario>
       </AnimatePresence>
 
       {/* Lista — Metas Estratégicas */}

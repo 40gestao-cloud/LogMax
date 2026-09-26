@@ -433,11 +433,13 @@ const LARGURA_MODAL_FORM = {
   lg: 'max-w-5xl',
   xl: 'max-w-[1800px]',
 } as const;
-export const ModalFormulario = ({ aberto, titulo, subtitulo, onCancelar, acoes, lateral, largura = 'lg', children }: {
+export const ModalFormulario = ({ aberto, titulo, subtitulo, onCancelar, cancelarDesabilitado, acoes, lateral, largura = 'lg', children }: {
   aberto: boolean;
   titulo: React.ReactNode;
   subtitulo?: React.ReactNode;
   onCancelar: () => void;
+  /** Trava o Cancelar enquanto grava: fechar no meio deixa o pedido órfão. */
+  cancelarDesabilitado?: boolean;
   /** Botão de salvar (e o que mais couber), ao lado do Cancelar no topo. */
   acoes?: React.ReactNode;
   /** Coluna fixa à direita (imagens, resumo, pré-visualização). */
@@ -464,13 +466,15 @@ export const ModalFormulario = ({ aberto, titulo, subtitulo, onCancelar, acoes, 
             aria-label={typeof titulo === 'string' ? titulo : undefined}
             initial={{ scale: 0.98, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.98, opacity: 0 }}
             className={`neu-flat rounded-3xl border border-white/10 w-full ${LARGURA_MODAL_FORM[largura]} max-h-full flex flex-col overflow-hidden`}>
-            <header className="flex items-center justify-between gap-3 px-5 py-3 border-b border-white/10 shrink-0">
-              <h3 className="text-sm font-bold text-gray-200 truncate min-w-0">
+            {/* Quebra de linha no celular: com o MaxID nas ações, o Salvar saía
+                para fora do modal e o título sumia. */}
+            <header className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 px-5 py-3 border-b border-white/10 shrink-0">
+              <h3 className="text-sm font-bold text-gray-200 truncate min-w-[10rem] flex-1">
                 {titulo}
                 {subtitulo && <span className="text-gray-500 font-normal ml-2">{subtitulo}</span>}
               </h3>
-              <div className="flex items-center gap-2 shrink-0">
-                <button type="button" onClick={onCancelar} className="neu-button py-2 px-5 rounded-xl text-sm text-gray-400">Cancelar</button>
+              <div className="flex flex-wrap items-center justify-end gap-2 ml-auto">
+                <button type="button" onClick={onCancelar} disabled={cancelarDesabilitado} className="neu-button py-2 px-5 rounded-xl text-sm text-gray-400 disabled:opacity-50">Cancelar</button>
                 {acoes}
               </div>
             </header>

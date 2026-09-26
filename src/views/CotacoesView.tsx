@@ -2456,149 +2456,130 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode, onNavigate }: { s
       {/* Modal de correção — Compras arruma o que foi devolvido */}
       <AnimatePresence>
         {correcao && (
-          <motion.div
-            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4"
-            onClick={() => !reenviando && setCorrecao(null)}>
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95, y: 10 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 10 }}
-              onClick={e => e.stopPropagation()}
-              className="neu-flat rounded-3xl p-6 border border-white/10 w-full max-w-lg">
-              <div className="flex items-center justify-between mb-5">
-                <h3 className="text-sm font-bold text-gray-300">
-                  Corrigir e reenviar
-                  <span className="text-accent ml-2">— {correcao.forn?.nome ?? 'fornecedor'}</span>
-                </h3>
-                <button onClick={() => !reenviando && setCorrecao(null)}
-                  className="w-7 h-7 neu-button rounded-lg flex items-center justify-center text-gray-500 hover:text-white">
-                  <X size={14} />
-                </button>
+          <ModalFormulario
+            aberto
+            titulo="Corrigir e reenviar"
+            subtitulo={`— ${correcao.forn?.nome ?? 'fornecedor'}`}
+            onCancelar={() => setCorrecao(null)}
+            cancelarDesabilitado={reenviando}
+            acoes={<>
+              <NeuButtonAccent onClick={handleReenviarCorrigida} isLoading={reenviando}>
+                <Send size={14} /> Reenviar ao Financeiro
+              </NeuButtonAccent>
+            </>}
+          >
+
+            {correcao.feedback && (
+              <div className="neu-inset rounded-xl p-3 mb-4 border border-amber-400/15">
+                <p className="text-[10px] text-amber-400 uppercase tracking-widest font-bold mb-1">O que pediram para corrigir</p>
+                <p className="text-xs text-gray-300 whitespace-pre-wrap">{correcao.feedback}</p>
               </div>
+            )}
 
-              {correcao.feedback && (
-                <div className="neu-inset rounded-xl p-3 mb-4 border border-amber-400/15">
-                  <p className="text-[10px] text-amber-400 uppercase tracking-widest font-bold mb-1">O que pediram para corrigir</p>
-                  <p className="text-xs text-gray-300 whitespace-pre-wrap">{correcao.feedback}</p>
-                </div>
+            <p className="text-xs text-gray-500 mb-4">
+              Fornecedor e requisição não mudam aqui: trocar de fornecedor é outra proposta, não
+              correção desta. Ao reenviar, a cotação volta para a fila do Financeiro.
+            </p>
+
+            {reqCorrecao && (
+              <div className="mb-4">
+                <FormField label={`Item — da requisição ${numeroRequisicao(reqCorrecao)}`}>
+                  <div className="neu-pressed py-2 px-3 rounded-xl text-sm text-gray-300">
+                    {reqCorrecao.item}{reqCorrecao.marca ? ` · ${reqCorrecao.marca}` : ''}
+                  </div>
+                </FormField>
+                <p className="text-[10px] text-gray-500 mt-1">
+                  O nome do item não se corrige aqui, nem na observação: ele é da requisição, e é o que
+                  segue para o pedido e para o cadastro do produto. Se pediram para mudar o item, fale com
+                  Compras ou o gerente — a correção é em Compras → Requisições de Compra, com esta cotação
+                  cancelada antes.
+                </p>
+              </div>
+            )}
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              {qtdCorrecao > 0 && (
+                <FormField label="Quantidade solicitada">
+                  <div className="neu-pressed py-2 px-3 rounded-xl text-sm text-gray-300 tabular-nums">
+                    {`${qtdBR(qtdCorrecao)} ${unidadeCorrecao}`}
+                    {embCorrecao && (
+                      <span className="block text-[10px] text-accent/90 mt-0.5">
+                        {qtdBR(embCorrecao.qtd)} {pluralEmbalagem(embCorrecao.nome, embCorrecao.qtd)} de {qtdBR(embCorrecao.fator)} {unidadeCorrecao}
+                      </span>
+                    )}
+                  </div>
+                </FormField>
               )}
-
-              <p className="text-xs text-gray-500 mb-4">
-                Fornecedor e requisição não mudam aqui: trocar de fornecedor é outra proposta, não
-                correção desta. Ao reenviar, a cotação volta para a fila do Financeiro.
-              </p>
-
-              {reqCorrecao && (
-                <div className="mb-4">
-                  <FormField label={`Item — da requisição ${numeroRequisicao(reqCorrecao)}`}>
-                    <div className="neu-pressed py-2 px-3 rounded-xl text-sm text-gray-300">
-                      {reqCorrecao.item}{reqCorrecao.marca ? ` · ${reqCorrecao.marca}` : ''}
-                    </div>
-                  </FormField>
-                  <p className="text-[10px] text-gray-500 mt-1">
-                    O nome do item não se corrige aqui, nem na observação: ele é da requisição, e é o que
-                    segue para o pedido e para o cadastro do produto. Se pediram para mudar o item, fale com
-                    Compras ou o gerente — a correção é em Compras → Requisições de Compra, com esta cotação
-                    cancelada antes.
-                  </p>
-                </div>
-              )}
-
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                {qtdCorrecao > 0 && (
-                  <FormField label="Quantidade solicitada">
-                    <div className="neu-pressed py-2 px-3 rounded-xl text-sm text-gray-300 tabular-nums">
-                      {`${qtdBR(qtdCorrecao)} ${unidadeCorrecao}`}
-                      {embCorrecao && (
-                        <span className="block text-[10px] text-accent/90 mt-0.5">
-                          {qtdBR(embCorrecao.qtd)} {pluralEmbalagem(embCorrecao.nome, embCorrecao.qtd)} de {qtdBR(embCorrecao.fator)} {unidadeCorrecao}
-                        </span>
-                      )}
-                    </div>
-                  </FormField>
-                )}
-                {/* Migr. 589: o preço na medida em que o fornecedor fala — e o
-                    único campo de preço digitável. */}
-                {fonteCorrecao && (
-                  <FormField label={fonteCorrecao.label}>
-                    <input type="text" inputMode="numeric" className="neu-input py-2 px-3 rounded-xl text-sm"
-                      value={correcaoForm.valor_fonte}
-                      onChange={e => setCorrecaoFonte(e.target.value)}
-                      onKeyDown={handleMoneyKeyDown}
-                      placeholder="0,00" />
-                  </FormField>
-                )}
-                {embCorrecao && (
-                  <FormField label={`Valor Unitário (R$ / ${unidadeCorrecao})`}>
-                    <div className="neu-pressed py-2 px-3 rounded-xl text-sm text-gray-300 tabular-nums">
-                      {precoUnitario(parseBRL(correcaoForm.valor_total), qtdCorrecao) || '—'}
-                    </div>
-                  </FormField>
-                )}
-                <FormField label="Valor Total (R$)">
+              {/* Migr. 589: o preço na medida em que o fornecedor fala — e o
+                  único campo de preço digitável. */}
+              {fonteCorrecao && (
+                <FormField label={fonteCorrecao.label}>
                   <input type="text" inputMode="numeric" className="neu-input py-2 px-3 rounded-xl text-sm"
-                    value={correcaoForm.valor_total}
-                    onChange={e => setCorrecaoTotal(e.target.value)}
+                    value={correcaoForm.valor_fonte}
+                    onChange={e => setCorrecaoFonte(e.target.value)}
                     onKeyDown={handleMoneyKeyDown}
                     placeholder="0,00" />
-                  {temAjusteCorrecao ? (
-                    <p className="text-[10px] text-amber-400 mt-1">
-                      Ajustado à mão: a conta dava R$ {formatBRL(totalBaseCorrecao)}
-                      {' '}({ajusteCorrecao > 0 ? '+' : '−'} R$ {formatBRL(Math.abs(ajusteCorrecao))}).
-                    </p>
-                  ) : null}
                 </FormField>
-                <FormField label="Prazo de Entrega">
-                  <input type="date" className="neu-input py-2 px-3 rounded-xl text-sm"
-                    value={correcaoForm.prazo_entrega}
-                    onChange={e => setCorrecaoForm(x => ({ ...x, prazo_entrega: e.target.value }))} />
+              )}
+              {embCorrecao && (
+                <FormField label={`Valor Unitário (R$ / ${unidadeCorrecao})`}>
+                  <div className="neu-pressed py-2 px-3 rounded-xl text-sm text-gray-300 tabular-nums">
+                    {precoUnitario(parseBRL(correcaoForm.valor_total), qtdCorrecao) || '—'}
+                  </div>
                 </FormField>
-                <FormField label="Validade da Proposta *">
-                  <input type="date" min={todayBR()}
-                    className="neu-input py-2 px-3 rounded-xl text-sm"
-                    value={correcaoForm.validade}
-                    onChange={e => setCorrecaoForm(x => ({ ...x, validade: e.target.value }))} />
+              )}
+              <FormField label="Valor Total (R$)">
+                <input type="text" inputMode="numeric" className="neu-input py-2 px-3 rounded-xl text-sm"
+                  value={correcaoForm.valor_total}
+                  onChange={e => setCorrecaoTotal(e.target.value)}
+                  onKeyDown={handleMoneyKeyDown}
+                  placeholder="0,00" />
+                {temAjusteCorrecao ? (
+                  <p className="text-[10px] text-amber-400 mt-1">
+                    Ajustado à mão: a conta dava R$ {formatBRL(totalBaseCorrecao)}
+                    {' '}({ajusteCorrecao > 0 ? '+' : '−'} R$ {formatBRL(Math.abs(ajusteCorrecao))}).
+                  </p>
+                ) : null}
+              </FormField>
+              <FormField label="Prazo de Entrega">
+                <input type="date" className="neu-input py-2 px-3 rounded-xl text-sm"
+                  value={correcaoForm.prazo_entrega}
+                  onChange={e => setCorrecaoForm(x => ({ ...x, prazo_entrega: e.target.value }))} />
+              </FormField>
+              <FormField label="Validade da Proposta *">
+                <input type="date" min={todayBR()}
+                  className="neu-input py-2 px-3 rounded-xl text-sm"
+                  value={correcaoForm.validade}
+                  onChange={e => setCorrecaoForm(x => ({ ...x, validade: e.target.value }))} />
+              </FormField>
+              {/* Migr. 526: só na eventual. Na reposição o campo nem existe
+                  na proposta — a marca é do produto do catálogo. */}
+              {!correcao.req?.produto_id && (
+                <FormField label="Marca oferecida">
+                  <input list="marcas-conhecidas" className="neu-input py-2 px-3 rounded-xl text-sm"
+                    value={correcaoForm.marca}
+                    onChange={e => setCorrecaoForm(x => ({ ...x, marca: e.target.value }))}
+                    placeholder="Ex.: Foxton" />
                 </FormField>
-                {/* Migr. 526: só na eventual. Na reposição o campo nem existe
-                    na proposta — a marca é do produto do catálogo. */}
-                {!correcao.req?.produto_id && (
-                  <FormField label="Marca oferecida">
-                    <input list="marcas-conhecidas" className="neu-input py-2 px-3 rounded-xl text-sm"
-                      value={correcaoForm.marca}
-                      onChange={e => setCorrecaoForm(x => ({ ...x, marca: e.target.value }))}
-                      placeholder="Ex.: Foxton" />
-                  </FormField>
-                )}
-                <FormField label="Condição de pagamento *">
-                  <select className="neu-input py-2 px-3 rounded-xl text-sm"
-                    value={correcaoForm.condicao_pagamento}
-                    onChange={e => setCorrecaoForm(x => ({ ...x, condicao_pagamento: e.target.value }))}>
-                    {CONDICOES_PAGAMENTO.map(c => <option key={c} value={c}>{c}</option>)}
-                  </select>
+              )}
+              <FormField label="Condição de pagamento *">
+                <select className="neu-input py-2 px-3 rounded-xl text-sm"
+                  value={correcaoForm.condicao_pagamento}
+                  onChange={e => setCorrecaoForm(x => ({ ...x, condicao_pagamento: e.target.value }))}>
+                  {CONDICOES_PAGAMENTO.map(c => <option key={c} value={c}>{c}</option>)}
+                </select>
+              </FormField>
+              <div className="sm:col-span-3">
+                <FormField label="Condições / observações do fornecedor">
+                  <textarea maxLength={240}
+                    className="neu-input py-2 px-3 rounded-xl text-sm resize-none campo-cresce w-full"
+                    value={correcaoForm.observacao}
+                    onChange={e => setCorrecaoForm(x => ({ ...x, observacao: e.target.value }))}
+                    placeholder="Ex.: frete incluso; garantia de 12 meses" />
                 </FormField>
-                <div className="sm:col-span-3">
-                  <FormField label="Condições / observações do fornecedor">
-                    <textarea maxLength={240}
-                      className="neu-input py-2 px-3 rounded-xl text-sm resize-none campo-cresce w-full"
-                      value={correcaoForm.observacao}
-                      onChange={e => setCorrecaoForm(x => ({ ...x, observacao: e.target.value }))}
-                      placeholder="Ex.: frete incluso; garantia de 12 meses" />
-                  </FormField>
-                </div>
               </div>
-
-              <div className="flex justify-end gap-2 mt-6">
-                <button onClick={() => setCorrecao(null)} disabled={reenviando}
-                  className="px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-widest neu-button text-gray-400 hover:text-gray-200 disabled:opacity-50">
-                  Cancelar
-                </button>
-                <NeuButtonAccent onClick={handleReenviarCorrigida} isLoading={reenviando}>
-                  <Send size={14} /> Reenviar ao Financeiro
-                </NeuButtonAccent>
-              </div>
-            </motion.div>
-          </motion.div>
+            </div>
+          </ModalFormulario>
         )}
       </AnimatePresence>
 
