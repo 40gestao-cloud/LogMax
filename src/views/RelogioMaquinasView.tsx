@@ -195,7 +195,7 @@ export function RelogioMaquinasView({ profile, showToast }: {
           { rotulo: 'Fora de hora',    valor: foraDeHora,       cor: foraDeHora ? 'text-yellow-400' : 'text-emerald-400', Icone: foraDeHora ? AlertTriangle : ShieldCheck },
           { rotulo: 'Derrubam sessão', valor: graves,           cor: graves ? 'text-red-400' : 'text-emerald-400', Icone: graves ? AlertTriangle : ShieldCheck },
         ].map(({ rotulo, valor, cor, Icone }) => (
-          <div key={rotulo} className="neu-card rounded-2xl p-4">
+          <div key={rotulo} className="neu-flat border border-white/10 rounded-2xl p-4">
             <div className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider text-gray-500">
               <Icone size={13} /> {rotulo}
             </div>
@@ -223,7 +223,7 @@ export function RelogioMaquinasView({ profile, showToast }: {
                 initial={{ opacity: 0, y: 8 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: Math.min(i * 0.02, 0.3) }}
-                className="neu-card rounded-2xl p-4 flex items-center gap-4 flex-wrap"
+                className="neu-flat border border-white/10 rounded-2xl p-4 flex items-center gap-4 flex-wrap"
               >
                 <div className="w-9 h-9 rounded-xl neu-pressed flex items-center justify-center shrink-0">
                   <Icone size={16} className={estilo.texto} />

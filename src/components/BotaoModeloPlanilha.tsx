@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { FileSpreadsheet, FolderOpen } from 'lucide-react';
 import { baixarModeloPlanilha, type ModeloEntidade } from '../lib/modelosPlanilha';
+import { tituloPlanilhas } from '../lib/planilhasTrabalho';
 import { MinhasPlanilhasModal } from './MinhasPlanilhasModal';
 import { useAuth } from '../hooks/useAuth';
 
@@ -8,10 +9,11 @@ import { useAuth } from '../hooks/useAuth';
 //
 //   "Modelo de planilha"  → baixa o .xlsx espelho do formulário, com as listas
 //                           suspensas já carregadas do LogMax.
-//   "Minhas planilhas"    → onde a planilha PREENCHIDA fica guardada (migr.
+//   "Planilhas de X"      → onde a planilha PREENCHIDA fica guardada (migr.
 //                           389). Antes disso ela dependia de pendrive,
 //                           WhatsApp ou Drive pessoal para chegar à aula
-//                           seguinte, e era o que mais se perdia.
+//                           seguinte, e era o que mais se perdia. Uma pasta
+//                           por operação: X é a entidade da tela.
 //
 // Sem gate de RBAC: quem enxerga a tela pode baixar o modelo, porque o arquivo
 // não carrega dado da operação — é só a estrutura dos campos —, e guardar a
@@ -61,7 +63,7 @@ export const BotaoModeloPlanilha = ({ entidade, filial, showToast, label = 'Mode
         className="btn-ferramenta btn-solido btn-solido--azul"
       >
         <FolderOpen size={13} />
-        Minhas planilhas
+        {tituloPlanilhas(entidade)}
       </button>
 
       {aberto && (

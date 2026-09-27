@@ -175,7 +175,7 @@ export function MandatosView({
           const titulares = vigentes.filter(m => m.filial === unidade);
           const nota = placar[unidade];
           return (
-            <div key={unidade} className="neu-card p-4 space-y-3">
+            <div key={unidade} className="neu-flat border border-white/10 p-4 space-y-3">
               <div className="flex items-center justify-between gap-3">
                 <FilialBadge filial={unidade} />
                 {nota !== undefined && (
@@ -306,7 +306,7 @@ export function MandatosView({
 
       {/* ── Desfecho ── */}
       {encerrando && (
-        <div className="neu-card p-4 space-y-3">
+        <div className="neu-flat border border-white/10 p-4 space-y-3">
           <div className="flex items-center gap-2 text-sm font-medium text-gray-200">
             <Award size={15} className="text-accent" />
             Desfecho do mandato — {encerrando.nome_snapshot} ({encerrando.cargo} · {encerrando.filial})
@@ -355,7 +355,7 @@ export function MandatosView({
       )}
 
       {/* ── Histórico dos postos ── */}
-      <div className="neu-card p-4 space-y-3">
+      <div className="neu-flat border border-white/10 p-4 space-y-3">
         <button onClick={() => setHistorico(h => h ? null : 'aberto')}
           className="flex items-center gap-2 text-sm font-medium text-gray-300">
           <History size={15} /> Mandatos encerrados

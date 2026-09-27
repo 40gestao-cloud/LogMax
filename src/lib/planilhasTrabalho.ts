@@ -65,6 +65,15 @@ export type PlanilhaTrabalho = {
   updated_at: string;
 };
 
+/** Nome de cada operação — dá título ao botão e ao modal de cada tela. */
+export const ENTIDADE_LABEL: Record<ModeloEntidade | 'outro', string> = {
+  clientes: 'Clientes', fornecedores: 'Fornecedores', produtos: 'Produtos',
+  servicos: 'Serviços', requisicoes: 'Requisições', outro: 'Outras',
+};
+
+export const tituloPlanilhas = (entidade: ModeloEntidade | 'outro'): string =>
+  `Planilhas de ${ENTIDADE_LABEL[entidade] ?? entidade}`;
+
 export const extensaoValida = (nome: string): boolean =>
   EXTENSOES.some(e => nome.toLowerCase().endsWith(e));
 
@@ -81,14 +90,20 @@ export const formatarTamanho = (bytes: number): string =>
  * conselheiro é a turma inteira. Como o modal monta com a sessão ainda
  * resolvendo, o primeiro render passava `undefined` e um docente via, por um
  * instante, as planilhas dos outros dentro de "Minhas planilhas".
+ *
+ * Com `entidade`, só as daquela operação: a planilha de Requisições não
+ * aparece em Produtos. Cada tela é uma pasta.
  */
-export async function listarPlanilhas(userId: string): Promise<PlanilhaTrabalho[]> {
+export async function listarPlanilhas(
+  userId: string, entidade?: ModeloEntidade,
+): Promise<PlanilhaTrabalho[]> {
   if (!supabase) return [];
-  const { data, error } = await supabase.from('planilhas_trabalho')
+  let q = supabase.from('planilhas_trabalho')
     .select('id, user_id, nome_snapshot, entidade, filial, arquivo_nome, path, tamanho_bytes, versao, updated_at')
     .eq('ativo', true)
-    .eq('user_id', userId)
-    .order('updated_at', { ascending: false });
+    .eq('user_id', userId);
+  if (entidade) q = q.eq('entidade', entidade);
+  const { data, error } = await q.order('updated_at', { ascending: false });
   if (error) throw new Error(error.message);
   return (data ?? []) as PlanilhaTrabalho[];
 }
@@ -124,7 +139,16 @@ export async function salvarPlanilha(opts: {
   // metadado, se o objeto que acabamos de enviar era novo (e portanto lixo a
   // recolher) ou a substituição legítima de um que já existia.
   const existente = await supabase.from('planilhas_trabalho')
-    .select('id, versao').eq('path', path).maybeSingle();
+    .select('id, versao, entidade, ativo').eq('path', path).maybeSingle();
+
+  // O caminho não leva a operação (índice único é por aluno + nome), então o
+  // mesmo nome em outra tela substituiria o arquivo de lá e o faria mudar de
+  // pasta. Recusa antes do upload, para não sobrescrever nada.
+  if (existente.data?.ativo && existente.data.entidade !== entidade) {
+    throw new Error(
+      `Já existe "${arquivoNome}" em ${tituloPlanilhas(existente.data.entidade)}. Renomeie o arquivo para guardar aqui.`,
+    );
+  }
 
   const { error: upErr } = await supabase.storage
     .from(PLANILHAS_BUCKET)

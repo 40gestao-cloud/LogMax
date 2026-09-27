@@ -39,7 +39,7 @@ export function RecargaRemotaModal({ comando }: { comando: ComandoTurma }) {
       <motion.div
         initial={{ opacity: 0, scale: 0.94 }}
         animate={{ opacity: 1, scale: 1 }}
-        className="neu-card rounded-3xl p-6 max-w-md w-full text-center flex flex-col items-center gap-3"
+        className="neu-flat border border-white/10 rounded-3xl p-6 max-w-md w-full text-center flex flex-col items-center gap-3"
         role="alertdialog"
         aria-live="assertive"
       >
