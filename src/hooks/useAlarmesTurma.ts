@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
 import { assinarRealtime } from '../lib/realtimeAgrupado';
 import {
-  ACRE_HHMM, ALARME_AUDIO_URL,
+  ACRE_HHMM, ALARME_AUDIO_URL, diaSemanaAcre, diasDoAlarme,
   type AlarmeTipo, type AlarmeTurma,
 } from '../lib/alarmes';
 
@@ -63,18 +63,18 @@ export function useAlarmesTurma() {
   useRealtimeAlarmes(load);
 
   const criar = useCallback(async (
-    hora: number, minuto: number, tipo: AlarmeTipo, mensagem: string | null,
+    hora: number, minuto: number, tipo: AlarmeTipo, mensagem: string | null, dias: number[],
   ): Promise<string | null> => {
     if (!supabase) return 'Supabase não configurado.';
     const { error } = await supabase.from('alarmes_turma').insert({
-      hora, minuto, tipo,
+      hora, minuto, tipo, dias,
       mensagem: tipo === 'aviso' ? (mensagem ?? '').trim() : null,
       ativo: true,
     });
     if (error) {
       // O índice único de horário é o erro esperado aqui; traduzir para o
       // aluno/professor em vez de despejar o texto do Postgres.
-      if (error.code === '23505') return 'Já existe um alarme nesse horário.';
+      if (error.code === '23505') return 'Já existe um alarme nesse horário num dos dias escolhidos.';
       return error.message;
     }
     await load();
@@ -85,18 +85,18 @@ export function useAlarmesTurma() {
   // turma inteira já enxerga era, até aqui, excluir e cadastrar de novo — e
   // no meio do caminho o alarme sumia da tela de todo mundo.
   const editar = useCallback(async (
-    id: string, hora: number, minuto: number, tipo: AlarmeTipo, mensagem: string | null,
+    id: string, hora: number, minuto: number, tipo: AlarmeTipo, mensagem: string | null, dias: number[],
   ): Promise<string | null> => {
     if (!supabase) return 'Supabase não configurado.';
     const { error } = await supabase.from('alarmes_turma').update({
-      hora, minuto, tipo,
+      hora, minuto, tipo, dias,
       // Trocar `aviso` por um tipo de texto fixo tem de LIMPAR a mensagem:
       // deixá-la ali guardaria um texto que ninguém mais vê e que voltaria
       // sozinho se o tipo fosse revertido.
       mensagem: tipo === 'aviso' ? (mensagem ?? '').trim() : null,
     }).eq('id', id);
     if (error) {
-      if (error.code === '23505') return 'Já existe um alarme nesse horário.';
+      if (error.code === '23505') return 'Já existe um alarme nesse horário num dos dias escolhidos.';
       return error.message;
     }
     await load();
@@ -227,7 +227,10 @@ export function useAlarmeGlobal(enabled: boolean) {
       ultimoMinuto = hhmm;
       if (disparoRef.current) return; // um modal por vez
       const [h, m] = hhmm.split(':').map(n => Number.parseInt(n, 10));
-      const hit = alarmesRef.current.find(a => a.ativo && a.hora === h && a.minuto === m);
+      // O dia é o do Acre, pela mesma razão da hora (migr. 637).
+      const dia = diaSemanaAcre();
+      const hit = alarmesRef.current.find(a =>
+        a.ativo && a.hora === h && a.minuto === m && diasDoAlarme(a).includes(dia));
       if (!hit) return;
       setDisparo(hit);
       try {

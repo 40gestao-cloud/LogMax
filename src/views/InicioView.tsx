@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion } from 'motion/react';
-import { ArrowRight, ClipboardList, Trophy, ExternalLink } from 'lucide-react';
+import { ArrowRight, ClipboardList, ExternalLink } from 'lucide-react';
 import type { UserProfile } from '../hooks/useUserProfile';
 import { allSetores } from '../lib/rbac';
 import { dataExtensoBR, saudacaoBR } from '../lib/dates';
@@ -141,7 +141,7 @@ export const InicioView = ({
   const isAdmin = profile?.role === 'admin';
 
   return (
-    <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col gap-8 pb-8">
+    <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col gap-6 pb-6 min-h-full">
       {/* PontoFAB (scanner do totem) removido em 2026-07-29 junto com a aba
           Totem: era a porta do colaborador para marcar o próprio ponto, e sem
           o totem ela abria um scanner que não leva a lugar nenhum. O
@@ -180,158 +180,148 @@ export const InicioView = ({
         </button>
       )}
 
+      {/* Os cards dividem a altura que sobra na tela (flex-1 + linhas iguais),
+          com um mínimo para não espremer em janela baixa — aí a página rola. */}
       {isLoading ? <LoadingSpinner /> : (
-        <div className="flex flex-col gap-6 shrink-0">
-          <h3 className="text-xl font-bold text-gray-200 pl-3 border-l-4 border-accent tracking-wide">Resumo Diário</h3>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-8">
+        <div className="flex flex-col gap-4 flex-1 min-h-0">
+          <h3 className="text-xl font-bold text-gray-200 pl-3 border-l-4 border-accent tracking-wide shrink-0">Gestão Organizacional</h3>
+          <div className="grid grid-cols-1 md:grid-cols-3 auto-rows-fr gap-4 sm:gap-5 flex-1 min-h-0">
             {matrizMode ? (
-              <>
-                <div className="neu-flat rounded-3xl p-5 sm:p-8 flex flex-col items-center justify-center relative border border-accent/20">
-                  <h4 className="text-xs font-bold text-gray-400 mb-6 sm:mb-8 self-start uppercase tracking-widest">Avaliações em Aberto</h4>
-                  <div className="relative w-24 h-24 sm:w-28 sm:h-28 mb-6 sm:mb-8">
-                    <svg viewBox="0 0 36 36" className="w-full h-full -rotate-90">
-                      <circle cx="18" cy="18" r="15.9155" fill="none" stroke={chartColors.grid} strokeWidth="3" />
-                      <circle cx="18" cy="18" r="15.9155" fill="none" stroke={chartColors.accent} strokeWidth="3"
-                        strokeDasharray={`${pctAvaliado} ${100 - pctAvaliado}`} strokeDashoffset="0" strokeLinecap="round" />
-                    </svg>
-                    <div className="absolute inset-0 flex flex-col items-center justify-center">
-                      <span className="text-2xl sm:text-3xl font-black text-accent leading-none">{avaliacaoPendentes}</span>
-                      <span className="text-[9px] font-bold text-gray-500 uppercase tracking-widest mt-0.5">em aberto</span>
-                    </div>
-                  </div>
-                  <div className="text-center mt-auto">
-                    <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest block mb-1">
-                      {pctAvaliado}% avaliado
-                    </span>
-                    <span className="text-base sm:text-lg font-bold text-gray-100 block truncate max-w-[200px]" title={resumoAvaliacao?.competicaoNome ?? undefined}>
-                      {resumoAvaliacao?.competicaoNome ?? 'Sem competição ativa'}
-                    </span>
-                  </div>
-                </div>
-                <div className="neu-flat rounded-3xl p-5 sm:p-8 flex flex-col items-center justify-center text-center relative border border-accent/20">
-                  <h4 className="text-xs font-bold text-gray-400 mb-6 sm:mb-8 self-start uppercase tracking-widest">Competição</h4>
-                  <div className="w-16 h-16 rounded-2xl bg-accent/10 flex items-center justify-center text-accent mb-4">
-                    <Trophy size={28} />
-                  </div>
-                  <span className="text-sm font-bold text-gray-200 mb-1">Competição entre filiais</span>
-                  <span className="text-xs text-gray-500 leading-snug mb-6 max-w-[220px]">
-                    Ranking, fases e resultado das 3 unidades.
+              <CardResumo titulo="Avaliações em Aberto">
+                <Donut pct={pctAvaliado} valor={avaliacaoPendentes} rotulo="em aberto" cor={chartColors} />
+                <div className="text-center">
+                  <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest block mb-1">
+                    {pctAvaliado}% avaliado
                   </span>
-                  <button
-                    onClick={() => onNavigate?.('matriz-competicao')}
-                    className="btn-shimmer w-full py-3 px-6 rounded-2xl text-sm font-bold flex items-center justify-center gap-2 transition-all mt-auto"
-                    style={{
-                      background: 'var(--color-accent)',
-                      color:      'var(--color-accent-text)',
-                      border:     'none',
-                      boxShadow:  '0 1px 2px rgba(0, 0, 0, 0.35)',
-                    }}>
-                    Ver Competição <ArrowRight size={14} />
-                  </button>
+                  <span className="text-sm sm:text-base font-semibold text-gray-200 block truncate max-w-[16rem]" title={resumoAvaliacao?.competicaoNome ?? undefined}>
+                    {resumoAvaliacao?.competicaoNome ?? 'Sem competição ativa'}
+                  </span>
                 </div>
-              </>
+              </CardResumo>
             ) : (
               <>
-                <div className="neu-flat rounded-3xl p-5 sm:p-8 flex flex-col items-center justify-center relative border border-accent/20">
-                  <h4 className="text-xs font-bold text-gray-400 mb-6 sm:mb-8 self-start uppercase tracking-widest">Contas a Receber</h4>
-                  {/* Donut estático: fração paga vs. total, calculado por VALOR.
-                      Substitui o anel animate-spin que lia como "carregando". */}
-                  <div className="relative w-24 h-24 sm:w-28 sm:h-28 mb-6 sm:mb-8">
-                    <svg viewBox="0 0 36 36" className="w-full h-full -rotate-90">
-                      <circle cx="18" cy="18" r="15.9155" fill="none" stroke={chartColors.grid} strokeWidth="3" />
-                      <circle cx="18" cy="18" r="15.9155" fill="none" stroke={chartColors.accent} strokeWidth="3"
-                        strokeDasharray={`${pctPago} ${100 - pctPago}`} strokeDashoffset="0" strokeLinecap="round" />
-                    </svg>
-                    <div className="absolute inset-0 flex flex-col items-center justify-center">
-                      <span className="text-2xl sm:text-3xl font-black text-accent leading-none">{contasReceberCount}</span>
-                      <span className="text-[9px] font-bold text-gray-500 uppercase tracking-widest mt-0.5">em aberto</span>
-                    </div>
-                  </div>
-                  <div className="text-center mt-auto">
+                <CardResumo titulo="Contas a Receber">
+                  {/* Donut estático: fração paga vs. total, calculado por VALOR. */}
+                  <Donut pct={pctPago} valor={contasReceberCount} rotulo="em aberto" cor={chartColors} />
+                  <div className="text-center">
                     <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest block mb-1">
                       {pctPago}% recebido do total
                     </span>
-                    <span className="text-2xl sm:text-3xl font-bold text-gray-100">{contasReceberValor}</span>
+                    <span className="font-bold text-gray-100 tabular-nums whitespace-nowrap text-[clamp(1rem,10cqi,1.5rem)]">{contasReceberValor}</span>
                   </div>
-                </div>
-                <div className="neu-flat rounded-3xl p-5 sm:p-8 flex flex-col items-center justify-center relative border border-accent/20">
-                  <h4 className="text-xs font-bold text-gray-400 mb-6 sm:mb-8 self-start uppercase tracking-widest">Contas a Pagar</h4>
-                  <div className="relative w-24 h-24 sm:w-28 sm:h-28 mb-6 sm:mb-8">
-                    <svg viewBox="0 0 36 36" className="w-full h-full -rotate-90">
-                      <circle cx="18" cy="18" r="15.9155" fill="none" stroke={chartColors.grid} strokeWidth="3" />
-                      <circle cx="18" cy="18" r="15.9155" fill="none" stroke={chartColors.accent} strokeWidth="3"
-                        strokeDasharray={`${pctPagoCP} ${100 - pctPagoCP}`} strokeDashoffset="0" strokeLinecap="round" />
-                    </svg>
-                    <div className="absolute inset-0 flex flex-col items-center justify-center">
-                      <span className="text-2xl sm:text-3xl font-black text-accent leading-none">{contasPagarCount}</span>
-                      <span className="text-[9px] font-bold text-gray-500 uppercase tracking-widest mt-0.5">em aberto</span>
-                    </div>
-                  </div>
-                  <div className="text-center mt-auto">
+                </CardResumo>
+                <CardResumo titulo="Contas a Pagar">
+                  <Donut pct={pctPagoCP} valor={contasPagarCount} rotulo="em aberto" cor={chartColors} />
+                  <div className="text-center">
                     <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest block mb-1">
                       {pctPagoCP}% pago do total
                     </span>
-                    <span className="text-2xl sm:text-3xl font-bold text-gray-100">{contasPagarValor}</span>
+                    <span className="font-bold text-gray-100 tabular-nums whitespace-nowrap text-[clamp(1rem,10cqi,1.5rem)]">{contasPagarValor}</span>
                   </div>
-                </div>
+                </CardResumo>
               </>
             )}
-            {/* No lugar do card de Metas (que já tem entrada própria no menu):
-                a porta para o PortalMax, que é onde o curso vive. A logo tem
+
+            {/* Central de Tempo no lugar da Competição (que tem entrada própria
+                no menu), só na Matriz: a hora do Acre ao vivo já responde a
+                pergunta que traz a pessoa até aqui, e o botão abre as quatro
+                ferramentas. Nas filiais a grade fica com as contas. */}
+            {matrizMode && (
+              <CardResumo titulo="Central de Tempo" acao={
+                <BotaoCard onClick={() => onNavigate?.('central-tempo')}>
+                  Abrir Central de Tempo <ArrowRight size={14} />
+                </BotaoCard>
+              }>
+                <img src={relogioIcon} alt="" className="w-20 h-20 sm:w-24 sm:h-24 object-contain" />
+                <div className="text-center">
+                  <HoraAcreAoVivo />
+                  <span className="text-xs text-gray-500 block mt-1">Relógio, alarmes, cronômetro e timer</span>
+                </div>
+              </CardResumo>
+            )}
+
+            {/* A porta para o PortalMax, que é onde o curso vive. A logo tem
                 fundo transparente e o "Max" é branco com contorno, então some
-                sobre fundo claro — no tema light o quadro escuro fica, é o que
-                a mantém legível. No dark o card já é preto: ali o quadro só
-                aparecia como um retângulo cinza contornado atrás da logo, e sai. */}
-            <div className="neu-flat rounded-3xl p-5 sm:p-8 flex flex-col items-center justify-center text-center relative border border-accent/20">
-              <h4 className="text-xs font-bold text-gray-400 mb-6 sm:mb-8 self-start uppercase tracking-widest">Portal do curso</h4>
-              <div className={`w-full max-w-[240px] rounded-2xl px-5 py-4 mb-4 ${
+                sobre fundo claro — no tema light o quadro escuro fica. */}
+            <CardResumo titulo="Portal do curso" acao={
+              <BotaoCard href={PORTALMAX_URL}>
+                Abrir PortalMax <ExternalLink size={14} />
+              </BotaoCard>
+            }>
+              <div className={`w-full max-w-[220px] rounded-2xl px-4 py-3 ${
                 theme === 'light' ? 'bg-[#0A0A0A] border border-white/10' : ''
               }`}>
                 <img src="/icon-portalmax.png" alt="PortalMax" className="w-full h-auto" />
               </div>
-              <span className="text-xs text-gray-500 leading-snug mb-6 max-w-[220px]">
-                Ecossistema Max Educacional
-              </span>
-              <a
-                href={PORTALMAX_URL} target="_blank" rel="noopener noreferrer"
-                className="btn-shimmer w-full py-3 px-6 rounded-2xl text-sm font-bold flex items-center justify-center gap-2 transition-all mt-auto"
-                style={{
-                  background: 'var(--color-accent)',
-                  color:      'var(--color-accent-text)',
-                  border:     'none',
-                  boxShadow:  '0 1px 2px rgba(0, 0, 0, 0.35)',
-                }}>
-                Abrir PortalMax <ExternalLink size={14} />
-              </a>
-            </div>
+              <span className="text-xs text-gray-500 leading-snug text-center">Ecossistema Max Educacional</span>
+            </CardResumo>
           </div>
         </div>
       )}
-
-      <div className="shrink-0">
-        <div
-          className="neu-flat rounded-3xl p-5 sm:p-8 flex flex-col items-center justify-center relative overflow-hidden border border-accent/20"
-        >
-          <div className="flex flex-col items-center justify-center text-center w-full py-2">
-            <img src={relogioIcon} alt="Relógio" className="w-24 h-24 object-contain mb-3" />
-            <h3 className="text-xl font-bold text-accent mb-2">Central de Tempo</h3>
-            <p className="text-xs text-gray-500 leading-snug mb-5">
-              Relógio, alarmes, cronômetro e timer
-            </p>
-            <button
-              onClick={() => onNavigate?.('central-tempo')}
-              className="btn-shimmer py-3 px-6 rounded-2xl text-sm font-bold flex items-center gap-2 transition-all"
-              style={{
-                background:  'var(--color-accent)',
-                color:       'var(--color-accent-text)',
-                border:      'none',
-                boxShadow:   '0 1px 2px rgba(0, 0, 0, 0.35)',
-              }}>
-              Abrir <ArrowRight size={14} />
-            </button>
-          </div>
-        </div>
-      </div>
     </motion.div>
   );
 };
+
+// Card da grade: título no topo, o conteúdo distribuído no meio e a ação
+// presa no rodapé — assim os botões de cards vizinhos ficam na mesma linha,
+// por mais que o conteúdo de cima tenha alturas diferentes.
+function CardResumo({ titulo, acao, children }: { titulo: string; acao?: React.ReactNode; children: React.ReactNode }) {
+  return (
+    <div className="neu-flat rounded-3xl p-5 sm:p-6 flex flex-col items-center border border-accent/20 min-h-[16rem] h-full">
+      <h4 className="text-xs font-black text-accent text-center uppercase tracking-widest shrink-0">{titulo}</h4>
+      <div className="@container flex-1 w-full flex flex-col items-center justify-evenly gap-3 pt-3">{children}</div>
+      {acao && <div className="w-full pt-4 shrink-0">{acao}</div>}
+    </div>
+  );
+}
+
+function Donut({ pct, valor, rotulo, cor }: { pct: number; valor: number; rotulo: string; cor: { grid: string; accent: string } }) {
+  return (
+    // Cresce até 11rem e encolhe com o card: na filial são quatro lado a lado.
+    <div className="relative w-full max-w-[11rem] aspect-square">
+      <svg viewBox="0 0 36 36" className="w-full h-full -rotate-90">
+        <circle cx="18" cy="18" r="15.9155" fill="none" stroke={cor.grid} strokeWidth="3" />
+        <circle cx="18" cy="18" r="15.9155" fill="none" stroke={cor.accent} strokeWidth="3"
+          strokeDasharray={`${pct} ${100 - pct}`} strokeDashoffset="0" strokeLinecap="round" />
+      </svg>
+      <div className="absolute inset-0 flex flex-col items-center justify-center">
+        <span className="text-4xl sm:text-5xl font-black text-accent leading-none tabular-nums">{valor}</span>
+        <span className="text-[10px] sm:text-xs font-bold text-gray-400 uppercase tracking-widest mt-1.5">{rotulo}</span>
+      </div>
+    </div>
+  );
+}
+
+const ESTILO_BOTAO_CARD: React.CSSProperties = {
+  background: 'var(--color-accent)',
+  color:      'var(--color-accent-text)',
+  border:     'none',
+  boxShadow:  '0 1px 2px rgba(0, 0, 0, 0.35)',
+};
+const CLASSE_BOTAO_CARD = 'btn-shimmer w-full py-3 px-6 rounded-2xl text-sm font-bold flex items-center justify-center gap-2 transition-all';
+
+function BotaoCard({ onClick, href, children }: { onClick?: () => void; href?: string; children: React.ReactNode }) {
+  if (href) {
+    return <a href={href} target="_blank" rel="noopener noreferrer" className={CLASSE_BOTAO_CARD} style={ESTILO_BOTAO_CARD}>{children}</a>;
+  }
+  return <button type="button" onClick={onClick} className={CLASSE_BOTAO_CARD} style={ESTILO_BOTAO_CARD}>{children}</button>;
+}
+
+const HORA_ACRE = new Intl.DateTimeFormat('pt-BR', {
+  timeZone: 'America/Rio_Branco', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false,
+});
+
+// O tique fica neste componente pequeno: no pai, a tela de Início inteira
+// renderizaria de novo a cada segundo.
+function HoraAcreAoVivo() {
+  const [agora, setAgora] = React.useState(() => new Date());
+  React.useEffect(() => {
+    const id = setInterval(() => setAgora(new Date()), 1000);
+    return () => clearInterval(id);
+  }, []);
+  return (
+    <span className="font-mono tabular-nums text-3xl sm:text-4xl font-black text-accent leading-none block">
+      {HORA_ACRE.format(agora)}
+    </span>
+  );
+}
