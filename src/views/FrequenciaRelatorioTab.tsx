@@ -283,7 +283,7 @@ export const FrequenciaRelatorioTab = ({
       </div>
 
       {/* Direita: quem entra. */}
-      <SecaoFormulario titulo="Funcionários" icon={Users} cor="roxo"
+      <SecaoFormulario titulo="Funcionários" icon={Users} cor="dourado"
         extra={selecionados.size === 0 ? `Todos (${elegiveis.length})` : `${selecionados.size} de ${elegiveis.length}`}>
         <div className="flex flex-col sm:flex-row gap-2 mb-2">
           <div className="relative flex-1 min-w-0">
@@ -340,9 +340,9 @@ export const FrequenciaRelatorioTab = ({
                       return (
                         <button key={f.id} type="button" onClick={() => toggle(f.id)} aria-pressed={on}
                           className={`flex items-center gap-2 px-2.5 py-1.5 rounded-lg border text-left transition min-w-0 ${
-                            on ? 'bg-purple-500/15 border-purple-500/40' : 'border-white/5 hover:border-white/20 hover:bg-white/5'}`}>
+                            on ? 'bg-accent/15 border-accent/40' : 'border-white/5 hover:border-white/20 hover:bg-white/5'}`}>
                           <span className={`w-4 h-4 rounded-md border flex items-center justify-center shrink-0 ${
-                            on ? 'bg-purple-500 border-purple-500 text-white' : 'border-white/20 text-transparent'}`}>
+                            on ? 'bg-accent border-accent text-black' : 'border-white/20 text-transparent'}`}>
                             <Check size={11} strokeWidth={3} />
                           </span>
                           <span className="min-w-0" title={[f.nome, f.cargo].filter(Boolean).join(' · ')}>
