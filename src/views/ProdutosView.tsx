@@ -4,7 +4,7 @@ import type { FilialOp } from '../components/FilialSelector';
 import { useFilial } from '../contexts/FilialContext';
 import { MatrizConsolidado } from '../components/MatrizConsolidado';
 import { motion, AnimatePresence } from 'motion/react';
-import { Search, Edit2, Trash2, Plus, Save, FileDown, Sheet, AlertTriangle, Barcode, Grid3x3, Upload } from 'lucide-react';
+import { Search, Edit2, Trash2, Plus, Save, FileDown, Sheet, AlertTriangle, Barcode, Grid3x3, Upload, Utensils } from 'lucide-react';
 import { HistoricoOperacoes } from '../components/HistoricoOperacoes';
 import { MenuMais, ItemMenu } from '../components/MenuMais';
 import { useColarImagemGlobal } from '../components/ColarImagem';
@@ -2242,15 +2242,15 @@ const ProdutosViewInner = ({ showToast, filial, profile, onNavigate }: { showToa
                                 Inativo
                               </span>
                             )}
+                            {/* No desktop o selo mora na coluna Categoria (vazia
+                                em consumo): aqui ele abria uma linha só para si
+                                e esticava a célula do nome. Fica só no celular,
+                                onde a coluna Categoria some — ou quando o item
+                                de consumo tem categoria e o lugar está tomado. */}
                             {normalizarTipo(item.tipo) === 'consumo' && (
-                              <span className="text-[9px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded bg-sky-900/40 text-sky-400 border border-sky-600/30"
+                              <span className={`${item.categoria ? '' : 'lg:hidden'} text-[9px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded bg-sky-900/40 text-sky-400 border border-sky-600/30`}
                                 title="Material de uso e consumo — não vai para o PDV. Sai por Estoque > Requisições de Material.">
                                 Consumo
-                              </span>
-                            )}
-                            {item.elegivel_beneficios && (
-                              <span className="text-[9px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded bg-emerald-900/40 text-emerald-400 border border-emerald-600/30" title="Aceita MaxBank Benefícios">
-                                Benef
                               </span>
                             )}
                             {/* A ficha do nicho é opcional, mas incompleta em
@@ -2275,8 +2275,20 @@ const ProdutosViewInner = ({ showToast, filial, profile, onNavigate }: { showToa
                             // é o que responde "compro de quantos em quantos?"
                             // sem abrir o cadastro.
                             const emb = rotuloEmbalagem(embalagemDoProduto(item), item.unidade);
-                            return (item.fornecedor || conteudo || emb) ? (
+                            // Benefícios vai nesta linha de detalhes, e não ao
+                            // lado do nome: lá o selo abria uma linha só para si
+                            // e esticava a célula.
+                            return (item.fornecedor || conteudo || emb || item.elegivel_beneficios) ? (
                               <p className="text-[10px] text-gray-600 mt-0.5">
+                                {item.elegivel_beneficios && (
+                                  // Só o ícone (o mesmo da seção de benefícios do
+                                  // cadastro); o nome fica no title e no leitor de tela.
+                                  <span className="inline-flex align-middle items-center justify-center w-4 h-4 mr-1.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/40"
+                                    title="Aceita MaxBank Benefícios (vale alimentação/refeição)"
+                                    aria-label="Aceita MaxBank Benefícios">
+                                    <Utensils size={9} strokeWidth={2.5} />
+                                  </span>
+                                )}
                                 {item.fornecedor}
                                 {item.fornecedor && conteudo && ' • '}
                                 {conteudo && (
@@ -2308,7 +2320,13 @@ const ProdutosViewInner = ({ showToast, filial, profile, onNavigate }: { showToa
                             // reticências: o nome inteiro fica no title.
                             ? <span title={item.categoria}
                                 className="inline-block align-middle max-w-[150px] truncate whitespace-nowrap text-[10px] uppercase neu-pressed px-2 py-0.5 rounded text-gray-400 tracking-widest font-bold">{item.categoria}</span>
-                            : <span className="text-gray-700">—</span>}
+                            // Consumo não tem categoria de venda: o selo do tipo
+                            // ocupa o lugar do traço, em vez de uma linha a mais
+                            // na célula do nome.
+                            : normalizarTipo(item.tipo) === 'consumo'
+                              ? <span title="Material de uso e consumo — não vai para o PDV. Sai por Estoque > Requisições de Material."
+                                  className="inline-block align-middle whitespace-nowrap text-[10px] uppercase px-2 py-0.5 rounded bg-sky-900/40 text-sky-400 border border-sky-600/30 tracking-widest font-bold">Consumo</span>
+                              : <span className="text-gray-700">—</span>}
                         </td>
                         {/* `whitespace-nowrap` nos valores: sem ele o espaço de
                             "R$ 8,00" era ponto de quebra e a coluna saía com o
