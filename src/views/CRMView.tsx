@@ -265,7 +265,7 @@ const CRMViewInner = ({ type, showToast, filial }: {
         <div>
           <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">{title}</h2>
         </div>
-        <div className="flex flex-wrap gap-3 items-center w-full sm:w-auto">
+        <div className="flex flex-wrap gap-3 items-center sm:justify-end w-full sm:w-auto">
           <BotaoModeloPlanilha entidade={isClientes ? 'clientes' : 'fornecedores'} filial={filial} showToast={showToast} />
           {data.length > 0 && (
             <>

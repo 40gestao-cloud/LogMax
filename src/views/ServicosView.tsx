@@ -422,7 +422,7 @@ export const ServicosView = ({ showToast, onNavigate }: { showToast: any; onNavi
         <div>
           <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Serviços — {filial}</h2>
         </div>
-        <div className="flex flex-wrap gap-2 items-center">
+        <div className="flex flex-wrap gap-2 items-center sm:justify-end">
           <BotaoModeloPlanilha entidade="servicos" filial={filial} showToast={showToast} />
           <NeuButtonAccent onClick={openNew}><Plus size={14} /> Novo serviço</NeuButtonAccent>
         </div>

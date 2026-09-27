@@ -1942,7 +1942,7 @@ const ProdutosViewInner = ({ showToast, filial, profile, onNavigate }: { showToa
         <div>
           <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Produtos — {filial}</h2>
         </div>
-        <div className="flex flex-wrap gap-3 items-center w-full sm:w-auto">
+        <div className="flex flex-wrap gap-3 items-center sm:justify-end w-full sm:w-auto">
           <BotaoModeloPlanilha entidade="produtos" filial={filial} showToast={showToast} />
           <button
             type="button"

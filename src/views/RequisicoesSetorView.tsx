@@ -874,7 +874,7 @@ const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: 
         <div>
           <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Requisições — {filial}</h2>
         </div>
-        <div className="flex flex-wrap gap-2 items-center">
+        <div className="flex flex-wrap gap-2 items-center sm:justify-end">
           <BotaoModeloPlanilha entidade="requisicoes" filial={filial} showToast={showToast} />
           {!showForm && (
             <NeuButtonAccent onClick={() => setShowForm(true)}>
