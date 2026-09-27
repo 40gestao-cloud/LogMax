@@ -311,7 +311,7 @@ export const ExportButton = ({ label, onClick, icon: Icon, variante }: {
     <button
       onClick={onClick}
       className={v
-        ? `btn-solido ${VARIANTE_EXPORT[v]}`
+        ? `btn-ferramenta btn-solido ${VARIANTE_EXPORT[v]}`
         : 'neu-button py-2 px-4 rounded-xl text-xs font-bold text-gray-400 hover:text-accent transition-colors flex items-center gap-1.5'}
     >
       <Icon size={13} />
@@ -393,7 +393,7 @@ export const AbaComContador = ({ label, n, cor, ativa, onClick, icon: Icon, titl
   <div className="flex items-stretch gap-1.5">
     <div className="relative flex">
       <button type="button" role="tab" aria-selected={ativa} title={title} onClick={onClick}
-        className={`btn-solido ${COR_ABA[cor].botao} !py-2.5 !text-[11px] uppercase tracking-widest ${ativa ? 'aba-ativa' : ''}`}>
+        className={`aba btn-solido ${COR_ABA[cor].botao} !py-2.5 !text-[11px] uppercase tracking-widest ${ativa ? 'aba-ativa' : ''}`}>
         {Icon && <Icon size={13} />}
         {label}
         {alerta && <span className="w-2 h-2 rounded-full bg-red-500 ring-2 ring-white/80 shrink-0" />}
@@ -416,7 +416,7 @@ export const AbaComContador = ({ label, n, cor, ativa, onClick, icon: Icon, titl
 export const SecaoFormulario = ({ titulo, icon: Icon, cor, extra, children }: {
   titulo: React.ReactNode; icon?: any; cor: CorAba; extra?: React.ReactNode; children: React.ReactNode;
 }) => (
-  <section className="rounded-2xl border border-white/10 overflow-hidden flex flex-col">
+  <section className="secao-formulario rounded-2xl border border-white/10 overflow-hidden flex flex-col">
     <header className={`${COR_ABA[cor].botao} flex items-center justify-between gap-3 px-4 py-2 shrink-0`}>
       <h4 className="flex items-center gap-2 text-[11px] font-black uppercase tracking-widest">
         {Icon && <Icon size={14} className="shrink-0" />}
@@ -524,7 +524,7 @@ export const AbaColorida = ({ label, cor, ativa, onClick, icon: Icon, title }: {
 }) => (
   <div className="relative flex">
     <button type="button" role="tab" aria-selected={ativa} title={title} onClick={onClick}
-      className={`btn-solido ${COR_ABA[cor].botao} !py-1.5 !px-3 !text-[11px] uppercase tracking-widest ${ativa ? 'aba-ativa' : ''}`}>
+      className={`aba btn-solido ${COR_ABA[cor].botao} !py-1.5 !px-3 !text-[11px] uppercase tracking-widest ${ativa ? 'aba-ativa' : ''}`}>
       {Icon && <Icon size={12} />}
       {label}
     </button>

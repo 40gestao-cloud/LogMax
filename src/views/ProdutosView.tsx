@@ -1946,7 +1946,7 @@ const ProdutosViewInner = ({ showToast, filial, profile, onNavigate }: { showToa
             onClick={() => setImportando(true)}
             title="Ler um arquivo preenchido e cadastrar em lote"
             // Grava no catálogo: laranja sólido, o de ação que pede atenção.
-            className="btn-solido btn-solido--laranja"
+            className="btn-ferramenta btn-solido btn-solido--laranja"
           >
             <Upload size={14} /> Importar planilha
           </button>

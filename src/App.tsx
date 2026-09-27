@@ -933,7 +933,7 @@ const SidebarNav = ({ activeView, navigate, openModules, toggleModule, handleSig
     </nav>
 
     <button onClick={handleSignOut}
-      className="flex items-center justify-center gap-2 p-3 rounded-xl neu-button text-gray-100 hover:text-red-500 transition-all mt-auto border border-transparent hover:border-red-500/10 text-sm font-medium">
+      className="flex items-center justify-center gap-2 p-3 rounded-xl neu-button text-accent border border-accent/20 hover:bg-accent hover:text-black transition-colors mt-auto text-sm font-bold">
       <LogOut size={16} /><span>Sair</span>
     </button>
   </>

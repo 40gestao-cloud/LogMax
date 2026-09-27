@@ -48,7 +48,7 @@ export const BotaoModeloPlanilha = ({ entidade, filial, showToast, label = 'Mode
         disabled={baixando}
         title="Baixa uma planilha com os campos desta tela e listas suspensas já preenchidas com o que existe no LogMax, para conferir antes de cadastrar"
         // Baixar documento: roxo sólido (paleta em .btn-solido, index.css).
-        className="btn-solido btn-solido--roxo"
+        className="btn-ferramenta btn-solido btn-solido--roxo"
       >
         <FileSpreadsheet size={13} />
         {baixando ? 'Gerando...' : label}
@@ -58,7 +58,7 @@ export const BotaoModeloPlanilha = ({ entidade, filial, showToast, label = 'Mode
         onClick={() => setAberto(true)}
         title="Guarde aqui a planilha preenchida e continue de onde parou na próxima aula, de qualquer computador"
         // Abrir a pasta do aluno: azul sólido.
-        className="btn-solido btn-solido--azul"
+        className="btn-ferramenta btn-solido btn-solido--azul"
       >
         <FolderOpen size={13} />
         Minhas planilhas

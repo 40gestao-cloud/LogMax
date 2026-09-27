@@ -244,7 +244,7 @@ export const MaxShowsView = ({ showToast, profile }: any) => {
           <Presentation size={26} className="shrink-0" /> Max Show
         </h2>
         <button onClick={onPickPdf} disabled={uploading}
-          className="btn-solido btn-solido--laranja self-start sm:self-auto disabled:opacity-60">
+          className="btn-ferramenta btn-solido btn-solido--laranja self-start sm:self-auto disabled:opacity-60">
           {uploading ? <Loader2 size={15} className="animate-spin" /> : <FileUp size={15} />}
           {uploading ? 'Enviando…' : 'Importar PDF'}
         </button>

@@ -2904,6 +2904,29 @@ main { scroll-padding-top: 7rem; }
 .btn-solido--verde-escuro { background: #166534; border-color: #14532d; color: #fff; }
 .btn-solido--vermelho-forte { background: #b91c1c; border-color: #7f1d1d; color: #fff; }
 
+/* Faixa de título das seções de formulário (SecaoFormulario) e abas
+   (AbaComContador, AbaColorida): tom mais escuro e menos saturado que a cor
+   cheia dos botões. Na cor cheia a faixa e a barra de abas gritavam mais que
+   o conteúdo — aprovado no formulário de Nova Requisição em 2026-09-27.
+   `.aba.btn-solido.btn-solido--x` com três classes de propósito: o tema claro
+   tem regra própria para verde e laranja que viria depois e ganharia. */
+.secao-formulario > header.btn-solido--amarelo,  .aba.btn-solido.btn-solido--amarelo  { background: #a16207; border-color: #854d0e; color: #fff; }
+.secao-formulario > header.btn-solido--vermelho, .aba.btn-solido.btn-solido--vermelho { background: #991b1b; border-color: #7f1d1d; color: #fff; }
+.secao-formulario > header.btn-solido--azul,     .aba.btn-solido.btn-solido--azul     { background: #1e40af; border-color: #1e3a8a; color: #fff; }
+.secao-formulario > header.btn-solido--verde,    .aba.btn-solido.btn-solido--verde    { background: #166534; border-color: #14532d; color: #fff; }
+.secao-formulario > header.btn-solido--laranja,  .aba.btn-solido.btn-solido--laranja  { background: #9a3412; border-color: #7c2d12; color: #fff; }
+.secao-formulario > header.btn-solido--roxo,     .aba.btn-solido.btn-solido--roxo     { background: #5b21b6; border-color: #4c1d95; color: #fff; }
+
+/* Mesma paleta nos botões da barra de ferramentas das telas (Modelo de
+   planilha, Minhas planilhas, Importar, Etiquetas, PDF, Excel): ficam lado a
+   lado com as abas, e a cor cheia deles gritava mais que a barra inteira. */
+.btn-ferramenta.btn-solido.btn-solido--roxo     { background: #5b21b6; border-color: #4c1d95; color: #fff; }
+.btn-ferramenta.btn-solido.btn-solido--azul     { background: #1e40af; border-color: #1e3a8a; color: #fff; }
+.btn-ferramenta.btn-solido.btn-solido--laranja  { background: #9a3412; border-color: #7c2d12; color: #fff; }
+.btn-ferramenta.btn-solido.btn-solido--dourado  { background: #a16207; border-color: #854d0e; color: #fff; }
+.btn-ferramenta.btn-solido.btn-solido--vermelho { background: #991b1b; border-color: #7f1d1d; color: #fff; }
+.btn-ferramenta.btn-solido.btn-solido--verde    { background: #166534; border-color: #14532d; color: #fff; }
+
 
 /* ── Card de contador (CardContador, ui.tsx) ────────────────────────────────
    A cor diz a situação: fundo escuro no tom, borda sólida, rótulo na cor e o
