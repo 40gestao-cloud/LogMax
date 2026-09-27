@@ -1,4 +1,4 @@
-import React, { useMemo, useEffect } from 'react';
+import React, { useMemo } from 'react';
 import {
   Package, DollarSign, Users, Building2,
   Database, ShoppingCart, Megaphone, Monitor, Brain, ListTodo, TrendingUp,
@@ -214,17 +214,13 @@ export function HubView({
   profile,
   navigate,
   badges = {},
-  registerBackHandler,
 }: {
   title: string;
   macros: MacroDef[];
   profile: UserProfile | null;
   navigate: (viewId: string) => void;
   badges?: Record<string, number>;
-  registerBackHandler?: (h: (() => boolean) | null) => void;
 }) {
-  // Sem etapas internas: o Voltar segue o fluxo normal da navegação.
-  useEffect(() => { registerBackHandler?.(null); }, [registerBackHandler]);
 
   // Filtro por setor: para group macros, mantém só módulos que o setor acessa
   const allowedModuleIds = useMemo(() => new Set(

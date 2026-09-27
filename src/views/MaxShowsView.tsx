@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState, lazy, Suspense } from 'react';
 import { motion } from 'motion/react';
-import { Presentation, Trash2, Loader2, Eye, RotateCcw, Inbox, FileUp, FileText, Search, Users, X } from 'lucide-react';
+import { Presentation, Trash2, Loader2, Eye, RotateCcw, Inbox, FileUp, FileText, Search, Users } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { PageLoadingFallback, LoadingSpinner, AbaComContador, SecaoFormulario, CardContador, COR_ABA, type CorAba } from '../components/ui';
 import { MenuMais, ItemMenu, CABECALHO_TABELA } from '../components/MenuMais';
 import { useConfirm } from '../contexts/ConfirmContext';
+import { useVoltarInterno } from '../hooks/useVoltarInterno';
 
 const MaxShowEditor = lazy(() =>
   import('./MaxShowEditor').then(m => ({ default: m.MaxShowEditor }))
@@ -68,6 +69,8 @@ export const MaxShowsView = ({ showToast, profile }: any) => {
   const [loading, setLoading] = useState(true);
   const [openId, setOpenId] = useState<string | null>(null);
   const [openMode, setOpenMode] = useState<'view' | 'edit'>('edit');
+  // PDF aberto: o Voltar do topo e o gesto do celular fecham o PDF, não o módulo.
+  useVoltarInterno(!!openId, () => { setOpenId(null); load(); });
   const [busca, setBusca] = useState('');
 
   const load = useCallback(async () => {
@@ -233,7 +236,7 @@ export const MaxShowsView = ({ showToast, profile }: any) => {
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
       className="p-3 sm:p-6 max-w-6xl mx-auto flex flex-col gap-5"
       onDragOver={e => { if (e.dataTransfer.types.includes('Files')) { e.preventDefault(); setArrastando(true); } }}
-      onDragLeave={e => { if (e.currentTarget === e.target) setArrastando(false); }}
+      onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setArrastando(false); }}
       onDrop={e => { if (!e.dataTransfer.files.length) return; e.preventDefault(); setArrastando(false); importar(e.dataTransfer.files[0]); }}>
 
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -265,13 +268,7 @@ export const MaxShowsView = ({ showToast, profile }: any) => {
         <div className="relative md:w-72">
           <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none" />
           <input value={busca} onChange={e => setBusca(e.target.value)} placeholder="Buscar…"
-            className="neu-input w-full py-2 pl-9 pr-8 rounded-xl text-sm" />
-          {busca && (
-            <button type="button" onClick={() => setBusca('')} aria-label="Limpar busca"
-              className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-gray-500 hover:text-gray-300">
-              <X size={14} />
-            </button>
-          )}
+            className="neu-input w-full py-2 pl-9 pr-3 rounded-xl text-sm" />
         </div>
       </div>
 

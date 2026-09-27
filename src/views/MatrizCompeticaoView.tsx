@@ -8,6 +8,7 @@ import { todayBR } from '../lib/dates';
 import { freshToken } from '../lib/authFetch';
 import { LoadingSpinner, EmptyState, NeuButtonAccent, FormField, FilialBadge } from '../components/ui';
 import { useConfirm } from '../contexts/ConfirmContext';
+import { useVoltarInterno } from '../hooks/useVoltarInterno';
 import { isConselheiro } from '../lib/rbac';
 import { BotaoWhatsApp } from '../components/BotaoWhatsApp';
 import { montarMensagemWhats } from '../lib/whatsappShare';
@@ -174,6 +175,7 @@ export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToa
   // e não como objeto pra não congelar uma linha velha: a lista recarrega
   // depois de reabrir/declarar e o estado tem de acompanhar.
   const [analiseId, setAnaliseId] = useState<string | null>(null);
+  useVoltarInterno(analiseId !== null, () => { setAnaliseId(null); setTab('historico'); });
   const [competicoes, setCompeticoes] = useState<Competicao[]>([]);
   const [placar, setPlacar] = useState<Placar | null>(null);
   const [competicaoAtual, setCompeticaoAtual] = useState<Competicao | null>(null);

@@ -47,7 +47,9 @@ import { AIAssistantFAB } from './components/AIAssistantFAB';
 import { PendenciasFAB } from './components/PendenciasFAB';
 import { PerfilFotoModal } from './components/PerfilFotoModal';
 import { AIAssistantProvider } from './contexts/AIAssistantContext';
-import { ConfirmProvider } from './contexts/ConfirmContext';
+import { ConfirmProvider, useConfirm } from './contexts/ConfirmContext';
+import { VoltarInternoContext } from './hooks/useVoltarInterno';
+import { motivoDeAdiar } from './lib/naoInterromper';
 import { PromptProvider } from './contexts/PromptContext';
 
 // --- lazy views ---
@@ -583,6 +585,64 @@ const viewPermitidaNoModo = (view: string, matrizMode: boolean, role?: string): 
   return matrizMode ? !FILIAL_ONLY_VIEWS.has(view) : !MATRIZ_ONLY_VIEWS.has(view);
 };
 
+// Teto da pilha do Voltar — ninguém volta cinquenta telas.
+const HISTORICO_MAX = 50;
+
+// Nomes de rota antigos convergem para os atuais. Vale para a tela aberta e
+// para a pilha do Voltar: uma entrada antiga na pilha abria tela inexistente.
+const migrarViewAntiga = (raw: string): string => {
+  // Migração de rotas após reorganização dos submenus:
+  //   - Produtos/Serviços saíram de Empresa → módulo Cadastros (novo).
+  //   - Colaboradores removido (redundante com Funcionários em RH).
+  //   - Clientes saiu de Empresa (já existia em Vendas).
+  //   - Centros de custo saiu de Empresa → Financeiro.
+  // Redireciona sessões antigas pra não cair no fallback "em desenvolvimento".
+  return raw
+    .replace(/^empresa-produtos$/,         'cadastros-produtos')
+    .replace(/^empresa-serviços$/,         'cadastros-serviços')
+    .replace(/^empresa-colaboradores$/,    'rh-funcionários')
+    .replace(/^rh-colaboradores$/,         'rh-funcionários')
+    .replace(/^empresa-clientes$/,         'vendas-clientes')
+    .replace(/^empresa-fornecedores$/,     'cadastros-fornecedores')
+    // Auditoria inteira sai (2026-08-08): Comitê, trilha e Matriz de
+    // Riscos. O histórico de cada documento continua dentro dele.
+    .replace(/^comite-auditoria$/,         'inicio')
+    .replace(/^auditoria$/,                'inicio')
+    .replace(/^riscos$/,                   'inicio')
+    // Remuneração Variável sai (2026-08-09): o placar da competição volta
+    // a ser orgulho, não dinheiro. Folha e carteira seguem intactas.
+    .replace(/^rh-remuneraçãovariável$/,   'inicio')
+    // Políticas saiu: sobrepunha Avisos da Matriz + "Ciente" e nunca teve
+    // uma linha em nenhuma das 4 turmas.
+    .replace(/^politicas$/,                'inicio')
+    // Deliberação de valores sai (2026-08-17, migr. 441): o Conselho não
+    // delibera mais verba, contas nem repartição de lucro. Mandatos e o
+    // Painel de Governança ficam.
+    .replace(/^financeiro-orçamentoanual$/,        'inicio')
+    .replace(/^financeiro-prestaçãodecontas$/,     'inicio')
+    .replace(/^financeiro-destinaçãodoresultado$/, 'inicio')
+    // Votações removida; Feedback + Requerimentos unificados numa só tela com abas.
+    .replace(/^votacoes$/,                 'inicio')
+    .replace(/^matriz-votacoes$/,          'inicio')
+    .replace(/^requerimentos$/,            'feedback-org')
+    .replace(/^matriz-requerimentos$/,     'feedback-org')
+    // Categorias saiu de Empresa → Cadastros (pré-requisito de Produto).
+    .replace(/^empresa-categorias$/,       'cadastros-categorias')
+    // Ponto Eletrônico + Frequência de Trabalho → Registro de Ponto (abas).
+    .replace(/^rh-pontoeletrônico$/,        'rh-registrodeponto')
+    .replace(/^rh-frequênciadetrabalho$/,   'rh-registrodeponto')
+    // Requisições saiu de Empresa e virou módulo próprio. Três nomes
+    // antigos convergem: o original, o intermediário sem possessivo
+    // (migr. 285) e a caixa de aprovação.
+    .replace(/^empresa-minhasrequisições$/, 'requisicoes-dosetor')
+    .replace(/^empresa-requisições$/,       'requisicoes-dosetor')
+    .replace(/^empresa-aprovações$/,        'requisicoes-aprovações')
+    // 'Requisições Recebidas' existia com nome idêntico em Compras e em
+    // Estoque, para documentos diferentes. Cada um ganhou o nome do seu.
+    .replace(/^compras-requisiçõesrecebidas$/, 'compras-requisiçõesdecompra')
+    .replace(/^estoque-requisiçõesrecebidas$/, 'estoque-requisiçõesdematerial');
+};
+
 const SidebarNav = ({ activeView, navigate, openModules, toggleModule, handleSignOut, onClose, visibleModules, profile, badges, matrizMode, aulaAllow, aulaFiltro, atividadesAula, atividadesNaoLidas }: any) => (
   <>
     <div className="relative flex justify-center px-1 mb-4">
@@ -938,58 +998,7 @@ function LogMaxAppInner() {
   // sem voltar para 'inicio'. Limpa ao fechar a aba e no logout.
   const [activeView, setActiveView] = useState<string>(() => {
     try {
-      const raw = sessionStorage.getItem('logmax:activeView') || 'inicio';
-      // Migração de rotas após reorganização dos submenus:
-      //   - Produtos/Serviços saíram de Empresa → módulo Cadastros (novo).
-      //   - Colaboradores removido (redundante com Funcionários em RH).
-      //   - Clientes saiu de Empresa (já existia em Vendas).
-      //   - Centros de custo saiu de Empresa → Financeiro.
-      // Redireciona sessões antigas pra não cair no fallback "em desenvolvimento".
-      const migrado = raw
-        .replace(/^empresa-produtos$/,         'cadastros-produtos')
-        .replace(/^empresa-serviços$/,         'cadastros-serviços')
-        .replace(/^empresa-colaboradores$/,    'rh-funcionários')
-        .replace(/^rh-colaboradores$/,         'rh-funcionários')
-        .replace(/^empresa-clientes$/,         'vendas-clientes')
-        .replace(/^empresa-fornecedores$/,     'cadastros-fornecedores')
-        // Auditoria inteira sai (2026-08-08): Comitê, trilha e Matriz de
-        // Riscos. O histórico de cada documento continua dentro dele.
-        .replace(/^comite-auditoria$/,         'inicio')
-        .replace(/^auditoria$/,                'inicio')
-        .replace(/^riscos$/,                   'inicio')
-        // Remuneração Variável sai (2026-08-09): o placar da competição volta
-        // a ser orgulho, não dinheiro. Folha e carteira seguem intactas.
-        .replace(/^rh-remuneraçãovariável$/,   'inicio')
-        // Políticas saiu: sobrepunha Avisos da Matriz + "Ciente" e nunca teve
-        // uma linha em nenhuma das 4 turmas.
-        .replace(/^politicas$/,                'inicio')
-        // Deliberação de valores sai (2026-08-17, migr. 441): o Conselho não
-        // delibera mais verba, contas nem repartição de lucro. Mandatos e o
-        // Painel de Governança ficam.
-        .replace(/^financeiro-orçamentoanual$/,        'inicio')
-        .replace(/^financeiro-prestaçãodecontas$/,     'inicio')
-        .replace(/^financeiro-destinaçãodoresultado$/, 'inicio')
-        // Votações removida; Feedback + Requerimentos unificados numa só tela com abas.
-        .replace(/^votacoes$/,                 'inicio')
-        .replace(/^matriz-votacoes$/,          'inicio')
-        .replace(/^requerimentos$/,            'feedback-org')
-        .replace(/^matriz-requerimentos$/,     'feedback-org')
-        // Categorias saiu de Empresa → Cadastros (pré-requisito de Produto).
-        .replace(/^empresa-categorias$/,       'cadastros-categorias')
-        // Ponto Eletrônico + Frequência de Trabalho → Registro de Ponto (abas).
-        .replace(/^rh-pontoeletrônico$/,        'rh-registrodeponto')
-        .replace(/^rh-frequênciadetrabalho$/,   'rh-registrodeponto')
-        // Requisições saiu de Empresa e virou módulo próprio. Três nomes
-        // antigos convergem: o original, o intermediário sem possessivo
-        // (migr. 285) e a caixa de aprovação.
-        .replace(/^empresa-minhasrequisições$/, 'requisicoes-dosetor')
-        .replace(/^empresa-requisições$/,       'requisicoes-dosetor')
-        .replace(/^empresa-aprovações$/,        'requisicoes-aprovações')
-        // 'Requisições Recebidas' existia com nome idêntico em Compras e em
-        // Estoque, para documentos diferentes. Cada um ganhou o nome do seu.
-        .replace(/^compras-requisiçõesrecebidas$/, 'compras-requisiçõesdecompra')
-        .replace(/^estoque-requisiçõesrecebidas$/, 'estoque-requisiçõesdematerial');
-      return migrado;
+      return migrarViewAntiga(sessionStorage.getItem('logmax:activeView') || 'inicio');
     } catch { return 'inicio'; }
   });
   useEffect(() => {
@@ -1000,7 +1009,7 @@ function LogMaxAppInner() {
   const [viewHistory, setViewHistory] = useState<string[]>(() => {
     try {
       const raw = sessionStorage.getItem('logmax:viewHistory');
-      return raw ? JSON.parse(raw) : [];
+      return raw ? (JSON.parse(raw) as string[]).map(migrarViewAntiga) : [];
     } catch { return []; }
   });
   useEffect(() => {
@@ -1025,33 +1034,49 @@ function LogMaxAppInner() {
   // Modo Aula sem exigir aulaConfig como dep (evita recriar o callback e
   // invalidar props memoizadas). O ref é atualizado logo abaixo.
   const aulaGuardRef = useRef<(view: string) => boolean>(() => true);
-  // Views com navegação interna (HubView macros→modulos→submenus, wizards)
-  // registram um back handler que consome um passo interno. Se retornar true,
-  // Voltar é considerado tratado e a pilha de views não é despilhada.
-  const backHandlerRef = useRef<null | (() => boolean)>(null);
-  const registerBackHandler = useCallback((h: (() => boolean) | null) => {
-    backHandlerRef.current = h;
+  // Mesma ideia para a régua Matriz x Filial; atualizado no render, onde o
+  // modo é calculado.
+  const modoGuardRef = useRef<(view: string) => boolean>(() => true);
+  // Passos de volta DENTRO da tela aberta (ver `useVoltarInterno`). Quem
+  // empilha também desempilha ao fechar ou desmontar, então sair da tela
+  // esvazia sozinho o que era dela.
+  const passosInternosRef = useRef<Array<() => void>>([]);
+  // Espelho em estado só para o botão do topo aparecer quando há passo
+  // interno mesmo com a pilha de telas vazia.
+  const [nPassosInternos, setNPassosInternos] = useState(0);
+  // Rearma a entrada extra do histórico do navegador (ver o efeito do gesto
+  // de voltar, logo abaixo). Tela ou passo novo = há de novo para onde voltar.
+  const armarGestoRef = useRef<() => void>(() => {});
+  const empilharVoltar = useCallback((passo: () => void) => {
+    passosInternosRef.current = [...passosInternosRef.current, passo];
+    setNPassosInternos(passosInternosRef.current.length);
+    armarGestoRef.current();
+    return () => {
+      passosInternosRef.current = passosInternosRef.current.filter(p => p !== passo);
+      setNPassosInternos(passosInternosRef.current.length);
+    };
   }, []);
   const navigate = useCallback((view: string) => {
     if (!aulaGuardRef.current(view)) return;
     const prev = activeViewRef.current;
     if (prev === view) return;
-    // Sair da view atual descarta qualquer back handler interno pendente —
-    // ele pertence à view que está saindo.
-    backHandlerRef.current = null;
-    setViewHistory(h => [...h, prev]);
+    setViewHistory(h => [...h, prev].slice(-HISTORICO_MAX));
     setActiveView(view);
+    armarGestoRef.current();
   }, []);
   const goBack = useCallback(() => {
-    // Primeiro tenta consumir um passo interno da view atual (ex.: HubView
-    // volta de submenus → modulos → macros antes de despilhar a view).
-    if (backHandlerRef.current?.()) return;
+    // Primeiro o passo interno mais recente da tela (fechar o PDF, voltar à
+    // lista); só sem nenhum é que a pilha de telas anda.
+    const passos = passosInternosRef.current;
+    if (passos.length > 0) { passos[passos.length - 1](); return; }
     const h = viewHistoryRef.current;
     if (h.length === 0) return;
-    // Pula pra trás enquanto encontrar views bloqueadas pelo Modo Aula
-    // (evita o botão Voltar "engolir" a pilha em loop).
+    // Pula pra trás enquanto encontrar views que não abrem agora — bloqueadas
+    // pelo Modo Aula ou de fora do modo atual (Matriz x Filial). Sem o segundo
+    // filtro, o Voltar abria a tela e o guard do render a trocava por Início:
+    // para quem via, o botão "saía para outro lugar".
     let idx = h.length - 1;
-    while (idx >= 0 && !aulaGuardRef.current(h[idx])) idx--;
+    while (idx >= 0 && (!aulaGuardRef.current(h[idx]) || !modoGuardRef.current(h[idx]))) idx--;
     if (idx < 0) {
       setActiveView('inicio');
       setViewHistory([]);
@@ -1059,6 +1084,59 @@ function LogMaxAppInner() {
     }
     setActiveView(h[idx]);
     setViewHistory(h.slice(0, idx));
+  }, []);
+
+  // Voltar que SAI da tela pergunta antes se houver trabalho não gravado
+  // (carrinho, formulário preenchido) — mesma régua do reload da PWA. Passo
+  // interno não pergunta: quem o empilhou já sabe o que fechar.
+  const confirmar = useConfirm();
+  const voltar = useCallback(async () => {
+    if (passosInternosRef.current.length === 0 && viewHistoryRef.current.length > 0) {
+      (document.activeElement as HTMLElement | null)?.blur?.();
+      // Sem `view`: tela de operação vazia (PDV sem venda, caixa parado) não
+      // tem o que perder, e perguntar toda vez ensinaria a clicar "Sair" sem
+      // ler. Carrinho e contagem já travam pela régua; campo escrito também.
+      const motivo = motivoDeAdiar({ ignorarOcioso: true });
+      if (motivo && !(await confirmar({
+        message: `Sair desta tela? ${motivo[0].toUpperCase()}${motivo.slice(1)} — o que não foi gravado se perde.`,
+        confirmLabel: 'Sair mesmo assim',
+      }))) return;
+    }
+    goBack();
+  }, [goBack, confirmar]);
+
+  // Gesto de voltar do celular e botão Voltar do navegador. Sem isto o gesto
+  // passava por cima do app: no PWA fechava tudo, no navegador ia para a
+  // página anterior. Uma entrada extra no histórico do navegador segura o
+  // gesto; cada toque consome a entrada, anda um passo no app e a repõe.
+  // Sem nada para onde voltar, a entrada não volta — o toque seguinte sai.
+  const voltarRef = useRef(voltar);
+  voltarRef.current = voltar;
+  useEffect(() => {
+    // Já armado se a entrada atual é a nossa: F5 mantém a entrada, e montar de
+    // novo (StrictMode, relogin) empilharia outra a cada vez.
+    let armado = !!window.history.state?.logmaxVoltar;
+    const armar = () => {
+      if (armado) return;
+      window.history.pushState({ logmaxVoltar: true }, '');
+      armado = true;
+    };
+    armarGestoRef.current = armar;
+    armar();
+    const aoVoltar = () => {
+      armado = false;
+      // Confirmação ou prompt na tela: o gesto não passa por baixo dela — a
+      // pergunta ficaria órfã e a resposta cairia numa tela que já saiu.
+      if (document.querySelector('[data-dialogo-app]')) { armar(); return; }
+      if (passosInternosRef.current.length === 0 && viewHistoryRef.current.length === 0) return;
+      armar();
+      voltarRef.current();
+    };
+    window.addEventListener('popstate', aoVoltar);
+    return () => {
+      window.removeEventListener('popstate', aoVoltar);
+      armarGestoRef.current = () => {};
+    };
   }, []);
   const [openModules, setOpenModules] = useState<Record<string, boolean>>({});
   const [toast, setToast] = useState({ show: false, message: '', type: 'info' });
@@ -1101,7 +1179,12 @@ function LogMaxAppInner() {
   if (escolheu && filialAnteriorRef.current !== filialAtiva) {
     const primeiraEscolha = filialAnteriorRef.current === 'UNSET';
     filialAnteriorRef.current = filialAtiva;
-    if (!primeiraEscolha) setActiveView('inicio');
+    if (!primeiraEscolha) {
+      setActiveView('inicio');
+      // A pilha era da unidade anterior: voltar para ela abria a tela antiga
+      // já na unidade nova.
+      setViewHistory([]);
+    }
   }
 
   // Contagens de pendências por submódulo, exibidas como bolinha no Sidebar.
@@ -1387,6 +1470,7 @@ function LogMaxAppInner() {
   // durante o render, antes do commit, então não há flash. 'inicio' é
   // permitida nos dois modos, o que garante que isto converge.
   if (!viewPermitidaNoModo(activeView, matrizMode, profile?.role)) setActiveView('inicio');
+  modoGuardRef.current = (v: string) => viewPermitidaNoModo(v, matrizMode, profile?.role);
 
   const visibleModulesBase = matrizMode
     // Em Matriz, TODOS os módulos operacionais vivem nos 3 hubs (Sessões Gerais,
@@ -1439,8 +1523,8 @@ function LogMaxAppInner() {
     }
     switch (activeView) {
       case 'inicio':                          return <InicioView onNavigate={navigate} profile={profile} badges={badges} matrizMode={matrizMode} />;
-      case 'sessoes-gerais':                  return <HubView title="Sessões Gerais" macros={SESSOES_MATRIZ_MACROS} profile={profile} navigate={navigate} badges={badges} registerBackHandler={registerBackHandler} />;
-      case 'analise-ia':                      return <HubView title="Análise com IA" macros={ANALISE_IA_MACROS} profile={profile} navigate={navigate} badges={badges} registerBackHandler={registerBackHandler} />;
+      case 'sessoes-gerais':                  return <HubView title="Sessões Gerais" macros={SESSOES_MATRIZ_MACROS} profile={profile} navigate={navigate} badges={badges} />;
+      case 'analise-ia':                      return <HubView title="Análise com IA" macros={ANALISE_IA_MACROS} profile={profile} navigate={navigate} badges={badges} />;
       case 'dashboard':                       return <DashboardAnalyticsView profile={profile} />;
       case 'cadastros-categorias':             return <CategoriasProdutoView showToast={st} profile={profile} />;
       case 'empresa-filiais':                 return <FiliaisView showToast={st} />;
@@ -1730,9 +1814,9 @@ function LogMaxAppInner() {
               className="hidden lg:flex neu-button w-9 h-9 rounded-xl items-center justify-center text-gray-400 hover:text-accent transition-colors shrink-0">
               {sidebarRecolhida ? <PanelLeftOpen size={18} /> : <PanelLeftClose size={18} />}
             </button>
-            {viewHistory.length > 0 && (
+            {(viewHistory.length > 0 || nPassosInternos > 0) && (
               <button
-                onClick={goBack}
+                onClick={voltar}
                 title="Voltar para a tela anterior"
                 aria-label="Voltar"
                 className="neu-button w-9 h-9 rounded-xl flex items-center justify-center text-gray-400 hover:text-accent transition-colors shrink-0"
@@ -1826,11 +1910,13 @@ function LogMaxAppInner() {
           isento={profile?.role === 'admin' || profile?.role === 'ceo' || isConselheiro(profile)}
         />
         <div className="flex-1 min-h-0">
-          <ErrorBoundary key={activeView}>
-            <Suspense fallback={<PageLoadingFallback />}>
-              {renderContent()}
-            </Suspense>
-          </ErrorBoundary>
+          <VoltarInternoContext.Provider value={empilharVoltar}>
+            <ErrorBoundary key={activeView}>
+              <Suspense fallback={<PageLoadingFallback />}>
+                {renderContent()}
+              </Suspense>
+            </ErrorBoundary>
+          </VoltarInternoContext.Provider>
         </div>
       </main>
 

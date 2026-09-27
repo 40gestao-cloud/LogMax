@@ -58,6 +58,7 @@ export function ConfirmProvider({ children }: { children: React.ReactNode }) {
       {children}
       {state && (
         <div
+          data-dialogo-app=""
           className="fixed inset-0 z-[9999] flex items-center justify-center p-4"
           style={{ transition: 'opacity 180ms', opacity: visible ? 1 : 0 }}
         >

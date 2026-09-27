@@ -5,6 +5,7 @@ import { Check, X, Loader2, UserCircle2, ShieldCheck, FileText, MessageSquare, A
 import { useFetchData, dbUpdate } from '../hooks/useSupabaseData';
 import { LoadingSpinner, EmptyState, NeuButtonAccent, FormField, FilialBadge, IdadeBadge } from '../components/ui';
 import { useConfirm } from '../contexts/ConfirmContext';
+import { useVoltarInterno } from '../hooks/useVoltarInterno';
 import { formatBRL } from '../lib/viewUtils';
 import { rotuloCondicao } from '../lib/condicaoPagamento';
 import { supabase } from '../lib/supabase';
@@ -34,6 +35,7 @@ export const ClienteEspecialView = ({ showToast, profile }: { showToast: any; pr
   const [filtroFilial, setFiltroFilial] = useState<string>('todas');
   const [marcados, setMarcados] = useState<Set<string>>(new Set());
   const [aprovandoLote, setAprovandoLote] = useState(false);
+  useVoltarInterno(!!selecionado, () => { setSelecionado(null); setTipoDecisao(null); setFeedbackInput(''); });
   const confirm = useConfirm();
 
   const aguardandoCliente = useMemo(

@@ -5,6 +5,7 @@ import { supabase } from '../lib/supabase';
 import { assinarRealtime } from '../lib/realtimeAgrupado';
 import { LoadingSpinner, EmptyState } from '../components/ui';
 import { isConselheiro } from '../lib/rbac';
+import { useVoltarInterno } from '../hooks/useVoltarInterno';
 import type { UserProfile } from '../hooks/useUserProfile';
 import { MatrizTarefasPanel } from './MatrizTarefasPanel';
 import { AvaliacaoFilialPanel } from './AvaliacaoFilialPanel';
@@ -64,6 +65,7 @@ export function MatrizAvaliacoesView({ profile, showToast }: { profile: UserProf
   // tela os painéis de filial/ciclo enquanto se avalia uma tarefa — antes
   // eles apareciam embaixo de TODA tarefa aberta.
   const [secao, setSecao] = useState<'filiais' | 'ciclo' | null>(null);
+  useVoltarInterno(secao !== null, () => setSecao(null));
 
   // Competição escolhida no Histórico da tela de Competição. Lido uma vez e
   // apagado na hora: é intenção daquela navegação, não preferência salva —

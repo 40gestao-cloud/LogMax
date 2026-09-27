@@ -5,6 +5,9 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Package, Landmark } from 'lucide-react';
 import { diasDesde } from '../lib/dates';
 import { urlMiniatura } from '../lib/produtoImagem';
+import { useConfirm } from '../contexts/ConfirmContext';
+import { useVoltarInterno } from '../hooks/useVoltarInterno';
+import { temCampoPreenchido } from '../lib/naoInterromper';
 
 // Situação em cor cheia, sem transparência, com uma régua de SIGNIFICADO
 // única no app (Pedidos, Cotações, Requisições, Contas…): verde = deu certo,
@@ -453,6 +456,15 @@ export const ModalFormulario = ({ aberto, titulo, subtitulo, onCancelar, cancela
   children: React.ReactNode;
 }) => {
   const ref = React.useRef<HTMLDivElement | null>(null);
+  // Gesto de voltar do celular com o formulário aberto: pergunta e fecha o
+  // formulário, em vez de sair da tela por baixo dele levando o preenchido.
+  const confirmar = useConfirm();
+  useVoltarInterno(aberto, async () => {
+    if (cancelarDesabilitado) return;
+    // Formulário que ninguém tocou fecha direto: não há o que perder.
+    if (!temCampoPreenchido()
+      || await confirmar({ message: 'Fechar o formulário? O que foi preenchido e não salvo se perde.', confirmLabel: 'Fechar' })) onCancelar();
+  });
   React.useEffect(() => {
     if (!aberto) return;
     requestAnimationFrame(() => {

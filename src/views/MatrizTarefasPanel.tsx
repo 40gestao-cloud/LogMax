@@ -10,6 +10,7 @@ import { supabase } from '../lib/supabase';
 import { assinarRealtime } from '../lib/realtimeAgrupado';
 import { LoadingSpinner, EmptyState, CardContador, FilialBadge, NeuButtonAccent } from '../components/ui';
 import { useConfirm } from '../contexts/ConfirmContext';
+import { useVoltarInterno } from '../hooks/useVoltarInterno';
 import { todayBR } from '../lib/dates';
 import type { UserProfile } from '../hooks/useUserProfile';
 import { CENTRAL_FILIAL_TONE, CENTRAL_OP_FILIAIS, type CentralCompeticao as Competicao } from './MatrizAvaliacoesView';
@@ -155,6 +156,7 @@ export function MatrizTarefasPanel({ competicao, profile, podeAvaliar, ehAvaliad
   extras?: React.ReactNode;
 }) {
   const [tipoAtivo, setTipoAtivo] = useState<TipoTarefa | null>(null);
+  useVoltarInterno(tipoAtivo !== null, () => setTipoAtivo(null));
 
   if (tipoAtivo === null) {
     return (
