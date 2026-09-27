@@ -39,12 +39,16 @@ describe('ficha por nicho — fonte única', () => {
     }
   });
 
-  it('campo obrigatório na ficha é obrigatório no modelo', () => {
+  // A ficha só vale para Mercadoria: no modelo a coluna não leva `*` (uso e
+  // consumo e patrimônio a deixam em branco), mas a dica diz que é obrigatória
+  // e o import cobra na linha de mercadoria.
+  it('campo obrigatório na ficha é avisado como obrigatório em Mercadoria', () => {
     for (const [filial, defs] of Object.entries(ATRIBUTOS_PRODUTO)) {
       const campos = getModelo('produtos', filial).campos;
       for (const d of defs.filter(x => x.req)) {
         const col = campos.find(c => c.col === d.label.replace(/\s*\*\s*$/, ''));
-        expect(col?.obrigatorio, `${filial} > ${d.label}`).toBe(true);
+        expect(col, `${filial} > ${d.label}`).toBeDefined();
+        expect(col?.dica ?? '', `${filial} > ${d.label}`).toMatch(/Obrigatório em Mercadoria/);
       }
     }
   });

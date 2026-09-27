@@ -179,7 +179,7 @@ export const ImportarProdutosModal = ({ filial, contexto, showToast, onFechar, o
             <div className="shrink-0 pt-4 mt-2 border-t border-white/5">
               <p className="text-[10px] text-gray-500 leading-snug mb-3">
                 Produto entra com saldo <span className="text-gray-400 font-bold">zero</span>, salvo o que a
-                coluna <span className="text-gray-400">Saldo de Abertura</span> trouxer — e abertura não é compra:
+                coluna <span className="text-gray-400">Saldo de abertura (qtd)</span> trouxer — e abertura não é compra:
                 não gera conta a pagar. Linha com problema não entra; corrija na planilha e importe de novo,
                 ou cadastre aquela à mão.
               </p>

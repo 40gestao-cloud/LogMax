@@ -11,15 +11,25 @@ import { lerPlanilhaProdutos } from '../src/lib/importarProdutos';
 const FILIAL = 'SuperMax';
 
 /** Monta um arquivo com o cabeçalho do modelo e as linhas dadas. */
-async function planilha(linhas: Array<Record<string, string>>, opts?: { comExemplo?: boolean }) {
+async function planilha(
+  linhas: Array<Record<string, string | number>>,
+  opts?: { comExemplo?: boolean; cabecalho?: string[]; comInstrucoes?: boolean },
+) {
   const modelo = getModelo('produtos', FILIAL, {});
   const wb = new ExcelJS.Workbook();
+  // Como no modelo real: a aba Instruções vem ANTES e cita cada coluna no
+  // dicionário, uma por linha.
+  if (opts?.comInstrucoes) {
+    const info = wb.addWorksheet('Instruções');
+    info.addRow(['Dicionário de campos']);
+    modelo.campos.forEach(c => info.addRow([c.col, c.obrigatorio ? 'Sim' : '—', c.dica ?? '']));
+  }
   const ws = wb.addWorksheet('Produto');
   // O modelo real tem título e linha em branco antes do cabeçalho: reproduzimos
   // para o detector de cabeçalho ser exercitado de verdade.
   ws.addRow([modelo.titulo]);
   ws.addRow([]);
-  ws.addRow(modelo.campos.map(c => (c.obrigatorio ? `${c.col} *` : c.col)));
+  ws.addRow(opts?.cabecalho ?? modelo.campos.map(c => (c.obrigatorio ? `${c.col} *` : c.col)));
   if (opts?.comExemplo !== false) ws.addRow(modelo.campos.map(c => c.exemplo ?? ''));
   linhas.forEach(l => ws.addRow(modelo.campos.map(c => l[c.col] ?? '')));
 
@@ -33,12 +43,13 @@ async function planilha(linhas: Array<Record<string, string>>, opts?: { comExemp
 const CONTEXTO = {
   categorias:    [{ id: 'cat-1', nome: 'Mercearia' }],
   subcategorias: [{ id: 'sub-1', nome: 'Grãos', categoria_id: 'cat-1' }],
-  fornecedores:  ['Atacadão Central'],
+  fornecedores:  [{ id: 'forn-1', nome: 'Atacadão Central' }],
   codigosExistentes: ['999'],
   nomesExistentes:   ['Produto Que Já Existe'],
+  emImplantacao: true,
 };
 
-const LINHA_BOA: Record<string, string> = {
+const LINHA_BOA: Record<string, string | number> = {
   'Código': '001',
   'Nome do produto': 'Arroz Branco Tipo 1 5kg',
   'Categoria': 'Mercearia',
@@ -48,9 +59,11 @@ const LINHA_BOA: Record<string, string> = {
   'Marca': 'Tio João',
   'Preço de Custo (R$)': '18,90',
   'Preço de Venda (R$)': '24,90',
-  'Unidade': 'UN',
-  'Estoque Mínimo': '10',
-  'Saldo de Abertura': '40',
+  'Peso / Volume por embalagem': '5',
+  'Medida do conteúdo': 'KG',
+  'Unidade de estoque': 'UN — unidade',
+  'Estoque mínimo (qtd)': '10',
+  'Saldo de abertura (qtd)': '40',
   'Produto perecível': 'Não',
 };
 
@@ -66,6 +79,9 @@ describe('lerPlanilhaProdutos', () => {
       categoria_id: 'cat-1',
       subcategoria_id: 'sub-1',
       unidade: 'UN',
+      fornecedor_id: 'forn-1',
+      peso: 5,
+      peso_unidade: 'KG',
       estoque: 0,          // produto nasce zerado, sempre
       estoque_minimo: 10,
       filial: FILIAL,
@@ -114,13 +130,13 @@ describe('lerPlanilhaProdutos', () => {
 
   it('recusa fração em unidade que não aceita meia', async () => {
     const r = await lerPlanilhaProdutos(
-      await planilha([{ ...LINHA_BOA, 'Unidade': 'UN', 'Estoque Mínimo': '10,5' }]), FILIAL, CONTEXTO);
+      await planilha([{ ...LINHA_BOA, 'Unidade de estoque': 'UN', 'Estoque mínimo (qtd)': '10,5' }]), FILIAL, CONTEXTO);
     expect(r.linhas[0].erros.join(' ')).toMatch(/fração/i);
   });
 
   it('aceita fração quando a unidade é KG', async () => {
     const r = await lerPlanilhaProdutos(
-      await planilha([{ ...LINHA_BOA, 'Unidade': 'KG', 'Estoque Mínimo': '10,5', 'Saldo de Abertura': '12,5' }]),
+      await planilha([{ ...LINHA_BOA, 'Unidade de estoque': 'KG', 'Estoque mínimo (qtd)': '10,5', 'Saldo de abertura (qtd)': '12,5' }]),
       FILIAL, CONTEXTO);
     expect(r.linhas[0].erros).toEqual([]);
     expect(r.linhas[0].saldoAbertura).toBe(12.5);
@@ -154,11 +170,11 @@ describe('lerPlanilhaProdutos', () => {
       perecivel: 'Sim', validade_dias: '30', armazenagem: 'Refrigerado' });
   });
 
-  it('avisa (sem impedir) preço de venda abaixo do custo', async () => {
+  // A tela bloqueia (só passa com a caixa marcada); o import não tem a caixa.
+  it('recusa preço de venda abaixo do custo, como a tela', async () => {
     const r = await lerPlanilhaProdutos(
       await planilha([{ ...LINHA_BOA, 'Preço de Venda (R$)': '9,90' }]), FILIAL, CONTEXTO);
-    expect(r.linhas[0].erros).toEqual([]);
-    expect(r.linhas[0].avisos.join(' ')).toMatch(/abaixo do custo/i);
+    expect(r.linhas[0].erros.join(' ')).toMatch(/abaixo do custo/i);
   });
 
   // ── Classificação (Tipo) ────────────────────────────────────────────────
@@ -213,7 +229,7 @@ describe('lerPlanilhaProdutos', () => {
     expect(r.linhas[0].payload?.preco).toBe(0);
     expect(r.linhas[0].payload?.estoque_minimo).toBe(0);
     expect(r.linhas[0].saldoAbertura).toBe(0);
-    expect(r.linhas[0].avisos.join(' ')).toMatch(/Saldo de Abertura foi ignorado/i);
+    expect(r.linhas[0].avisos.join(' ')).toMatch(/Saldo de abertura foi ignorado/i);
   });
 
   it('explica quando o arquivo não tem o cabeçalho do modelo', async () => {
@@ -226,5 +242,125 @@ describe('lerPlanilhaProdutos', () => {
     const r = await lerPlanilhaProdutos(file, FILIAL, CONTEXTO);
     expect(r.linhas).toHaveLength(0);
     expect(r.erroGeral).toMatch(/Modelo de planilha/);
+  });
+
+  // ── Célula numérica ─────────────────────────────────────────────────────
+  // O Excel grava 24,90 digitado numa célula de moeda como o NÚMERO 24.9. O
+  // leitor antigo juntava os dígitos e dividia por 100: R$ 2,49.
+  it('lê preço e quantidade de célula numérica sem dividir por 100', async () => {
+    const r = await lerPlanilhaProdutos(await planilha([{
+      ...LINHA_BOA,
+      'Preço de Custo (R$)': 18,
+      'Preço de Venda (R$)': 24.9,
+      'Estoque mínimo (qtd)': 10,
+      'Saldo de abertura (qtd)': 40,
+    }]), FILIAL, CONTEXTO);
+    expect(r.linhas[0].erros).toEqual([]);
+    expect(r.linhas[0].precoCusto).toBe(18);
+    expect(r.linhas[0].payload?.preco).toBe(24.9);
+    expect(r.linhas[0].saldoAbertura).toBe(40);
+  });
+
+  it('lê preço em texto no formato brasileiro', async () => {
+    const r = await lerPlanilhaProdutos(await planilha([{
+      ...LINHA_BOA, 'Preço de Custo (R$)': 'R$ 1.234,50', 'Preço de Venda (R$)': '1.500,00',
+    }]), FILIAL, CONTEXTO);
+    expect(r.linhas[0].precoCusto).toBe(1234.5);
+    expect(r.linhas[0].payload?.preco).toBe(1500);
+  });
+
+  it('recusa quantidade escrita em texto', async () => {
+    const r = await lerPlanilhaProdutos(
+      await planilha([{ ...LINHA_BOA, 'Saldo de abertura (qtd)': 'quarenta' }]), FILIAL, CONTEXTO);
+    expect(r.linhas[0].erros.join(' ')).toMatch(/não é um número/);
+  });
+
+  it('continua lendo o arquivo com os cabeçalhos antigos', async () => {
+    const modelo = getModelo('produtos', FILIAL, {});
+    const antigos: Record<string, string> = {
+      'Unidade de estoque': 'Unidade',
+      'Saldo de abertura (qtd)': 'Saldo de Abertura',
+      'Estoque mínimo (qtd)': 'Estoque Mínimo',
+    };
+    const r = await lerPlanilhaProdutos(await planilha([LINHA_BOA], {
+      cabecalho: modelo.campos.map(c => antigos[c.col] ?? c.col),
+    }), FILIAL, CONTEXTO);
+    expect(r.erroGeral).toBeNull();
+    expect(r.linhas[0].erros).toEqual([]);
+    expect(r.linhas[0].saldoAbertura).toBe(40);
+  });
+
+  it('acha a aba de preenchimento mesmo com a aba Instruções antes', async () => {
+    const r = await lerPlanilhaProdutos(
+      await planilha([LINHA_BOA], { comInstrucoes: true }), FILIAL, CONTEXTO);
+    expect(r.erroGeral).toBeNull();
+    expect(r.linhas).toHaveLength(1);
+    expect(r.linhas[0].erros).toEqual([]);
+  });
+
+  // ── Régua do formulário ─────────────────────────────────────────────────
+  it('recusa fornecedor fora do cadastro (a tela só aceita da lista)', async () => {
+    const r = await lerPlanilhaProdutos(
+      await planilha([{ ...LINHA_BOA, 'Fornecedor': 'Distribuidora Fantasma' }]), FILIAL, CONTEXTO);
+    expect(r.linhas[0].erros.join(' ')).toMatch(/não está cadastrado/);
+  });
+
+  it('fora da implantação, recusa mercadoria e aceita uso e consumo', async () => {
+    const r = await lerPlanilhaProdutos(await planilha([
+      LINHA_BOA,
+      { ...LINHA_BOA, 'Código': '002', 'Nome do produto': 'Resma A4',
+        'Classificação (Tipo)': 'Uso e consumo (interno)' },
+    ]), FILIAL, { ...CONTEXTO, emImplantacao: false });
+    expect(r.linhas[0].erros.join(' ')).toMatch(/Fora da implantação/);
+    // O banco recusa a Entrada de abertura fora da implantação: a linha com
+    // saldo é barrada antes de gravar o produto.
+    expect(r.linhas[1].erros.join(' ')).toMatch(/Saldo de abertura só na implantação/);
+    const semSaldo = await lerPlanilhaProdutos(await planilha([
+      { ...LINHA_BOA, 'Código': '002', 'Nome do produto': 'Resma A4',
+        'Classificação (Tipo)': 'Uso e consumo (interno)', 'Saldo de abertura (qtd)': '' },
+    ]), FILIAL, { ...CONTEXTO, emImplantacao: false });
+    expect(semSaldo.linhas[0].erros).toEqual([]);
+  });
+
+  it('cobra marca e conteúdo de mercadoria em embalagem, não do granel', async () => {
+    const r = await lerPlanilhaProdutos(await planilha([
+      { ...LINHA_BOA, 'Marca': '', 'Peso / Volume por embalagem': '', 'Medida do conteúdo': '' },
+      { ...LINHA_BOA, 'Código': '002', 'Nome do produto': 'Banana prata',
+        'Unidade de estoque': 'KG', 'Marca': '', 'Peso / Volume por embalagem': '', 'Medida do conteúdo': '' },
+    ]), FILIAL, CONTEXTO);
+    const e0 = r.linhas[0].erros.join(' ');
+    expect(e0).toMatch(/Marca é obrigatória/);
+    expect(e0).toMatch(/Peso \/ Volume por embalagem é obrigatório/);
+    expect(r.linhas[1].erros).toEqual([]);
+    expect(r.linhas[1].payload?.peso).toBeNull();
+  });
+
+  it('uso e consumo exige o custo (valor de aquisição) e ignora o EAN', async () => {
+    const r = await lerPlanilhaProdutos(await planilha([{
+      ...LINHA_BOA, 'Classificação (Tipo)': 'Uso e consumo (interno)',
+      'Preço de Custo (R$)': '', 'Preço de Venda (R$)': '',
+    }]), FILIAL, CONTEXTO);
+    expect(r.linhas[0].erros.join(' ')).toMatch(/Preço de Custo é obrigatório/);
+    const ok = await lerPlanilhaProdutos(await planilha([{
+      ...LINHA_BOA, 'Classificação (Tipo)': 'Uso e consumo (interno)', 'Preço de Venda (R$)': '',
+    }]), FILIAL, CONTEXTO);
+    expect(ok.linhas[0].erros).toEqual([]);
+    expect(ok.linhas[0].payload?.ean).toBe('');
+  });
+
+  it('patrimônio grava os campos de patrimônio', async () => {
+    const r = await lerPlanilhaProdutos(await planilha([{
+      ...LINHA_BOA,
+      'Classificação (Tipo)': 'Patrimônio (bem de uso)',
+      'Nome do produto': 'Freezer horizontal 500L',
+      'Preço de Venda (R$)': '',
+      'Nº de Patrimônio (tag)': 'TAG-001', 'Responsável': 'Ana', 'Localização': 'Depósito',
+      'Vida útil (meses)': 60,
+    }]), FILIAL, CONTEXTO);
+    expect(r.linhas[0].erros).toEqual([]);
+    expect(r.linhas[0].payload).toMatchObject({
+      tipo: 'patrimonio', patrimonio_numero: 'TAG-001', patrimonio_responsavel: 'Ana',
+      patrimonio_localizacao: 'Depósito', patrimonio_vida_util_meses: 60, ean: '', embalagem_compra: null,
+    });
   });
 });

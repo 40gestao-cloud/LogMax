@@ -25,12 +25,13 @@
 // Mexeu no form, mexe aqui — inclusive na ORDEM dos campos.
 
 import { GOLD_HEX, BLACK_HEX, GOLD_TINT_HEX } from './pdfPalette';
-import { unidadesDeProduto, unidadesDeRequisicao, itemExemploDaFilial, exemploProduto, UNIDADES_CONTEUDO, EMBALAGENS_COMPRA } from './unidades';
+import { unidadesDeProduto, unidadesDeRequisicao, itemExemploDaFilial, exemploProduto, rotuloUnidade, UNIDADES_CONTEUDO, EMBALAGENS_COMPRA } from './unidades';
 import { ATRIBUTOS_PRODUTO as ATRIBUTOS_FICHA, rotuloParaCliente, type AtributoDef } from './atributosProduto';
 import { TIPOS_PRODUTO, TIPO_LABEL, TIPO_AJUDA } from './tipoProduto';
 import { supabase } from './supabase';
 
-export type ModeloFormato = 'texto' | 'moeda' | 'inteiro' | 'decimal' | 'data';
+/** `codigo`: texto puro, para o Excel não comer zero à esquerda nem virar 7,89E+12. */
+export type ModeloFormato = 'texto' | 'codigo' | 'moeda' | 'inteiro' | 'decimal' | 'data';
 
 export type ModeloCampo = {
   /** Cabeçalho da coluna. O ` *` de obrigatório é acrescentado pelo gerador. */
@@ -50,6 +51,8 @@ export type ModeloCampo = {
    * o download nunca depende da rede para funcionar.
    */
   fonte?: keyof ListasDinamicas;
+  /** Cabeçalhos antigos desta coluna — o import ainda os reconhece. */
+  aliases?: readonly string[];
 };
 
 export type Modelo = {
@@ -129,17 +132,27 @@ const campoDaFicha = (a: AtributoDef, filial: string): ModeloCampo => {
       ? `Obrigatório quando "${pai}" for Sim; deixe vazio quando for Não.`
       : `Só se aplica quando "${pai}" for Sim.`);
   }
+  // A ficha só vale para Mercadoria: sem `*` no cabeçalho, porque uso e
+  // consumo e patrimônio deixam a coluna em branco. O import cobra na linha.
+  if (a.req) dicas.unshift('Obrigatório em Mercadoria.');
   const dica = dicas.join(' ') || undefined;
 
-  if (a.type === 'bool')   return { col, lista: SIM_NAO, exemplo: 'Sim', dica };
-  if (a.type === 'select') return { col, obrigatorio: a.req, lista: a.options, exemplo: a.options?.[0], dica };
-  return {
-    col,
-    obrigatorio: a.req,
-    formato: a.soDigitos ? 'inteiro' : undefined,
-    exemplo: exemploDoPlaceholder(a.placeholder),
-    dica,
-  };
+  const exemplo = (() => {
+    const proprio = a.type === 'bool' ? 'Sim'
+      : a.type === 'select' ? a.options?.[0]
+      : exemploDoPlaceholder(a.placeholder);
+    if (!a.dependeDe) return proprio;
+    // Filho só leva exemplo se o exemplo do pai o liga — senão a linha de
+    // exemplo mostrava "Perecível: Não" com "Validade: 5 dias" ao lado.
+    const pai = (ATRIBUTOS_FICHA[filial] ?? []).find(x => x.key === a.dependeDe);
+    const exPai = pai?.type === 'bool' ? 'Sim' : pai?.type === 'select' ? pai.options?.[0] : undefined;
+    const liga = a.dependeDeValor !== undefined ? exPai === a.dependeDeValor : exPai === 'Sim';
+    return liga ? proprio : undefined;
+  })();
+
+  if (a.type === 'bool')   return { col, lista: SIM_NAO, exemplo, dica };
+  if (a.type === 'select') return { col, lista: a.options, exemplo, dica };
+  return { col, formato: a.soDigitos ? 'inteiro' : undefined, exemplo, dica };
 };
 
 /** `'Ex: P, M, G, 38, 40'` → `'P'`. Sem placeholder, sem exemplo. */
@@ -218,83 +231,93 @@ const modeloPessoa = (filial: string, isCliente: boolean): Modelo => {
   };
 };
 
+// Produtos: MESMA ORDEM DO FORMULÁRIO (Identificação → Patrimônio → ficha do
+// nicho → Preços → Estoque). O import lê este arquivo e cadastra direto, então
+// a régua de cada coluna é a do Salvar da tela, não uma aproximação dela:
+// obrigatoriedade que depende da Classificação ou da Unidade NÃO leva `*` no
+// cabeçalho — a condição vai na dica e é cobrada linha a linha no import.
+//
+// `aliases` guardam o cabeçalho antigo de cada coluna renomeada: arquivo
+// baixado antes da mudança continua sendo lido.
 const modeloProdutos = (filial: string): Modelo => {
   const isSuper = filial === 'SuperMax';
   // Exemplos do nicho, não da mercearia. O modelo saía com arroz e "Tio João"
   // para as três filiais — quem baixa o da boutique lia exemplo de supermercado
   // e parava para entender se tinha baixado o arquivo certo.
   const ex = exemploProduto(filial);
+  const SO_PATRIMONIO = 'Só para Patrimônio — deixe em branco nos outros.';
   const campos: ModeloCampo[] = [
-    { col: 'Código', obrigatorio: true, exemplo: '001',
-      dica: `Código único dentro da ${filial}. Filiais diferentes podem repetir o mesmo código.` },
-    { col: 'Nome do produto', obrigatorio: true, exemplo: ex.nome },
-    // A pergunta que decide o resto da linha, e que faltava aqui: o formulário
-    // sempre teve os três destinos (migr. 440), o modelo não. Quem preenchia a
-    // planilha só via "produto" e cadastrava resma de papel e freezer como
-    // mercadoria — os dois iam parar no PDV. Em branco continua entrando como
-    // mercadoria, que é o legado, mas a linha avisa.
+    // A pergunta que decide o resto da linha: é o primeiro campo da tela.
     { col: 'Classificação (Tipo)', lista: TIPOS_PRODUTO.map(t => TIPO_LABEL[t]),
       exemplo: TIPO_LABEL.estoque_venda,
       dica: TIPOS_PRODUTO.map(t => `${TIPO_LABEL[t]}: ${TIPO_AJUDA[t]}`).join(' | ')
         + ' Em branco, entra como Mercadoria para revenda.' },
-    { col: 'Categoria', obrigatorio: true, exemplo: ex.categoria, fonte: 'categorias',
-      dica: 'Precisa existir em Cadastros > Categorias antes de cadastrar o produto. É ela que carrega o markup-alvo usado para sugerir o preço de venda.' },
+    { col: 'Nome do produto', obrigatorio: true, exemplo: ex.nome },
+    // Texto, não número: "001" viraria 1 e o código mudaria sozinho.
+    { col: 'Código', obrigatorio: true, formato: 'codigo', exemplo: '001',
+      dica: `Código único dentro da ${filial}. Filiais diferentes podem repetir o mesmo código.` },
+    // Texto: como número, o Excel mostra 13 dígitos como 7,89123E+12.
+    { col: 'Cód. Barras EAN', formato: 'codigo', exemplo: '7891234567895',
+      dica: 'Mercadoria: EAN-13 do fabricante (12 ou 13 dígitos). Em branco, o LogMax gera um interno da loja (prefixo 2). Uso e consumo e Patrimônio não têm — deixe em branco.' },
+    { col: 'Categoria', exemplo: ex.categoria, fonte: 'categorias',
+      dica: 'Obrigatória em Mercadoria. Precisa existir em Cadastros > Categorias — é ela que carrega o markup-alvo do preço de venda.' },
     { col: 'Subcategoria', exemplo: ex.subcategoria, fonte: 'subcategorias',
-      dica: 'Opcional. Também vem do cadastro de categorias.' },
-    { col: 'Cód. Barras EAN', obrigatorio: true, exemplo: '7891234567895',
-      dica: 'EAN-13, 13 dígitos — é o que o PDV lê no caixa. Sem o código do fabricante, o cadastro gera um interno da loja (prefixo 2).' },
-    { col: 'Fornecedor', obrigatorio: true, exemplo: ex.fornecedor, fonte: 'fornecedores',
-      dica: 'Precisa estar cadastrado em Fornecedores antes.' },
-    { col: 'Marca', obrigatorio: true, exemplo: ex.marca, fonte: 'marcas',
-      dica: 'A lista traz as marcas já usadas nesta filial. Marca nova pode ser digitada.' },
+      dica: 'Opcional. Tem de ser da Categoria escolhida.' },
+    { col: 'Marca', exemplo: ex.marca, fonte: 'marcas',
+      dica: 'Obrigatória em Mercadoria vendida em embalagem (Unidade UN, CX, PC ou PCT). Granel (KG, L) não tem marca. Marca nova pode ser digitada.' },
   ];
   if (isSuper) {
-    // Duas colunas, não uma. A dica antiga ("na unidade escolhida mais adiante")
-    // mandava usar a unidade de ESTOQUE para medir o CONTEÚDO — e é assim que a
-    // coluna `peso` acumulou 900 e 0,5 sem ninguém saber se era grama ou quilo
-    // (migr. 438). Só é obrigatório para embalagem fechada: granel não tem
-    // conteúdo por embalagem, a unidade de estoque já é a medida.
+    // Duas colunas, não uma: o conteúdo tem medida própria, que não é a
+    // Unidade de estoque (migr. 438).
     campos.push(
       { col: 'Peso / Volume por embalagem', formato: 'decimal', exemplo: '5',
-        dica: 'O que vem dentro de UMA embalagem. Deixe em branco se o produto é vendido a granel (Unidade em KG ou L).' },
+        dica: 'O que vem dentro de UMA embalagem. Obrigatório em Mercadoria vendida em embalagem. Em branco no granel (Unidade KG ou L).' },
       { col: 'Medida do conteúdo', lista: UNIDADES_CONTEUDO, exemplo: 'KG',
-        dica: 'A medida do conteúdo — nada a ver com a Unidade de estoque. Arroz de 5 kg em pacote: conteúdo 5 KG, Unidade UN. Use UN quando o conteúdo se CONTA (pacote com 6 sabonetes): conteúdo 6 UN, Unidade PCT.' },
+        dica: 'Medida do número ao lado. Arroz de 5 kg em pacote: 5 KG. Use UN quando o conteúdo se CONTA (pacote com 6 sabonetes: 6 UN) — e aí a Unidade de estoque não pode ser UN.' },
     );
   }
   campos.push(
-    ...(ATRIBUTOS_PRODUTO[filial] ?? []),
-    { col: 'Preço de Custo (R$)', obrigatorio: true, formato: 'moeda', exemplo: '18,90',
-      dica: 'Quanto a empresa paga. No LogMax só admin/CEO/Financeiro enxergam.' },
-    { col: 'Preço de Venda (R$)', obrigatorio: true, formato: 'moeda', exemplo: '24,90',
-      dica: 'Se a Categoria tiver markup-alvo cadastrado, o LogMax sugere este valor a partir do custo — a sugestão é um clique, e o preço continua editável. Markup é sobre o custo; margem é sobre a venda.' },
-    { col: 'Unidade', lista: unidadesDeProduto(filial), exemplo: 'UN',
+    { col: 'Fornecedor', obrigatorio: true, exemplo: ex.fornecedor, fonte: 'fornecedores',
+      dica: 'Escolha na lista: precisa estar cadastrado em Cadastros > Fornecedores desta unidade.' },
+    { col: 'Nº de Patrimônio (tag)', formato: 'codigo', dica: SO_PATRIMONIO },
+    { col: 'Responsável', dica: SO_PATRIMONIO },
+    { col: 'Localização', dica: SO_PATRIMONIO },
+    { col: 'Vida útil (meses)', formato: 'inteiro',
+      dica: `${SO_PATRIMONIO} Em branco = não entra na depreciação do DRE.` },
+    ...(ATRIBUTOS_PRODUTO[filial] ?? []).map(c => ({
+      ...c,
+      dica: [c.dica, 'Só Mercadoria — deixe em branco nos outros.'].filter(Boolean).join(' '),
+    })),
+    { col: 'Preço de Custo (R$)', formato: 'moeda', exemplo: '18,90',
+      dica: 'Quanto a empresa paga por UMA Unidade de estoque. Obrigatório em Uso e consumo e Patrimônio (é o valor de aquisição). Em Mercadoria, em branco fica "a apurar" até o primeiro recebimento.' },
+    { col: 'Preço de Venda (R$)', formato: 'moeda', exemplo: '24,90',
+      dica: 'Obrigatório em Mercadoria, por Unidade de estoque (por KG no granel). Abaixo do custo é recusado — se for proposital, cadastre pela tela, que tem a opção. Uso e consumo e Patrimônio não se vendem: deixe em branco.' },
+    // As quantidades vêm logo depois da Unidade, na ordem da seção Estoque, e
+    // dizem "(qtd)" no nome: a Unidade é uma sigla escolhida na lista, e era
+    // nela que se tentava digitar a quantidade.
+    { col: 'Unidade de estoque', aliases: ['Unidade'],
+      lista: unidadesDeProduto(filial).map(u => rotuloUnidade(u)), exemplo: rotuloUnidade('UN'),
       dica: isSuper
-        ? 'Como o item entra e sai do estoque. 50 pacotes de arroz são 50 UN; banana pesada no caixa é KG.'
-        : 'Como o item entra e sai do estoque.' },
-    // "Quantidade Comprada" saiu: era uma segunda entrada de estoque no mesmo
-    // cadastro, e quem preenchia as duas com 40 terminava com 80. Compra tem
-    // documento — vai por Compras → Recebimentos.
-    { col: 'Saldo de Abertura', formato: 'decimal', exemplo: '40',
-      dica: 'O que já está na prateleira hoje. Não é compra: não gera conta a pagar. Fração só faz sentido se a Unidade for KG ou L (12,5 KG) — em UN, CX, PC e PCT vai inteiro.' },
-    { col: 'Estoque Mínimo', obrigatorio: true, formato: 'decimal', exemplo: '10',
-      dica: 'Abaixo disso o produto aparece em Sugestões de Compra. Aceita fração para item vendido a peso (migr. 438).' },
-    // A terceira medida (migr. 589). Fica ao lado de Unidade porque é com ela
-    // que se confunde: uma é como o estoque conta, a outra é como o fornecedor
-    // vende. Opcional — item que só se compra avulso deixa as duas em branco.
+        ? 'Só a MEDIDA, escolhida na lista — a quantidade vai nas colunas "(qtd)". 50 pacotes de arroz: UN aqui e 50 no Saldo. Banana pesada no caixa: KG. Em branco = UN.'
+        : 'Só a MEDIDA, escolhida na lista — a quantidade vai nas colunas "(qtd)". 20 camisetas: UN aqui e 20 no Saldo. Em branco = UN.' },
     { col: 'Compra em', lista: EMBALAGENS_COMPRA, exemplo: 'FARDO',
-      dica: 'Como o FORNECEDOR vende, se ele vender em embalagem fechada. Não é a Unidade: o estoque continua contando em UN. Em branco = compra avulsa.' },
+      dica: 'Como o FORNECEDOR vende, se for em embalagem fechada. Não muda a Unidade de estoque. Em branco = compra avulsa.' },
     { col: 'Qtd por embalagem', formato: 'decimal', exemplo: '30',
-      dica: 'Quantas UNIDADES (a coluna Unidade) vêm em uma embalagem: fardo de arroz com 30. Preencha junto com "Compra em" — uma sem a outra não vale.' },
+      dica: 'Quantas Unidades de estoque vêm em uma embalagem de compra (fardo com 30). Mais que 1. Preencha junto com "Compra em".' },
+    { col: 'Saldo de abertura (qtd)', aliases: ['Saldo de Abertura'], formato: 'decimal', exemplo: '40',
+      dica: 'Quantas Unidades de estoque já estão na prateleira hoje. Não é compra: não gera conta a pagar. Fração só em KG, L, M, M² e M³. Não se aplica a Patrimônio.' },
+    { col: 'Estoque mínimo (qtd)', aliases: ['Estoque Mínimo'], formato: 'decimal', exemplo: '10',
+      dica: 'Obrigatório em Mercadoria e Uso e consumo. Abaixo disso o produto aparece em Sugestões de Compra. Fração só em KG, L, M, M² e M³.' },
   );
   if (isSuper) {
     campos.push({ col: 'Elegível a benefícios', lista: SIM_NAO, exemplo: 'Não',
-      dica: 'Se entra na cesta de benefícios do colaborador.' });
+      dica: 'Só Mercadoria: se o colaborador pode pagar com o vale alimentação/refeição no PDV.' });
   }
   return {
     acao: 'Produto',
     titulo: `Produtos — ${filial}`,
     arquivo: `modelo-produtos-${filial.toLowerCase()}`,
-    intro: 'Uma linha por produto. Comece pela Classificação: mercadoria para revenda vai ao PDV, uso e consumo é o que a empresa gasta internamente (papel, limpeza, embalagem) e patrimônio é bem de uso (freezer, balcão, computador) — a classificação muda o que o LogMax cobra no resto da linha. Categoria e Fornecedor vêm em lista suspensa com o que já existe no LogMax — se o que você precisa não está lá, cadastre primeiro. Preenchido o arquivo, volte em Cadastros > Produtos e use "Importar planilha": o LogMax confere linha a linha e mostra o que entra antes de gravar.',
+    intro: 'Uma linha por produto, na mesma ordem do formulário de cadastro. Comece pela Classificação: ela decide o que o resto da linha pede. Colunas com seta abrem lista com o que já existe no LogMax. Depois, em Cadastros > Produtos, use "Importar planilha": o LogMax confere cada linha com as regras do formulário e mostra o que entra antes de gravar. A foto de capa não vai pela planilha — adicione depois, pelo cadastro.',
     campos,
   };
 };
@@ -464,9 +487,12 @@ export function getModelo(
 
 const NUM_FMT: Record<ModeloFormato, string | undefined> = {
   texto:   undefined,
+  codigo:  '@',
   moeda:   'R$ #,##0.00',
   inteiro: '0',
-  decimal: '#,##0.###',
+  // 'General', e não '#,##0.###': com as casas opcionais, o Excel pt-BR mostra
+  // o separador mesmo sem fração — 40 aparecia como "40,".
+  decimal: 'General',
   data:    'dd/mm/yyyy',
 };
 

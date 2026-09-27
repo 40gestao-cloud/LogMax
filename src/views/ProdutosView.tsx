@@ -87,9 +87,12 @@ const UNIDADES = UNIDADES_PRODUTO;
 /**
  * Produto sem nenhum campo da ficha do nicho preenchido. Só conta para filial
  * que TEM ficha — não faz sentido acusar incompletude de uma seção que não
- * existe.
+ * existe. Pelo mesmo motivo, só para Mercadoria: uso e consumo não tem a seção
+ * no formulário (e o Salvar zera `atributos`), então o selo aparecia em todo
+ * papel toalha e esponja sem que houvesse onde preenchê-lo.
  */
 const fichaVazia = (item: any, filial: string): boolean => {
+  if (!ehVendavel(normalizarTipo(item?.tipo))) return false;
   const defs = ATRIBUTOS_PRODUTO[filial] ?? [];
   if (defs.length === 0) return false;
   const atr = item?.atributos;
@@ -2497,9 +2500,12 @@ const ProdutosViewInner = ({ showToast, filial, profile, onNavigate }: { showToa
               subcategorias: subcategoriasProduto.map((sc: any) => ({
                 id: sc.id, nome: sc.nome, categoria_id: sc.categoria_id,
               })),
-              fornecedores: fornecedoresList.map((f: any) => f.nome).filter(Boolean),
+              fornecedores: fornecedoresOrdenados
+                .filter((f: any) => f.nome)
+                .map((f: any) => ({ id: String(f.id), nome: f.nome })),
               codigosExistentes: codigosCatalogo,
               nomesExistentes: [...nomesCatalogo],
+              emImplantacao,
             }}
             onFechar={() => setImportando(false)}
             onImportou={() => { reload(); }}
