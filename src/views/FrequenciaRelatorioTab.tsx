@@ -204,9 +204,10 @@ export const FrequenciaRelatorioTab = ({
       className="grid grid-cols-1 lg:grid-cols-[minmax(0,340px)_minmax(0,1fr)] gap-5 items-start">
 
       {/* Esquerda: o que vai no PDF, na ordem em que se decide, e o botão no fim.
-          Fica presa no topo enquanto a lista rola: a lista não tem rolagem
-          própria (duas barras prendiam a roda do mouse no card). */}
-      <div className="flex flex-col gap-5 min-w-0 lg:sticky lg:top-0">
+          Nem ela fica presa no topo (sticky cortava o card na borda do
+          rolamento) nem a lista tem rolagem própria (duas barras prendiam a
+          roda do mouse no card): a página rola, e só ela. */}
+      <div className="flex flex-col gap-5 min-w-0">
         <SecaoFormulario titulo="Período" icon={CalendarRange} cor="azul"
           extra={diasCorridos > 0 ? `${diasCorridos} dia(s)` : 'datas invertidas'}>
           <div className="grid grid-cols-2 gap-3">
@@ -330,18 +331,21 @@ export const FrequenciaRelatorioTab = ({
                       </button>
                     </div>
                   )}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-1.5">
+                  {/* Colunas pela largura do card, não por breakpoint: nome e
+                      cargo cabem em ~170px, e três colunas fixas esticavam cada
+                      um até o dobro disso. */}
+                  <div className="grid grid-cols-[repeat(auto-fill,minmax(170px,1fr))] gap-1.5">
                     {lista.map(f => {
                       const on = selecionados.has(f.id);
                       return (
                         <button key={f.id} type="button" onClick={() => toggle(f.id)} aria-pressed={on}
-                          className={`flex items-center gap-2.5 px-3 py-2 rounded-xl border text-left transition ${
+                          className={`flex items-center gap-2 px-2.5 py-1.5 rounded-lg border text-left transition min-w-0 ${
                             on ? 'bg-purple-500/15 border-purple-500/40' : 'border-white/5 hover:border-white/20 hover:bg-white/5'}`}>
                           <span className={`w-4 h-4 rounded-md border flex items-center justify-center shrink-0 ${
                             on ? 'bg-purple-500 border-purple-500 text-white' : 'border-white/20 text-transparent'}`}>
                             <Check size={11} strokeWidth={3} />
                           </span>
-                          <span className="min-w-0">
+                          <span className="min-w-0" title={[f.nome, f.cargo].filter(Boolean).join(' · ')}>
                             <span className="block text-xs font-semibold text-gray-200 truncate">{f.nome}</span>
                             <span className="block text-[10px] text-gray-500 truncate">{f.cargo || '—'}</span>
                           </span>

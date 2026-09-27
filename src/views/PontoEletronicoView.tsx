@@ -111,7 +111,7 @@ const PontoEletronicoViewInner = ({ showToast, profile, filial }: { showToast: a
 
 
   return (
-    <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col h-full gap-6 overflow-y-auto main-scrollbar pb-6">
+    <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col h-full gap-6 overflow-y-auto sem-barra pb-6">
       {/* Título */}
       <div className="shrink-0">
         <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">
