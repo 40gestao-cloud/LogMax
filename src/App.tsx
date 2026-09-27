@@ -645,12 +645,16 @@ const migrarViewAntiga = (raw: string): string => {
 
 const SidebarNav = ({ activeView, navigate, openModules, toggleModule, handleSignOut, onClose, visibleModules, profile, badges, matrizMode, aulaAllow, aulaFiltro, atividadesAula, atividadesNaoLidas }: any) => (
   <>
-    <div className="relative flex justify-center px-1 mb-4">
+    <div className="relative flex justify-center px-1 pt-2 pb-3">
       <div className="logo-shimmer inline-block">
+        {/* Versão recortada do icon-logmax.png: o original é 512×512 com o
+            desenho numa faixa de 451×301 — o resto é fundo preto, que na
+            sidebar só empurrava o menu para baixo. O original continua sendo
+            o ícone do app, o favicon e o logo do login. */}
         <img
-          src="/icon-logmax.png"
+          src="/logo-sidebar.png"
           alt="LogMax"
-          className="w-36 h-36 object-contain block"
+          className="h-24 w-auto object-contain block"
         />
       </div>
       {onClose && (
@@ -660,7 +664,7 @@ const SidebarNav = ({ activeView, navigate, openModules, toggleModule, handleSig
       )}
     </div>
 
-    <nav className="flex-1 flex flex-col gap-6 overflow-y-auto pr-2 custom-scrollbar">
+    <nav className="flex-1 flex flex-col gap-6 overflow-y-auto pr-1 sem-barra">
       <div className="flex flex-col gap-2">
         <button onPointerEnter={() => prefetchOnHover('inicio')} onPointerLeave={cancelPrefetchHover} onPointerDown={() => prefetchView('inicio')} onClick={() => { navigate('inicio'); onClose?.(); }} className={`flex items-center gap-3 p-2.5 rounded-xl text-sm font-semibold ${activeView === 'inicio' ? 'nav-item neu-pressed text-accent is-active' : 'nav-item neu-button text-gray-100'}`}>
           <Home size={18} /><span>Início</span>
@@ -868,7 +872,11 @@ const SidebarNav = ({ activeView, navigate, openModules, toggleModule, handleSig
             return (
               <div key={mod.id} className="flex flex-col">
                 {blockLabel && (
-                  <div className="mt-4 mb-1.5 px-1">
+                  // Espaço igual acima e abaixo do título (8px do gap da lista
+                  // + 8px aqui = 16px, e 16px embaixo): o título fica no meio
+                  // entre o grupo anterior e o seu, e não encosta na borda do
+                  // primeiro menu. Era mt-4/mb-1.5 — 24px em cima e 6px embaixo.
+                  <div className="mt-2 mb-4 px-1">
                     <span className="inline-block text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-full"
                       style={{ color: '#000000', background: '#F0B429', border: '1px solid #F0B429' }}>
                       {blockLabel}
@@ -894,7 +902,7 @@ const SidebarNav = ({ activeView, navigate, openModules, toggleModule, handleSig
                 <AnimatePresence>
                   {isOpen && (
                     <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="flex flex-col overflow-hidden">
-                      <div className="flex flex-col pt-2 pb-1">
+                      <div className="flex flex-col gap-1 pt-2 pb-1 ml-6 mr-3">
                         {mod.submenus
                           .filter((sub: any) => {
                             if (!subPermitido(sub, profile, aulaFiltro, matrizMode)) return false;
@@ -909,7 +917,7 @@ const SidebarNav = ({ activeView, navigate, openModules, toggleModule, handleSig
                             return (
                               <div key={label} className="relative">
                                 <button onPointerEnter={() => prefetchOnHover(viewId)} onPointerLeave={cancelPrefetchHover} onPointerDown={() => prefetchView(viewId)} onClick={() => { navigate(viewId); onClose?.(); }}
-                                  className={`w-full nav-subitem flex items-center justify-between gap-2 text-xs py-2 px-3 pl-9 pr-3 rounded-lg leading-tight border-l-2 text-left ${isActive ? `is-active font-bold bg-white/5 ${!mod.color ? 'text-accent border-accent' : ''}` : 'text-gray-200 border-transparent'}`}
+                                  className={`w-full nav-subitem flex items-center justify-between gap-2 text-xs py-2 px-3 rounded-lg leading-tight border-l-2 text-left ${isActive ? `is-active font-bold bg-white/5 ${!mod.color ? 'text-accent border-accent' : ''}` : 'text-gray-200 border-transparent'}`}
                                   style={isActive && mod.color ? { color: mod.color, borderColor: mod.color } : {}}>
                                   <span className="flex-1 min-w-0 text-left">{label}</span>
                                   {(badges?.[viewId] ?? 0) > 0 && (
@@ -1769,7 +1777,7 @@ function LogMaxAppInner() {
               className="fixed inset-0 bg-black/60 z-40 lg:hidden" />
             <motion.aside initial={{ x: -288 }} animate={{ x: 0 }} exit={{ x: -288 }}
               transition={{ type: 'tween', duration: 0.18, ease: 'easeOut' }}
-              className="fixed top-0 left-0 w-72 h-full flex flex-col pt-8 pb-5 px-5 gap-6 z-50 neu-flat sidebar-dark lg:hidden">
+              className="fixed top-0 left-0 w-72 h-full flex flex-col pt-4 pb-5 px-5 gap-4 z-50 neu-flat sidebar-dark lg:hidden">
               <SidebarNav
                 activeView={activeView} navigate={navigate}
                 openModules={openModules} toggleModule={toggleModule}
@@ -1785,7 +1793,7 @@ function LogMaxAppInner() {
       </AnimatePresence>
 
       {/* SIDEBAR */}
-      <aside className={`hidden ${sidebarRecolhida ? '' : 'lg:flex'} w-72 h-full flex-col pt-8 pb-5 px-5 gap-6 shrink-0 z-10 neu-flat sidebar-dark relative`}>
+      <aside className={`hidden ${sidebarRecolhida ? '' : 'lg:flex'} w-72 h-full flex-col pt-4 pb-5 px-5 gap-4 shrink-0 z-10 neu-flat sidebar-dark relative`}>
         <SidebarNav
           activeView={activeView} navigate={navigate}
           openModules={openModules} toggleModule={toggleModule}

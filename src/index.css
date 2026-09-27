@@ -1472,6 +1472,30 @@ main.main-scrollbar,
   cursor: not-allowed;
 }
 
+/* ── Ver / Baixar arquivo (Documentos) — cor CHEIA, mesma caixa de 2rem ──
+   Os dois são a ação principal da linha (abrir o arquivo), por isso sólidos,
+   ao contrário do glass de editar/excluir ao lado. Ver amarelo, Baixar vermelho. */
+.action-btn-ver,
+.action-btn-baixar {
+  width: 2rem;
+  height: 2rem;
+  border-radius: 0.5rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  border: 1px solid transparent;
+  transition: filter .12s ease, transform .12s ease;
+}
+.action-btn-ver    { background: #eab308; border-color: #ca8a04; color: #0a0a0a; }
+.action-btn-baixar { background: #dc2626; border-color: #b91c1c; color: #fff; }
+.action-btn-ver:hover:not(:disabled),
+.action-btn-baixar:hover:not(:disabled)  { filter: brightness(1.12); }
+.action-btn-ver:active:not(:disabled),
+.action-btn-baixar:active:not(:disabled) { transform: translateY(1px); }
+.action-btn-ver:disabled,
+.action-btn-baixar:disabled { opacity: 0.55; cursor: not-allowed; }
+
 .action-btn-delete::before {
   content: '';
   position: absolute;
@@ -1977,6 +2001,13 @@ main.main-scrollbar,
   white-space: nowrap;
 }
 
+/* Borda dourada leve em todo item de menu da sidebar (2026-09-27), para
+   os botões terem contorno mesmo parados. Antes do bloco de hover de propósito:
+   mesma especificidade, então o hover (mais abaixo) continua ganhando. */
+.sidebar-dark .nav-item:not(.is-active) {
+  border-color: color-mix(in srgb, var(--color-accent) 22%, transparent);
+}
+
 /* O flex interno precisa poder encolher, senão `nowrap` vira overflow em vez
    de reticências: filho de flex tem min-width:auto por padrão e se recusa a
    ficar menor que o conteúdo. */
@@ -2023,6 +2054,15 @@ main.main-scrollbar,
 /* ── Hover destacado dos submódulos ──
    Submenus têm border-l-2 indicando hierarquia. No hover: desliza 4px
    pra direita, vira accent (texto + barra lateral) e glow leve. */
+/* Contorno dourado nos submenus (2026-09-27), mais leve que o dos
+   menus (12% contra 22%). A barra da esquerda continua com 2px — é ela que o
+   hover e o item ativo acendem. Antes do bloco de hover: mesma especificidade,
+   então o hover continua ganhando. */
+.sidebar-dark .nav-subitem:not(.is-active) {
+  border: 1px solid color-mix(in srgb, var(--color-accent) 12%, transparent);
+  border-left-width: 2px;
+}
+
 .nav-subitem {
   transition:
     color 0.18s ease,
@@ -2903,6 +2943,10 @@ main { scroll-padding-top: 7rem; }
 .btn-solido--navy        { background: #1e3a8a; border-color: #172554; color: #fff; }
 .btn-solido--verde-escuro { background: #166534; border-color: #14532d; color: #fff; }
 .btn-solido--vermelho-forte { background: #b91c1c; border-color: #7f1d1d; color: #fff; }
+/* Abas de autor em Documentos: Admin Master amarelo escuro, Gerente vermelho
+   escuro — tons fechados para o texto branco ler bem nos dois temas. */
+.btn-solido--amarelo-escuro  { background: #a16207; border-color: #854d0e; color: #fff; }
+.btn-solido--vermelho-escuro { background: #7f1d1d; border-color: #450a0a; color: #fff; }
 
 /* Faixa de título das seções de formulário (SecaoFormulario) e abas
    (AbaComContador, AbaColorida): tom mais escuro e menos saturado que a cor

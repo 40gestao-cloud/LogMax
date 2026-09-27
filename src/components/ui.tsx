@@ -381,6 +381,8 @@ export const COR_ABA = {
   navy:     { botao: 'btn-solido--navy',       numero: 'text-blue-300' },
   verdeEscuro: { botao: 'btn-solido--verde-escuro', numero: 'text-green-400' },
   vermelhoForte: { botao: 'btn-solido--vermelho-forte', numero: 'text-red-400' },
+  amareloEscuro: { botao: 'btn-solido--amarelo-escuro', numero: 'text-yellow-500' },
+  vermelhoEscuro: { botao: 'btn-solido--vermelho-escuro', numero: 'text-red-400' },
   dourado:  { botao: 'btn-solido--dourado',    numero: 'text-accent' },
   preto:    { botao: 'btn-solido--preto-ouro', numero: 'text-accent' },
 } as const;
