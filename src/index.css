@@ -2810,6 +2810,11 @@ main.main-scrollbar,
   padding: 0.75rem 0.75rem;
 }
 .tabela > thead > tr > th + th { border-left: 1px solid color-mix(in oklab, var(--color-accent) 60%, #000); }
+/* Cabeçalho na cor da aba (Decisões tomadas é a aba verde). */
+.tabela.tabela--verde > thead > tr > th { background: #16a34a; color: #fff !important; }
+.tabela.tabela--verde > thead > tr > th + th { border-left-color: #15803d; }
+.tabela.tabela--azul > thead > tr > th { background: #2563eb; color: #fff !important; }
+.tabela.tabela--azul > thead > tr > th + th { border-left-color: #1d4ed8; }
 .tabela > thead > tr > th:first-child { border-top-left-radius: 0.75rem; border-bottom-left-radius: 0.75rem; }
 .tabela > thead > tr > th:last-child { border-top-right-radius: 0.75rem; border-bottom-right-radius: 0.75rem; }
 .tabela > tbody > tr > td { border-bottom: 1px solid color-mix(in oklab, var(--color-accent) 45%, var(--color-bg-base, #000)); vertical-align: middle; }
@@ -2897,6 +2902,7 @@ main { scroll-padding-top: 7rem; }
 .btn-solido.aba-ativa { box-shadow: 0 0 0 2px var(--color-bg-base, #000), 0 0 0 4px color-mix(in oklab, var(--color-accent) 70%, transparent); }
 .btn-solido--navy        { background: #1e3a8a; border-color: #172554; color: #fff; }
 .btn-solido--verde-escuro { background: #166534; border-color: #14532d; color: #fff; }
+.btn-solido--vermelho-forte { background: #b91c1c; border-color: #7f1d1d; color: #fff; }
 
 
 /* ── Card de contador (CardContador, ui.tsx) ────────────────────────────────

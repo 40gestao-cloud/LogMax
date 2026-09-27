@@ -7,6 +7,7 @@ import { useFetchData, dbInsert, dbDelete } from '../hooks/useSupabaseData';
 import { supabase } from '../lib/supabase';
 import { notificarSetor } from '../lib/notificar';
 import { freshToken, lerJsonDaApi } from '../lib/authFetch';
+import { SelectBusca } from '../components/SelectBusca';
 import { LoadingSpinner, EmptyState, NeuButtonAccent, ExportButton, CardContador, SecaoFormulario, type TomContador, corDoStatus, ModalFormulario } from '../components/ui';
 import { exportToPDF, exportToExcel, formatBRL, parseBRL, handleMoneyKeyDown } from '../lib/viewUtils';
 import { ehPrestado } from '../lib/naturezaServico';
@@ -78,55 +79,6 @@ const EMPTY_FORM = {
   descricao: '',
   campanha_id: '',
 };
-
-function SearchableSelect({ value, onChange, items, placeholder }: {
-  value: string;
-  onChange: (id: string) => void;
-  items: { id: string; nome: string; filial: string }[];
-  placeholder: string;
-}) {
-  const [q, setQ] = useState('');
-  const [open, setOpen] = useState(false);
-  const selected = items.find(i => i.id === value);
-  const filtered = q
-    ? items.filter(i =>
-        i.nome.toLowerCase().includes(q.toLowerCase()) ||
-        i.filial.toLowerCase().includes(q.toLowerCase()))
-    : items;
-  return (
-    <div className="relative">
-      <input
-        type="text"
-        value={open ? q : (selected?.nome ?? '')}
-        onChange={e => setQ(e.target.value)}
-        onFocus={() => { setOpen(true); setQ(''); }}
-        onBlur={() => setTimeout(() => setOpen(false), 150)}
-        placeholder={placeholder}
-        className="neu-input rounded-xl px-3 py-2.5 text-sm w-full"
-        autoComplete="off"
-      />
-      {open && (
-        <div className="absolute z-20 left-0 right-0 mt-1 bg-[var(--color-bg,#0f0f0f)] rounded-xl border border-white/10 max-h-52 overflow-y-auto main-scrollbar shadow-2xl">
-          <button type="button" onMouseDown={() => { onChange(''); setOpen(false); }}
-            className="w-full text-left px-3 py-2 text-xs text-gray-500 hover:bg-white/5 border-b border-white/5">
-            Nenhum
-          </button>
-          {filtered.length === 0
-            ? <p className="px-3 py-2 text-xs text-gray-600 italic">Nenhum resultado</p>
-            : filtered.map(i => (
-              <button key={i.id} type="button"
-                onMouseDown={() => { onChange(i.id); setQ(''); setOpen(false); }}
-                className={`w-full text-left px-3 py-2 text-sm flex items-center justify-between gap-2 hover:bg-white/5 ${value === i.id ? 'text-accent' : 'text-gray-300'}`}>
-                <span className="truncate">{i.nome}</span>
-                <span className="text-[10px] text-gray-600 shrink-0">{i.filial}</span>
-              </button>
-            ))
-          }
-        </div>
-      )}
-    </div>
-  );
-}
 
 const PromocoesMarketingViewInner = ({ showToast, profile, filial }: { showToast: any; profile: any; filial: FilialOp }) => {
   const { data: promocoesAll, setData, isLoading, reload } = useFetchData<any>('/api/marketingpromocoesview', { filial }, true);
@@ -697,43 +649,44 @@ const PromocoesMarketingViewInner = ({ showToast, profile, filial }: { showToast
             </NeuButtonAccent>
           </>}
         >
-          <div className="flex flex-col gap-4">
+          {/* Seções em pares, como em Requisição e Cotação. */}
+          <div className="grid grid-cols-1 @5xl:grid-cols-2 gap-5">
           <SecaoFormulario titulo="Produto ou serviço" icon={Package} cor="amarelo">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="flex flex-col gap-1.5">
               <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Produto</label>
-              <SearchableSelect
+              <SelectBusca
                 value={form.tipo_origem === 'produto' ? form.produto_id : ''}
                 onChange={handleProductChange}
-                items={itensProduto}
-                placeholder="Digite para buscar produto…"
+                placeholder="Escolha o produto"
+                opcoes={itensProduto.map(i => ({ value: i.id, label: i.nome, hint: i.filial }))}
               />
             </div>
             <div className="flex flex-col gap-1.5">
               <label className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Serviço</label>
-              <SearchableSelect
+              <SelectBusca
                 value={form.tipo_origem === 'servico' ? form.produto_id : ''}
                 onChange={handleProductChange}
-                items={itensServico}
-                placeholder="Digite para buscar serviço…"
+                placeholder="Escolha o serviço"
+                opcoes={itensServico.map(i => ({ value: i.id, label: i.nome, hint: i.filial }))}
               />
             </div>
           </div>
           </SecaoFormulario>
           <SecaoFormulario titulo="Preços" icon={DollarSign} cor="vermelho">
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 items-start">
             <div className="flex flex-col gap-1.5">
-              <label htmlFor="promo-preco-atual" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Preço de Venda Atual</label>
+              <label htmlFor="promo-preco-atual" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Preço atual</label>
               <input id="promo-preco-atual" type="text" value={form.preco_atual} readOnly
                 className="neu-input rounded-xl px-3 py-2.5 text-sm opacity-50 cursor-not-allowed" placeholder="Auto" />
             </div>
             <div className="flex flex-col gap-1.5">
-              <label htmlFor="promo-preco-custo" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Preço de Custo (referência)</label>
+              <label htmlFor="promo-preco-custo" title="Referência: abaixo dele a promoção dá prejuízo" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Custo</label>
               <input id="promo-preco-custo" type="text" value={form.preco_custo} readOnly
                 className="neu-input rounded-xl px-3 py-2.5 text-sm opacity-50 cursor-not-allowed" placeholder="Auto" />
             </div>
             <div className="flex flex-col gap-1.5">
-              <label htmlFor="promo-preco-promocional" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Preço Promocional (R$) *</label>
+              <label htmlFor="promo-preco-promocional" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Promocional (R$) *</label>
               <input id="promo-preco-promocional" type="text" inputMode="numeric" value={form.preco_promocional}
                 onChange={e => setForm((f: any) => ({ ...f, preco_promocional: formatBRL(e.target.value) }))}
                 onKeyDown={handleMoneyKeyDown}
@@ -742,24 +695,23 @@ const PromocoesMarketingViewInner = ({ showToast, profile, filial }: { showToast
           </div>
           </SecaoFormulario>
           <SecaoFormulario titulo="Período" icon={CalendarClock} cor="azul">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-start">
             <div className="flex flex-col gap-1.5">
-              <label htmlFor="promo-data-inicio" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Início da Campanha</label>
+              <label htmlFor="promo-data-inicio" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Início</label>
               <input id="promo-data-inicio" type="date" value={form.data_inicio} onChange={e => setForm((f: any) => ({ ...f, data_inicio: e.target.value }))}
                 className="neu-input rounded-xl px-3 py-2.5 text-sm" />
             </div>
             <div className="flex flex-col gap-1.5">
-              <label htmlFor="promo-data-fim" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Fim da Campanha *</label>
+              <label htmlFor="promo-data-fim" title="É o prazo que devolve o preço: sem ele a promoção nunca encerra" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Fim *</label>
               <input id="promo-data-fim" type="date" value={form.data_fim} onChange={e => setForm((f: any) => ({ ...f, data_fim: e.target.value }))}
                 className="neu-input rounded-xl px-3 py-2.5 text-sm" />
-              <span className="text-[10px] text-gray-500">É o prazo que devolve o preço: sem ele a promoção nunca encerra.</span>
             </div>
           </div>
           </SecaoFormulario>
           <SecaoFormulario titulo="Descrição e campanha" icon={Megaphone} cor="verde">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-start">
             <div className="flex flex-col gap-1.5">
-              <label htmlFor="promo-descricao" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Descrição da Promoção</label>
+              <label htmlFor="promo-descricao" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Descrição</label>
               <input id="promo-descricao" type="text" value={form.descricao} onChange={e => setForm((f: any) => ({ ...f, descricao: e.target.value }))}
                 className="neu-input rounded-xl px-3 py-2.5 text-sm" placeholder="Ex: Black Friday" />
             </div>

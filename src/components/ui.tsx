@@ -377,13 +377,14 @@ export const COR_ABA = {
   laranja:  { botao: 'btn-solido--laranja',    numero: 'text-orange-400' },
   navy:     { botao: 'btn-solido--navy',       numero: 'text-blue-300' },
   verdeEscuro: { botao: 'btn-solido--verde-escuro', numero: 'text-green-400' },
+  vermelhoForte: { botao: 'btn-solido--vermelho-forte', numero: 'text-red-400' },
   dourado:  { botao: 'btn-solido--dourado',    numero: 'text-accent' },
   preto:    { botao: 'btn-solido--preto-ouro', numero: 'text-accent' },
 } as const;
 export type CorAba = keyof typeof COR_ABA;
 
 export const AbaComContador = ({ label, n, cor, ativa, onClick, icon: Icon, title, alerta }: {
-  label: string; n: number; cor: CorAba; ativa: boolean; onClick: () => void;
+  label: string; n?: number; cor: CorAba; ativa: boolean; onClick: () => void;
   icon?: any; title?: string; alerta?: boolean;
 }) => (
   <div className="flex items-stretch gap-1.5">
@@ -396,10 +397,12 @@ export const AbaComContador = ({ label, n, cor, ativa, onClick, icon: Icon, titl
       </button>
       {ativa && <span aria-hidden className="absolute left-3 right-3 -bottom-2 h-0.5 rounded-full bg-accent" />}
     </div>
-    <div title={title}
-      className="min-w-[2.75rem] px-3 rounded-xl border border-white/10 bg-white/[0.03] flex items-center justify-center">
-      <span className={`text-base font-black tabular-nums ${COR_ABA[cor].numero}`}>{n}</span>
-    </div>
+    {n !== undefined && (
+      <div title={title}
+        className="min-w-[2.75rem] px-3 rounded-xl border border-white/10 bg-white/[0.03] flex items-center justify-center">
+        <span className={`text-base font-black tabular-nums ${COR_ABA[cor].numero}`}>{n}</span>
+      </div>
+    )}
   </div>
 );
 
@@ -410,15 +413,15 @@ export const AbaComContador = ({ label, n, cor, ativa, onClick, icon: Icon, titl
 export const SecaoFormulario = ({ titulo, icon: Icon, cor, extra, children }: {
   titulo: React.ReactNode; icon?: any; cor: CorAba; extra?: React.ReactNode; children: React.ReactNode;
 }) => (
-  <section className="rounded-2xl border border-white/10 overflow-hidden">
-    <header className={`${COR_ABA[cor].botao} flex items-center justify-between gap-3 px-4 py-2`}>
+  <section className="rounded-2xl border border-white/10 overflow-hidden flex flex-col">
+    <header className={`${COR_ABA[cor].botao} flex items-center justify-between gap-3 px-4 py-2 shrink-0`}>
       <h4 className="flex items-center gap-2 text-[11px] font-black uppercase tracking-widest">
         {Icon && <Icon size={14} className="shrink-0" />}
         {titulo}
       </h4>
       {extra && <span className="text-[10px] font-bold opacity-90 text-right">{extra}</span>}
     </header>
-    <div className="p-4 sm:p-5">{children}</div>
+    <div className="p-4 sm:p-5 flex-1 flex flex-col [&>*]:shrink-0">{children}</div>
   </section>
 );
 
@@ -428,6 +431,8 @@ export const SecaoFormulario = ({ titulo, icon: Icon, cor, extra, children }: {
 // à view em vez da tela. z-40 deixa o toast (z-50) por cima, que é onde a
 // validação avisa o que falta. Só o Cancelar fecha: clique fora ou Esc perderia
 // o cadastro pela metade. Com `lateral`, no desktop cada coluna rola sozinha.
+// Preso ao topo, não centrado: formulário curto flutuava no meio, pulava ao
+// mudar de altura e deixava a lista suspensa sem espaço para abrir.
 const LARGURA_MODAL_FORM = {
   md: 'max-w-2xl',
   lg: 'max-w-5xl',
@@ -461,7 +466,7 @@ export const ModalFormulario = ({ aberto, titulo, subtitulo, onCancelar, cancela
       {aberto && (
         <motion.div
           initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-          className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4">
+          className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm flex items-start justify-center p-2 sm:p-4 sm:pt-[4vh]">
           <motion.div ref={ref} role="dialog" aria-modal="true"
             aria-label={typeof titulo === 'string' ? titulo : undefined}
             initial={{ scale: 0.98, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.98, opacity: 0 }}

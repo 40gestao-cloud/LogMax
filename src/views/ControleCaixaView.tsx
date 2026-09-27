@@ -1,14 +1,14 @@
-import { MenuMais, ItemMenu } from '../components/MenuMais';
+import { MenuMais, ItemMenu, CABECALHO_TABELA } from '../components/MenuMais';
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { LockOpen, Lock, Clock, DollarSign, User, ChevronDown, Trash2, RotateCcw, ArrowDownToLine, ArrowUpFromLine, X, Calculator, Landmark, TrendingDown, Wallet, Info } from 'lucide-react';
+import { LockOpen, Lock, DollarSign, User, Trash2, RotateCcw, ArrowDownToLine, ArrowUpFromLine, X, Calculator, Landmark, TrendingDown, Wallet, History } from 'lucide-react';
 import { HistoricoOperacoes } from '../components/HistoricoOperacoes';
 import { useCaixasDoDia, FILIAIS_OPERACIONAIS, type FilialOperacional } from '../hooks/useCaixaAberto';
 import { useFetchData, dbDelete } from '../hooks/useSupabaseData';
 import { useAuth } from '../hooks/useAuth';
 import { supabase } from '../lib/supabase';
 import { todayBR } from '../lib/dates';
-import { LoadingSpinner, NeuButtonAccent, FilialBadge } from '../components/ui';
+import { LoadingSpinner, NeuButtonAccent, FilialBadge, SecaoFormulario, ModalFormulario, FormField, StatusBadge, Pagination } from '../components/ui';
 import type { UserProfile } from '../hooks/useUserProfile';
 import { hasAnySetor, isConselheiro } from '../lib/rbac';
 import { formatBRL, parseBRL, handleMoneyKeyDown } from '../lib/viewUtils';
@@ -148,15 +148,32 @@ const ReaberturaModal = ({ caixa, saving, onClose, onConfirm }: {
 const podeOperarTodasFiliais = (profile: UserProfile | null | undefined): boolean =>
   profile?.role === 'admin' || profile?.role === 'ceo' || isConselheiro(profile);
 
+// Número grande com rótulo — a mesma caixa para os valores do caixa e para a
+// saúde financeira da unidade, para as duas colunas lerem igual.
+const Kpi = ({ rotulo, valor, cor = 'text-gray-100', icon: Icon, sub }: {
+  rotulo: string; valor: React.ReactNode; cor?: string; icon?: any; sub?: React.ReactNode;
+}) => (
+  <div className="neu-pressed rounded-xl p-3 border border-white/5 flex flex-col gap-1 min-w-0">
+    <span className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest text-gray-500">
+      {Icon && <Icon size={12} className="shrink-0" />} {rotulo}
+    </span>
+    <span className={`text-lg font-black tabular-nums truncate ${cor}`}>{valor}</span>
+    {sub && <span className="text-[10px] text-gray-500 truncate">{sub}</span>}
+  </div>
+);
+
+const rotuloDiferenca = (tipo: string, dif: number) =>
+  tipo === 'exato' ? 'Exato' : `${tipo === 'sobra' ? 'Sobra' : 'Falta'} de ${fmtBRL(Math.abs(dif))}`;
+const corDiferenca = (tipo: string) =>
+  tipo === 'exato' ? 'text-gray-100' : tipo === 'sobra' ? 'text-emerald-400' : 'text-red-400';
+
 // Cada filial tem seu próprio card de status + abertura/fechamento.
 // Extraído porque o ControleCaixaView pode renderizar 1, 2 ou 3 deles dependendo
 // do role/filial do operador.
 const CaixaCard = ({ filial, caixa, showToast, profile, onChanged }: any) => {
   const { user } = useAuth();
-  const [valorAbertura, setValorAbertura] = useState('');
-  const [observacao, setObservacao] = useState('');
   const [saving, setSaving] = useState(false);
-  // Painel ativo dentro do card aberto: sangria, suprimento, fechar ou nenhum.
+  // Modal aberto: sangria, suprimento, fechar ou nenhum.
   const [painel, setPainel] = useState<'none' | 'sangria' | 'suprimento' | 'fechar'>('none');
   const [movValor, setMovValor] = useState('');
   const [movMotivo, setMovMotivo] = useState('');
@@ -164,7 +181,6 @@ const CaixaCard = ({ filial, caixa, showToast, profile, onChanged }: any) => {
   const [obsFechamento, setObsFechamento] = useState('');
   const [movs, setMovs] = useState<any[]>([]);
   const [reabrindo, setReabrindo] = useState(false);
-  const today = todayBR();
 
   const handleReabrirCaixa = async (motivo: string) => {
     if (!supabase) return;
@@ -216,7 +232,6 @@ const CaixaCard = ({ filial, caixa, showToast, profile, onChanged }: any) => {
     });
     setSaving(false);
     if (error) { showToast(`Erro: ${error.message}`, 'error'); return; }
-    // Refetch movimentações
     if (supabase) {
       const { data: novas } = await supabase.from('movimentacoes_caixa')
         .select('id, tipo, valor, motivo, criado_por_nome, created_at')
@@ -299,80 +314,53 @@ const CaixaCard = ({ filial, caixa, showToast, profile, onChanged }: any) => {
     const tipoDif = caixa.tipo_diferenca ?? 'exato';
     const valorFinal = valorReconf.trim() ? (parseBRL(valorReconf) ?? contadoOperador) : contadoOperador;
     const difFinal = valorFinal - esperado;
+    const tipoFinal = Math.abs(difFinal) < 0.005 ? 'exato' : difFinal > 0 ? 'sobra' : 'falta';
     return (
-      <motion.div initial={{ opacity: 0, scale: 0.97 }} animate={{ opacity: 1, scale: 1 }}
-        className="neu-flat rounded-3xl p-6 border border-yellow-500/30 flex flex-col gap-4"
-        style={{ background: 'color-mix(in srgb, #EAB308 6%, var(--color-bg-base))' }}>
-        <div className="flex items-center gap-3">
-          <div className="w-12 h-12 rounded-2xl flex items-center justify-center shrink-0" style={{ background: 'color-mix(in srgb, #EAB308 15%, var(--color-bg-base))' }}>
-            <Calculator size={22} className="text-yellow-400" />
+      <SecaoFormulario titulo={`Aguardando confirmação — ${filial}`} icon={Calculator} cor="amarelo"
+        extra="Fechado pelo PDV">
+        <div className="flex flex-col gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <Kpi rotulo="Esperado" valor={fmtBRL(esperado)} icon={Calculator} />
+            <Kpi rotulo="Contado (operador)" valor={fmtBRL(contadoOperador)} icon={User}
+              sub={`${caixa.fechado_por_nome ?? '—'} às ${fmtHora(caixa.fechado_em ?? null)}`} />
+            <Kpi rotulo="Diferença" valor={rotuloDiferenca(tipoDif, diferenca)} cor={corDiferenca(tipoDif)} />
           </div>
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 mb-1 flex-wrap">
-              <FilialBadge filial={filial} />
-              <span className="text-[10px] font-black uppercase tracking-widest text-yellow-400">Aguardando Confirmação</span>
-              <span className="px-2 py-0.5 rounded text-[9px] font-black uppercase bg-blue-500/15 text-blue-400">PDV</span>
+
+          {caixa.observacao && (
+            <div className="neu-pressed rounded-xl px-3 py-2.5 border border-white/5">
+              <span className="block text-[10px] text-gray-500 uppercase font-black tracking-widest mb-1">Observação do operador</span>
+              <span className="text-xs text-gray-200 whitespace-pre-line">{caixa.observacao}</span>
             </div>
-            <p className="text-xs text-gray-400">
-              Encerrado por <span className="text-gray-200 font-bold">{caixa.fechado_por_nome ?? '—'}</span> às {fmtHora(caixa.fechado_em ?? null)}
-            </p>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-2 gap-2 text-[11px]">
-          <div className="neu-pressed rounded-lg px-2.5 py-2">
-            <div className="text-gray-500 uppercase font-bold tracking-widest text-[9px]">Esperado</div>
-            <div className="text-gray-100 font-black tabular-nums">{fmtBRL(esperado)}</div>
-          </div>
-          <div className="neu-pressed rounded-lg px-2.5 py-2">
-            <div className="text-gray-500 uppercase font-bold tracking-widest text-[9px]">Contado (operador)</div>
-            <div className="text-gray-100 font-black tabular-nums">{fmtBRL(contadoOperador)}</div>
-          </div>
-          <div className="neu-pressed rounded-lg px-2.5 py-2 col-span-2">
-            <div className="text-gray-500 uppercase font-bold tracking-widest text-[9px]">Diferença apurada</div>
-            <div className={`font-black tabular-nums ${tipoDif === 'exato' ? 'text-gray-200' : tipoDif === 'sobra' ? 'text-emerald-400' : 'text-red-400'}`}>
-              {tipoDif === 'exato' ? 'Exato' : `${tipoDif === 'sobra' ? 'Sobra' : 'Falta'} de ${fmtBRL(Math.abs(diferenca))}`}
-            </div>
-          </div>
-        </div>
-
-        {caixa.observacao && (
-          <div className="neu-pressed rounded-lg px-3 py-2 text-[11px]">
-            <div className="text-gray-500 uppercase font-bold tracking-widest text-[9px] mb-1">Observação do operador</div>
-            <div className="text-gray-300 whitespace-pre-line">{caixa.observacao}</div>
-          </div>
-        )}
-
-        <div className="flex flex-col gap-2 pt-2 border-t border-white/5">
-          <input type="text" inputMode="numeric" placeholder={`Reconferir valor (opcional — atual: ${fmtBRL(contadoOperador)})`}
-            className="neu-input py-2 px-3 rounded-xl text-xs tabular-nums"
-            value={valorReconf}
-            onChange={e => setValorReconf(formatBRL(e.target.value))}
-            onKeyDown={handleMoneyKeyDown} />
-          {valorReconf.trim() && (
-            <p className={`text-[10px] font-bold ${Math.abs(difFinal) < 0.005 ? 'text-gray-400' : difFinal > 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-              Reconferido: {Math.abs(difFinal) < 0.005 ? 'Exato' : `${difFinal > 0 ? 'Sobra' : 'Falta'} de ${fmtBRL(Math.abs(difFinal))}`}
-            </p>
           )}
-          <input type="text" placeholder="Observação do Financeiro (opcional)"
-            className="neu-input py-2 px-3 rounded-xl text-xs"
-            value={obsExtra}
-            onChange={e => setObsExtra(e.target.value)} />
-        </div>
 
-        <div className="flex flex-wrap gap-2 justify-end">
-          <button
-            onClick={() => setReabrindo(true)}
-            disabled={saving}
-            className="neu-button px-3 py-1.5 rounded-xl text-[11px] font-bold text-orange-300 hover:text-orange-200 flex items-center gap-1.5 disabled:opacity-50">
-            <RotateCcw size={11} /> Reabrir
-          </button>
-          <button
-            onClick={handleConfirmarFechamento}
-            disabled={saving}
-            className="px-3 py-1.5 rounded-xl text-[11px] font-bold text-emerald-300 bg-emerald-900/30 border border-emerald-500/30 hover:bg-emerald-900/50 flex items-center gap-1.5 disabled:opacity-50">
-            <Lock size={11} /> {saving ? '…' : 'Confirmar fechamento'}
-          </button>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <FormField label="Reconferir valor (opcional)">
+              <input type="text" inputMode="numeric" placeholder={`Atual: ${fmtBRL(contadoOperador)}`}
+                className="neu-input py-2 px-3 rounded-xl text-sm tabular-nums"
+                value={valorReconf}
+                onChange={e => setValorReconf(formatBRL(e.target.value))}
+                onKeyDown={handleMoneyKeyDown} />
+              {valorReconf.trim() && (
+                <span className={`text-[11px] font-bold mt-1 ${corDiferenca(tipoFinal)}`}>
+                  Reconferido: {rotuloDiferenca(tipoFinal, difFinal)}
+                </span>
+              )}
+            </FormField>
+            <FormField label="Observação do Financeiro (opcional)">
+              <input type="text" className="neu-input py-2 px-3 rounded-xl text-sm"
+                value={obsExtra}
+                onChange={e => setObsExtra(e.target.value)} />
+            </FormField>
+          </div>
+
+          <div className="flex flex-wrap gap-2 justify-end">
+            <button onClick={() => setReabrindo(true)} disabled={saving} className="btn-solido btn-solido--laranja">
+              <RotateCcw size={13} /> Reabrir
+            </button>
+            <button onClick={handleConfirmarFechamento} disabled={saving} className="btn-solido btn-solido--verde">
+              <Lock size={13} /> {saving ? 'Confirmando…' : 'Confirmar fechamento'}
+            </button>
+          </div>
         </div>
 
         <AnimatePresence>
@@ -385,169 +373,165 @@ const CaixaCard = ({ filial, caixa, showToast, profile, onChanged }: any) => {
             />
           )}
         </AnimatePresence>
-      </motion.div>
+      </SecaoFormulario>
     );
   }
 
-  return caixa ? (
-    /* ── CAIXA ABERTO ── */
-    <motion.div initial={{ opacity: 0, scale: 0.97 }} animate={{ opacity: 1, scale: 1 }}
-      className="neu-flat rounded-3xl p-6 border border-emerald-500/20 flex flex-col gap-4"
-      style={{ background: 'color-mix(in srgb, #10B981 6%, var(--color-bg-base))' }}>
-      <div className="flex items-center gap-3">
-        <div className="w-12 h-12 rounded-2xl flex items-center justify-center shrink-0" style={{ background: 'color-mix(in srgb, #10B981 15%, var(--color-bg-base))' }}>
-          <LockOpen size={22} className="text-emerald-400" />
-        </div>
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 mb-1 flex-wrap">
-            <FilialBadge filial={filial} />
-            <span className="text-[10px] font-black uppercase tracking-widest text-emerald-400">Aberto</span>
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+  if (!caixa) {
+    /* ── CAIXA FECHADO ── */
+    // Quem abre o caixa é o OPERADOR, na tela do PDV: é ele que conta o fundo
+    // de troco e assume a gaveta. O aviso de abertura e de fechamento chega
+    // aqui pelo sino (migr. 581).
+    return (
+      <SecaoFormulario titulo={`Caixa fechado — ${filial}`} icon={Lock} cor="cinza">
+        <div className="flex-1 flex items-center gap-4 py-2">
+          <div className="w-12 h-12 rounded-2xl neu-pressed flex items-center justify-center shrink-0">
+            <Lock size={20} className="text-gray-500" />
           </div>
-          <p className="text-xl font-black text-gray-100 tabular-nums">{fmtBRL(caixa.valor_abertura)}</p>
-          <div className="flex flex-wrap items-center gap-2 mt-1 text-[10px] text-gray-500">
-            <span className="flex items-center gap-1"><User size={9} />{caixa.aberto_por_nome ?? '—'}</span>
-            <span className="flex items-center gap-1"><Clock size={9} />{fmtHora(caixa.aberto_em)}</span>
+          <div className="min-w-0">
+            <p className="text-sm font-bold text-gray-200">Aguardando a abertura do turno.</p>
+            <p className="text-xs text-gray-500 mt-0.5">Abre pelo PDV, na mão do operador — o aviso chega pelo sino.</p>
           </div>
         </div>
-      </div>
+      </SecaoFormulario>
+    );
+  }
 
-      {/* Totais de sangria/suprimento do dia, se houver movimentações */}
-      {(totalSangria > 0 || totalSuprimento > 0) && (
-        <div className="grid grid-cols-2 gap-2 text-[10px]">
-          <div className="neu-pressed rounded-lg px-2 py-1.5">
-            <div className="text-gray-500 uppercase font-bold tracking-widest">Suprimentos</div>
-            <div className="text-emerald-300 font-bold tabular-nums">+ {fmtBRL(totalSuprimento)}</div>
-          </div>
-          <div className="neu-pressed rounded-lg px-2 py-1.5">
-            <div className="text-gray-500 uppercase font-bold tracking-widest">Sangrias</div>
-            <div className="text-red-300 font-bold tabular-nums">− {fmtBRL(totalSangria)}</div>
-          </div>
+  /* ── CAIXA ABERTO ── */
+  const movAberto = painel === 'sangria' || painel === 'suprimento';
+  return (
+    <SecaoFormulario titulo={`Caixa aberto — ${filial}`} icon={LockOpen} cor="verde"
+      extra={<span className="inline-flex items-center gap-1.5"><span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" /> em operação</span>}>
+      <div className="flex flex-col gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <Kpi rotulo="Abertura" valor={fmtBRL(Number(caixa.valor_abertura ?? 0))} icon={DollarSign}
+            sub={`${caixa.aberto_por_nome ?? '—'} às ${fmtHora(caixa.aberto_em)}`} />
+          <Kpi rotulo="Suprimentos" valor={`+ ${fmtBRL(totalSuprimento)}`} cor="text-emerald-400" icon={ArrowDownToLine} />
+          <Kpi rotulo="Sangrias" valor={`− ${fmtBRL(totalSangria)}`} cor="text-orange-400" icon={ArrowUpFromLine} />
         </div>
-      )}
 
-      <div className="flex flex-wrap gap-2 justify-end">
-        <button onClick={() => setPainel(painel === 'suprimento' ? 'none' : 'suprimento')}
-          className="neu-button px-3 py-1.5 rounded-xl text-[11px] font-bold text-emerald-300 hover:text-emerald-200 flex items-center gap-1.5">
-          <ArrowDownToLine size={11} /> Suprimento
-        </button>
-        <button onClick={() => setPainel(painel === 'sangria' ? 'none' : 'sangria')}
-          className="neu-button px-3 py-1.5 rounded-xl text-[11px] font-bold text-orange-300 hover:text-orange-200 flex items-center gap-1.5">
-          <ArrowUpFromLine size={11} /> Sangria
-        </button>
-        <button onClick={() => setPainel(painel === 'fechar' ? 'none' : 'fechar')}
-          className="neu-button px-3 py-1.5 rounded-xl text-[11px] font-bold text-gray-400 hover:text-red-400 flex items-center gap-1.5">
-          <Lock size={11} /> Fechar
-        </button>
-      </div>
+        <div className="flex flex-wrap gap-2 justify-end">
+          <button onClick={() => setPainel('suprimento')} className="btn-solido btn-solido--verde">
+            <ArrowDownToLine size={13} /> Suprimento
+          </button>
+          <button onClick={() => setPainel('sangria')} className="btn-solido btn-solido--laranja">
+            <ArrowUpFromLine size={13} /> Sangria
+          </button>
+          <button onClick={() => setPainel('fechar')} className="btn-solido btn-solido--vermelho">
+            <Lock size={13} /> Fechar caixa
+          </button>
+        </div>
 
-      <AnimatePresence>
-        {(painel === 'sangria' || painel === 'suprimento') && (
-          <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }}
-            className="neu-pressed rounded-2xl p-4 flex flex-col gap-3 overflow-hidden">
-            <div className="text-xs font-bold text-gray-300 uppercase tracking-widest">
-              {painel === 'sangria' ? 'Sangria (retirada de caixa)' : 'Suprimento (entrada de troco/reforço)'}
+        <div className="flex flex-col gap-2">
+          <span className="text-[10px] font-black uppercase tracking-widest text-gray-500">
+            Movimentações do dia{movs.length > 0 ? ` (${movs.length})` : ''}
+          </span>
+          {movs.length === 0 ? (
+            <p className="text-xs text-gray-600">Nenhuma sangria ou suprimento neste turno.</p>
+          ) : (
+            <div className="flex flex-col gap-1.5">
+              {movs.map(m => {
+                const sangria = m.tipo === 'sangria';
+                return (
+                  <div key={m.id} className="neu-pressed rounded-xl px-3 py-2 border border-white/5 flex items-center gap-3">
+                    <span className={`shrink-0 w-24 text-center px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-widest text-white ${sangria ? 'bg-orange-600' : 'bg-green-600'}`}>
+                      {sangria ? 'Sangria' : 'Suprimento'}
+                    </span>
+                    <span className={`shrink-0 text-sm font-black tabular-nums ${sangria ? 'text-orange-400' : 'text-emerald-400'}`}>
+                      {sangria ? '−' : '+'} {fmtBRL(Number(m.valor))}
+                    </span>
+                    <span className="flex-1 min-w-0 text-xs text-gray-400 truncate" title={m.motivo ?? ''}>{m.motivo || '—'}</span>
+                    <span className="shrink-0 text-[11px] text-gray-500 hidden sm:inline">{m.criado_por_nome ?? '—'}</span>
+                    <span className="shrink-0 text-[11px] text-gray-500 font-mono">{fmtHora(m.created_at)}</span>
+                  </div>
+                );
+              })}
             </div>
-            <input type="text" inputMode="numeric" placeholder="Valor (R$)"
+          )}
+        </div>
+      </div>
+
+      <ModalFormulario
+        aberto={movAberto}
+        largura="md"
+        titulo={painel === 'sangria' ? `Sangria — ${filial}` : `Suprimento — ${filial}`}
+        subtitulo={painel === 'sangria' ? 'retirada de dinheiro da gaveta' : 'entrada de troco ou reforço'}
+        onCancelar={resetPainel}
+        cancelarDesabilitado={saving}
+        acoes={
+          <NeuButtonAccent onClick={() => handleMovimentacao(painel as 'sangria' | 'suprimento')} isLoading={saving}>
+            Confirmar
+          </NeuButtonAccent>
+        }
+      >
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <FormField label="Valor (R$) *">
+            <input type="text" inputMode="numeric" placeholder="0,00"
               className="neu-input py-2 px-3 rounded-xl text-sm tabular-nums"
               value={movValor}
               onChange={e => setMovValor(formatBRL(e.target.value))}
               onKeyDown={handleMoneyKeyDown} />
-            <input type="text" placeholder={painel === 'sangria' ? 'Motivo: ex. depósito banco' : 'Motivo: ex. troco inicial'}
+          </FormField>
+          <FormField label="Motivo">
+            <input type="text" placeholder={painel === 'sangria' ? 'Ex.: depósito no banco' : 'Ex.: troco inicial'}
               className="neu-input py-2 px-3 rounded-xl text-sm"
               value={movMotivo}
               onChange={e => setMovMotivo(e.target.value)} />
-            <div className="flex justify-end gap-2">
-              <button onClick={resetPainel} className="neu-button px-3 py-1.5 rounded-lg text-xs text-gray-400 flex items-center gap-1"><X size={11} /> Cancelar</button>
-              <NeuButtonAccent onClick={() => handleMovimentacao(painel as 'sangria' | 'suprimento')} isLoading={saving}>Confirmar</NeuButtonAccent>
-            </div>
-          </motion.div>
-        )}
+          </FormField>
+        </div>
+      </ModalFormulario>
 
-        {painel === 'fechar' && (
-          <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }}
-            className="neu-pressed rounded-2xl p-4 flex flex-col gap-3 overflow-hidden">
-            <div className="text-xs font-bold text-gray-300 uppercase tracking-widest flex items-center gap-2">
-              <Calculator size={12} /> Fechamento conferido
-            </div>
-            <p className="text-[11px] text-gray-500">
-              Informe o valor em <b>dinheiro</b> contado fisicamente. O sistema calcula o esperado (abertura + vendas em dinheiro + suprimentos − sangrias) e mostra a diferença.
-            </p>
-            <input type="text" inputMode="numeric" placeholder="Valor contado em dinheiro"
+      <ModalFormulario
+        aberto={painel === 'fechar'}
+        largura="md"
+        titulo={`Fechar caixa — ${filial}`}
+        subtitulo="fechamento conferido"
+        onCancelar={resetPainel}
+        cancelarDesabilitado={saving}
+        acoes={
+          <button onClick={handleFecharConferido} disabled={saving} className="btn-solido btn-solido--vermelho">
+            <Lock size={13} /> {saving ? 'Fechando…' : 'Fechar caixa'}
+          </button>
+        }
+      >
+        <p className="text-xs text-gray-400">
+          Conte só o <b className="text-gray-200">dinheiro</b> da gaveta. O esperado é abertura + vendas em dinheiro + suprimentos − sangrias.
+        </p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <FormField label="Valor contado em dinheiro *">
+            <input type="text" inputMode="numeric" placeholder="0,00"
               className="neu-input py-2 px-3 rounded-xl text-sm tabular-nums"
               value={valorContado}
               onChange={e => setValorContado(formatBRL(e.target.value))}
               onKeyDown={handleMoneyKeyDown} />
-            <input type="text" placeholder="Observação (opcional)"
-              className="neu-input py-2 px-3 rounded-xl text-sm"
+          </FormField>
+          <FormField label="Observação">
+            <input type="text" className="neu-input py-2 px-3 rounded-xl text-sm"
               value={obsFechamento}
               onChange={e => setObsFechamento(e.target.value)} />
-            <div className="flex justify-end gap-2">
-              <button onClick={resetPainel} className="neu-button px-3 py-1.5 rounded-lg text-xs text-gray-400 flex items-center gap-1"><X size={11} /> Cancelar</button>
-              <button onClick={handleFecharConferido} disabled={saving}
-                className="px-3 py-1.5 rounded-lg text-[11px] font-bold text-red-300 bg-red-900/30 border border-red-500/20 hover:bg-red-900/50 disabled:opacity-50">
-                {saving ? '...' : 'Fechar caixa'}
-              </button>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* Histórico curto de movimentações do dia */}
-      {movs.length > 0 && (
-        <details className="text-[10px]">
-          <summary className="cursor-pointer text-gray-500 uppercase font-bold tracking-widest hover:text-gray-300">
-            Movimentações do dia ({movs.length})
-          </summary>
-          <ul className="mt-2 flex flex-col gap-1 max-h-40 overflow-y-auto main-scrollbar pr-1">
-            {movs.map(m => (
-              <li key={m.id} className="flex items-center justify-between gap-2 px-2 py-1 rounded bg-black/20">
-                <span className={`font-bold uppercase ${m.tipo === 'sangria' ? 'text-orange-300' : 'text-emerald-300'}`}>
-                  {m.tipo === 'sangria' ? '−' : '+'} {fmtBRL(Number(m.valor))}
-                </span>
-                <span className="text-gray-500 truncate flex-1">{m.motivo || '—'}</span>
-                <span className="text-gray-600">{fmtHora(m.created_at)}</span>
-              </li>
-            ))}
-          </ul>
-        </details>
-      )}
-    </motion.div>
-  ) : (
-    /* ── CAIXA FECHADO ── */
-    <motion.div initial={{ opacity: 0, scale: 0.97 }} animate={{ opacity: 1, scale: 1 }}
-      className="neu-flat rounded-3xl p-6 border border-white/5 flex flex-col gap-4">
-      <div className="flex items-center gap-3">
-        <div className="w-12 h-12 rounded-2xl neu-pressed flex items-center justify-center shrink-0">
-          <Lock size={22} className="text-gray-500" />
+          </FormField>
         </div>
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 mb-1 flex-wrap">
-            <FilialBadge filial={filial} />
-            <span className="text-[10px] font-black uppercase tracking-widest text-gray-500">Fechado</span>
-          </div>
-          <p className="text-xs text-gray-400">Aguardando a abertura do turno.</p>
-        </div>
-      </div>
-
-      {/* Quem abre o caixa é o OPERADOR, na tela do PDV: é ele que conta o
-          fundo de troco e assume a gaveta. O Financeiro acompanha, confere e
-          responde pela diferença — como na frente de loja de verdade, onde o
-          supervisor não abre o caixa de ninguém. O aviso de abertura e de
-          fechamento chega aqui pelo sino (migr. 581). */}
-      <div className="neu-pressed rounded-2xl p-4 flex items-start gap-3">
-        <Info size={15} className="text-accent shrink-0 mt-0.5" />
-        <p className="text-xs text-gray-400 leading-relaxed">
-          A abertura é do <span className="text-gray-200 font-bold">operador</span>, na tela do
-          <span className="text-gray-200 font-bold"> PDV</span> — é ele que conta o fundo de troco e
-          assume a gaveta. Aqui o Financeiro acompanha, confere e fecha.
-          <br />
-          Você recebe um aviso quando o caixa abrir e outro quando fechar, com a diferença apurada.
-        </p>
-      </div>
-    </motion.div>
+      </ModalFormulario>
+    </SecaoFormulario>
   );
 };
+
+type SaldoFilial = { capital_total: number; despesas_pagas: number; saldo_livre: number; bloqueado: boolean };
+
+// Capital / Gastos / Saldo livre — espelha o cabeçalho de Financeiro → Capital,
+// para quem cuida do caixa saber quanto ainda tem antes de aprovar despesas.
+const SaudeCard = ({ saldo }: { saldo: SaldoFilial }) => (
+  <SecaoFormulario titulo="Saúde financeira" icon={Landmark} cor="dourado"
+    extra={saldo.bloqueado ? <span className="px-2 py-0.5 rounded bg-red-600 text-white">Bloqueado</span> : undefined}>
+    <div className="flex flex-col gap-3">
+      <Kpi rotulo="Capital" valor={fmtBRL(saldo.capital_total)} cor="text-accent" icon={Landmark} />
+      <Kpi rotulo="Gastos" valor={fmtBRL(saldo.despesas_pagas)} cor="text-red-400" icon={TrendingDown} />
+      <Kpi rotulo="Saldo livre" valor={fmtBRL(saldo.saldo_livre)} cor={saldo.bloqueado ? 'text-red-400' : 'text-green-400'} icon={Wallet} />
+    </div>
+  </SecaoFormulario>
+);
+
+const POR_PAGINA_HIST = 20;
 
 export const ControleCaixaView = ({ showToast, profile }: { showToast: any; profile: UserProfile }) => {
   // Guard: caixa é financeiro+vendas, ou gerente (cobre a própria filial
@@ -566,7 +550,8 @@ export const ControleCaixaView = ({ showToast, profile }: { showToast: any; prof
   // Saldo consolidado (capital + gastos + saldo livre) por filial visível.
   // Vem da RPC calcular_saldo_capital — mesma fonte usada em FilialCapitalView
   // pra evitar divergência entre as duas telas.
-  const [saldosMap, setSaldosMap] = useState<Record<string, { capital_total: number; despesas_pagas: number; saldo_livre: number; bloqueado: boolean }>>({});
+  const [saldosMap, setSaldosMap] = useState<Record<string, SaldoFilial>>({});
+  const [paginaHist, setPaginaHist] = useState(0);
 
   const today = todayBR();
 
@@ -603,7 +588,7 @@ export const ControleCaixaView = ({ showToast, profile }: { showToast: any; prof
 
   // Chama a RPC calcular_saldo_capital pra cada filial visível em paralelo.
   // Se qualquer chamada falhar (RLS, RPC ausente na turma), a filial simplesmente
-  // some do bloco de cards — não vale bloquear o resto da tela.
+  // fica sem a coluna de saúde — não vale bloquear o resto da tela.
   useEffect(() => {
     if (!supabase || filiaisVisiveis.length === 0) { setSaldosMap({}); return; }
     let cancelado = false;
@@ -620,7 +605,7 @@ export const ControleCaixaView = ({ showToast, profile }: { showToast: any; prof
         }] as const;
       }));
       if (cancelado) return;
-      const map: Record<string, { capital_total: number; despesas_pagas: number; saldo_livre: number; bloqueado: boolean }> = {};
+      const map: Record<string, SaldoFilial> = {};
       for (const e of entries) if (e) map[e[0]] = e[1];
       setSaldosMap(map);
     })();
@@ -668,147 +653,95 @@ export const ControleCaixaView = ({ showToast, profile }: { showToast: any; prof
 
   if (caixaLoading) return <div className="flex-1 flex items-center justify-center"><LoadingSpinner /></div>;
 
+  const paginaHistOk = Math.min(paginaHist, Math.max(0, Math.ceil(historico.length / POR_PAGINA_HIST) - 1));
+  const paginaVista = historico.slice(paginaHistOk * POR_PAGINA_HIST, (paginaHistOk + 1) * POR_PAGINA_HIST);
+
   return (
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col h-full gap-6 overflow-y-auto main-scrollbar pb-6">
 
-      {/* Título */}
       <div className="shrink-0">
         <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Controle de Caixa</h2>
       </div>
 
-      {/* Saúde financeira por filial — 3 mini-cards (Capital / Gastos / Saldo
-          Livre) espelhando o cabeçalho de Financeiro → Capital, pra o operador
-          do caixa saber quanto ainda tem antes de aprovar despesas. */}
-      {(() => {
-        const filiaisComSaldo = filiaisVisiveis.filter(f => f in saldosMap);
-        if (filiaisComSaldo.length === 0) return null;
-        return (
-          <div className={`shrink-0 grid gap-4 ${filiaisComSaldo.length === 1 ? 'grid-cols-1' : 'grid-cols-1 lg:grid-cols-2 xl:grid-cols-3'}`}>
-            {filiaisComSaldo.map(f => {
-              const s = saldosMap[f];
-              return (
-                <div key={f} className="neu-flat rounded-2xl p-4 border border-accent/10 flex flex-col gap-3">
-                  <div className="flex items-center justify-between">
-                    <FilialBadge filial={f} />
-                    {s.bloqueado && (
-                      <span className="text-[9px] font-black uppercase tracking-widest text-red-400 bg-red-500/10 px-2 py-0.5 rounded-full">
-                        Bloqueado
-                      </span>
-                    )}
-                  </div>
-                  <div className="grid grid-cols-3 gap-2">
-                    <div className="neu-pressed rounded-xl p-2.5 flex flex-col gap-1 border border-white/5">
-                      <div className="flex items-center gap-1.5">
-                        <Landmark size={11} className="text-accent" />
-                        <span className="text-[9px] font-black uppercase tracking-widest text-gray-500">Capital</span>
-                      </div>
-                      <span className="text-sm font-black text-accent tabular-nums truncate">{fmtBRL(s.capital_total)}</span>
-                    </div>
-                    <div className="neu-pressed rounded-xl p-2.5 flex flex-col gap-1 border border-white/5">
-                      <div className="flex items-center gap-1.5">
-                        <TrendingDown size={11} className="text-red-400" />
-                        <span className="text-[9px] font-black uppercase tracking-widest text-gray-500">Gastos</span>
-                      </div>
-                      <span className="text-sm font-black text-red-400 tabular-nums truncate">{fmtBRL(s.despesas_pagas)}</span>
-                    </div>
-                    <div className="neu-pressed rounded-xl p-2.5 flex flex-col gap-1 border border-white/5">
-                      <div className="flex items-center gap-1.5">
-                        <Wallet size={11} className={s.bloqueado ? 'text-red-400' : 'text-green-400'} />
-                        <span className="text-[9px] font-black uppercase tracking-widest text-gray-500">Saldo Livre</span>
-                      </div>
-                      <span className={`text-sm font-black tabular-nums truncate ${s.bloqueado ? 'text-red-400' : 'text-green-400'}`}>
-                        {fmtBRL(s.saldo_livre)}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        );
-      })()}
-
-      {/* Cards por filial */}
+      {/* Um bloco por unidade: o caixa do dia à esquerda, a saúde financeira
+          à direita. Separados, a saúde ocupava a largura toda e o caixa ficava
+          preso numa coluna estreita embaixo, com a tela vazia ao lado. */}
       {filiaisVisiveis.length === 0 ? (
         <div className="neu-flat rounded-3xl p-6 border border-white/5 text-center">
           <p className="text-sm text-gray-400">
             Sua filial atual (<span className="font-bold">{profile?.filial ?? '—'}</span>) não opera PDV. Peça ao admin para te associar a SuperMax, MaxLook ou TechMax.
           </p>
         </div>
-      ) : (
-        <div className={`shrink-0 grid gap-4 ${filiaisVisiveis.length === 1 ? 'grid-cols-1 max-w-md' : 'grid-cols-1 md:grid-cols-2 xl:grid-cols-3'}`}>
-          {filiaisVisiveis.map(f => (
+      ) : filiaisVisiveis.map(f => {
+        const saldo = saldosMap[f];
+        return (
+          <div key={f} className={`shrink-0 grid grid-cols-1 gap-4 ${saldo ? 'lg:grid-cols-[minmax(0,1fr)_19rem]' : ''}`}>
             <CaixaCard
-              key={f}
               filial={f}
               caixa={caixas[f]}
               showToast={showToast}
               profile={profile}
               onChanged={() => { refresh(); reload(); }}
             />
-          ))}
-        </div>
-      )}
+            {saldo && <SaudeCard saldo={saldo} />}
+          </div>
+        );
+      })}
 
-      {/* Histórico */}
-      <div className="neu-flat rounded-3xl p-6 border border-white/5 shrink-0">
-        <h3 className="text-sm font-bold text-gray-300 mb-5 flex items-center gap-2">
-          <ChevronDown size={14} className="text-gray-500" /> Histórico de Sessões
-        </h3>
-
+      <div className="shrink-0">
+      <SecaoFormulario titulo="Histórico de sessões" icon={History} cor="azul"
+        extra={historico.length > 0 ? `${historico.length} sess${historico.length === 1 ? 'ão' : 'ões'}` : undefined}>
         {histLoading ? (
           <div className="flex justify-center py-6"><LoadingSpinner /></div>
         ) : historico.length === 0 ? (
           <p className="text-sm text-gray-600 text-center py-6">Nenhuma sessão registrada.</p>
         ) : (
+          <>
           <div className="overflow-x-auto main-scrollbar">
-            <table className="tabela w-full text-left border-collapse min-w-[920px]">
+            <table className="tabela w-full text-left border-collapse min-w-[860px]">
               <thead>
-                <tr className="border-b border-white/10 text-[10px] text-gray-500 uppercase tracking-widest">
-                  <th className="pb-3 font-bold px-4">Data</th>
-                  <th className="pb-3 font-bold px-4">Filial</th>
-                  <th className="pb-3 font-bold px-4 text-right">Abertura</th>
-                  <th className="pb-3 font-bold px-4">Aberto por</th>
-                  <th className="pb-3 font-bold px-4 text-center">Hora Abert.</th>
-                  <th className="pb-3 font-bold px-4 text-center">Hora Fech.</th>
-                  <th className="pb-3 font-bold px-4">Fechado por</th>
-                  <th className="pb-3 font-bold px-4 text-center">Status</th>
-                  <th className="pb-3 font-bold px-4 text-center">Origem</th>
-                  <th className="pb-3 font-bold px-4 text-right">Ações</th>
+                <tr className={CABECALHO_TABELA}>
+                  <th className="text-center w-28">Data</th>
+                  <th className="text-center w-32">Unidade</th>
+                  <th className="text-center w-32">Abertura</th>
+                  <th className="text-center w-36">Turno</th>
+                  <th className="text-center">Responsáveis</th>
+                  <th className="text-center w-40">Status</th>
+                  <th className="text-center w-28">Origem</th>
+                  <th className="text-center w-px">Ações</th>
                 </tr>
               </thead>
               <tbody>
-                {historico.map((h: any) => {
+                {paginaVista.map((h: any) => {
                   const podeReabrir = (h.status === 'Fechado' || h.status === 'Suspenso') && h.data === today
                     && (FILIAIS_OPERACIONAIS as readonly string[]).includes(h.filial)
                     && !caixas[h.filial as FilialOperacional];
                   return (
-                    <tr key={h.id} className="border-b border-white/5 hover:bg-white/5 transition-colors group">
-                      <td className="py-3 px-4 text-xs font-mono text-gray-400">{fmtData(h.data)}</td>
-                      <td className="py-3 px-4"><FilialBadge filial={h.filial} /></td>
-                      <td className="py-3 px-4 text-xs font-mono text-gray-200 text-right font-bold">{fmtBRL(Number(h.valor_abertura))}</td>
-                      <td className="py-3 px-4 text-xs text-gray-400">{h.aberto_por_nome ?? '—'}</td>
-                      <td className="py-3 px-4 text-xs font-mono text-center text-gray-500">{fmtHora(h.aberto_em)}</td>
-                      <td className="py-3 px-4 text-xs font-mono text-center text-gray-500">{fmtHora(h.fechado_em)}</td>
-                      <td className="py-3 px-4 text-xs text-gray-400">{h.fechado_por_nome ?? '—'}</td>
-                      <td className="py-3 px-4 text-center">
-                        <span
-                          className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${h.status === 'Aberto' ? 'bg-emerald-500/15 text-emerald-500' : h.status === 'Suspenso' ? 'bg-yellow-500/15 text-yellow-500' : 'text-gray-500'}`}
-                          style={h.status !== 'Aberto' && h.status !== 'Suspenso' ? { background: 'var(--color-badge-neutral-bg)' } : {}}
-                        >{h.status}</span>
+                    <tr key={h.id} className="border-b border-accent/10 hover:bg-accent/[0.04] transition-colors align-middle">
+                      <td className="py-3 px-3 text-sm font-semibold text-gray-100 font-mono whitespace-nowrap">{h.data ? fmtData(h.data) : '—'}</td>
+                      <td className="py-3 px-3 text-center"><FilialBadge filial={h.filial} /></td>
+                      <td className="py-3 px-3 text-center text-sm font-bold text-gray-100 tabular-nums">{fmtBRL(Number(h.valor_abertura ?? 0))}</td>
+                      <td className="py-3 px-3 text-center text-xs text-gray-300 font-mono whitespace-nowrap">
+                        {fmtHora(h.aberto_em)} <span className="text-gray-600">–</span> {fmtHora(h.fechado_em)}
                       </td>
-                      <td className="py-3 px-4 text-center">
+                      <td className="py-3 px-3 text-center text-[11px] leading-relaxed">
+                        <span className="block"><span className="text-gray-500">abriu </span><span className="text-gray-200">{h.aberto_por_nome ?? '—'}</span></span>
+                        <span className="block"><span className="text-gray-500">fechou </span><span className="text-gray-200">{h.fechado_por_nome ?? '—'}</span></span>
+                      </td>
+                      <td className="py-3 px-3 text-center"><StatusBadge status={h.status} /></td>
+                      <td className="py-3 px-3 text-center">
                         {h.origem_fechamento ? (
-                          <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${h.origem_fechamento === 'operador' ? 'bg-blue-500/15 text-blue-400' : 'text-gray-500'}`}
-                            style={h.origem_fechamento !== 'operador' ? { background: 'var(--color-badge-neutral-bg)' } : {}}>
+                          <span className={`inline-block px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-widest text-white ${h.origem_fechamento === 'operador' ? 'bg-blue-600' : 'bg-zinc-600'}`}>
                             {h.origem_fechamento === 'operador' ? 'PDV' : 'Financeiro'}
                           </span>
-                        ) : <span className="text-gray-600 text-[10px]">—</span>}
+                        ) : <span className="text-gray-600 text-xs">—</span>}
                       </td>
-                      <td className="py-3 px-4 text-right">
-                        <div className="flex justify-center items-center gap-1.5">
+                      <td className="py-3 px-3">
+                        <div className="flex justify-center items-center gap-1.5 flex-nowrap whitespace-nowrap">
                           {podeReabrir && (
-                            <button onClick={() => setReabrirAlvo(h)} title="Reabrir caixa" className="action-btn-warning"><RotateCcw size={12} /></button>
+                            <button onClick={() => setReabrirAlvo(h)} title="Reabrir caixa" aria-label="Reabrir caixa" className="action-btn-laranja">
+                              <RotateCcw size={13} />
+                            </button>
                           )}
                           <MenuMais>
                             {fechar => (
@@ -829,7 +762,11 @@ export const ControleCaixaView = ({ showToast, profile }: { showToast: any; prof
               </tbody>
             </table>
           </div>
+          <Pagination page={paginaHistOk} totalCount={historico.length} pageSize={POR_PAGINA_HIST}
+            onPrev={() => setPaginaHist(Math.max(0, paginaHistOk - 1))} onNext={() => setPaginaHist(paginaHistOk + 1)} />
+          </>
         )}
+      </SecaoFormulario>
       </div>
 
       <AnimatePresence>

@@ -1,11 +1,13 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
-  Landmark, Plus, X, AlertTriangle, ShieldAlert, CheckCircle,
-  XCircle, Clock, CreditCard, Info, Calculator, Check, TrendingDown,
+  Landmark, Plus, X, AlertTriangle, ShieldAlert,
+  CreditCard, Info, Calculator, Check, TrendingDown,
+  BarChart3, PiggyBank, HandCoins, CalendarClock,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
-import { LoadingSpinner, NeuButtonAccent } from '../components/ui';
+import { LoadingSpinner, NeuButtonAccent, EmptyState, CardContador, AbaComContador, type CorAba, SecaoFormulario, ModalFormulario, FormField, StatusBadge } from '../components/ui';
+import { CABECALHO_TABELA } from '../components/MenuMais';
 import { useFetchData } from '../hooks/useSupabaseData';
 import { PeriodoCapitalAviso } from '../components/PeriodoCapitalAviso';
 import { AplicacoesPanel } from '../components/AplicacoesPanel';
@@ -84,6 +86,10 @@ const BRL = (v: number) =>
 
 const fmtDate = (iso: string) =>
   new Date(iso).toLocaleDateString('pt-BR', { timeZone: 'America/Rio_Branco' });
+// Coluna `date` ('YYYY-MM-DD'): sem `new Date()`, que traria o fuso de volta.
+const fmtData = (d: string) => d.split('-').reverse().join('/');
+
+type AbaCapital = 'resultado' | 'aplicacoes' | 'emprestimos' | 'parcelas' | 'lucro';
 
 function podesolicitarEmprestimo(p: UserProfile | null, filial: string) {
   if (!p) return false;
@@ -254,6 +260,7 @@ export function FilialCapitalView({
   const [antecipandoId, setAntecipandoId] = useState<string | null>(null);
   const [antecipaBankId, setAntecipaBankId] = useState('');
   const [antecipaSaving, setAntecipaSaving] = useState(false);
+  const [aba, setAba] = useState<AbaCapital>('resultado');
 
   const { data: emprestimos = [], isLoading: loadingEmp, reload: reloadEmp } =
     useFetchData<Emprestimo>('emprestimos_filial', { filial }, false);
@@ -348,12 +355,6 @@ export function FilialCapitalView({
     }
   };
 
-  const statusIcon = (s: string) => {
-    if (s === 'Aprovado') return <CheckCircle size={13} className="text-green-400" />;
-    if (s === 'Negado')   return <XCircle size={13} className="text-red-400" />;
-    return <Clock size={13} className="text-yellow-400" />;
-  };
-
   if (!filial) {
     return (
       <div className="flex items-center justify-center h-40 text-sm text-gray-500">
@@ -362,12 +363,50 @@ export function FilialCapitalView({
     );
   }
 
+  const parcelaAntecipando = parcelasPendentes.find(p => p.id === antecipandoId) ?? null;
+  const empAntecipando = parcelaAntecipando ? empAprovados.find(e => e.id === parcelaAntecipando.emprestimo_id) : undefined;
+  const taxaAntecipando = Number(empAntecipando?.taxa_juros ?? 0) / 100;
+  const mesesAntecipando = parcelaAntecipando ? mesesCheiosAte(parcelaAntecipando.data_vencimento, hoje) : 0;
+  const pvAntecipando = parcelaAntecipando && taxaAntecipando > 0
+    ? Math.round((parcelaAntecipando.valor_parcela / Math.pow(1 + taxaAntecipando, mesesAntecipando)) * 100) / 100
+    : null;
+  const descontoAntecipando = parcelaAntecipando && pvAntecipando !== null
+    ? Math.round((parcelaAntecipando.valor_parcela - pvAntecipando) * 100) / 100
+    : null;
+
+  const temVencida = parcelasPendentes.some(p => p.data_vencimento < hoje);
+  const totalDistribuido = distribuicoes.reduce((a, d) => a + Number(d.valor ?? 0), 0);
+  const pctLivre = saldo && saldo.capital_total > 0 ? Math.max(0, saldo.saldo_livre / saldo.capital_total * 100) : 0;
+
+  // Na ordem da pergunta: como vou (resultado), tenho sobra parada
+  // (aplicações), preciso de dinheiro (empréstimos), o que devo (parcelas), o
+  // que já mandei para a Matriz (lucro).
+  const ABAS: { id: AbaCapital; label: string; cor: CorAba; n?: number; alerta?: boolean; icon: any }[] = [
+    { id: 'resultado',   label: 'Resultado',   cor: 'azul',    icon: BarChart3 },
+    { id: 'aplicacoes',  label: 'Aplicações',  cor: 'roxo',    icon: PiggyBank },
+    { id: 'emprestimos', label: 'Empréstimos', cor: 'amarelo', icon: CreditCard, n: emprestimos.length, alerta: empPendentes.length > 0 },
+    { id: 'parcelas',    label: 'Parcelas',    cor: 'laranja', icon: CalendarClock, n: parcelasPendentes.length, alerta: temVencida },
+    { id: 'lucro',       label: 'Lucro distribuído', cor: 'verde', icon: HandCoins, n: distribuicoes.length },
+  ];
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.3 }}
-      className="flex flex-col gap-5 pb-16"
+      className="flex flex-col gap-6 pb-16"
     >
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight flex items-center gap-2">
+          <Landmark size={26} /> Capital — {filial}
+        </h2>
+        {saldo?.data_inicio && (
+          <span className="text-xs text-gray-400 px-3 py-1.5 rounded-lg bg-white/5">
+            Período {dataSimplesBR(saldo.data_inicio)}
+            {saldo.data_fim ? ` a ${dataSimplesBR(saldo.data_fim)}` : ', sem prazo'}
+          </span>
+        )}
+      </div>
+
       {/* Diagnóstico visível quando a RPC falhou — evita "traços silenciosos". */}
       {!loadingSaldo && !saldo && saldoErr && (
         <div className="neu-flat rounded-2xl border border-red-500/30 bg-red-500/5 p-4 flex items-start gap-3">
@@ -375,10 +414,6 @@ export function FilialCapitalView({
           <div className="flex-1 min-w-0">
             <p className="text-sm font-bold text-red-300">Não consegui calcular o Capital de {filial}.</p>
             <p className="text-[11px] text-red-400/80 mt-1 font-mono break-words">{saldoErr}</p>
-            <p className="text-[11px] text-gray-500 mt-2 leading-relaxed">
-              Causas comuns: (a) a migração <span className="font-mono text-gray-400">177_20260710c_capital_efetivo.sql</span> ainda não foi aplicada no Supabase;
-              (b) o SQL Editor está apontando pra outro projeto; (c) a RLS de <span className="font-mono text-gray-400">capital_filial</span> não deixou a RPC ler o aporte.
-            </p>
           </div>
         </div>
       )}
@@ -391,365 +426,310 @@ export function FilialCapitalView({
         />
       )}
 
-      {/* Card principal de saldo */}
-      {loadingSaldo ? (
-        <LoadingSpinner />
-      ) : (
-        <div className={`neu-flat rounded-3xl border ${saldo?.bloqueado ? 'border-red-500/30' : 'border-accent/20'} overflow-hidden`}>
-          <div className={`p-5 ${saldo?.bloqueado ? 'bg-red-500/10' : 'bg-accent/5'} border-b border-white/5`}>
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-2">
-                <Landmark size={15} className={saldo?.bloqueado ? 'text-red-400' : 'text-accent'} />
-                <span className="text-[10px] font-black uppercase tracking-widest text-gray-500">Capital — {filial}</span>
-              </div>
-              {saldo?.bloqueado && (
-                <span className="flex items-center gap-1 text-[10px] font-bold text-red-400 bg-red-500/10 px-2 py-1 rounded-full">
-                  <ShieldAlert size={10} /> BLOQUEADO
-                </span>
-              )}
-            </div>
-
-            <div className="grid grid-cols-2 gap-4 mb-4">
-              <div className="contador contador--azul rounded-xl p-3">
-                <span className="text-[10px] uppercase tracking-widest text-gray-500">Capital Total</span>
-                <p className="text-2xl font-black text-accent tabular-nums mt-0.5">
-                  {saldo ? BRL(saldo.capital_total) : '—'}
-                </p>
-              </div>
-              <div className={`contador ${saldo?.bloqueado ? "contador--vermelho" : "contador--verde"} rounded-xl p-3`}>
-                <span className="text-[10px] uppercase tracking-widest text-gray-500">Saldo Livre</span>
-                <p className={`text-2xl font-black tabular-nums mt-0.5 ${saldo?.bloqueado ? 'text-red-400' : 'text-green-400'}`}>
-                  {saldo ? BRL(saldo.saldo_livre) : '—'}
-                </p>
-              </div>
-              <div>
-                <span className="text-[10px] uppercase tracking-widest text-gray-500">Gasto (despesas pagas)</span>
-                <p className="text-sm font-bold text-gray-300 tabular-nums mt-0.5">
-                  {saldo ? BRL(saldo.despesas_pagas) : '—'}
-                </p>
-              </div>
-              <div>
-                <span className="text-[10px] uppercase tracking-widest text-gray-500">Receita recebida</span>
-                <p className="text-sm font-bold text-green-300 tabular-nums mt-0.5">
-                  {saldo ? BRL(saldo.receitas_pagas) : '—'}
-                </p>
-              </div>
-            </div>
-
-            {saldo && (
-              <>
-                <HealthBar saldo={saldo.saldo_livre} total={saldo.capital_total} />
-                <div className="flex justify-between text-[10px] text-gray-500 mt-1">
-                  <span>
-                    {saldo.capital_total > 0
-                      ? `${Math.max(0, (saldo.saldo_livre / saldo.capital_total * 100)).toFixed(0)}% disponível`
-                      : 'Sem capital'}
-                  </span>
-                  {saldo.reserva_pct > 0 && (
-                    <span>Reserva obrigatória: {BRL(saldo.reserva_valor)} ({saldo.reserva_pct}%)</span>
-                  )}
-                </div>
-                {saldo.data_inicio && (
-                  <p className="text-[10px] text-gray-600 mt-2">
-                    Período: {dataSimplesBR(saldo.data_inicio)}
-                    {saldo.data_fim ? ` → ${dataSimplesBR(saldo.data_fim)}` : ' → sem prazo'}
-                  </p>
-                )}
-              </>
+      {/* O que se veio ver, sempre à vista; o resto vai para as abas. */}
+      {loadingSaldo ? <LoadingSpinner /> : saldo && (
+        <div className="flex flex-col gap-3">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            <CardContador label="Capital total" value={BRL(saldo.capital_total)} tom="azul" />
+            <CardContador label="Saldo livre" value={BRL(saldo.saldo_livre)} tom={saldo.bloqueado ? 'vermelho' : 'verde'}
+              sub={saldo.capital_total > 0 ? `${pctLivre.toFixed(0)}% do capital` : 'Sem capital'} />
+            <CardContador label="Gastos pagos" value={BRL(saldo.despesas_pagas)} tom="laranja" />
+            <CardContador label="Receita recebida" value={BRL(saldo.receitas_pagas)} tom="verde" />
+          </div>
+          <div className="flex flex-col gap-1">
+            <HealthBar saldo={saldo.saldo_livre} total={saldo.capital_total} />
+            {saldo.reserva_pct > 0 && (
+              <span className="text-[10px] text-gray-500 self-end">
+                Reserva obrigatória: {BRL(saldo.reserva_valor)} ({saldo.reserva_pct}%)
+              </span>
             )}
           </div>
-
-          {/* Alertas */}
-          {saldo?.bloqueado && (
-            <div className="px-5 py-3 flex items-start gap-2 bg-red-500/5">
-              <AlertTriangle size={14} className="text-red-400 shrink-0 mt-0.5" />
-              <p className="text-xs text-red-300">
-                Capital estourado. Novos lançamentos de despesas estão bloqueados. Solicite um empréstimo ou aguarde aporte da Matriz.
-              </p>
+          {saldo.bloqueado && (
+            <div className="rounded-xl px-4 py-2.5 flex items-center gap-2 bg-red-600 text-white">
+              <ShieldAlert size={15} className="shrink-0" />
+              <p className="text-xs font-bold">Capital estourado: despesas novas estão bloqueadas. Peça empréstimo ou aguarde aporte da Matriz.</p>
             </div>
           )}
-          {saldo?.em_reserva && (
-            <div className="px-5 py-3 flex items-start gap-2 bg-yellow-500/5">
-              <AlertTriangle size={14} className="text-yellow-400 shrink-0 mt-0.5" />
-              <p className="text-xs text-yellow-300">
-                Você invadiu a reserva mínima ({BRL(saldo.reserva_valor)}). Lançamentos ainda são permitidos, mas monitore o caixa.
-              </p>
+          {!saldo.bloqueado && saldo.em_reserva && (
+            <div className="rounded-xl px-4 py-2.5 flex items-center gap-2 bg-yellow-500 text-black">
+              <AlertTriangle size={15} className="shrink-0" />
+              <p className="text-xs font-bold">Dentro da reserva mínima ({BRL(saldo.reserva_valor)}): ainda dá para lançar, mas acompanhe o caixa.</p>
             </div>
           )}
         </div>
       )}
 
-      {/* DRE contábil — leitura vertical de cima pra baixo:
-          Receita Bruta → (-) Despesas Operacionais = LUCRO OPERACIONAL,
-          depois (-) Despesas Financeiras e (-) Reserva = LUCRO LÍQUIDO.
-          Duas linhas de fecho ficam destacadas com fundo pra distinguir. */}
-      {saldo && (
-        <div className="neu-flat rounded-3xl p-5 border border-accent/20 flex flex-col gap-1">
-          <div className="flex items-center gap-2 mb-3">
-            <span className="text-[10px] font-black uppercase tracking-widest text-gray-500">DRE do Período</span>
-          </div>
+      <div className="flex gap-3 flex-wrap" role="tablist">
+        {ABAS.map(a => (
+          <AbaComContador key={a.id} label={a.label} n={a.n} cor={a.cor} icon={a.icon}
+            alerta={a.alerta} ativa={aba === a.id} onClick={() => setAba(a.id)} />
+        ))}
+      </div>
 
-          {/* Acima da linha operacional */}
-          <div className="flex justify-between items-baseline py-2">
-            <span className="text-xs text-gray-300">Receita Bruta</span>
-            <span className="text-sm font-bold text-green-400 tabular-nums">{BRL(saldo.receitas_pagas)}</span>
-          </div>
-          <div className="flex justify-between items-baseline py-2 border-b border-white/5">
-            <span className="text-xs text-gray-300">(−) Despesas Operacionais</span>
-            <span className="text-sm font-bold text-red-400 tabular-nums">{BRL(saldo.despesas_operacionais)}</span>
-          </div>
-
-          {/* Lucro Operacional — subtotal em destaque */}
-          <div className={`flex justify-between items-baseline py-2.5 px-3 my-1 rounded-xl ${
-            saldo.lucro_operacional >= 0 ? 'bg-accent/5' : 'bg-orange-500/10'
-          }`}>
-            <span className="text-xs font-bold uppercase tracking-widest text-gray-400">
-              {saldo.lucro_operacional >= 0 ? 'Lucro Operacional' : 'Prejuízo Operacional'}
-            </span>
-            <span className={`text-base font-black tabular-nums ${
-              saldo.lucro_operacional >= 0 ? 'text-accent' : 'text-orange-400'
-            }`}>
-              {BRL(saldo.lucro_operacional)}
-            </span>
-          </div>
-
-          {/* Abaixo da linha operacional */}
-          <div className="flex justify-between items-baseline py-2">
-            <span className="text-xs text-gray-300">(−) Despesas Financeiras <span className="text-gray-500">(juros do empréstimo)</span></span>
-            <span className="text-sm font-bold text-red-400 tabular-nums">{BRL(saldo.despesas_financeiras)}</span>
-          </div>
-          <div className="flex justify-between items-baseline py-2 border-b border-white/5">
-            <span className="text-xs text-gray-300">
-              (−) Reserva Obrigatória <span className="text-gray-500">({saldo.reserva_pct}%)</span>
-            </span>
-            <span className="text-sm font-bold text-yellow-300 tabular-nums">{BRL(saldo.reserva_valor)}</span>
-          </div>
-
-          {/* Lucro Líquido — total em destaque forte */}
-          <div className={`flex justify-between items-baseline py-3 px-3 mt-1 rounded-xl border ${
-            saldo.lucro_liquido >= 0
-              ? 'bg-green-500/10 border-green-500/30'
-              : 'bg-red-500/10 border-red-500/30'
-          }`}>
-            <span className={`text-sm font-black uppercase tracking-widest ${
-              saldo.lucro_liquido >= 0 ? 'text-green-300' : 'text-red-300'
-            }`}>
-              {saldo.lucro_liquido >= 0 ? 'Lucro Líquido' : 'Prejuízo Líquido'}
-            </span>
-            <span className={`text-xl font-black tabular-nums ${
-              saldo.lucro_liquido >= 0 ? 'text-green-400' : 'text-red-400'
-            }`}>
-              {BRL(saldo.lucro_liquido)}
-            </span>
-          </div>
-
-          <p className="text-[10px] text-gray-600 mt-2 leading-relaxed">
-            Lucro Operacional mede o resultado da operação em si.
-            Lucro Líquido desconta ainda o custo do capital emprestado e a reserva obrigatória —
-            é o que sobra de fato pra distribuir ou reinvestir.
-          </p>
-        </div>
+      {aba === 'resultado' && (
+        saldo ? (
+          <SecaoFormulario titulo="DRE do período" icon={BarChart3} cor="azul">
+            {/* Leitura de cima para baixo: receita, (−) operação = lucro
+                operacional; (−) juros e reserva = lucro líquido. */}
+            <div className="flex flex-col gap-1 max-w-3xl w-full mx-auto">
+              <div className="flex justify-between items-baseline py-2">
+                <span className="text-sm text-gray-300">Receita bruta</span>
+                <span className="text-sm font-bold text-green-400 tabular-nums">{BRL(saldo.receitas_pagas)}</span>
+              </div>
+              <div className="flex justify-between items-baseline py-2 border-b border-white/5">
+                <span className="text-sm text-gray-300">(−) Despesas operacionais</span>
+                <span className="text-sm font-bold text-red-400 tabular-nums">{BRL(saldo.despesas_operacionais)}</span>
+              </div>
+              <div className={`flex justify-between items-baseline py-2.5 px-3 my-1 rounded-xl ${saldo.lucro_operacional >= 0 ? 'bg-accent/10' : 'bg-orange-500/10'}`}>
+                <span className="text-xs font-black uppercase tracking-widest text-gray-300">
+                  {saldo.lucro_operacional >= 0 ? 'Lucro operacional' : 'Prejuízo operacional'}
+                </span>
+                <span className={`text-base font-black tabular-nums ${saldo.lucro_operacional >= 0 ? 'text-accent' : 'text-orange-400'}`}>
+                  {BRL(saldo.lucro_operacional)}
+                </span>
+              </div>
+              <div className="flex justify-between items-baseline py-2">
+                <span className="text-sm text-gray-300">(−) Despesas financeiras <span className="text-gray-500">(juros do empréstimo)</span></span>
+                <span className="text-sm font-bold text-red-400 tabular-nums">{BRL(saldo.despesas_financeiras)}</span>
+              </div>
+              <div className="flex justify-between items-baseline py-2 border-b border-white/5">
+                <span className="text-sm text-gray-300">(−) Reserva obrigatória <span className="text-gray-500">({saldo.reserva_pct}%)</span></span>
+                <span className="text-sm font-bold text-yellow-300 tabular-nums">{BRL(saldo.reserva_valor)}</span>
+              </div>
+              <div className={`flex justify-between items-baseline py-3 px-3 mt-1 rounded-xl ${saldo.lucro_liquido >= 0 ? 'bg-green-600' : 'bg-red-600'} text-white`}>
+                <span className="text-sm font-black uppercase tracking-widest">
+                  {saldo.lucro_liquido >= 0 ? 'Lucro líquido' : 'Prejuízo líquido'}
+                </span>
+                <span className="text-xl font-black tabular-nums">{BRL(saldo.lucro_liquido)}</span>
+              </div>
+            </div>
+          </SecaoFormulario>
+        ) : !loadingSaldo && <EmptyState message="Sem resultado para mostrar enquanto o capital não é calculado." />
       )}
 
-      {/* Aplicações (migr. 604) — antes dos empréstimos de propósito: a
-          pergunta "tenho sobra parada?" vem antes de "preciso pegar dinheiro?". */}
-      {filial && (
+      {/* Aplicações (migr. 604). */}
+      {aba === 'aplicacoes' && (
         <AplicacoesPanel
           filial={filial} profile={profile} showToast={showToast}
           onMovimentou={carregarSaldo}
         />
       )}
 
-      {/* Empréstimos */}
-      <div className="neu-flat rounded-3xl p-5 border border-accent/20 flex flex-col gap-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <CreditCard size={14} className="text-accent" />
-            <span className="text-[10px] font-black uppercase tracking-widest text-gray-500">Empréstimos Bancários</span>
-          </div>
-          {podesolicitarEmprestimo(profile, filial) && (
-            <button
-              onClick={() => setModalSolicitar(true)}
-              className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-xl bg-accent/10 text-accent border border-accent/20 hover:bg-accent/20 transition-colors"
-            >
-              <Plus size={12} /> Solicitar
-            </button>
-          )}
-        </div>
-
-        {loadingEmp ? (
-          <LoadingSpinner />
-        ) : emprestimos.length === 0 ? (
-          <p className="text-sm text-gray-500 text-center py-4">Nenhum empréstimo registrado.</p>
-        ) : (
-          <div className="flex flex-col gap-2">
-            {emprestimos.map(emp => (
-              <div key={emp.id} className="neu-pressed rounded-2xl p-3 flex flex-col gap-1.5">
-                <div className="flex items-center gap-2">
-                  {statusIcon(emp.status)}
-                  <span className="text-sm font-bold text-gray-100 tabular-nums">{BRL(emp.valor)}</span>
-                  <span className="text-xs text-gray-500">{emp.num_parcelas}x</span>
-                  {emp.taxa_juros > 0 && (
-                    <span className="text-xs text-gray-500">{qtdBR(emp.taxa_juros)}% a.m.</span>
-                  )}
-                  {emp.banco_nome && (
-                    <span className="text-xs text-gray-500 truncate ml-auto">{emp.banco_nome}</span>
-                  )}
-                  {emp.arquivado_em && (
-                    <span
-                      title={`Preservado no reset de ${fmtDate(emp.arquivado_em)}. Fica para consulta: as parcelas e os títulos daquela turma já não existem.`}
-                      className={`text-[10px] font-bold text-gray-400 bg-white/5 border border-white/10 px-2 py-0.5 rounded-full shrink-0 ${emp.banco_nome ? '' : 'ml-auto'}`}
-                    >
-                      Turma anterior
-                    </span>
-                  )}
-                </div>
-                <p className="text-[11px] text-gray-400 italic">"{emp.justificativa}"</p>
-                {emp.justificativa_resposta && (
-                  <p className="text-[11px] text-gray-500 border-t border-white/5 pt-1.5">
-                    Matriz: "{emp.justificativa_resposta}"
-                  </p>
-                )}
-                <div className="flex justify-between items-center gap-2 text-[10px] text-gray-600">
-                  <span>{fmtDate(emp.created_at)}</span>
-                  {emp.aprovado_por_nome && <span className="truncate">Analisado por: {emp.aprovado_por_nome}</span>}
-                  {/* A conta aberta: o aluno tem de conseguir refazer a parcela,
-                      não só ler o valor dela. */}
-                  {emp.status === 'Aprovado' && (
-                    <button
-                      onClick={() => setModalMemoria(emp)}
-                      className="ml-auto flex items-center gap-1 text-[10px] font-bold text-accent hover:underline shrink-0"
-                    >
-                      <Calculator size={11} /> Memória de cálculo
-                    </button>
-                  )}
-                </div>
+      {aba === 'emprestimos' && (
+        <SecaoFormulario titulo="Empréstimos bancários" icon={CreditCard} cor="amarelo"
+          extra={`${empAprovados.length} ativo${empAprovados.length === 1 ? '' : 's'} · ${empPendentes.length} em análise · ${empNegados.length} negado${empNegados.length === 1 ? '' : 's'}`}>
+          <div className="flex flex-col gap-4">
+            {podesolicitarEmprestimo(profile, filial) && (
+              <div className="flex justify-end">
+                <button type="button" onClick={() => setModalSolicitar(true)} className="btn-solido btn-solido--vermelho">
+                  <Plus size={14} /> Solicitar empréstimo
+                </button>
               </div>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {/* Parcelas em aberto */}
-      {parcelasPendentes.length > 0 && (
-        <div className="neu-flat rounded-3xl p-5 border border-orange-500/20 flex flex-col gap-3">
-          <span className="text-[10px] font-black uppercase tracking-widest text-orange-400">
-            Parcelas em Aberto ({parcelasPendentes.length})
-          </span>
-          {parcelasPendentes.map(p => {
-            const vencido = new Date(p.data_vencimento) < new Date();
-            const emp = empAprovados.find(e => e.id === p.emprestimo_id);
-            const i = Number(emp?.taxa_juros ?? 0) / 100;
-            const mesesAntecip = mesesCheiosAte(p.data_vencimento, hoje);
-            const elegivel = !vencido && i > 0 && mesesAntecip >= 1 && podeAntecipar(profile, filial);
-            const pv = elegivel ? Math.round((p.valor_parcela / Math.pow(1 + i, mesesAntecip)) * 100) / 100 : null;
-            const descontoPreview = pv !== null ? Math.round((p.valor_parcela - pv) * 100) / 100 : null;
-            return (
-              <div key={p.id} className="flex flex-col gap-0.5">
-                <div className="flex items-center justify-between text-sm gap-2">
-                  <span className="text-gray-400">Parcela {p.num_parcela}</span>
-                  <span className={`font-bold tabular-nums ${vencido ? 'text-red-400' : 'text-gray-200'}`}>
-                    {BRL(p.valor_parcela)}
-                  </span>
-                  <span className={`text-xs ${vencido ? 'text-red-400' : 'text-gray-500'}`}>
-                    {fmtDate(p.data_vencimento)}{vencido ? ' — VENCIDA' : ''}
-                  </span>
-                  {elegivel && antecipandoId !== p.id && (
-                    <button
-                      onClick={() => openAntecipar(p)}
-                      title="Pagar hoje, com desconto do juro que ainda não correu."
-                      className="neu-button py-1 px-2.5 rounded-lg text-[10px] font-bold text-accent hover:bg-accent/10 transition-colors flex items-center gap-1 shrink-0"
-                    >
-                      <TrendingDown size={11} /> Antecipar
-                    </button>
-                  )}
-                </div>
-                {/* Onde a aula acontece: da parcela, só o juro é custo. O
-                    resto é o próprio dinheiro voltando pra Matriz. */}
-                {p.juros !== null && (
-                  <span className="text-[10px] text-gray-600 tabular-nums">
-                    juros {BRL(p.juros)} · amortização {BRL(p.amortizacao ?? 0)}
-                    {p.saldo_devedor !== null && ` · resta ${BRL(p.saldo_devedor)}`}
-                  </span>
-                )}
-                <AnimatePresence>
-                  {antecipandoId === p.id && (
-                    <motion.div
-                      initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }}
-                      className="mt-1 flex flex-col gap-2 p-3 rounded-2xl"
-                      style={{ background: 'color-mix(in srgb, var(--color-accent) 5%, transparent)', border: '1px solid color-mix(in srgb, var(--color-accent) 18%, transparent)' }}
-                    >
-                      <p className="text-[11px] text-gray-400">
-                        Antecipando {mesesAntecip} mês(es): valor à vista{' '}
-                        <strong className="text-accent tabular-nums">{pv !== null ? BRL(pv) : '—'}</strong>
-                        {' '}— desconto de{' '}
-                        <strong className="text-emerald-300 tabular-nums">{descontoPreview !== null ? BRL(descontoPreview) : '—'}</strong>
-                        {' '}(juro que deixa de correr, {qtdBR(Number(emp?.taxa_juros ?? 0))}% a.m.). O cronograma das outras parcelas não muda.
-                      </p>
-                      <div className="flex flex-col sm:flex-row sm:items-end gap-2">
-                        <div className="flex flex-col gap-1 flex-1 min-w-0">
-                          <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest flex items-center gap-1.5">
-                            <Landmark size={11} /> Conta bancária de débito *
-                          </label>
-                          <SelectBusca
-                            compacto
-                            value={antecipaBankId}
-                            onChange={setAntecipaBankId}
-                            placeholder="Escolha a conta"
-                            opcoes={bancosAtivos.map((b: any) => opcaoBanco(b, { saldo: true }))}
-                          />
-                          {bancosAtivos.length === 0 && (
-                            <span className="text-[10px] text-yellow-400 mt-1">Nenhum caixa/banco ativo em {filial}.</span>
+            )}
+            {loadingEmp ? <LoadingSpinner /> : emprestimos.length === 0 ? (
+              <p className="text-sm text-gray-500 text-center py-6">Nenhum empréstimo registrado.</p>
+            ) : (
+              <div className="overflow-x-auto main-scrollbar">
+                <table className="tabela tabela--azul w-full text-left border-collapse min-w-[860px]">
+                  <thead>
+                    <tr className={CABECALHO_TABELA}>
+                      <th className="text-center">Finalidade</th>
+                      <th className="text-center w-36">Valor</th>
+                      <th className="text-center w-32">Condição</th>
+                      <th className="text-center w-40">Banco</th>
+                      <th className="text-center w-32">Situação</th>
+                      <th className="text-center w-28">Pedido em</th>
+                      <th className="text-center w-px">Ações</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {emprestimos.map(emp => (
+                      <tr key={emp.id} className="border-b border-accent/10 hover:bg-accent/[0.04] transition-colors align-middle">
+                        <td className="py-3 px-3 min-w-[22rem]">
+                          <span className="text-sm text-gray-100 line-clamp-2" title={emp.justificativa}>{emp.justificativa}</span>
+                          {emp.justificativa_resposta && (
+                            <span className="text-[11px] text-gray-500 mt-0.5 line-clamp-1" title={emp.justificativa_resposta}>
+                              Matriz{emp.aprovado_por_nome ? ` (${emp.aprovado_por_nome})` : ''}: {emp.justificativa_resposta}
+                            </span>
                           )}
-                        </div>
-                        <div className="flex gap-2">
-                          <button
-                            onClick={() => handleConfirmarAntecipacao(p)} disabled={antecipaSaving || !antecipaBankId}
-                            className="neu-button-accent py-2 px-4 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 disabled:opacity-50"
-                          >
-                            {antecipaSaving ? 'Antecipando...' : <><Check size={12} /> Confirmar</>}
-                          </button>
-                          <button onClick={closeAntecipar} className="neu-button py-2 px-3 rounded-xl text-xs text-gray-500 flex items-center justify-center gap-1">
-                            <X size={11} /> Cancelar
-                          </button>
-                        </div>
-                      </div>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
+                        </td>
+                        <td className="py-3 px-3 text-center text-sm font-bold text-gray-100 tabular-nums">{BRL(emp.valor)}</td>
+                        <td className="py-3 px-3 text-center text-xs text-gray-300 whitespace-nowrap">
+                          {emp.num_parcelas}x{emp.taxa_juros > 0 ? ` · ${qtdBR(emp.taxa_juros)}% a.m.` : ''}
+                        </td>
+                        <td className="py-3 px-3 text-center text-xs text-gray-300 whitespace-nowrap">{emp.banco_nome ?? '—'}</td>
+                        <td className="py-3 px-3 text-center">
+                          <div className="flex flex-col items-center gap-1">
+                            <StatusBadge status={emp.status === 'Pendente' ? 'Em Análise' : emp.status} />
+                            {emp.arquivado_em && (
+                              <span title={`Preservado no reset de ${fmtDate(emp.arquivado_em)}. As parcelas e os títulos daquela turma já não existem.`}
+                                className="text-[9px] font-bold uppercase tracking-widest text-gray-400">
+                                Turma anterior
+                              </span>
+                            )}
+                          </div>
+                        </td>
+                        <td className="py-3 px-3 text-center text-xs text-gray-400 font-mono">{fmtDate(emp.created_at)}</td>
+                        <td className="py-3 px-3">
+                          <div className="flex justify-center items-center gap-1.5">
+                            {/* A conta aberta: o aluno tem de conseguir refazer a
+                                parcela, não só ler o valor dela. */}
+                            {emp.status === 'Aprovado' ? (
+                              <button onClick={() => setModalMemoria(emp)} title="Memória de cálculo" aria-label="Memória de cálculo"
+                                className="action-btn-neutral">
+                                <Calculator size={13} />
+                              </button>
+                            ) : <span className="text-xs text-gray-600">—</span>}
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
-            );
-          })}
-        </div>
+            )}
+          </div>
+        </SecaoFormulario>
+      )}
+
+      {aba === 'parcelas' && (
+        <SecaoFormulario titulo="Parcelas em aberto" icon={CalendarClock} cor="laranja"
+          extra={parcelasPendentes.length > 0
+            ? `${BRL(parcelasPendentes.reduce((a, p) => a + Number(p.valor_parcela ?? 0), 0))} a pagar`
+            : undefined}>
+          {parcelasPendentes.length === 0 ? (
+            <p className="text-sm text-gray-500 text-center py-6">Nenhuma parcela em aberto.</p>
+          ) : (
+            <div className="overflow-x-auto main-scrollbar">
+              <table className="tabela w-full text-left border-collapse min-w-[760px]">
+                <thead>
+                  <tr className={CABECALHO_TABELA}>
+                    <th className="text-center">Parcela</th>
+                    <th className="text-center w-32">Vencimento</th>
+                    <th className="text-center w-36">Valor</th>
+                    <th className="text-center">Composição</th>
+                    <th className="text-center w-32">Situação</th>
+                    <th className="text-center w-px">Ações</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {parcelasPendentes.map(p => {
+                    const vencido = p.data_vencimento < hoje;
+                    const emp = empAprovados.find(e => e.id === p.emprestimo_id);
+                    const i = Number(emp?.taxa_juros ?? 0) / 100;
+                    const elegivel = !vencido && i > 0 && mesesCheiosAte(p.data_vencimento, hoje) >= 1 && podeAntecipar(profile, filial);
+                    return (
+                      <tr key={p.id} className="border-b border-accent/10 hover:bg-accent/[0.04] transition-colors align-middle">
+                        <td className="py-3 px-3">
+                          <span className="block text-sm font-semibold text-gray-100">Parcela {p.num_parcela}{emp ? ` de ${emp.num_parcelas}` : ''}</span>
+                          {emp && <span className="block text-[11px] text-gray-500">empréstimo de {BRL(emp.valor)}</span>}
+                        </td>
+                        <td className={`py-3 px-3 text-center text-xs font-mono ${vencido ? 'text-red-400 font-bold' : 'text-gray-300'}`}>{fmtData(p.data_vencimento)}</td>
+                        <td className={`py-3 px-3 text-center text-sm font-bold tabular-nums ${vencido ? 'text-red-400' : 'text-gray-100'}`}>{BRL(p.valor_parcela)}</td>
+                        {/* Da parcela, só o juro é custo; o resto é o próprio
+                            dinheiro voltando para a Matriz. */}
+                        <td className="py-3 px-3 text-center text-[11px] text-gray-400 tabular-nums">
+                          {p.juros !== null ? (
+                            <>
+                              <span className="block">juros {BRL(p.juros)} · amortização {BRL(p.amortizacao ?? 0)}</span>
+                              {p.saldo_devedor !== null && <span className="block text-gray-500">resta {BRL(p.saldo_devedor)}</span>}
+                            </>
+                          ) : '—'}
+                        </td>
+                        <td className="py-3 px-3 text-center"><StatusBadge status={vencido ? 'Vencido' : 'Pendente'} /></td>
+                        <td className="py-3 px-3">
+                          <div className="flex justify-center items-center gap-1.5">
+                            {elegivel ? (
+                              <button onClick={() => openAntecipar(p)}
+                                title="Antecipar: pagar hoje, com desconto do juro que ainda não correu" aria-label="Antecipar parcela"
+                                className="action-btn-verde">
+                                <TrendingDown size={13} />
+                              </button>
+                            ) : <span className="text-xs text-gray-600">—</span>}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </SecaoFormulario>
       )}
 
       {/* Lucro que foi para a Matriz. Não é despesa — o resultado da unidade
           continua o mesmo; o que mudou foi o caixa. */}
-      {distribuicoes.length > 0 && (
-        <div className="neu-flat rounded-3xl p-5 border border-accent/20 flex flex-col gap-3">
-          <div className="flex items-center justify-between gap-2">
-            <span className="text-[10px] font-black uppercase tracking-widest text-accent">
-              Lucro distribuído à Matriz
-            </span>
-            <span className="text-sm font-black text-gray-200 tabular-nums">
-              {BRL(distribuicoes.reduce((a, d) => a + Number(d.valor ?? 0), 0))}
-            </span>
-          </div>
-          {distribuicoes.map(d => (
-            <div key={d.id} className="flex items-center justify-between gap-3 text-sm">
-              <span className="text-gray-400 truncate flex-1 italic text-xs">
-                {d.observacao ?? 'Distribuição de resultado'}
-              </span>
-              <span className="font-bold text-gray-200 tabular-nums">{BRL(Number(d.valor))}</span>
-              <span className="text-xs text-gray-500">{fmtDate(d.created_at)}</span>
+      {aba === 'lucro' && (
+        <SecaoFormulario titulo="Lucro distribuído à Matriz" icon={HandCoins} cor="verde"
+          extra={distribuicoes.length > 0 ? `${BRL(totalDistribuido)} no total` : undefined}>
+          {distribuicoes.length === 0 ? (
+            <p className="text-sm text-gray-500 text-center py-6">Nenhuma distribuição de lucro ainda.</p>
+          ) : (
+            <div className="overflow-x-auto main-scrollbar">
+              <table className="tabela w-full text-left border-collapse min-w-[620px]">
+                <thead>
+                  <tr className={CABECALHO_TABELA}>
+                    <th className="text-center">Observação</th>
+                    <th className="text-center w-40">Decidido por</th>
+                    <th className="text-center w-36">Valor</th>
+                    <th className="text-center w-28">Data</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {distribuicoes.map(d => (
+                    <tr key={d.id} className="border-b border-accent/10 hover:bg-accent/[0.04] transition-colors align-middle">
+                      <td className="py-3 px-3 text-sm text-gray-200">{d.observacao ?? 'Distribuição de resultado'}</td>
+                      <td className="py-3 px-3 text-center text-xs text-gray-300">{d.decidido_por_nome ?? '—'}</td>
+                      <td className="py-3 px-3 text-center text-sm font-bold text-gray-100 tabular-nums">{BRL(Number(d.valor))}</td>
+                      <td className="py-3 px-3 text-center text-xs text-gray-400 font-mono">{fmtDate(d.created_at)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
-          ))}
-          <p className="text-[10px] text-gray-500 leading-relaxed">
-            Isto não é despesa: é o retorno de quem aportou o capital da unidade. O lucro
-            do período não muda — o caixa, sim.
-          </p>
-        </div>
+          )}
+        </SecaoFormulario>
       )}
+
+      <ModalFormulario
+        aberto={!!parcelaAntecipando}
+        largura="md"
+        titulo={parcelaAntecipando ? `Antecipar parcela ${parcelaAntecipando.num_parcela}` : 'Antecipar parcela'}
+        subtitulo={parcelaAntecipando ? `vence em ${fmtData(parcelaAntecipando.data_vencimento)}` : undefined}
+        onCancelar={closeAntecipar}
+        cancelarDesabilitado={antecipaSaving}
+        acoes={parcelaAntecipando && (
+          <NeuButtonAccent onClick={() => handleConfirmarAntecipacao(parcelaAntecipando)} isLoading={antecipaSaving}
+            disabled={!antecipaBankId}>
+            <Check size={14} /> Confirmar
+          </NeuButtonAccent>
+        )}
+      >
+        {parcelaAntecipando && (
+          <>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <CardContador label="Valor da parcela" value={BRL(parcelaAntecipando.valor_parcela)} tom="azul" />
+              <CardContador label="Paga hoje" value={pvAntecipando !== null ? BRL(pvAntecipando) : '—'} tom="amarelo"
+                sub={`${mesesAntecipando} ${mesesAntecipando === 1 ? 'mês' : 'meses'} antes`} />
+              <CardContador label="Desconto" value={descontoAntecipando !== null ? BRL(descontoAntecipando) : '—'} tom="verde"
+                sub={`juro de ${qtdBR(Number(empAntecipando?.taxa_juros ?? 0))}% a.m.`} />
+            </div>
+            <FormField label="Conta bancária de débito *">
+              <SelectBusca
+                value={antecipaBankId}
+                onChange={setAntecipaBankId}
+                placeholder="Escolha a conta"
+                opcoes={bancosAtivos.map((b: any) => opcaoBanco(b, { saldo: true }))}
+              />
+              {bancosAtivos.length === 0 && (
+                <span className="text-[11px] text-yellow-400 mt-1">Nenhum caixa/banco ativo em {filial}.</span>
+              )}
+            </FormField>
+            <p className="text-xs text-gray-500">O cronograma das outras parcelas não muda.</p>
+          </>
+        )}
+      </ModalFormulario>
 
       <AnimatePresence>
         {modalMemoria && (

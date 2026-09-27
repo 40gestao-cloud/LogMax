@@ -1,16 +1,16 @@
-import { MenuMais, ItemMenu } from '../components/MenuMais';
+import { MenuMais, ItemMenu, CABECALHO_TABELA } from '../components/MenuMais';
 import React, { useMemo, useState, useEffect } from 'react';
 import { todayBR } from '../lib/dates';
 import type { FilialOp } from '../components/FilialSelector';
 import { useFilial } from '../contexts/FilialContext';
 import { motion, AnimatePresence } from 'motion/react';
 import {
-  UserMinus, X, Calculator, RotateCcw, FileText, Loader2, AlertTriangle, DollarSign, CheckCircle, Clock,
-  Check, Ban, Send, Hourglass,
+  UserMinus, X, Calculator, RotateCcw, FileText, Loader2, DollarSign,
+  Check, Ban, Send, Hourglass, MessageSquareText,
 } from 'lucide-react';
 import { useFetchData } from '../hooks/useSupabaseData';
 import { supabase } from '../lib/supabase';
-import { LoadingSpinner, EmptyState, NeuButtonAccent, corDoStatus } from '../components/ui';
+import { LoadingSpinner, EmptyState, CardContador, AbaComContador, type CorAba, SecaoFormulario, ModalFormulario, FormField, StatusBadge } from '../components/ui';
 import { hasSetor } from '../lib/rbac';
 import { useConfirm } from '../contexts/ConfirmContext';
 import type { UserProfile } from '../hooks/useUserProfile';
@@ -38,12 +38,20 @@ const TIPOS = [
 
 type Tipo = typeof TIPOS[number];
 
-const TIPO_BADGE: Record<string, string> = {
-  'Sem justa causa':    'bg-blue-500/10   text-blue-400   border-blue-500/20',
-  'Com justa causa':    'bg-red-500/10    text-red-400    border-red-500/20',
-  'Pedido de demissão': 'bg-yellow-400/10 text-yellow-400 border-yellow-400/20',
-  'Acordo':             'bg-purple-500/10 text-purple-400 border-purple-500/20',
+const TIPO_SOLIDO: Record<string, string> = {
+  'Sem justa causa':    'bg-blue-600 text-white',
+  'Com justa causa':    'bg-red-600 text-white',
+  'Pedido de demissão': 'bg-yellow-400 text-black',
+  'Acordo':             'bg-purple-600 text-white',
 };
+const TIPO_BOTAO: Record<string, string> = {
+  'Sem justa causa':    'btn-solido--azul',
+  'Com justa causa':    'btn-solido--vermelho',
+  'Pedido de demissão': 'btn-solido--amarelo',
+  'Acordo':             'btn-solido--roxo',
+};
+
+type AbaDesl = 'pendentes' | 'desligados' | 'readmitidos' | 'recusados';
 
 /** O que cada tipo muda no bolso — a explicação é metade do valor da tela. */
 const TIPO_RESUMO: Record<string, string> = {
@@ -104,8 +112,6 @@ const fmtData = (s?: string | null) => {
   return `${d}/${m}/${y}`;
 };
 
-const statusCls = (s: string) => `${corDoStatus(s)} px-2 py-0.5 rounded`;
-
 const EMPTY = {
   funcionario_id: '',
   tipo: 'Sem justa causa' as Tipo,
@@ -134,6 +140,8 @@ const DesligamentosViewInner = ({ showToast, profile, filial }: {
   const [salvando, setSalvando] = useState(false);
   const [acaoId, setAcaoId] = useState<string | null>(null);
   const [detalhe, setDetalhe] = useState<{ nome: string; r: any } | null>(null);
+  const [formAberto, setFormAberto] = useState(false);
+  const [aba, setAba] = useState<AbaDesl | null>(null);
 
   // A decisão continua sendo da Matriz (migr. 307), mas a instrução do
   // processo passou a ser da filial (migr. 318): RH ou gerência montam a
@@ -258,6 +266,8 @@ const DesligamentosViewInner = ({ showToast, profile, filial }: {
       }
       setForm({ ...EMPTY, data_desligamento: todayBR() });
       setPreview(null);
+      setFormAberto(false);
+      setAba(podeDecidir ? 'desligados' : 'pendentes');
       await Promise.all([reloadDem(), reloadResc(), reloadFunc()]);
     } catch (err: any) {
       showToast(err?.message ?? 'Erro ao registrar.', 'error', true);
@@ -351,203 +361,121 @@ const DesligamentosViewInner = ({ showToast, profile, filial }: {
   const ativas = (demissoes ?? []).filter((d: any) => d.ativo && statusDe(d) === 'Aprovado');
   const readmitidos = (demissoes ?? []).filter((d: any) => !d.ativo && statusDe(d) !== 'Recusado');
   const recusados = (demissoes ?? []).filter((d: any) => !d.ativo && statusDe(d) === 'Recusado');
+  const aProcessar = ativas.filter((d: any) => rescisaoDe(d.id)?.status === 'Pendente').length;
+
+  const ABAS: { id: AbaDesl; label: string; cor: CorAba; n: number; icon: any }[] = [
+    { id: 'pendentes',   label: 'Aguardando decisão', cor: 'amarelo', n: pendentes.length,   icon: Hourglass },
+    { id: 'desligados',  label: 'Desligados',         cor: 'vermelho', n: ativas.length,     icon: UserMinus },
+    { id: 'readmitidos', label: 'Readmitidos',        cor: 'verde',   n: readmitidos.length, icon: RotateCcw },
+    { id: 'recusados',   label: 'Recusadas',          cor: 'cinza',   n: recusados.length,   icon: Ban },
+  ];
+  // Sem escolha do usuário, abre onde há trabalho: a fila, se tiver alguém nela.
+  const abaAtiva: AbaDesl = aba ?? (pendentes.length > 0 ? 'pendentes' : 'desligados');
+
+  const fecharForm = () => { setFormAberto(false); setForm({ ...EMPTY, data_desligamento: todayBR() }); setPreview(null); };
+
+  const TipoBadge = ({ tipo }: { tipo: string }) => (
+    <span className={`inline-block px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-widest whitespace-nowrap ${TIPO_SOLIDO[tipo] ?? 'bg-zinc-600 text-white'}`}>
+      {tipo}
+    </span>
+  );
 
   return (
-    <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col gap-5">
-      <div>
+    <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col gap-6">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Desligamento</h2>
+        {podeMontarProcesso && (
+          <button type="button" onClick={() => setFormAberto(true)} className="btn-solido btn-solido--vermelho !py-2.5 !px-5 !text-sm">
+            <UserMinus size={15} /> {podeDecidir ? 'Registrar desligamento' : 'Solicitar desligamento'}
+          </button>
+        )}
       </div>
 
-      {/* ── Formulário ─────────────────────────────────────────────────── */}
-      {podeMontarProcesso ? (
-        <div className="neu-flat rounded-3xl p-5 sm:p-6 border border-white/5">
-          <div className="flex items-center gap-2 mb-2">
-            <UserMinus size={16} className="text-accent" />
-            <h3 className="text-sm font-bold text-gray-300">
-              {podeDecidir ? 'Registrar desligamento' : 'Solicitar desligamento'}
-            </h3>
-          </div>
-          <p className="text-[11px] text-gray-500 mb-5 leading-relaxed">
-            {podeDecidir
-              ? 'Como Matriz, o registro é efetivado na hora — sem passar pela fila de aprovação.'
-              : 'A unidade monta o processo e a Matriz decide. Até a aprovação de admin/CEO nada muda para o colaborador: ele segue ativo e com acesso normal.'}
-          </p>
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <CardContador label="Aguardando decisão" value={pendentes.length} tom="amarelo" onClick={() => setAba('pendentes')} ativo={abaAtiva === 'pendentes'} />
+        <CardContador label="Desligados" value={ativas.length} tom="vermelho" onClick={() => setAba('desligados')} ativo={abaAtiva === 'desligados'} />
+        <CardContador label="Rescisões a processar" value={aProcessar} tom="laranja" onClick={() => setAba('desligados')} />
+        <CardContador label="Readmitidos" value={readmitidos.length} tom="verde" onClick={() => setAba('readmitidos')} ativo={abaAtiva === 'readmitidos'} />
+      </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="text-[10px] font-bold uppercase tracking-widest text-gray-500 block mb-1.5">Colaborador</label>
-              <SelectBusca
-                value={form.funcionario_id}
-                onChange={v => setForm(f => ({ ...f, funcionario_id: v }))}
-                placeholder="Escolha o colaborador"
-                opcoes={ativos.map((f: any) => opcaoFuncionario(f))}
-              />
-            </div>
-
-            <div>
-              <label className="text-[10px] font-bold uppercase tracking-widest text-gray-500 block mb-1.5">Data do desligamento</label>
-              <input
-                type="date"
-                value={form.data_desligamento}
-                max={todayBR()}
-                onChange={e => setForm(f => ({ ...f, data_desligamento: e.target.value }))}
-                className="neu-input w-full px-3 py-2.5 rounded-xl text-sm"
-              />
-            </div>
-
-            <div className="md:col-span-2">
-              <label className="text-[10px] font-bold uppercase tracking-widest text-gray-500 block mb-1.5">Tipo de desligamento</label>
-              <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
-                {TIPOS.map(t => (
-                  <button
-                    key={t}
-                    type="button"
-                    onClick={() => setTipo(t)}
-                    className={`px-3 py-2 rounded-xl text-[11px] font-bold border transition text-left ${
-                      form.tipo === t
-                        ? TIPO_BADGE[t] + ' ring-1 ring-inset ring-white/10'
-                        : 'border-white/5 text-gray-500 hover:text-gray-300 hover:border-white/15'
-                    }`}
-                  >
-                    {t}
-                  </button>
-                ))}
-              </div>
-              {/* A explicação é metade do conteúdo: o aluno precisa ver POR QUE
-                  um tipo rende menos que o outro, não só o total no fim. */}
-              <p className="text-[11px] text-gray-500 leading-relaxed mt-2">{TIPO_RESUMO[form.tipo]}</p>
-            </div>
-
-            <div>
-              <label className="text-[10px] font-bold uppercase tracking-widest text-gray-500 block mb-1.5">Aviso prévio</label>
-              <select
-                value={form.aviso_previo}
-                onChange={e => setForm(f => ({ ...f, aviso_previo: e.target.value }))}
-                className="neu-input w-full px-3 py-2.5 rounded-xl text-sm"
-              >
-                {AVISOS_POR_TIPO[form.tipo].map(a => <option key={a} value={a}>{a}</option>)}
-              </select>
-            </div>
-
-            <div className="md:col-span-2">
-              <label className="text-[10px] font-bold uppercase tracking-widest text-gray-500 block mb-1.5">
-                Motivo <span className="text-accent">*</span>
-              </label>
-              <textarea
-                rows={3}
-                value={form.motivo}
-                onChange={e => setForm(f => ({ ...f, motivo: e.target.value }))}
-                placeholder="Descreva o motivo. Fica registrado com seu nome e a data."
-                className="neu-input w-full px-3 py-2.5 rounded-xl text-sm resize-none"
-              />
-            </div>
-          </div>
-
-          {/* Preview do cálculo */}
-          {(calculando || preview) && (
-            <div className="mt-5 rounded-2xl border border-white/5 p-4 bg-white/[0.02]">
-              <div className="flex items-center gap-2 mb-3">
-                <Calculator size={13} className="text-accent" />
-                <h4 className="text-[11px] font-bold uppercase tracking-widest text-gray-400">Demonstrativo da rescisão</h4>
-                {calculando && <Loader2 size={12} className="animate-spin text-gray-500" />}
-              </div>
-              {preview && <Demonstrativo r={preview} />}
-            </div>
-          )}
-
-          <div className="flex justify-end mt-5">
-            <NeuButtonAccent variant="" onClick={handleDesligar} disabled={salvando || !form.funcionario_id || !form.motivo.trim()}>
-              {salvando
-                ? (podeDecidir ? 'Registrando…' : 'Enviando…')
-                : podeDecidir
-                  ? 'Registrar desligamento'
-                  : <><Send size={13} /> Enviar para aprovação da Matriz</>}
-            </NeuButtonAccent>
-          </div>
-        </div>
-      ) : (
-        <div className="neu-flat rounded-2xl p-4 border border-white/5 flex items-start gap-3">
-          <AlertTriangle size={15} className="text-yellow-400 shrink-0 mt-0.5" />
-          <p className="text-xs text-gray-400 leading-relaxed">
-            O processo de desligamento é montado pelo RH ou pela gerência da unidade e decidido por admin/CEO —
-            a mesma régua de "quem instrui não decide" que vale para afastamentos e compras. Você pode
-            acompanhar e processar as rescisões abaixo.
-          </p>
-        </div>
-      )}
+      <div className="flex gap-3 flex-wrap" role="tablist">
+        {ABAS.map(a => (
+          <AbaComContador key={a.id} label={a.label} n={a.n} cor={a.cor} icon={a.icon}
+            ativa={abaAtiva === a.id} onClick={() => setAba(a.id)} alerta={a.id === 'pendentes' && podeDecidir && a.n > 0} />
+        ))}
+      </div>
 
       {/* ── Fila de aprovação ──────────────────────────────────────────── */}
-      {pendentes.length > 0 && (
-        <div className="neu-flat rounded-3xl p-5 sm:p-6 border border-yellow-400/20">
-          <div className="flex items-center gap-2 mb-1">
-            <Hourglass size={15} className="text-yellow-400" />
-            <h3 className="text-sm font-bold text-gray-300">Aguardando decisão da Matriz</h3>
-            <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-yellow-400/10 text-yellow-400 border border-yellow-400/20">
-              {pendentes.length}
-            </span>
+      {abaAtiva === 'pendentes' && (
+        pendentes.length === 0 ? <EmptyState message="Nenhuma solicitação aguardando a Matriz." /> : (
+          <div className="neu-flat rounded-2xl p-4 sm:p-5 border border-white/5 overflow-x-auto main-scrollbar">
+            <table className="tabela w-full text-left border-collapse min-w-[860px]">
+              <thead>
+                <tr className={CABECALHO_TABELA}>
+                  <th className="text-center">Colaborador</th>
+                  <th className="text-center w-40">Tipo</th>
+                  <th className="text-center w-28">Data</th>
+                  <th className="text-center w-28">Aviso</th>
+                  <th className="text-center">Motivo</th>
+                  <th className="text-center w-px">Ações</th>
+                </tr>
+              </thead>
+              <tbody>
+                {pendentes.map((d: any) => {
+                  const busy = acaoId === d.id;
+                  return (
+                    <tr key={d.id} className="border-b border-accent/10 hover:bg-accent/[0.04] transition-colors align-middle">
+                      <td className="py-3 px-3 min-w-[12rem]">
+                        <span className="block text-sm font-semibold text-gray-100">{d.nome_funcionario ?? '—'}</span>
+                        <span className="block text-[11px] text-gray-500">pedido por {d.solicitado_por_nome ?? '—'}</span>
+                      </td>
+                      <td className="py-3 px-3 text-center"><TipoBadge tipo={d.tipo} /></td>
+                      <td className="py-3 px-3 text-center text-xs font-mono text-gray-300">{fmtData(d.data_desligamento)}</td>
+                      <td className="py-3 px-3 text-center text-xs text-gray-300">{d.aviso_previo}</td>
+                      <td className="py-3 px-3 text-center">
+                        <span className="text-xs text-gray-400 line-clamp-2 max-w-[22rem] mx-auto" title={d.motivo}>{d.motivo}</span>
+                      </td>
+                      <td className="py-3 px-3">
+                        <div className="flex justify-center items-center gap-1.5 flex-nowrap whitespace-nowrap">
+                          {podeDecidir ? (
+                            <>
+                              <button onClick={() => handleDecidir(d, true)} disabled={busy}
+                                title="Aprovar — calcula a rescisão e encerra o acesso" aria-label="Aprovar desligamento"
+                                className="action-btn-verde disabled:opacity-50">
+                                {busy ? <Loader2 size={13} className="animate-spin" /> : <Check size={14} />}
+                              </button>
+                              <button onClick={() => handleDecidir(d, false)} disabled={busy}
+                                title="Recusar — o colaborador segue ativo" aria-label="Recusar desligamento"
+                                className="action-btn-vermelho disabled:opacity-50">
+                                <Ban size={13} />
+                              </button>
+                            </>
+                          ) : <StatusBadge status="Pendente" />}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
-          <p className="text-[11px] text-gray-500 mb-4">
-            {podeDecidir
-              ? 'Aprovar calcula e grava a rescisão e encerra o acesso. Recusar encerra a solicitação sem nenhum efeito.'
-              : 'Enquanto está aqui, o colaborador segue ativo e com acesso normal.'}
-          </p>
-          <div className="flex flex-col gap-2">
-            {pendentes.map((d: any) => {
-              const busy = acaoId === d.id;
-              return (
-                <div key={d.id} className="rounded-2xl border border-white/5 bg-white/[0.02] p-3 flex flex-wrap items-start gap-3">
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-sm font-semibold text-gray-200">{d.nome_funcionario ?? '—'}</span>
-                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded border ${TIPO_BADGE[d.tipo] ?? ''}`}>{d.tipo}</span>
-                      <span className="text-[10px] font-mono text-gray-500">{fmtData(d.data_desligamento)}</span>
-                      <span className="text-[10px] text-gray-500">aviso: {d.aviso_previo}</span>
-                    </div>
-                    <p className="text-xs text-gray-400 mt-1 leading-snug">{d.motivo}</p>
-                    <p className="text-[10px] text-gray-600 mt-1">
-                      Solicitado por {d.solicitado_por_nome ?? '—'} · {d.filial}
-                    </p>
-                  </div>
-                  {podeDecidir && (
-                    <div className="flex gap-2 shrink-0">
-                      <button
-                        onClick={() => handleDecidir(d, true)} disabled={busy}
-                        className="neu-button py-1.5 px-3 rounded-lg text-[11px] font-bold text-emerald-300 ring-1 ring-emerald-500/30 hover:ring-emerald-500 flex items-center gap-1.5 disabled:opacity-50"
-                      >
-                        {busy ? <Loader2 size={11} className="animate-spin" /> : <Check size={12} />} Aprovar
-                      </button>
-                      <button
-                        onClick={() => handleDecidir(d, false)} disabled={busy}
-                        className="neu-button py-1.5 px-3 rounded-lg text-[11px] font-bold text-red-300 ring-1 ring-red-500/30 hover:ring-red-500 flex items-center gap-1.5 disabled:opacity-50"
-                      >
-                        <Ban size={12} /> Recusar
-                      </button>
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        </div>
+        )
       )}
 
       {/* ── Desligados ─────────────────────────────────────────────────── */}
-      <div className="neu-flat rounded-3xl p-5 sm:p-6 border border-white/5">
-        <h3 className="text-sm font-bold text-gray-300 mb-4">Desligados</h3>
-        {ativas.length === 0 ? (
-          <EmptyState message="Nenhum colaborador desligado nesta unidade." />
-        ) : (
-          <div className="overflow-x-auto main-scrollbar">
-            <table className="tabela w-full text-left border-collapse min-w-[820px]">
+      {abaAtiva === 'desligados' && (
+        ativas.length === 0 ? <EmptyState message="Nenhum colaborador desligado nesta unidade." /> : (
+          <div className="neu-flat rounded-2xl p-4 sm:p-5 border border-white/5 overflow-x-auto main-scrollbar">
+            <table className="tabela w-full text-left border-collapse min-w-[900px]">
               <thead>
-                <tr className="border-b border-white/10 text-[10px] text-gray-500 uppercase tracking-widest">
-                  <th className="pb-3 font-bold px-3">Colaborador</th>
-                  <th className="pb-3 font-bold px-3">Tipo</th>
-                  <th className="pb-3 font-bold px-3">Data</th>
-                  <th className="pb-3 font-bold px-3">Motivo</th>
-                  <th className="pb-3 font-bold px-3 text-right">Líquido</th>
-                  <th className="pb-3 font-bold px-3 text-center">Rescisão</th>
-                  <th className="pb-3 font-bold px-3 text-right">Ações</th>
+                <tr className={CABECALHO_TABELA}>
+                  <th className="text-center">Colaborador</th>
+                  <th className="text-center w-40">Tipo</th>
+                  <th className="text-center w-28">Data</th>
+                  <th className="text-center">Motivo</th>
+                  <th className="text-center w-36">Líquido</th>
+                  <th className="text-center w-32">Rescisão</th>
+                  <th className="text-center w-px">Ações</th>
                 </tr>
               </thead>
               <tbody>
@@ -555,52 +483,40 @@ const DesligamentosViewInner = ({ showToast, profile, filial }: {
                   const r = rescisaoDe(d.id);
                   const busy = acaoId === d.id;
                   return (
-                    <tr key={d.id} className="border-b border-white/5 hover:bg-white/5 transition-colors group">
-                      <td className="py-3 px-3">
-                        <div className="text-sm font-semibold text-gray-200">{d.nome_funcionario ?? '—'}</div>
-                        <div className="text-[10px] text-gray-600">por {d.decidido_por_nome ?? '—'}</div>
+                    <tr key={d.id} className="border-b border-accent/10 hover:bg-accent/[0.04] transition-colors align-middle">
+                      <td className="py-3 px-3 min-w-[12rem]">
+                        <span className="block text-sm font-semibold text-gray-100">{d.nome_funcionario ?? '—'}</span>
+                        <span className="block text-[11px] text-gray-500">decidido por {d.decidido_por_nome ?? '—'}</span>
                       </td>
-                      <td className="py-3 px-3">
-                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded border ${TIPO_BADGE[d.tipo] ?? ''}`}>
-                          {d.tipo}
-                        </span>
-                      </td>
-                      <td className="py-3 px-3 text-xs font-mono text-gray-400">{fmtData(d.data_desligamento)}</td>
-                      <td className="py-3 px-3 text-xs text-gray-400 max-w-[240px] truncate" title={d.motivo}>{d.motivo}</td>
-                      <td className="py-3 px-3 text-xs font-mono text-green-400 text-right">{r ? brl(r.total_liquido) : '—'}</td>
+                      <td className="py-3 px-3 text-center"><TipoBadge tipo={d.tipo} /></td>
+                      <td className="py-3 px-3 text-center text-xs font-mono text-gray-300">{fmtData(d.data_desligamento)}</td>
                       <td className="py-3 px-3 text-center">
-                        {r ? (
-                          <span className={`inline-flex items-center gap-1 text-[10px] font-bold uppercase ${statusCls(r.status)}`}>
-                            {r.status === 'Paga' ? <CheckCircle size={11} /> : r.status === 'Processada' ? <DollarSign size={11} /> : <Clock size={11} />}
-                            {r.status}
-                          </span>
-                        ) : <span className="text-gray-700 text-xs">—</span>}
+                        <span className="text-xs text-gray-400 line-clamp-2 max-w-[18rem] mx-auto" title={d.motivo}>{d.motivo}</span>
                       </td>
-                      <td className="py-3 px-3 text-right">
-                        <div className="flex justify-center items-center gap-1.5">
-                          {(r || podeDecidir) && (
+                      <td className="py-3 px-3 text-center text-sm font-bold text-green-400 tabular-nums whitespace-nowrap">{r ? brl(r.total_liquido) : '—'}</td>
+                      <td className="py-3 px-3 text-center">{r ? <StatusBadge status={r.status} /> : <span className="text-gray-600 text-xs">—</span>}</td>
+                      <td className="py-3 px-3">
+                        <div className="flex justify-center items-center gap-1.5 flex-nowrap whitespace-nowrap">
+                          {r && (
+                            <button onClick={() => setDetalhe({ nome: d.nome_funcionario, r })}
+                              title="Ver demonstrativo" aria-label="Ver demonstrativo" className="action-btn-neutral">
+                              <FileText size={13} />
+                            </button>
+                          )}
+                          {r?.status === 'Pendente' && podeProcessar && (
+                            <button onClick={() => handleProcessar(d)} disabled={busy}
+                              title="Processar — gera a conta a pagar no Financeiro" aria-label="Processar rescisão"
+                              className="action-btn-purple disabled:opacity-50">
+                              {busy ? <Loader2 size={13} className="animate-spin" /> : <DollarSign size={13} />}
+                            </button>
+                          )}
+                          {podeDecidir && (
                             <MenuMais>
                               {fechar => (
-                                <>
-                                  {r && (
-                                    <ItemMenu onClick={() => { fechar(); setDetalhe({ nome: d.nome_funcionario, r }); }}
-                                      cor="text-gray-200 hover:bg-white/5" icon={FileText}>
-                                      Ver demonstrativo
-                                    </ItemMenu>
-                                  )}
-                                  {r?.status === 'Pendente' && podeProcessar && (
-                                    <ItemMenu onClick={() => { fechar(); handleProcessar(d); }} disabled={busy}
-                                      cor="text-purple-300 hover:bg-purple-500/10" icon={DollarSign}>
-                                      Processar (gera conta a pagar)
-                                    </ItemMenu>
-                                  )}
-                                  {podeDecidir && (
-                                    <ItemMenu onClick={() => { fechar(); handleReadmitir(d); }} disabled={busy}
-                                      cor="text-emerald-400 hover:bg-emerald-500/10" icon={RotateCcw}>
-                                      Readmitir
-                                    </ItemMenu>
-                                  )}
-                                </>
+                                <ItemMenu onClick={() => { fechar(); handleReadmitir(d); }} disabled={busy}
+                                  cor="text-emerald-400 hover:bg-emerald-500/10" icon={RotateCcw}>
+                                  Readmitir
+                                </ItemMenu>
                               )}
                             </MenuMais>
                           )}
@@ -612,58 +528,118 @@ const DesligamentosViewInner = ({ showToast, profile, filial }: {
               </tbody>
             </table>
           </div>
-        )}
+        )
+      )}
 
-        {readmitidos.length > 0 && (
-          <div className="mt-6 pt-4 border-t border-white/5">
-            <p className="text-[10px] font-bold uppercase tracking-widest text-gray-600 mb-2">Readmitidos</p>
-            <div className="flex flex-col gap-1">
-              {readmitidos.map((d: any) => (
-                <div key={d.id} className="flex items-center gap-3 text-xs text-gray-500 px-2 py-1.5 rounded-lg hover:bg-white/5">
-                  <RotateCcw size={11} className="text-emerald-500 shrink-0" />
-                  <span className="text-gray-400 font-semibold">{d.nome_funcionario}</span>
-                  <span className="font-mono">{fmtData(d.data_desligamento)}</span>
-                  <span className="truncate flex-1">{d.observacao ?? d.motivo}</span>
-                </div>
+      {(abaAtiva === 'readmitidos' || abaAtiva === 'recusados') && (() => {
+        const lista = abaAtiva === 'readmitidos' ? readmitidos : recusados;
+        if (lista.length === 0) {
+          return <EmptyState message={abaAtiva === 'readmitidos' ? 'Ninguém readmitido nesta unidade.' : 'Nenhuma solicitação recusada.'} />;
+        }
+        return (
+          <div className="neu-flat rounded-2xl p-4 sm:p-5 border border-white/5 overflow-x-auto main-scrollbar">
+            <table className="tabela w-full text-left border-collapse min-w-[720px]">
+              <thead>
+                <tr className={CABECALHO_TABELA}>
+                  <th className="text-center">Colaborador</th>
+                  <th className="text-center w-40">Tipo</th>
+                  <th className="text-center w-28">Desligamento</th>
+                  <th className="text-center">{abaAtiva === 'readmitidos' ? 'Observação' : 'Motivo da solicitação'}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {lista.map((d: any) => (
+                  <tr key={d.id} className="border-b border-accent/10 hover:bg-accent/[0.04] transition-colors align-middle">
+                    <td className="py-3 px-3 text-sm font-semibold text-gray-100">{d.nome_funcionario ?? '—'}</td>
+                    <td className="py-3 px-3 text-center"><TipoBadge tipo={d.tipo} /></td>
+                    <td className="py-3 px-3 text-center text-xs font-mono text-gray-300">{fmtData(d.data_desligamento)}</td>
+                    <td className="py-3 px-3 text-center">
+                      <span className="text-xs text-gray-400 line-clamp-2 max-w-[28rem] mx-auto" title={d.observacao ?? d.motivo}>{d.observacao ?? d.motivo}</span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        );
+      })()}
+
+      {/* ── Formulário ─────────────────────────────────────────────────── */}
+      <ModalFormulario
+        aberto={formAberto && podeMontarProcesso}
+        largura="xl"
+        titulo={podeDecidir ? 'Registrar desligamento' : 'Solicitar desligamento'}
+        subtitulo={podeDecidir ? 'efetiva na hora' : 'vai para a decisão da Matriz'}
+        onCancelar={fecharForm}
+        cancelarDesabilitado={salvando}
+        acoes={
+          <button type="button" onClick={handleDesligar} disabled={salvando || !form.funcionario_id || !form.motivo.trim()}
+            className="btn-solido btn-solido--vermelho">
+            {podeDecidir ? <UserMinus size={14} /> : <Send size={14} />}
+            {salvando ? (podeDecidir ? 'Registrando…' : 'Enviando…') : podeDecidir ? 'Registrar desligamento' : 'Enviar à Matriz'}
+          </button>
+        }
+        lateral={
+          <SecaoFormulario titulo="Demonstrativo" icon={Calculator} cor="verde"
+            extra={calculando ? <Loader2 size={12} className="animate-spin" /> : undefined}>
+            {preview ? <Demonstrativo r={preview} /> : (
+              <p className="text-xs text-gray-500 text-center py-6">Escolha o colaborador e a data para ver o cálculo.</p>
+            )}
+          </SecaoFormulario>
+        }
+      >
+        <SecaoFormulario titulo="Colaborador" icon={UserMinus} cor="vermelho">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <FormField label="Colaborador *">
+              <SelectBusca
+                value={form.funcionario_id}
+                onChange={v => setForm(f => ({ ...f, funcionario_id: v }))}
+                placeholder="Escolha o colaborador"
+                opcoes={ativos.map((f: any) => opcaoFuncionario(f))}
+              />
+            </FormField>
+            <FormField label="Data do desligamento *">
+              <input type="date" value={form.data_desligamento} max={todayBR()}
+                onChange={e => setForm(f => ({ ...f, data_desligamento: e.target.value }))}
+                className="neu-input px-3 py-2.5 rounded-xl text-sm" />
+            </FormField>
+          </div>
+        </SecaoFormulario>
+
+        <SecaoFormulario titulo="Tipo e aviso prévio" icon={FileText} cor="azul">
+          <div className="flex flex-col gap-4">
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
+              {TIPOS.map(t => (
+                <button key={t} type="button" onClick={() => setTipo(t)} aria-pressed={form.tipo === t}
+                  title={TIPO_RESUMO[t]}
+                  className={`btn-solido justify-center !py-3 ${TIPO_BOTAO[t]} ${form.tipo === t ? 'aba-ativa' : 'opacity-45 hover:opacity-75'}`}>
+                  {t}
+                </button>
               ))}
             </div>
+            <FormField label="Aviso prévio">
+              <div className="flex flex-wrap gap-2">
+                {AVISOS_POR_TIPO[form.tipo].map(a => (
+                  <button key={a} type="button" onClick={() => setForm(f => ({ ...f, aviso_previo: a }))} aria-pressed={form.aviso_previo === a}
+                    className={`py-2 px-4 rounded-xl text-xs font-bold border transition-colors ${form.aviso_previo === a
+                      ? 'bg-accent border-accent text-black' : 'neu-button border-transparent text-gray-400 hover:text-gray-200'}`}>
+                    {a}
+                  </button>
+                ))}
+              </div>
+            </FormField>
           </div>
-        )}
+        </SecaoFormulario>
 
-        {recusados.length > 0 && (
-          <div className="mt-6 pt-4 border-t border-white/5">
-            <p className="text-[10px] font-bold uppercase tracking-widest text-gray-600 mb-2">Solicitações recusadas</p>
-            <div className="flex flex-col gap-1">
-              {recusados.map((d: any) => (
-                <div key={d.id} className="flex items-center gap-3 text-xs text-gray-500 px-2 py-1.5 rounded-lg hover:bg-white/5">
-                  <Ban size={11} className="text-red-500 shrink-0" />
-                  <span className="text-gray-400 font-semibold">{d.nome_funcionario}</span>
-                  <span className="font-mono">{fmtData(d.data_desligamento)}</span>
-                  <span className="truncate flex-1">{d.observacao ?? d.motivo}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-      </div>
-
-      <div className="neu-flat rounded-2xl p-4 border border-white/5">
-        <p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-2">O que o desligamento faz</p>
-        <p className="text-xs text-gray-400 leading-relaxed mb-2">
-          A unidade instrui o processo (RH ou gerência) e a Matriz decide (admin/CEO). Solicitação pendente não
-          tem efeito nenhum: o colaborador segue ativo. Tudo abaixo só acontece na aprovação.
-        </p>
-        <p className="text-xs text-gray-400 leading-relaxed">
-          O acesso não é revogado: o colaborador continua entrando e vê um aviso de encerramento de vínculo.
-          O que ele perde é a escrita — as funções de RBAC deixam de reconhecer o perfil, então nenhuma tela
-          aceita lançamento ou edição dele. Processar a rescisão gera Conta a Pagar no Financeiro; quando o
-          Financeiro quita, a carteira MaxBank é creditada e a rescisão vira Paga.
-        </p>
-        <p className="text-xs text-gray-500 leading-relaxed mt-2">
-          O cálculo das verbas é didático e simplificado — FGTS é simulado a 8% ao mês e as tabelas de
-          INSS/IRRF são fixas. Não serve para rescisão real.
-        </p>
-      </div>
+        <SecaoFormulario titulo="Motivo" icon={MessageSquareText} cor="laranja">
+          <textarea
+            value={form.motivo}
+            onChange={e => setForm(f => ({ ...f, motivo: e.target.value }))}
+            placeholder="Descreva o motivo do desligamento"
+            className="neu-input w-full px-3 py-2.5 rounded-xl text-sm resize-none campo-cresce"
+          />
+        </SecaoFormulario>
+      </ModalFormulario>
 
       {/* ── Modal do demonstrativo ─────────────────────────────────────── */}
       <AnimatePresence>
@@ -675,16 +651,16 @@ const DesligamentosViewInner = ({ showToast, profile, filial }: {
           >
             <motion.div
               initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }}
-              className="neu-flat rounded-3xl p-6 border border-white/10 max-w-md w-full max-h-[85vh] overflow-y-auto main-scrollbar"
+              className="neu-flat rounded-3xl p-6 border border-white/10 max-w-md w-full max-h-[85vh] overflow-y-auto sem-barra"
               onClick={e => e.stopPropagation()}
             >
               <div className="flex items-center justify-between mb-4">
                 <div>
                   <h3 className="text-sm font-bold text-accent">Demonstrativo de Rescisão</h3>
-                  <p className="text-[10px] text-gray-500 mt-0.5">{detalhe.nome}</p>
+                  <p className="text-[11px] text-gray-400 mt-0.5">{detalhe.nome}</p>
                 </div>
-                <button onClick={() => setDetalhe(null)} className="w-7 h-7 neu-button rounded-lg flex items-center justify-center text-gray-500 hover:text-white">
-                  <X size={14} />
+                <button onClick={() => setDetalhe(null)} className="modal-close-btn">
+                  <X size={16} />
                 </button>
               </div>
               <Demonstrativo r={detalhe.r} />
@@ -713,8 +689,7 @@ function Demonstrativo({ r }: { r: any }) {
         <Linha label="Tempo de casa" value={`${r.meses_trabalhados} meses`} muted />
       )}
       {r.dias_aviso > 0 && <Linha label="Dias de aviso prévio" value={`${r.dias_aviso} dias`} muted />}
-      {/* Aviso indenizado integra o tempo de serviço: a saída projeta e pode
-          render mais um avo de 13º e de férias (art. 487 §1º). */}
+      {/* Aviso indenizado integra o tempo de serviço (art. 487 §1º). */}
       {r.data_projetada && r.data_projetada !== r.data_desligamento && (
         <Linha label="Saída projetada pelo aviso" value={fmtData(r.data_projetada)} colorClass="text-blue-400" />
       )}
@@ -725,7 +700,7 @@ function Demonstrativo({ r }: { r: any }) {
       <Linha label="13º proporcional" value={brl(r.decimo_terceiro)} />
       <Linha
         label={Number(r.ferias_periodos_dobro) > 0
-          ? `Férias vencidas (${r.ferias_periodos_dobro} período(s) em dobro)`
+          ? `Férias vencidas (${r.ferias_periodos_dobro} em dobro)`
           : 'Férias vencidas'}
         value={brl(r.ferias_vencidas)}
       />
@@ -735,56 +710,38 @@ function Demonstrativo({ r }: { r: any }) {
       <Linha label="Total bruto" value={brl(r.total_bruto)} bold />
 
       <div className="border-t border-white/5 my-3" />
-      <Linha label="INSS" value={`- ${brl(r.desconto_inss)}`} colorClass="text-red-400" />
-      <Linha label="IRRF" value={`- ${brl(r.desconto_irrf)}`} colorClass="text-red-400" />
-      {/* 13º tem tributação exclusiva na fonte: base própria, INSS e IRRF
-          próprios. Mostrar a parcela dele explica por que o total não bate
-          com uma conta feita sobre saldo + 13º somados. */}
-      {(Number(r.desconto_inss_13) > 0 || Number(r.desconto_irrf_13) > 0) && (
-        <p className="text-[10px] text-gray-600 leading-relaxed">
-          Do total acima, {brl(r.desconto_inss_13)} de INSS e {brl(r.desconto_irrf_13)} de IRRF incidiram
-          sobre o 13º, em base separada do saldo de salário (tributação exclusiva na fonte).
-        </p>
-      )}
+      {/* 13º tem tributação exclusiva na fonte: a parte dele vai no título. */}
+      <Linha label="INSS" value={`- ${brl(r.desconto_inss)}`} colorClass="text-red-400"
+        title={Number(r.desconto_inss_13) > 0 ? `Inclui ${brl(r.desconto_inss_13)} sobre o 13º, em base separada.` : undefined} />
+      <Linha label="IRRF" value={`- ${brl(r.desconto_irrf)}`} colorClass="text-red-400"
+        title={Number(r.desconto_irrf_13) > 0 ? `Inclui ${brl(r.desconto_irrf_13)} sobre o 13º, em base separada.` : undefined} />
       {Number(r.desconto_aviso) > 0 && (
         <Linha label="Aviso não cumprido" value={`- ${brl(r.desconto_aviso)}`} colorClass="text-red-400" />
       )}
       <Linha label="Total de descontos" value={`- ${brl(r.total_descontos)}`} colorClass="text-red-400" />
 
-      <div className="border-t border-white/5 my-3" />
-      <Linha label="Líquido a receber" value={brl(r.total_liquido)} colorClass="text-green-400" bold />
+      <div className="rounded-xl bg-green-600 text-white px-3 py-2.5 mt-3 flex items-center justify-between gap-3">
+        <span className="text-[11px] font-black uppercase tracking-widest">Líquido a receber</span>
+        <span className="text-base font-black tabular-nums">{brl(r.total_liquido)}</span>
+      </div>
 
-      {/* FGTS não entra no líquido: é saque na Caixa, não pagamento da empresa.
-          Mostrar sem somar evita a leitura de que o valor está faltando. */}
-      {/* `fgts_origem` = 'real' quando somado das competências da folha
-          (migr. 321); 'simulado' é o fallback da 306, para funcionário sem
-          folha recalculada. Dizer qual foi evita a pergunta "esse número veio
-          de onde?" seis meses depois. */}
-      <p className="text-[10px] text-gray-600 leading-relaxed pt-2">
-        FGTS depositado no período: {brl(r.fgts_depositado)} —{' '}
-        {r.fgts_origem === 'real'
-          ? 'somado das competências da folha'
-          : 'valor simulado (sem folha recalculada para este colaborador)'}
-        , sacado na Caixa e fora do líquido acima. A multa, essa sim, é paga pela empresa e já está somada.
-      </p>
-      {/* Vigência vem da migr. 319: as faixas saem de `rh_faixas` pela data do
-          desligamento, não mais escritas no corpo da função. */}
+      {/* FGTS não entra no líquido: é saque na Caixa. `fgts_origem` diz se veio
+          da folha (migr. 321) ou do fallback simulado da 306. */}
+      <Linha label={`FGTS depositado (${r.fgts_origem === 'real' ? 'folha' : 'simulado'}, fora do líquido)`}
+        value={brl(r.fgts_depositado)} muted />
       {r.vigencia_tabela && (
-        <p className="text-[10px] text-gray-600 leading-relaxed">
-          Tabelas de INSS e IRRF da vigência {r.vigencia_tabela}, escolhida pela data do desligamento
-          {(r.dependentes ?? 0) > 0 ? ` · ${r.dependentes} dependente(s) deduzido(s) no IRRF` : ''}.
-        </p>
+        <Linha label="Tabelas INSS/IRRF" value={`vigência ${r.vigencia_tabela}${(r.dependentes ?? 0) > 0 ? ` · ${r.dependentes} dep.` : ''}`} muted />
       )}
     </div>
   );
 }
 
-function Linha({ label, value, colorClass, muted, bold }: {
-  label: string; value: string; colorClass?: string; muted?: boolean; bold?: boolean;
+function Linha({ label, value, colorClass, muted, bold, title }: {
+  label: string; value: string; colorClass?: string; muted?: boolean; bold?: boolean; title?: string;
 }) {
   return (
-    <div className="flex items-center justify-between gap-3">
-      <span className={`${muted ? 'text-gray-600' : 'text-gray-400'} ${bold ? 'font-bold' : ''}`}>{label}</span>
+    <div className="flex items-center justify-between gap-3" title={title}>
+      <span className={`${muted ? 'text-gray-500' : 'text-gray-400'} ${bold ? 'font-bold' : ''}`}>{label}</span>
       <span className={`font-mono tabular-nums ${colorClass ?? (muted ? 'text-gray-500' : 'text-gray-200')} ${bold ? 'font-bold' : ''}`}>
         {value}
       </span>

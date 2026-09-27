@@ -4,11 +4,12 @@ import { motion, AnimatePresence } from 'motion/react';
 import {
   Landmark, Plus, X, Clock, Trash2, Pencil, ChevronDown, ChevronUp,
   TrendingUp, TrendingDown, AlertTriangle, CheckCircle, XCircle,
-  Settings, BarChart3, CreditCard, ShieldAlert, Info, PiggyBank, CalendarClock, Calculator,
+  Settings, BarChart3, CreditCard, ShieldAlert, Info, PiggyBank, CalendarClock, Calculator, FileText,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { tabelaPrice } from '../lib/mutuo';
-import { LoadingSpinner, NeuButtonAccent, FormField, CardContador } from '../components/ui';
+import { LoadingSpinner, NeuButtonAccent, FormField, CardContador, ModalFormulario, SecaoFormulario, StatusBadge, FilialBadge } from '../components/ui';
+import { MenuMais, ItemMenu, CABECALHO_TABELA } from '../components/MenuMais';
 import { useFetchData } from '../hooks/useSupabaseData';
 import { PeriodoCapitalAviso } from '../components/PeriodoCapitalAviso';
 import { AplicacoesPanel } from '../components/AplicacoesPanel';
@@ -1152,6 +1153,11 @@ function ModalEditarEmprestimo({
 }
 
 // ── Card por filial (Aportes) ──────────────────────────────────────────────
+// Mesma régua do CardContador (ui.tsx): até 1,5rem, e menor se o texto não
+// couber na largura da caixa (100cqi).
+const fonteQueCabe = (texto: string) =>
+  `min(1.5rem, calc(100cqi / ${(Math.max(texto.length, 4) * 0.64).toFixed(2)}))`;
+
 function FilialCapitalCard({
   filial, registros, saldo, profile, onNovo, onExcluir, posicao,
 }: {
@@ -1192,19 +1198,29 @@ function FilialCapitalCard({
           )}
         </div>
 
+        {/* @container + fonte que cabe: o card ocupa um terço da tela e
+            "R$ 1.500.000,00" em 24px fixos saía pela borda. */}
         <div className="grid grid-cols-2 gap-3">
-          <div className="contador contador--azul rounded-xl p-3">
-            <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500">Capital total</p>
-            <p className="text-2xl font-black tabular-nums text-gray-100 mt-0.5">
-              {saldo ? BRL(saldo.capital_total) : ultimo ? BRL(ultimo.valor) : '—'}
-            </p>
-          </div>
-          <div className={`contador ${bloqueado ? "contador--vermelho" : "contador--verde"} rounded-xl p-3 text-right`}>
-            <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500">Saldo livre</p>
-            <p className={`text-2xl font-black tabular-nums mt-0.5 ${bloqueado ? 'text-red-400' : 'text-green-400'}`}>
-              {saldo ? BRL(saldo.saldo_livre) : '—'}
-            </p>
-          </div>
+          {(() => {
+            const capital = saldo ? BRL(saldo.capital_total) : ultimo ? BRL(ultimo.valor) : '—';
+            const livre = saldo ? BRL(saldo.saldo_livre) : '—';
+            return (
+              <>
+                <div className="contador contador--azul @container min-w-0 rounded-xl p-3">
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500">Capital total</p>
+                  <p className="font-black tabular-nums text-gray-100 mt-0.5 whitespace-nowrap" style={{ fontSize: fonteQueCabe(capital) }}>
+                    {capital}
+                  </p>
+                </div>
+                <div className={`contador ${bloqueado ? "contador--vermelho" : "contador--verde"} @container min-w-0 rounded-xl p-3 text-right`}>
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500">Saldo livre</p>
+                  <p className={`font-black tabular-nums mt-0.5 whitespace-nowrap ${bloqueado ? 'text-red-400' : 'text-green-400'}`} style={{ fontSize: fonteQueCabe(livre) }}>
+                    {livre}
+                  </p>
+                </div>
+              </>
+            );
+          })()}
         </div>
 
         {saldo && (
@@ -1343,18 +1359,13 @@ function TabEmprestimos({
   const [modalApagar, setModalApagar] = useState<Emprestimo | null>(null);
   const [modalEditar, setModalEditar] = useState<Emprestimo | null>(null);
   const [modalAplicar, setModalAplicar] = useState(false);
+  const [empAberto, setEmpAberto] = useState<string | null>(null);
   const confirm = useConfirm();
   // Migr. 572 — arquivado é histórico fechado: o gatilho recusa aprovar e
   // negar, então ele sai da fila de análise mesmo continuando 'Pendente'.
   const [modalMemoria, setModalMemoria] = useState<Emprestimo | null>(null);
   const pendentes = emprestimos.filter(e => e.status === 'Pendente' && !e.arquivado_em);
   const historico = emprestimos.filter(e => e.status !== 'Pendente' || !!e.arquivado_em);
-
-  const statusIcon = (s: string) => {
-    if (s === 'Aprovado') return <CheckCircle size={13} className="text-green-400" />;
-    if (s === 'Negado') return <XCircle size={13} className="text-red-400" />;
-    return <Clock size={13} className="text-yellow-400" />;
-  };
 
   // Duas portas, porque são dois atos diferentes. Contrato vivo mexe em caixa:
   // vai para o modal, que mostra os saldos e pede a conta que recebe de volta
@@ -1374,123 +1385,158 @@ function TabEmprestimos({
   };
 
   return (
-    <div className="flex flex-col gap-4">
-      {/* A holding também origina (migr. 474). Antes ela só respondia a pedido
-          da filial, e o único movimento que ela começava era o aporte — que
-          não rende. */}
+    <div className="flex flex-col gap-5">
+      {/* A holding também origina (migr. 474): aporte não rende, mútuo sim. */}
       {podeAprovar(profile) && (
-        <div className="flex items-center justify-between gap-3 flex-wrap">
-          <p className="text-xs text-gray-500">Empréstimo com juros e parcelas: diferente do aporte, este dinheiro volta.</p>
-          <NeuButtonAccent onClick={() => setModalAplicar(true)}>
-            <Plus size={14} /> Aplicar capital numa unidade
-          </NeuButtonAccent>
+        <div className="flex justify-end">
+          <button type="button" onClick={() => setModalAplicar(true)} className="btn-solido btn-solido--verde !py-2.5 !px-5 !text-sm">
+            <Plus size={15} /> Aplicar capital numa unidade
+          </button>
         </div>
       )}
 
-      {pendentes.length === 0 && (
-        <div className="neu-flat rounded-2xl border border-white/5 py-8 text-center text-sm text-gray-500">Nenhum empréstimo aguardando análise.</div>
-      )}
-
-      {pendentes.length > 0 && (
-        <div className="flex flex-col gap-3">
-          <span className="text-[10px] font-black uppercase tracking-widest text-gray-500 px-1">
-            Aguardando análise ({pendentes.length})
-          </span>
-          {pendentes.map(emp => {
-            const cor = FILIAL_COLOR[emp.filial as Filial] ?? FILIAL_COLOR.SuperMax;
-            return (
-              <div key={emp.id} className="neu-flat rounded-2xl p-4 border border-amber-500/40 flex flex-col gap-3">
-                <div className="flex items-start justify-between gap-2">
-                  <div>
-                    <span className={`text-xs font-bold ${cor.accent}`}>{emp.filial}</span>
-                    <div className="text-xl font-black text-gray-100 tabular-nums">{BRL(emp.valor)}</div>
+      <SecaoFormulario titulo="Aguardando análise" icon={Clock} cor="amarelo"
+        extra={pendentes.length > 0 ? `${pendentes.length} pedido${pendentes.length === 1 ? '' : 's'}` : undefined}>
+        {pendentes.length === 0 ? (
+          <p className="text-sm text-gray-500 text-center py-6">Nenhum empréstimo aguardando análise.</p>
+        ) : (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+            {pendentes.map(emp => (
+              <div key={emp.id} className="neu-pressed rounded-xl p-4 border border-amber-500/30 flex flex-col gap-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <FilialBadge filial={emp.filial} />
+                    <div className="text-xl font-black text-gray-100 tabular-nums mt-1">{BRL(emp.valor)}</div>
                     <div className="text-xs text-gray-500 mt-0.5">
                       {emp.num_parcelas}x · por {emp.solicitado_por_nome ?? '—'} · {fmtDate(emp.created_at)}
                     </div>
                   </div>
-                  <span className="flex items-center gap-1 text-[10px] font-black uppercase tracking-widest text-black bg-amber-500 px-2 py-1 rounded-md shrink-0">
-                    <Clock size={11} /> Pendente
-                  </span>
-                </div>
-                <p className="text-xs text-gray-400 italic border-t border-white/5 pt-2">"{emp.justificativa}"</p>
-                {podeAprovar(profile) && (
-                  <div className="self-end">
+                  {podeAprovar(profile) && (
                     <NeuButtonAccent onClick={() => setModalEmp(emp)}>Analisar</NeuButtonAccent>
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      )}
-
-      {historico.length > 0 && (
-        <div className="flex flex-col gap-2">
-          <span className="text-[10px] font-black uppercase tracking-widest text-gray-500 px-1 mt-2">
-            Histórico
-          </span>
-          {historico.map(emp => {
-            const cor = FILIAL_COLOR[emp.filial as Filial] ?? FILIAL_COLOR.SuperMax;
-            return (
-              <div key={emp.id} className="neu-flat rounded-2xl p-3 border border-white/5 flex items-center gap-3">
-                {statusIcon(emp.status)}
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <span className={`text-xs font-bold ${cor.accent}`}>{emp.filial}</span>
-                    <span className="text-sm font-bold text-gray-200 tabular-nums">{BRL(emp.valor)}</span>
-                    <span className="text-xs text-gray-500">{emp.num_parcelas}x</span>
-                    {emp.banco_nome && <span className="text-xs text-gray-500 truncate">{emp.banco_nome}</span>}
-                  </div>
-                  {emp.justificativa_resposta && (
-                    <p className="text-[11px] text-gray-500 mt-0.5 italic truncate">"{emp.justificativa_resposta}"</p>
                   )}
                 </div>
-                {/* Migr. 572 — o contrato atravessou um reset. Fica para
-                    consulta, sem aprovar/negar e fora da conta de capital. */}
-                {emp.arquivado_em && (
-                  <span
-                    title={`Preservado no reset de ${fmtDate(emp.arquivado_em)}. Só consulta.`}
-                    className="text-[10px] font-bold text-gray-400 bg-white/5 border border-white/10 px-2 py-0.5 rounded-full shrink-0"
-                  >
-                    Turma anterior
-                  </span>
-                )}
-                <span className="text-[10px] text-gray-500">{fmtDate(emp.created_at)}</span>
-                {/* A conta aberta, para a Matriz responder a pergunta do aluno
-                    com a mesma tela que ele tem. */}
-                {emp.status === 'Aprovado' && (
-                  <button
-                    onClick={() => setModalMemoria(emp)}
-                    title="Memória de cálculo"
-                    className="action-btn-blue shrink-0"
-                  >
-                    <Calculator size={12} />
-                  </button>
-                )}
-                {/* Migr. 606 — só o contrato VIVO se corrige: negado não tem
-                    contrato, e arquivado é histórico fechado. */}
-                {podeEditarEmprestimo(profile) && emp.status === 'Aprovado' && !emp.arquivado_em && (
-                  <button
-                    onClick={() => setModalEditar(emp)}
-                    title="Corrigir empréstimo"
-                    className="action-btn-edit shrink-0"
-                  >
-                    <Pencil size={12} />
-                  </button>
-                )}
-                {podeApagarEmprestimo(profile) && (
-                  <button
-                    onClick={() => handleApagar(emp)}
-                    title="Apagar empréstimo"
-                    className="action-btn-delete shrink-0"
-                  >
-                    <Trash2 size={12} />
-                  </button>
-                )}
+                <p className="text-xs text-gray-300 border-t border-white/5 pt-2 line-clamp-3" title={emp.justificativa}>{emp.justificativa}</p>
               </div>
-            );
-          })}
-        </div>
+            ))}
+          </div>
+        )}
+      </SecaoFormulario>
+
+      {historico.length > 0 && (
+        <SecaoFormulario titulo="Histórico" icon={FileText} cor="azul"
+          extra={`${historico.length} contrato${historico.length === 1 ? '' : 's'}`}>
+          <div className="overflow-x-auto main-scrollbar">
+            <table className="tabela tabela--azul w-full text-left border-collapse min-w-[760px]">
+              <thead>
+                <tr className={CABECALHO_TABELA}>
+                  <th className="text-center">Finalidade e resposta</th>
+                  <th className="text-center w-28">Unidade</th>
+                  <th className="text-center w-32">Valor</th>
+                  <th className="text-center">Banco</th>
+                  <th className="text-center w-32">Situação</th>
+                  <th className="text-center w-px">Ações</th>
+                </tr>
+              </thead>
+              <tbody>
+                {historico.map(emp => {
+                  const aberto = empAberto === emp.id;
+                  const alternar = () => setEmpAberto(aberto ? null : emp.id);
+                  return (
+                  <React.Fragment key={emp.id}>
+                  {/* A linha abre o texto inteiro: na tabela a finalidade e a
+                      resposta ficam cortadas para caber. */}
+                  <tr onClick={alternar}
+                    className={`border-b border-accent/10 hover:bg-accent/[0.04] transition-colors align-middle cursor-pointer ${aberto ? "bg-accent/[0.04]" : ""}`}>
+                    <td className="py-3 px-3 min-w-[12rem]">
+                      <span className="text-sm text-gray-100 line-clamp-2" title={emp.justificativa}>{emp.justificativa || '—'}</span>
+                      {emp.justificativa_resposta && (
+                        <span className="text-[11px] text-gray-500 mt-0.5 line-clamp-1" title={emp.justificativa_resposta}>
+                          Resposta{emp.aprovado_por_nome ? ` de ${emp.aprovado_por_nome}` : ''}: {emp.justificativa_resposta}
+                        </span>
+                      )}
+                    </td>
+                    <td className="py-3 px-3 text-center"><FilialBadge filial={emp.filial} /></td>
+                    <td className="py-3 px-3 text-center whitespace-nowrap">
+                      <span className="block text-sm font-bold text-gray-100 tabular-nums">{BRL(emp.valor)}</span>
+                      <span className="block text-[11px] text-gray-500">
+                        {emp.num_parcelas}x{emp.taxa_juros > 0 ? ` · ${qtdBR(emp.taxa_juros)}% a.m.` : ''}
+                      </span>
+                    </td>
+                    <td className="py-3 px-3 text-center text-xs text-gray-300">{emp.banco_nome ?? '—'}</td>
+                    <td className="py-3 px-3 text-center">
+                      <div className="flex flex-col items-center gap-1">
+                        <StatusBadge status={emp.status === 'Pendente' ? 'Em Análise' : emp.status} />
+                        <span className="text-[10px] text-gray-500 font-mono">{fmtDate(emp.created_at)}</span>
+                        {/* Migr. 572 — atravessou um reset: só consulta. */}
+                        {emp.arquivado_em && (
+                          <span title={`Preservado no reset de ${fmtDate(emp.arquivado_em)}. Só consulta.`}
+                            className="text-[9px] font-bold uppercase tracking-widest text-gray-400">
+                            Turma anterior
+                          </span>
+                        )}
+                      </div>
+                    </td>
+                    <td className="py-3 px-3" onClick={e => e.stopPropagation()}>
+                      <div className="flex justify-center items-center gap-1.5 flex-nowrap whitespace-nowrap">
+                        <button onClick={alternar} aria-expanded={aberto}
+                          title={aberto ? "Fechar o texto" : "Ler a finalidade e a resposta inteiras"}
+                          aria-label={aberto ? "Fechar o texto" : "Ler a finalidade e a resposta inteiras"}
+                          className="action-btn-neutral">
+                          <ChevronDown size={14} className={`transition-transform duration-200 ${aberto ? "rotate-180" : ""}`} />
+                        </button>
+                        {emp.status === 'Aprovado' && (
+                          <button onClick={() => setModalMemoria(emp)} title="Memória de cálculo" aria-label="Memória de cálculo"
+                            className="action-btn-purple">
+                            <Calculator size={13} />
+                          </button>
+                        )}
+                        {/* Migr. 606 — só o contrato VIVO se corrige. */}
+                        {podeEditarEmprestimo(profile) && emp.status === 'Aprovado' && !emp.arquivado_em && (
+                          <button onClick={() => setModalEditar(emp)} title="Corrigir empréstimo" aria-label="Corrigir empréstimo"
+                            className="action-btn-edit">
+                            <Pencil size={13} />
+                          </button>
+                        )}
+                        {podeApagarEmprestimo(profile) && (
+                          <MenuMais>
+                            {fechar => (
+                              <ItemMenu onClick={() => { fechar(); handleApagar(emp); }}
+                                cor="text-red-400 hover:bg-red-500/10" icon={Trash2}>
+                                Apagar empréstimo
+                              </ItemMenu>
+                            )}
+                          </MenuMais>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                  {aberto && (
+                    <tr className="border-b border-accent/10">
+                      <td colSpan={6} className="px-3 pb-4 pt-1">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                          <div className="neu-pressed rounded-xl p-3 border border-white/5">
+                            <span className="block text-[10px] font-black uppercase tracking-widest text-gray-500 mb-1">
+                              Finalidade{emp.solicitado_por_nome ? ` — pedido por ${emp.solicitado_por_nome}` : ''}
+                            </span>
+                            <p className="text-sm text-gray-100 whitespace-pre-line leading-relaxed">{emp.justificativa || '—'}</p>
+                          </div>
+                          <div className="neu-pressed rounded-xl p-3 border border-white/5">
+                            <span className="block text-[10px] font-black uppercase tracking-widest text-gray-500 mb-1">
+                              Resposta da Matriz{emp.aprovado_por_nome ? ` — ${emp.aprovado_por_nome}` : ''}
+                            </span>
+                            <p className="text-sm text-gray-100 whitespace-pre-line leading-relaxed">{emp.justificativa_resposta || 'Sem resposta registrada.'}</p>
+                          </div>
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                  </React.Fragment>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </SecaoFormulario>
       )}
 
       <AnimatePresence>
@@ -1539,6 +1585,10 @@ function TabEmprestimos({
 // O caminho inverso do empréstimo comum: aqui não houve pedido da filial, a
 // holding decidiu aplicar. Chama `conceder_mutuo_capital` (migr. 474), que
 // cria o contrato já decidido e delega a Price à mesma `aprovar_emprestimo`.
+const COR_BOTAO_UNIDADE: Record<Filial, string> = {
+  SuperMax: 'btn-solido--azul', MaxLook: 'btn-solido--dourado', TechMax: 'btn-solido--laranja',
+};
+
 function ModalAplicarCapital({
   bancos, taxaPadrao, onClose, onSaved, showToast,
 }: {
@@ -1587,141 +1637,98 @@ function ModalAplicarCapital({
     } finally { setSaving(false); }
   };
 
+  const labelCls = 'text-[10px] font-black uppercase tracking-widest text-gray-500';
+  const inputCls = 'neu-input rounded-xl px-3 py-2.5 text-sm tabular-nums';
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={onClose}>
-      <motion.div
-        initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}
-        exit={{ opacity: 0, scale: 0.95 }} transition={{ duration: 0.18 }}
-        className="neu-flat rounded-3xl p-6 w-full max-w-md border border-accent/20 flex flex-col gap-4 max-h-[90vh] overflow-y-auto"
-        onClick={e => e.stopPropagation()}
-      >
-        <div className="flex items-center justify-between">
-          <div>
-            <h2 className="text-base font-bold text-gray-100">Aplicar capital numa unidade</h2>
-            <span className="text-[11px] text-gray-500">
-              Empréstimo com juros, não aporte — o dinheiro volta.
-            </span>
-          </div>
-          <button onClick={onClose} className="modal-close-btn"><X size={16} /></button>
-        </div>
-
-        <div className="flex flex-col gap-3">
-          <div className="flex flex-col gap-1">
-            <label className="text-[10px] font-black uppercase tracking-widest text-gray-500">Unidade *</label>
-            <select
-              value={filial}
-              onChange={e => { setFilial(e.target.value as Filial); setDestinoId(''); }}
-              className="neu-pressed rounded-xl px-3 py-2.5 text-sm text-gray-100 bg-transparent outline-none"
-            >
-              {FILIAIS.map(f => <option key={f} value={f}>{f}</option>)}
-            </select>
-          </div>
-
-          <div className="flex flex-col gap-1">
-            <label className="text-[10px] font-black uppercase tracking-widest text-gray-500">Valor *</label>
-            <input
-              type="text" inputMode="numeric" value={valor}
-              onChange={e => setValor(formatBRL(e.target.value))}
-              placeholder="0,00"
-              className="neu-pressed rounded-xl px-3 py-2.5 text-sm text-gray-100 bg-transparent outline-none"
-            />
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
-            <div className="flex flex-col gap-1">
-              <label className="text-[10px] font-black uppercase tracking-widest text-gray-500">
-                Taxa de juros (% ao mês)
-              </label>
-              <input
-                type="number" min="0" step="0.001" value={taxa}
-                onChange={e => setTaxa(e.target.value)}
-                className="neu-pressed rounded-xl px-3 py-2.5 text-sm text-gray-100 bg-transparent outline-none"
-              />
-            </div>
-            <div className="flex flex-col gap-1">
-              <label className="text-[10px] font-black uppercase tracking-widest text-gray-500">Nº de parcelas</label>
-              <input
-                type="number" min="1" max="60" value={parcelas}
-                onChange={e => setParcelas(e.target.value)}
-                className="neu-pressed rounded-xl px-3 py-2.5 text-sm text-gray-100 bg-transparent outline-none"
-              />
-            </div>
-          </div>
-
-          <div className="flex flex-col gap-1">
-            <label className="text-[10px] font-black uppercase tracking-widest text-gray-500">Sai da conta (Matriz) *</label>
-            <SelectBusca
-              value={origemId}
-              onChange={setOrigemId}
-              placeholder="Escolha a conta"
-              opcoes={contasMatriz.map(b => opcaoBanco(b, { saldo: true }))}
-            />
-            {contasMatriz.length === 0 && (
-              <span className="text-[10px] text-yellow-400">
-                A Matriz não tem caixa/banco ativo. Cadastre um em Caixa / Bancos antes de aplicar.
-              </span>
-            )}
-            {semSaldo && (
-              <span className="text-[10px] text-red-400">
-                Saldo insuficiente: a conta tem {BRL(saldoOrigem)} e a aplicação é de {BRL(valorNum)}.
-              </span>
-            )}
-          </div>
-
-          <div className="flex flex-col gap-1">
-            <label className="text-[10px] font-black uppercase tracking-widest text-gray-500">
-              Entra na conta * <span className="text-gray-600 normal-case tracking-normal">— conta de {filial}</span>
-            </label>
-            <SelectBusca
-              value={destinoId}
-              onChange={setDestinoId}
-              placeholder="Escolha a conta"
-              opcoes={contasFilial.map(b => opcaoBanco(b, { saldo: false }))}
-            />
-            {contasFilial.length === 0 && (
-              <span className="text-[10px] text-yellow-400">
-                {filial} não tem caixa/banco ativo. Cadastre um em Caixa / Bancos antes de aplicar.
-              </span>
-            )}
-          </div>
-
-          {valorNum > 0 && (
-            <div className="neu-pressed rounded-xl p-3 flex flex-col gap-1.5">
-              <div className="flex justify-between text-xs text-gray-400">
-                <span>Parcela fixa ({parcelas || 1}x)</span>
-                <strong className="text-gray-200 tabular-nums">{BRL(mutuo.valorParcela)}</strong>
-              </div>
-              <div className="flex justify-between text-xs text-gray-400">
-                <span>Total que {filial} devolve</span>
-                <strong className="text-gray-200 tabular-nums">{BRL(mutuo.totalPago)}</strong>
-              </div>
-              <div className="flex justify-between text-xs text-gray-400 border-t border-white/5 pt-1.5">
-                <span>Juros — o que a Matriz ganha</span>
-                <strong className="text-accent tabular-nums">{BRL(mutuo.totalJuros)}</strong>
-              </div>
-            </div>
-          )}
-
-          <div className="flex flex-col gap-1">
-            <label className="text-[10px] font-black uppercase tracking-widest text-gray-500">Por que está aplicando</label>
-            <textarea
-              value={obs} onChange={e => setObs(e.target.value)} rows={2}
-              className="neu-pressed rounded-xl px-3 py-2 text-sm text-gray-100 bg-transparent outline-none resize-none"
-              placeholder="Fica no histórico da unidade. Ex.: reforço de estoque para a alta temporada."
-            />
-          </div>
-        </div>
-
-        <p className="text-[10px] text-gray-500 leading-relaxed">
-          A unidade não pediu este dinheiro — ela será notificada. A primeira parcela vence
-          em 30 dias e aparece em Contas a Pagar dela, com ou sem lucro no mês.
-        </p>
-
+    <ModalFormulario
+      aberto
+      largura="lg"
+      titulo="Aplicar capital numa unidade"
+      subtitulo="empréstimo com juros"
+      onCancelar={onClose}
+      cancelarDesabilitado={saving}
+      acoes={
         <NeuButtonAccent onClick={aplicar} isLoading={saving} disabled={semSaldo}>
           <Landmark size={15} /> Aplicar capital
         </NeuButtonAccent>
-      </motion.div>
-    </div>
+      }
+    >
+      {/* Unidade como três botões na cor de cada uma: é a primeira decisão e
+          muda a lista de contas de destino. */}
+      <div className="flex flex-col gap-1.5">
+        <span className={labelCls}>Unidade *</span>
+        <div className="grid grid-cols-3 gap-2">
+          {FILIAIS.map(f => (
+            <button key={f} type="button" aria-pressed={filial === f}
+              onClick={() => { setFilial(f); setDestinoId(''); }}
+              className={`btn-solido ${COR_BOTAO_UNIDADE[f]} justify-center !py-3 !text-sm transition ${
+                filial === f ? 'aba-ativa' : 'opacity-45 hover:opacity-75'}`}>
+              {f}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <FormField label="Valor (R$) *">
+          <input type="text" inputMode="numeric" value={valor}
+            onChange={e => setValor(formatBRL(e.target.value))}
+            placeholder="0,00" className={inputCls} />
+        </FormField>
+        <FormField label="Juros (% ao mês)">
+          <input type="number" min="0" step="0.001" value={taxa}
+            onChange={e => setTaxa(e.target.value)} className={inputCls} />
+        </FormField>
+        <FormField label="Parcelas">
+          <input type="number" min="1" max="60" value={parcelas}
+            onChange={e => setParcelas(e.target.value)} className={inputCls} />
+        </FormField>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <FormField label="Sai da conta (Matriz) *">
+          <SelectBusca
+            value={origemId}
+            onChange={setOrigemId}
+            placeholder="Escolha a conta"
+            opcoes={contasMatriz.map(b => opcaoBanco(b, { saldo: true }))}
+          />
+          {contasMatriz.length === 0 && (
+            <span className="text-[11px] text-yellow-400 mt-1">A Matriz não tem caixa/banco ativo.</span>
+          )}
+          {semSaldo && (
+            <span className="text-[11px] text-red-400 mt-1">Saldo insuficiente: a conta tem {BRL(saldoOrigem)}.</span>
+          )}
+        </FormField>
+        <FormField label={`Entra na conta (${filial}) *`}>
+          <SelectBusca
+            value={destinoId}
+            onChange={setDestinoId}
+            placeholder="Escolha a conta"
+            opcoes={contasFilial.map(b => opcaoBanco(b, { saldo: false }))}
+          />
+          {contasFilial.length === 0 && (
+            <span className="text-[11px] text-yellow-400 mt-1">{filial} não tem caixa/banco ativo.</span>
+          )}
+        </FormField>
+      </div>
+
+      {/* A conta da Price à vista antes de aplicar. */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <CardContador label={`Parcela fixa (${parseInt(parcelas) || 1}x)`} value={valorNum > 0 ? BRL(mutuo.valorParcela) : '—'} tom="azul" />
+        <CardContador label={`${filial} devolve`} value={valorNum > 0 ? BRL(mutuo.totalPago) : '—'} tom="neutro" />
+        <CardContador label="Juros da Matriz" value={valorNum > 0 ? BRL(mutuo.totalJuros) : '—'} tom="verde" />
+      </div>
+
+      <FormField label="Motivo">
+        <textarea
+          value={obs} onChange={e => setObs(e.target.value)}
+          className="neu-input rounded-xl px-3 py-2.5 text-sm resize-none campo-cresce"
+          placeholder="Ex.: reforço de estoque para a alta temporada"
+        />
+      </FormField>
+    </ModalFormulario>
   );
 }
 

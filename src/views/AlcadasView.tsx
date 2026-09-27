@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { motion } from 'motion/react';
-import { Save, ShieldCheck, AlertTriangle } from 'lucide-react';
+import { Save, ShieldCheck, AlertTriangle, Landmark, UserCog, Crown, Building2 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
-import { LoadingSpinner, FormField, NeuButtonAccent } from '../components/ui';
+import { LoadingSpinner, FormField, NeuButtonAccent, SecaoFormulario, CardContador, type CorAba } from '../components/ui';
 import { formatBRL, parseBRL } from '../lib/viewUtils';
 import { useFilial } from '../contexts/FilialContext';
 import type { UserProfile } from '../hooks/useUserProfile';
@@ -16,6 +16,7 @@ type Alcada = {
 };
 
 const FILIAIS_OPERACIONAIS = ['SuperMax', 'MaxLook', 'TechMax'] as const;
+const COR_UNIDADE: Record<string, CorAba> = { SuperMax: 'azul', MaxLook: 'dourado', TechMax: 'laranja' };
 
 export const AlcadasView = ({ showToast, profile }: { showToast: any; profile: UserProfile }) => {
   const podeEditar = profile.role === 'admin' || profile.role === 'ceo';
@@ -110,49 +111,70 @@ export const AlcadasView = ({ showToast, profile }: { showToast: any; profile: U
 
   return (
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col gap-6">
-      <div>
-        <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight flex items-center gap-2">
-          <ShieldCheck size={26} /> Alçadas de Aprovação
-        </h2>
-      </div>
+      <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight flex items-center gap-2">
+        <ShieldCheck size={26} /> Alçadas de Aprovação
+      </h2>
 
-      <div className="neu-flat rounded-2xl p-5 border border-white/5 text-xs text-gray-400">
-        <p className="mb-2 font-bold text-gray-300 uppercase text-[10px] tracking-widest">Regra vigente</p>
-        <ul className="space-y-1 list-disc list-inside">
-          <li><span className="text-cyan-300 font-bold">Valor ≤ limite</span> — Financeiro decide (fluxo diário).</li>
-          <li><span className="text-amber-300 font-bold">Valor &gt; limite</span> — Gerente da filial decide (compras maiores).</li>
-          <li><span className="text-gray-200 font-bold">Admin / CEO</span> — sempre podem, override total.</li>
-        </ul>
+      {/* A regra em três selos, no lugar da lista explicativa: quem decide a
+          cotação conforme o valor. */}
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-[10px] font-black uppercase tracking-widest text-gray-500 mr-1">Quem decide a cotação</span>
+        <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-cyan-600 text-white">
+          <Landmark size={13} /> Até o limite · Financeiro
+        </span>
+        <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-amber-500 text-black">
+          <UserCog size={13} /> Acima do limite · Gerente da unidade
+        </span>
+        <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-zinc-600 text-white">
+          <Crown size={13} /> Admin e CEO · sempre
+        </span>
       </div>
 
       {loading ? <LoadingSpinner /> : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {filiaisVisiveis.map(filial => (
-            <div key={filial} className="neu-flat rounded-2xl p-5 border border-white/5 flex flex-col gap-3">
-              <div className="flex items-baseline justify-between">
-                <h3 className="text-base font-bold text-gray-200">{filial}</h3>
-                <span className="text-[10px] text-gray-500 uppercase tracking-widest">
-                  {alcadas[filial]?.id ? 'Configurado' : 'Padrão'}
-                </span>
-              </div>
-              <FormField label="Limite Financeiro (R$)">
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  className="neu-input py-2 px-3 rounded-xl text-sm text-right font-mono"
-                  value={inputs[filial] ?? ''}
-                  onChange={e => setInputs(prev => ({ ...prev, [filial]: formatBRL(e.target.value) }))}
-                  placeholder="0,00"
-                />
-              </FormField>
-              <p className="text-[10px] text-gray-500">
-                Até <span className="text-cyan-300 font-mono">R$ {inputs[filial] || '0,00'}</span> vai pro Financeiro; acima disso pro Gerente.
-              </p>
-              <NeuButtonAccent onClick={() => salvar(filial)} isLoading={savingFilial === filial}>
-                <Save size={14} /> Salvar
-              </NeuButtonAccent>
-            </div>
-          ))}
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
+          {filiaisVisiveis.map(filial => {
+            const salvo = alcadas[filial]?.valor_limite_financeiro ?? 0;
+            const digitado = parseBRL(inputs[filial] ?? '0');
+            const alterado = Math.abs((digitado || 0) - salvo) > 0.004 || !alcadas[filial]?.id;
+            return (
+              <SecaoFormulario key={filial} titulo={filial} icon={Building2} cor={COR_UNIDADE[filial]}
+                extra={alcadas[filial]?.id ? 'Configurado' : 'Padrão — ainda não salvo'}>
+                <div className="flex flex-col gap-4">
+                  <CardContador label="Limite do Financeiro" value={`R$ ${formatBRL(salvo)}`} tom="azul" />
+
+                  {/* A régua da unidade: à esquerda do limite, Financeiro; à direita, Gerente. */}
+                  <div className="flex rounded-xl overflow-hidden text-[11px] font-bold">
+                    <div className="flex-1 bg-cyan-600 text-white px-3 py-2 text-center">
+                      até R$ {inputs[filial] || '0,00'} · Financeiro
+                    </div>
+                    <div className="flex-1 bg-amber-500 text-black px-3 py-2 text-center">
+                      acima · Gerente
+                    </div>
+                  </div>
+
+                  <FormField label="Novo limite (R$)">
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      className="neu-input py-2 px-3 rounded-xl text-sm text-right font-mono tabular-nums"
+                      value={inputs[filial] ?? ''}
+                      onChange={e => setInputs(prev => ({ ...prev, [filial]: formatBRL(e.target.value) }))}
+                      placeholder="0,00"
+                    />
+                  </FormField>
+
+                  <div className="flex items-center justify-between gap-3">
+                    <span className={`text-[11px] font-bold ${alterado ? 'text-amber-400' : 'text-gray-600'}`}>
+                      {alterado ? 'Alteração não salva' : 'Sem alterações'}
+                    </span>
+                    <NeuButtonAccent onClick={() => salvar(filial)} isLoading={savingFilial === filial} disabled={!alterado}>
+                      <Save size={14} /> Salvar
+                    </NeuButtonAccent>
+                  </div>
+                </div>
+              </SecaoFormulario>
+            );
+          })}
         </div>
       )}
     </motion.div>

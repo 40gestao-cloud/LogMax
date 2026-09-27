@@ -78,7 +78,7 @@ export function SecaoIdentificacao({
 
   return (
     <>
-      <SecaoFormulario titulo="Identificação" icon={IdCard} cor="vermelho">
+      <SecaoFormulario titulo="Identificação" icon={IdCard} cor="roxo">
 
         {/* Tipo vem antes da origem: ele decide se a origem ainda se pergunta. */}
         {origemOferecida && (

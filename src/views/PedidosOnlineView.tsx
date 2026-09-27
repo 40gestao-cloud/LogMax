@@ -1,12 +1,13 @@
 import React, { useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { ShoppingCart, X, Check, Ban, ChevronDown, ChevronRight, Store, Link2, ExternalLink, Package, Search, AlertTriangle, Settings, Trash2 } from 'lucide-react';
+import { ShoppingCart, X, Check, Ban, ChevronDown, Store, Link2, ExternalLink, Package, Search, AlertTriangle, Settings, Trash2, Plus, Loader2 } from 'lucide-react';
+import { MenuMais, ItemMenu, CABECALHO_TABELA } from '../components/MenuMais';
 import type { FilialOp } from '../components/FilialSelector';
 import { useFilial } from '../contexts/FilialContext';
 import { useFetchData, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
 import { ehVendavel } from '../lib/tipoProduto';
 import { supabase } from '../lib/supabase';
-import { LoadingSpinner, EmptyState, NeuButtonAccent, CardContador, type TomContador, corDoStatus } from '../components/ui';
+import { LoadingSpinner, EmptyState, NeuButtonAccent, CardContador, type TomContador, AbaComContador, type CorAba, ProdutoThumb } from '../components/ui';
 import { useConfirm } from '../contexts/ConfirmContext';
 import { usePrompt } from '../contexts/PromptContext';
 import { groupCadastrosParaSelect } from '../lib/cadastrosSelect';
@@ -47,6 +48,9 @@ type Pedido = {
 // aluno descobrir isso por mensagem de erro.
 const EXIGE_CLIENTE = ['Fiado', 'Cartão Crédito'];
 
+type AbaPO = 'fila' | 'confirmados' | 'cancelados' | 'vitrine';
+type FiltroVitrine = 'todos' | 'na-loja' | 'fora' | 'sem-estoque';
+
 const PedidosOnlineInner = ({ showToast, profile, filial }: { showToast: any; profile: any; filial: FilialOp }) => {
   const confirm = useConfirm();
   // O `window.prompt` do navegador quebra a identidade visual e ainda anuncia
@@ -65,7 +69,8 @@ const PedidosOnlineInner = ({ showToast, profile, filial }: { showToast: any; pr
     useFetchData<any>('/api/lojaconfigview', { filial }, true, { orderBy: 'filial', ascending: true });
 
   const [aberto, setAberto] = useState<Record<string, boolean>>({});
-  const [verCatalogo, setVerCatalogo] = useState(false);
+  const [aba, setAba] = useState<AbaPO>('fila');
+  const [filtroVitrine, setFiltroVitrine] = useState<FiltroVitrine>('todos');
   const [buscaProd, setBuscaProd] = useState('');
   const [publicando, setPublicando] = useState<string | null>(null);
   const [atendendo, setAtendendo] = useState<Pedido | null>(null);
@@ -389,23 +394,33 @@ const PedidosOnlineInner = ({ showToast, profile, filial }: { showToast: any; pr
 
   if (isLoading) return <div className="flex-1 flex items-center justify-center"><LoadingSpinner /></div>;
 
-  const publicados = (produtos ?? []).filter((p: any) => p.loja_online);
+  // Patrimônio e material de uso e consumo não vão para a loja pública (migr.
+  // 440): ficam fora da vitrine e também da conta "X de Y".
+  const vendaveis = (produtos ?? []).filter((p: any) => ehVendavel(p.tipo));
+  const publicados = vendaveis.filter((p: any) => p.loja_online);
   const semEstoque = publicados.filter((p: any) => Number(p.estoque ?? 0) <= 0).length;
+  const cancelados = pedidos.filter(p => p.status === 'Cancelado');
 
   const kpis = [
-    { tom: 'amarelo' as TomContador, label: 'Na fila',        value: novos.length,        warn: novos.length > 0 },
-    { tom: 'roxo' as TomContador, label: 'Valor em fila',  value: brl(emFila),         warn: false },
-    { tom: 'verde' as TomContador, label: 'Confirmados',    value: confirmados.length,  warn: false },
-    { tom: 'azul' as TomContador, label: 'Na vitrine',     value: publicados.length,   warn: publicados.length === 0 },
-    { tom: cfg?.aberta ? 'verde' : 'vermelho' as TomContador, label: 'Loja',           value: cfg?.aberta ? 'Aberta' : 'Fechada', warn: !cfg?.aberta },
+    { tom: 'roxo' as TomContador,    label: 'Valor em fila', value: brl(emFila) },
+    { tom: 'azul' as TomContador,    label: 'Na vitrine',    value: publicados.length, sub: semEstoque > 0 ? `${semEstoque} sem estoque` : undefined },
+    { tom: (cfg?.aberta ? 'verde' : 'vermelho') as TomContador, label: 'Loja', value: cfg?.aberta ? 'Aberta' : 'Fechada' },
   ];
 
-  const produtosFiltrados = (produtos ?? [])
-    // Patrimônio e material de uso e consumo não vão para a loja pública
-    // (migr. 440). A lista oferecia TODOS os produtos da filial, então dava
-    // para publicar o freezer. O banco recusa em `fn_produto_publicavel`; aqui
-    // o item nem aparece com botão de publicar.
-    .filter((p: any) => ehVendavel(p.tipo))
+  const ABAS: { id: AbaPO; label: string; cor: CorAba; n: number; icon: any }[] = [
+    { id: 'fila',        label: 'Na fila',     cor: 'amarelo',  n: novos.length,       icon: ShoppingCart },
+    { id: 'confirmados', label: 'Confirmados', cor: 'verde',    n: confirmados.length, icon: Check },
+    { id: 'cancelados',  label: 'Cancelados',  cor: 'vermelho', n: cancelados.length,  icon: Ban },
+    { id: 'vitrine',     label: 'Vitrine',     cor: 'azul',     n: publicados.length,  icon: Package },
+  ];
+
+  const produtosFiltrados = vendaveis
+    .filter((p: any) => {
+      if (filtroVitrine === 'na-loja') return p.loja_online;
+      if (filtroVitrine === 'fora') return !p.loja_online;
+      if (filtroVitrine === 'sem-estoque') return Number(p.estoque ?? 0) <= 0;
+      return true;
+    })
     .filter((p: any) => {
       const q = buscaProd.trim().toLowerCase();
       if (!q) return true;
@@ -414,270 +429,261 @@ const PedidosOnlineInner = ({ showToast, profile, filial }: { showToast: any; pr
     .sort((a: any, b: any) =>
       Number(b.loja_online) - Number(a.loja_online) || String(a.nome).localeCompare(String(b.nome), 'pt-BR'));
 
-  return (
-    <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
-      className="flex flex-col h-full gap-6 overflow-y-auto main-scrollbar pb-6">
+  // 'Em Atendimento' existe no CHECK (migr. 293) sem ninguém gravar hoje; se
+  // aparecer, fica na fila em vez de sumir de todas as abas.
+  const listaPedidos = aba === 'confirmados' ? confirmados : aba === 'cancelados' ? cancelados
+    : pedidos.filter(p => p.status === 'Novo' || p.status === 'Em Atendimento');
 
-      <div className="flex flex-wrap justify-between items-start gap-3 shrink-0">
-        <div>
-          <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Pedidos Online — {filial}</h2>
-        </div>
-        <div className="flex gap-2">
+  return (
+    <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col gap-6 pb-6">
+
+      <div className="flex flex-wrap justify-between items-center gap-3">
+        <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Pedidos Online — {filial}</h2>
+        <div className="flex gap-2 flex-wrap">
           {podeAbrirFechar && (
-            <button onClick={definirUrl}
-              className="neu-button rounded-xl px-4 py-2 text-xs font-bold uppercase tracking-widest text-gray-400 hover:text-white flex items-center gap-2">
-              <ExternalLink size={13} />Endereço
+            <button onClick={definirUrl} className="btn-solido btn-solido--vermelho">
+              <ExternalLink size={13} /> Endereço
             </button>
           )}
-          <button onClick={copiarLink}
-            className="neu-button rounded-xl px-4 py-2 text-xs font-bold uppercase tracking-widest text-gray-400 hover:text-white flex items-center gap-2">
-            <Link2 size={13} />Copiar link
+          <button onClick={copiarLink} className="btn-solido btn-solido--azul">
+            <Link2 size={13} /> Copiar link
           </button>
           {podeAbrirFechar && cfg && (
-            <button onClick={abrirConfig}
-              className="neu-button rounded-xl px-4 py-2 text-xs font-bold uppercase tracking-widest text-gray-400 hover:text-white flex items-center gap-2">
-              <Settings size={13} />Limites
+            <button onClick={abrirConfig} className="btn-solido btn-solido--cinza">
+              <Settings size={13} /> Limites
             </button>
           )}
           {podeAbrirFechar && cfg && (
-            <NeuButtonAccent variant="" onClick={toggleLoja}>
-              <Store size={14} />{cfg.aberta ? 'Fechar loja' : 'Abrir loja'}
-            </NeuButtonAccent>
+            <button onClick={toggleLoja} className={`btn-solido ${cfg.aberta ? 'btn-solido--vermelho' : 'btn-solido--verde'}`}>
+              <Store size={14} /> {cfg.aberta ? 'Fechar loja' : 'Abrir loja'}
+            </button>
           )}
         </div>
       </div>
 
       {cfg && !cfg.aberta && (
-        <div className="neu-flat rounded-2xl p-4 border border-yellow-500/25 shrink-0">
-          <p className="text-xs text-yellow-400 leading-relaxed">
-            A loja está <strong>fechada</strong>: o link responde, mas não aceita pedidos novos.
-            {podeAbrirFechar ? ' Abra quando a turma estiver pronta para atender.' : ' Só gerente ou Matriz abre.'}
+        <div className="rounded-xl px-4 py-2.5 flex items-center gap-2 bg-yellow-500 text-black">
+          <Store size={15} className="shrink-0" />
+          <p className="text-xs font-bold">
+            Loja fechada: o link responde, mas não aceita pedidos.{!podeAbrirFechar && ' Só gerente ou Matriz abre.'}
           </p>
         </div>
       )}
 
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 shrink-0">
-        {kpis.map((k: any) => (
-          <CardContador key={k.label} label={k.label} value={k.value} sub={k.sub} tom={k.tom} />
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        {kpis.map(k => (
+          <CardContador key={k.label} label={k.label} value={k.value} sub={k.sub} tom={k.tom} corFixa />
         ))}
       </div>
 
-      {/* Vitrine da loja. Produto cadastrado NÃO entra sozinho: alguém decide
-          o que vai para o público, item a item. Sem isso, qualquer cadastro
-          de teste apareceria para gente de fora no instante em que fosse
-          salvo. */}
-      <div className="neu-flat rounded-3xl border border-white/5 shrink-0 overflow-hidden">
-        <button onClick={() => setVerCatalogo(v => !v)}
-          className="w-full flex items-center justify-between gap-3 p-5 hover:bg-white/[0.03] transition-colors">
-          <div className="flex items-center gap-3 text-left">
-            <Package size={16} className="text-accent shrink-0" />
-            <div>
-              <p className="text-sm font-bold text-gray-200">Publicar na loja online</p>
-              <p className="text-[11px] text-gray-500">
-                {publicados.length} de {(produtos ?? []).length} produto(s) publicado(s)
-                {semEstoque > 0 && <span className="text-yellow-400"> · {semEstoque} sem estoque (não aparece)</span>}
-              </p>
-            </div>
-          </div>
-          {verCatalogo ? <ChevronDown size={16} className="text-gray-500" /> : <ChevronRight size={16} className="text-gray-500" />}
-        </button>
+      <div className="flex gap-3 flex-wrap" role="tablist">
+        {ABAS.map(a => (
+          <AbaComContador key={a.id} label={a.label} n={a.n} cor={a.cor} icon={a.icon}
+            ativa={aba === a.id} onClick={() => setAba(a.id)} alerta={a.id === 'fila' && a.n > 0} />
+        ))}
+      </div>
 
-        {verCatalogo && (
-          <div className="px-5 pb-5">
-            <p className="text-[11px] text-gray-500 leading-relaxed mb-4">
-              Produto novo cadastrado no LogMax <strong className="text-gray-400">não entra na loja sozinho</strong> —
-              publique aqui. Ele só aparece para o público se estiver publicado, ativo e com estoque acima de zero.
-              Esta chave é da filial e não tem relação com a <strong className="text-gray-400">Vitrine da Tela
-              de Login</strong>, que é da Matriz e alimenta o carrossel do login.
-            </p>
-
-            <div className="relative mb-3">
-              <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
+      {/* ── Vitrine ──────────────────────────────────────────────────────── */}
+      {/* Produto cadastrado NÃO entra sozinho: alguém decide, item a item, o
+          que vai para o público. `produtos.loja_online` (migr. 294) — não é a
+          vitrine do login, que é da Matriz. */}
+      {aba === 'vitrine' && (
+        <div className="flex flex-col gap-4">
+          <div className="flex flex-wrap gap-2 items-center">
+            <div className="relative flex-1 min-w-[220px]">
+              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
               <input type="text" value={buscaProd} onChange={e => setBuscaProd(e.target.value)}
                 placeholder="Buscar por nome, código ou categoria..."
                 className="neu-input rounded-xl pl-9 pr-3 py-2.5 text-sm w-full" />
             </div>
+            {([
+              ['todos', `Todos (${vendaveis.length})`],
+              ['na-loja', `Na loja (${publicados.length})`],
+              ['fora', `Fora da loja (${vendaveis.length - publicados.length})`],
+              ['sem-estoque', `Sem estoque (${vendaveis.filter((p: any) => Number(p.estoque ?? 0) <= 0).length})`],
+            ] as const).map(([k, rot]) => (
+              <button key={k} type="button" onClick={() => setFiltroVitrine(k)} aria-pressed={filtroVitrine === k}
+                className={`py-2 px-3.5 rounded-xl text-xs font-bold border transition-colors ${filtroVitrine === k
+                  ? 'bg-accent border-accent text-black' : 'neu-button border-transparent text-gray-400 hover:text-gray-200'}`}>
+                {rot}
+              </button>
+            ))}
+          </div>
 
-            <div className="max-h-80 overflow-y-auto main-scrollbar flex flex-col gap-1.5">
-              {produtosFiltrados.length === 0 ? (
-                <p className="text-xs text-gray-500 py-6 text-center">Nenhum produto encontrado.</p>
-              ) : produtosFiltrados.map((p: any) => {
+          {produtosFiltrados.length === 0 ? (
+            <EmptyState message="Nenhum produto neste filtro." />
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-3">
+              {produtosFiltrados.map((p: any) => {
                 const semEst = Number(p.estoque ?? 0) <= 0;
+                const naLoja = !!p.loja_online;
                 return (
                   <div key={p.id}
-                    className="flex items-center gap-3 rounded-xl border border-white/5 bg-white/[0.02] px-3 py-2.5">
+                    className={`neu-flat rounded-2xl p-3 border flex items-center gap-3 transition-colors ${naLoja ? 'border-green-600/60' : 'border-white/5'}`}>
+                    <ProdutoThumb url={p.imagem_url} size="sm" alt={p.nome} />
                     <div className="flex-1 min-w-0">
-                      <p className="text-xs font-semibold text-gray-200 truncate">{p.nome}</p>
-                      <p className="text-[10px] text-gray-500">
-                        {p.categoria ?? '—'} · {brl(p.preco)} · {Number(p.estoque ?? 0)} em estoque
-                        {p.loja_online && semEst && <span className="text-yellow-400"> · não aparece sem estoque</span>}
-                        {p.loja_online && !p.imagem_url && <span className="text-gray-600"> · sem foto</span>}
+                      <p className="text-sm font-semibold text-gray-100 truncate" title={p.nome}>{p.nome}</p>
+                      <p className="text-[11px] text-gray-500 truncate">{p.categoria ?? '—'}</p>
+                      <p className="text-xs mt-0.5 flex items-center gap-2">
+                        <span className="font-bold text-gray-200 tabular-nums">{brl(p.preco)}</span>
+                        <span className={`tabular-nums ${semEst ? 'text-red-400 font-bold' : 'text-gray-500'}`}>
+                          {Number(p.estoque ?? 0)} em estoque
+                        </span>
                       </p>
+                      {naLoja && (semEst || !p.imagem_url) && (
+                        <p className="text-[10px] font-bold text-yellow-400 mt-0.5">
+                          {semEst ? 'Não aparece: sem estoque' : 'Sem foto'}
+                        </p>
+                      )}
                     </div>
                     <button onClick={() => togglePublicado(p)} disabled={publicando === p.id}
-                      className={`shrink-0 text-[10px] font-bold uppercase tracking-widest rounded-md px-2.5 py-1.5 border transition-colors disabled:opacity-40 ${
-                        p.loja_online
-                          ? 'text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/10'
-                          : 'text-gray-500 border-white/10 hover:text-gray-300 hover:border-white/20'
-                      }`}>
-                      {publicando === p.id ? '…' : p.loja_online ? 'Na loja' : 'Publicar'}
+                      title={naLoja ? 'Tirar da loja' : 'Publicar na loja'}
+                      className={`shrink-0 btn-solido !px-3 !py-2 !text-[11px] ${naLoja ? 'btn-solido--verde' : 'btn-solido--cinza'}`}>
+                      {publicando === p.id ? <Loader2 size={12} className="animate-spin" /> : naLoja ? <Check size={12} /> : <Plus size={12} />}
+                      {naLoja ? 'Na loja' : 'Publicar'}
                     </button>
                   </div>
                 );
               })}
             </div>
-          </div>
-        )}
-      </div>
+          )}
+        </div>
+      )}
 
-      <div className="neu-flat rounded-3xl p-6 border border-white/5 shrink-0">
-        {/* Consulta que falha e lista vazia são a mesma tela sem isto — e a
-            leitura natural de uma fila vazia é "ninguém pediu ainda", não
-            "não consegui ler os pedidos". */}
-        {erroPedidos ? (
+      {/* ── Pedidos ──────────────────────────────────────────────────────── */}
+      {aba !== 'vitrine' && (
+        // Consulta que falha e lista vazia são a mesma tela sem isto.
+        erroPedidos ? (
           <div className="rounded-2xl p-4 border border-red-500/30 bg-red-500/5">
             <p className="text-xs font-bold text-red-400 flex items-center gap-1.5 mb-1">
               <AlertTriangle size={12} />Não foi possível carregar a fila
             </p>
             <p className="text-[11px] text-gray-400 leading-relaxed">{erroPedidos}</p>
           </div>
-        ) : pedidos.length === 0 ? (
-          <EmptyState message="Nenhum pedido pela loja online ainda." />
+        ) : listaPedidos.length === 0 ? (
+          <EmptyState message={aba === 'fila' ? 'Nenhum pedido esperando atendimento.' : aba === 'confirmados' ? 'Nenhum pedido confirmado ainda.' : 'Nenhum pedido cancelado.'} />
         ) : (
-          <div className="flex flex-col gap-2">
-            <AnimatePresence>
-              {pedidos.map((p: Pedido) => {
-                const its = itensPorPedido.get(p.id) ?? [];
-                const exp = !!aberto[p.id];
-                return (
-                  <motion.div key={p.id} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}
-                    className="rounded-2xl border border-white/5 bg-white/[0.02] overflow-hidden">
-                    <div className="flex flex-wrap items-center gap-3 p-4">
-                      <button onClick={() => setAberto(a => ({ ...a, [p.id]: !exp }))}
-                        className="text-gray-500 hover:text-white shrink-0" aria-label="Ver itens">
-                        {exp ? <ChevronDown size={15} /> : <ChevronRight size={15} />}
-                      </button>
-
-                      <span className="font-mono text-sm font-bold text-accent tracking-wider">{p.codigo}</span>
-
-                      <span className={`inline-flex text-[10px] font-bold px-2 py-0.5 rounded-full border ${corDoStatus(p.status)}`}>
-                        {p.status}
-                      </span>
-
-                      {/* Indício, não acusação — e o texto precisa deixar isso
-                          claro, porque quem lê vai atender uma pessoa. Aba
-                          anônima gera outro token, e a turma inteira pode
-                          estar atrás do mesmo IP da escola. */}
-                      {faltaEstoque.has(p.id) && (
-                        <span
-                          title={`Estoque insuficiente agora: ${faltaEstoque.get(p.id)!.join(' · ')}.\n\nO pedido não reserva estoque, então isto mudou depois que ele entrou na fila. Confirmar assim será recusado — combine com o comprador antes.`}
-                          className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full border bg-red-500/10 text-red-400 border-red-500/25">
-                          <AlertTriangle size={9} />sem estoque
-                        </span>
-                      )}
-
-                      {Number(p.origem_pedidos_24h ?? 1) > 2 && (
-                        <span
-                          title={`Já vieram ${p.origem_pedidos_24h} pedidos desta mesma origem nas últimas 24h. É indício, não prova: pode ser a mesma pessoa comprando de novo, ou a rede da escola.`}
-                          className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full border bg-yellow-500/10 text-yellow-400 border-yellow-500/20">
-                          {p.origem_pedidos_24h}º da mesma origem
-                        </span>
-                      )}
-
-                      <div className="flex-1 min-w-[140px]">
-                        <p className="text-sm font-semibold text-gray-200 truncate">{p.comprador_apelido}</p>
-                        <p className="text-[10px] text-gray-500">
-                          {its.length} item(ns) · prefere {p.forma_desejada}
-                          {p.cupom_codigo && <> · cupom <span className="text-accent">{p.cupom_codigo}</span></>}
-                          {p.indicacao && <> · indicado por <span className="text-gray-400">{p.indicacao}</span></>}
-                        </p>
-                      </div>
-
-                      <span className="text-sm font-bold text-gray-100 tabular-nums">{brl(p.total_final)}</span>
-
-                      {p.status === 'Novo' && (
-                        <div className="flex gap-1.5">
-                          <button onClick={() => abrirAtendimento(p)}
-                            className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-emerald-400 border border-emerald-500/30 rounded-md px-2.5 py-1.5 hover:bg-emerald-500/10">
-                            <Check size={11} />Atender
-                          </button>
-                          <button onClick={() => cancelarPedido(p)}
-                            className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-red-400 border border-red-500/30 rounded-md px-2.5 py-1.5 hover:bg-red-500/10">
-                            <Ban size={11} />Cancelar
-                          </button>
-                        </div>
-                      )}
-
-                      {p.status === 'Confirmado' && (
-                        <span className="text-[10px] text-gray-500">
-                          por {p.atendente_nome ?? '—'}
-                          {p.venda_id && <span className="ml-1 text-accent inline-flex items-center gap-0.5"><ExternalLink size={9} />venda</span>}
-                        </span>
-                      )}
-                      {p.status === 'Cancelado' && p.motivo_cancelamento && (
-                        <span className="text-[10px] text-gray-500 max-w-[220px] truncate" title={p.motivo_cancelamento}>
-                          {p.motivo_cancelamento}
-                        </span>
-                      )}
-
-                      {/* Vale para qualquer status: pedido de teste também é
-                          atendido e confirmado enquanto a turma experimenta. */}
-                      {podeExcluir && (
-                        <button
-                          onClick={() => excluirPedido(p)}
-                          disabled={excluindo === p.id}
-                          title="Excluir pedido (some da lista)"
-                          className="action-btn-delete"
-                        >
-                          <Trash2 size={11} />
-                        </button>
-                      )}
-                    </div>
-
-                    {exp && (
-                      <div className="px-4 pb-4 pl-12">
-                        <table className="tabela w-full text-left text-xs">
-                          <thead>
-                            <tr className="text-[10px] text-gray-500 uppercase tracking-widest border-b border-white/5">
-                              <th className="pb-2 font-bold">Produto</th>
-                              <th className="pb-2 font-bold text-right">Qtd</th>
-                              <th className="pb-2 font-bold text-right">Unit.</th>
-                              <th className="pb-2 font-bold text-right">Subtotal</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {its.map((i: any) => (
-                              <tr key={i.id} className="border-b border-white/5">
-                                <td className="py-2 text-gray-300">{i.nome_produto}</td>
-                                <td className="py-2 text-right font-mono text-gray-400">{Number(i.qtd)}</td>
-                                <td className="py-2 text-right font-mono text-gray-400">{brl(i.preco_unitario)}</td>
-                                <td className="py-2 text-right font-mono text-gray-200">{brl(i.subtotal)}</td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                        {Number(p.cupom_desconto) > 0 && (
-                          p.cupom_ignorado ? (
-                            // O pedido guarda o que foi prometido; a venda diz o que
-                            // foi cobrado. Sem esta linha a diferença viraria mistério.
-                            <p className="text-[11px] text-yellow-400 mt-2 text-right">
-                              Cupom {p.cupom_codigo} não foi aplicado — venda fechada por {brl(p.total)}
-                            </p>
-                          ) : (
-                            <p className="text-[11px] text-emerald-400 mt-2 text-right">
-                              Cupom {p.cupom_codigo}: −{brl(p.cupom_desconto)} sobre {brl(p.total)}
-                            </p>
-                          )
+          <div className="neu-flat rounded-2xl p-4 sm:p-5 border border-white/5 overflow-x-auto main-scrollbar">
+            <table className="tabela w-full text-left border-collapse min-w-[820px]">
+              <thead>
+                <tr className={CABECALHO_TABELA}>
+                  <th className="text-center">Comprador</th>
+                  <th className="text-center w-24">Itens</th>
+                  <th className="text-center w-36">Total</th>
+                  <th className="text-center w-32">Pagamento</th>
+                  <th className="text-center w-44">{aba === 'fila' ? 'Alertas' : aba === 'confirmados' ? 'Atendido por' : 'Motivo'}</th>
+                  <th className="text-center w-px">Ações</th>
+                </tr>
+              </thead>
+              <tbody>
+                {listaPedidos.map((p: Pedido) => {
+                  const its = itensPorPedido.get(p.id) ?? [];
+                  const exp = !!aberto[p.id];
+                  const alternar = () => setAberto(a => ({ ...a, [p.id]: !exp }));
+                  return (
+                    <React.Fragment key={p.id}>
+                    <tr onClick={alternar}
+                      className={`border-b border-accent/10 hover:bg-accent/[0.04] transition-colors align-middle cursor-pointer ${exp ? 'bg-accent/[0.04]' : ''}`}>
+                      <td className="py-3 px-3 min-w-[13rem]">
+                        <span className="font-credencial text-[10px] tracking-wider text-accent/80">{p.codigo}</span>
+                        <span className="block text-sm font-semibold text-gray-100 truncate">{p.comprador_apelido}</span>
+                        {(p.cupom_codigo || p.indicacao) && (
+                          <span className="block text-[11px] text-gray-500 truncate">
+                            {p.cupom_codigo && <>cupom <span className="text-accent">{p.cupom_codigo}</span></>}
+                            {p.cupom_codigo && p.indicacao && ' · '}
+                            {p.indicacao && <>indicado por {p.indicacao}</>}
+                          </span>
                         )}
-                      </div>
+                      </td>
+                      <td className="py-3 px-3 text-center text-sm text-gray-300 tabular-nums">{its.length}</td>
+                      <td className="py-3 px-3 text-center text-sm font-bold text-gray-100 tabular-nums whitespace-nowrap">{brl(p.total_final)}</td>
+                      <td className="py-3 px-3 text-center text-xs text-gray-300">{p.forma_desejada}</td>
+                      <td className="py-3 px-3 text-center">
+                        {aba === 'fila' ? (
+                          <div className="flex flex-col items-center gap-1">
+                            {faltaEstoque.has(p.id) && (
+                              <span title={`Estoque insuficiente agora: ${faltaEstoque.get(p.id)!.join(' · ')}. Confirmar assim será recusado.`}
+                                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-red-600 text-white">
+                                <AlertTriangle size={10} /> Sem estoque
+                              </span>
+                            )}
+                            {/* Indício, não acusação: pode ser a mesma pessoa
+                                comprando de novo, ou a rede da escola. */}
+                            {Number(p.origem_pedidos_24h ?? 1) > 2 && (
+                              <span title={`${p.origem_pedidos_24h} pedidos da mesma origem nas últimas 24h. Pode ser a rede da escola.`}
+                                className="inline-flex px-2 py-0.5 rounded-md text-[10px] font-bold bg-yellow-400 text-black">
+                                {p.origem_pedidos_24h}º da mesma origem
+                              </span>
+                            )}
+                            {!faltaEstoque.has(p.id) && Number(p.origem_pedidos_24h ?? 1) <= 2 && <span className="text-xs text-gray-600">—</span>}
+                          </div>
+                        ) : aba === 'confirmados' ? (
+                          <span className="text-xs text-gray-300">{p.atendente_nome ?? '—'}</span>
+                        ) : (
+                          <span className="text-xs text-gray-400 line-clamp-2" title={p.motivo_cancelamento ?? ''}>{p.motivo_cancelamento ?? '—'}</span>
+                        )}
+                      </td>
+                      <td className="py-3 px-3" onClick={e => e.stopPropagation()}>
+                        <div className="flex justify-center items-center gap-1.5 flex-nowrap whitespace-nowrap">
+                          {p.status === 'Novo' && (
+                            <>
+                              <button onClick={() => abrirAtendimento(p)} title="Atender — fechar a venda" aria-label="Atender pedido"
+                                className="action-btn-verde"><Check size={14} /></button>
+                              <button onClick={() => cancelarPedido(p)} title="Cancelar pedido" aria-label="Cancelar pedido"
+                                className="action-btn-vermelho"><Ban size={13} /></button>
+                            </>
+                          )}
+                          <button onClick={alternar} aria-expanded={exp}
+                            title={exp ? 'Fechar os itens' : 'Ver os itens'} aria-label={exp ? 'Fechar os itens' : 'Ver os itens'}
+                            className="action-btn-neutral">
+                            <ChevronDown size={14} className={`transition-transform duration-200 ${exp ? 'rotate-180' : ''}`} />
+                          </button>
+                          {/* Vale para qualquer status: pedido de teste também é
+                              atendido e confirmado enquanto a turma experimenta. */}
+                          {podeExcluir && (
+                            <MenuMais>
+                              {fechar => (
+                                <ItemMenu onClick={() => { fechar(); excluirPedido(p); }} disabled={excluindo === p.id}
+                                  cor="text-red-400 hover:bg-red-500/10" icon={Trash2}>
+                                  Excluir pedido
+                                </ItemMenu>
+                              )}
+                            </MenuMais>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                    {exp && (
+                      <tr className="border-b border-accent/10">
+                        <td colSpan={6} className="px-3 pb-4 pt-1">
+                          <div className="neu-pressed rounded-xl p-3 border border-white/5 flex flex-col gap-1.5">
+                            {its.map((i: any) => (
+                              <div key={i.id} className="flex items-center gap-3 text-sm">
+                                <span className="flex-1 min-w-0 truncate text-gray-200">{i.nome_produto}</span>
+                                <span className="w-16 text-right tabular-nums text-gray-400">{Number(i.qtd)}×</span>
+                                <span className="w-28 text-right tabular-nums text-gray-400">{brl(i.preco_unitario)}</span>
+                                <span className="w-28 text-right tabular-nums font-bold text-gray-100">{brl(i.subtotal)}</span>
+                              </div>
+                            ))}
+                            {Number(p.cupom_desconto) > 0 && (
+                              <p className={`text-xs text-right mt-1 font-bold ${p.cupom_ignorado ? 'text-yellow-400' : 'text-emerald-400'}`}>
+                                {p.cupom_ignorado
+                                  ? `Cupom ${p.cupom_codigo} não aplicado — venda por ${brl(p.total)}`
+                                  : `Cupom ${p.cupom_codigo}: −${brl(p.cupom_desconto)} sobre ${brl(p.total)}`}
+                              </p>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
                     )}
-                  </motion.div>
-                );
-              })}
-            </AnimatePresence>
+                    </React.Fragment>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
-        )}
-      </div>
+        )
+      )}
 
       <AnimatePresence>
         {configAberta && cfg && (
@@ -701,7 +707,6 @@ const PedidosOnlineInner = ({ showToast, profile, filial }: { showToast: any; pr
                   onChange={e => setCfgForm(f => ({ ...f, mensagem_fechada: e.target.value }))}
                   placeholder="A loja está fechada no momento."
                   className="neu-input rounded-xl px-3 py-2.5 text-sm" />
-                <p className="text-[10px] text-gray-500">É o que o visitante lê no lugar da vitrine. Em branco, usa o texto padrão.</p>
               </div>
 
               <div className="grid grid-cols-2 gap-3 mb-4">
@@ -725,7 +730,7 @@ const PedidosOnlineInner = ({ showToast, profile, filial }: { showToast: any; pr
                   travar a turma inteira. */}
               <div className="grid grid-cols-2 gap-3 mb-2">
                 <div className="flex flex-col gap-1.5">
-                  <label htmlFor="cfg-hora" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Pedidos/hora por rede</label>
+                  <label htmlFor="cfg-hora" title="A turma costuma sair pela mesma internet: este limite vale para a sala inteira." className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Pedidos/hora por rede</label>
                   <input id="cfg-hora" type="text" inputMode="numeric" value={cfgForm.max_pedidos_hora ?? ''}
                     onChange={e => setCfgForm(f => ({ ...f, max_pedidos_hora: e.target.value.replace(/\D/g, '') }))}
                     className="neu-input rounded-xl px-3 py-2.5 text-sm" />
@@ -737,11 +742,7 @@ const PedidosOnlineInner = ({ showToast, profile, filial }: { showToast: any; pr
                     className="neu-input rounded-xl px-3 py-2.5 text-sm" />
                 </div>
               </div>
-              <p className="text-[10px] text-gray-500 leading-relaxed mb-5">
-                A turma toda costuma sair pela mesma internet, então o limite <strong className="text-gray-400">por rede</strong> é
-                da sala inteira — aperte-o e você trava todos. O de <strong className="text-gray-400">dispositivo</strong> é
-                o que segura uma pessoa sozinha despejando pedidos.
-              </p>
+              <div className="mb-5" />
 
               <div className="flex justify-end gap-2">
                 <button onClick={() => setConfigAberta(false)} disabled={salvando}
@@ -777,8 +778,7 @@ const PedidosOnlineInner = ({ showToast, profile, filial }: { showToast: any; pr
               <div className="neu-pressed rounded-xl p-3 text-xs text-gray-300 mb-4 leading-relaxed">
                 <strong className="text-gray-100">{atendendo.comprador_apelido}</strong> — {brl(t)}
                 {ignorarCupom && <span className="text-yellow-400"> (valor cheio, sem o cupom)</span>}
-                <br />
-                <span className="text-gray-500">Preferiu {atendendo.forma_desejada}. Você registra a forma real.</span>
+                <span className="text-gray-500"> · preferiu {atendendo.forma_desejada}</span>
               </div>
               ); })()}
 
@@ -793,10 +793,6 @@ const PedidosOnlineInner = ({ showToast, profile, filial }: { showToast: any; pr
                   <ul className="text-[11px] text-gray-400 leading-relaxed list-disc pl-4">
                     {faltaEstoque.get(atendendo.id)!.map(f => <li key={f}>{f}</li>)}
                   </ul>
-                  <p className="text-[10px] text-gray-500 mt-2">
-                    Confirmar assim vai ser recusado pelo banco — o pedido continua na fila.
-                    Combine com o comprador ou reponha o estoque antes.
-                  </p>
                 </div>
               )}
 
@@ -859,15 +855,7 @@ const PedidosOnlineInner = ({ showToast, profile, filial }: { showToast: any; pr
                 />
               </div>
 
-              <p className="text-[11px] text-gray-500 leading-relaxed mb-5">
-                Confirmar cria a venda pelo mesmo caminho do PDV: baixa estoque, gera conta a receber
-                e emite a nota. Se algum item tiver ficado sem estoque desde o pedido, a operação é
-                recusada inteira e o pedido continua na fila.
-                {EXIGE_CLIENTE.includes(forma) && (
-                  <> <span className="text-yellow-400">{forma} deixa a conta em aberto, por isso o cliente
-                  é obrigatório: sem ele a cobrança fica sem devedor.</span></>
-                )}
-              </p>
+              <div className="mb-5" />
 
               <div className="flex justify-end gap-2">
                 <button onClick={() => setAtendendo(null)} disabled={salvando}

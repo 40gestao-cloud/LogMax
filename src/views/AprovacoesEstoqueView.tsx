@@ -1,13 +1,18 @@
-import { MenuMais, ItemMenu } from '../components/MenuMais';
+import { MenuMais, ItemMenu, CABECALHO_TABELA } from '../components/MenuMais';
 import React, { useEffect, useState, useRef } from 'react';
 import type { FilialOp } from '../components/FilialSelector';
 import { useFilial } from '../contexts/FilialContext';
 import { motion } from 'motion/react';
-import { X, Check, Loader2, RotateCcw } from 'lucide-react';
+import { X, Check, Loader2, RotateCcw, Package } from 'lucide-react';
 import { useFetchData } from '../hooks/useSupabaseData';
 import { FiltroSolicitante, chaveSolicitante } from '../components/FiltroSolicitante';
 import { supabase } from '../lib/supabase';
-import { EmptyState, SelecioneUnidade, IdadeBadge } from '../components/ui';
+import { EmptyState, SelecioneUnidade, IdadeBadge, SecaoFormulario, StatusBadge, Pagination } from '../components/ui';
+import { qtdBR } from '../lib/viewUtils';
+import { normalizarUnidade } from '../lib/unidades';
+
+export type FiltroDecisao = 'todas' | 'Aprovado' | 'Negado';
+export const POR_PAGINA_DECIDIDAS = 20;
 import { useConfirm } from '../contexts/ConfirmContext';
 import { usePrompt } from '../contexts/PromptContext';
 import { ExcluirAdmin } from '../components/ExcluirAdmin';
@@ -29,7 +34,8 @@ type EnrichedAp = AprovacaoEstoque & {
  *  só, para as duas telas não divergirem com o tempo. */
 export type PedacoAprovacoesEstoque = 'ambos' | 'fila' | 'decididas';
 
-export const AprovacoesEstoqueBloco = ({ showToast, profile, filial, mostrar = 'ambos', solicitante, onSolicitantes }: { showToast: (msg: string, type: string, persist?: boolean) => void; profile: UserProfile; filial: FilialOp; mostrar?: PedacoAprovacoesEstoque;
+export const AprovacoesEstoqueBloco = ({ showToast, profile, filial, mostrar = 'ambos', solicitante, onSolicitantes, filtroDecisao = 'todas' }: { showToast: (msg: string, type: string, persist?: boolean) => void; profile: UserProfile; filial: FilialOp; mostrar?: PedacoAprovacoesEstoque;
+  filtroDecisao?: FiltroDecisao;
   /** Filtro por quem pediu, mandado de fora (aba de Requisições > Aprovações,
    *  onde um controle só vale para as quatro abas). Sozinha, esta tela tem o
    *  seu próprio seletor. */
@@ -49,6 +55,7 @@ export const AprovacoesEstoqueBloco = ({ showToast, profile, filial, mostrar = '
   const [solicLocal, setSolicLocal] = useState<string | null>(null);
   const [processing, setProcessing] = useState<string | null>(null);
   const [devolvendo, setDevolvendo] = useState<string | null>(null);
+  const [paginaDec, setPaginaDec] = useState(0);
   // Guard sincrônico: `processing` (state React) atualiza assíncronamente,
   // então double-click rápido entra no handler 2× antes do disable pintar.
   // O ref tranca instantaneamente.
@@ -275,6 +282,9 @@ export const AprovacoesEstoqueBloco = ({ showToast, profile, filial, mostrar = '
   const devolvidas  = enriched.filter(ap => ap.req.status === 'Em correção' && casaSolicitante(ap.req.solicitante));
   const decididasVisiveis = decididas.filter(ap =>
     casaSolicitante(requisicoes.find(r => r.id === ap.requisicao_estoque_id)?.solicitante));
+  const decididasVistas = decididasVisiveis.filter(ap => filtroDecisao === 'todas' || ap.status === filtroDecisao);
+  useEffect(() => { setPaginaDec(0); }, [filtroDecisao, solicAtivo]);
+  const paginaDecOk = Math.min(paginaDec, Math.max(0, Math.ceil(decididasVistas.length / POR_PAGINA_DECIDIDAS) - 1));
 
   // A fila pendente INTEIRA (sem o filtro aplicado) é o catálogo de nomes de
   // quem embute o bloco. Sai por efeito, comparando a lista já serializada:
@@ -452,78 +462,107 @@ export const AprovacoesEstoqueBloco = ({ showToast, profile, filial, mostrar = '
       )}
 
       {/* Decisões já tomadas — só para a direção. */}
-      {veDecididas && podeDevolver && decididasVisiveis.length > 0 && (
-        <div className="neu-flat rounded-2xl p-5 border border-white/5 shrink-0">
-          <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500">
-            {mostrar === 'ambos' ? 'Decisões já tomadas' : 'Decisões já tomadas — material do estoque'}
-          </p>
-          <p className="text-xs text-gray-500 mt-1 mb-4">
-            Negada por engano volta para a fila do gerente com o seu motivo. Liberada não volta: o material
-            já saiu da prateleira, e desfazer contaria a mesma saída duas vezes — o caminho é registrar a
-            entrada de devolução em Estoque → Movimentações.
-          </p>
-          {/* Sem caixa rolando dentro da página — rolagem dentro de rolagem
-              foi o que espremeu a lista para um card. São no máximo 15. */}
-          <div className="flex flex-col gap-2">
-            {decididasVisiveis.slice(0, 15).map(ap => {
-              const req = requisicoes.find(r => r.id === ap.requisicao_estoque_id);
-              const prod = req ? produtos.find(p => p.id === req.produto_id) : undefined;
-              const nome = prod?.nome ?? 'material';
-              const liberada = ap.status === 'Aprovado';
-              const indo = devolvendo === ap.id;
-              return (
-                <div key={ap.id} className="neu-pressed rounded-xl p-3 flex items-center justify-between gap-3">
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded border ${liberada
-                        ? 'text-green-400 border-green-500/30' : 'text-red-400 border-red-500/30'}`}>
-                        {/* "Liberado" é o verbo do botão, não o nome do status
-                            (item 21 do plano) — o valor gravado é 'Aprovado',
-                            igual ao resto da régua de decisão. */}
-                        {liberada ? 'Aprovado' : 'Negado'}
-                      </span>
-                      <span className="text-[11px] text-gray-500">Qtd: {req?.qtd ?? '—'}</span>
-                    </div>
-                    <p className="text-sm font-semibold text-gray-200 truncate">{nome}</p>
-                    <p className="text-[11px] text-gray-500 truncate">
-                      por {ap.aprovador || '—'}
-                      {ap.observacao ? ` · ${ap.observacao}` : ''}
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-2 shrink-0">
-                    {liberada ? (
-                      <span className="text-[10px] text-gray-600 max-w-[10rem] text-right leading-tight">
-                        material já saiu — devolução em Movimentações
-                      </span>
-                    ) : (
-                      <button onClick={() => devolver(ap, nome)} disabled={indo}
-                        title="Devolver para correção" className="action-btn-warning disabled:opacity-50">
-                        {indo ? <Loader2 size={12} className="animate-spin" /> : <RotateCcw size={12} />}
-                      </button>
-                    )}
-                    {isProfessor && (
-                      <ExcluirAdmin
-                        endpoint="/api/requisicoesestoqueview"
-                        id={ap.requisicao_estoque_id}
-                        rotulo={`a requisição de ${nome}`}
-                        alternativa={liberada
-                          ? 'registre a entrada de devolução em Estoque → Movimentações e abra uma requisição nova.'
-                          : 'use o botão de devolver ao lado: ela volta para Pendente e o gerente decide de novo.'}
-                        showToast={showToast}
-                        onExcluido={() => { reloadDecididas(); reloadReq(); }}
-                      />
-                    )}
-                  </div>
-                </div>
-              );
-            })}
+      {veDecididas && podeDevolver && (mostrar === 'decididas' || decididasVisiveis.length > 0) && (
+        <SecaoFormulario titulo="Material do estoque" icon={Package} cor="roxo"
+          extra={`${decididasVistas.length} decis${decididasVistas.length === 1 ? 'ão' : 'ões'}`}>
+          {decididasVistas.length === 0 ? (
+            <p className="text-xs text-gray-500 text-center py-6">Nenhuma liberação de material nesta seleção.</p>
+          ) : (
+          <>
+          <div className="overflow-x-auto main-scrollbar">
+            <table className="tabela tabela--verde w-full text-left border-collapse">
+              <thead>
+                <tr className={CABECALHO_TABELA}>
+                  <th className="text-center">Material</th>
+                  <th className="text-center w-28">Qtd</th>
+                  <th className="text-center w-32">Decisão</th>
+                  <th className="text-center w-48">Decidido por</th>
+                  <th className="text-center">Observação</th>
+                  <th className="text-center w-px">Ações</th>
+                </tr>
+              </thead>
+              <tbody>
+                {decididasVistas.slice(paginaDecOk * POR_PAGINA_DECIDIDAS, (paginaDecOk + 1) * POR_PAGINA_DECIDIDAS).map(ap => {
+                  const req = requisicoes.find(r => r.id === ap.requisicao_estoque_id);
+                  const prod = req ? produtos.find(p => p.id === req.produto_id) : undefined;
+                  const nome = prod?.nome ?? 'material';
+                  const liberada = ap.status === 'Aprovado';
+                  const indo = devolvendo === ap.id;
+                  return (
+                    <tr key={ap.id} className="border-b border-accent/10 hover:bg-accent/[0.04] transition-colors align-middle">
+                      <td className="py-3 px-3 min-w-[14rem]">
+                        {req && (
+                          <span className="font-credencial text-[10px] tracking-wider text-accent/70">{numeroRequisicao(req)}</span>
+                        )}
+                        <span className="block text-sm font-semibold text-gray-100 leading-snug mt-0.5 line-clamp-2 break-words" title={nome}>{nome}</span>
+                        {req?.solicitante && <span className="block text-[10px] text-gray-500">pedido por {req.solicitante}</span>}
+                      </td>
+                      <td className="py-3 px-3 text-center whitespace-nowrap">
+                        {req ? (
+                          <>
+                            <span className="text-sm font-semibold text-gray-200 tabular-nums">{qtdBR(req.qtd)}</span>
+                            {prod?.unidade && <span className="text-[10px] text-gray-500 ml-1 uppercase">{normalizarUnidade(prod.unidade)}</span>}
+                          </>
+                        ) : <span className="text-xs text-gray-600">—</span>}
+                      </td>
+                      {/* "Liberado" é o verbo do botão, não o nome do status
+                          (item 21 do plano) — o valor gravado é 'Aprovado'. */}
+                      <td className="py-3 px-3 text-center"><StatusBadge status={ap.status} /></td>
+                      <td className="py-3 px-3 text-center text-xs text-gray-300">{ap.aprovador || '—'}</td>
+                      <td className="py-3 px-3 text-center">
+                        <span className="block text-xs text-gray-400 line-clamp-2 max-w-[20rem] mx-auto" title={ap.observacao ?? ''}>
+                          {ap.observacao || '—'}
+                        </span>
+                      </td>
+                      <td className="py-3 px-3">
+                        <div className="flex justify-center items-center gap-1.5 flex-nowrap whitespace-nowrap">
+                          {/* Liberada não volta: o material já saiu da
+                              prateleira, e desfazer contaria a mesma saída duas
+                              vezes. O botão fica, apagado, dizendo o caminho. */}
+                          <button onClick={() => devolver(ap, nome)} disabled={indo || liberada}
+                            title={liberada
+                              ? 'Liberado não volta: o material já saiu. Registre a devolução em Estoque → Movimentações.'
+                              : 'Devolver para correção — volta para a fila do gerente com o seu motivo'}
+                            aria-label="Devolver para correção"
+                            className="action-btn-laranja disabled:opacity-30 disabled:cursor-not-allowed">
+                            {indo ? <Loader2 size={13} className="animate-spin" /> : <RotateCcw size={13} />}
+                          </button>
+                          <MenuMais>
+                            {fechar => (
+                              <>
+                                {req && (
+                                  <HistoricoOperacoes variante="menu" onAbrir={fechar} entidade="requisicoes_estoque" entidadeId={req.id}
+                                    titulo={`${numeroRequisicao(req)} · ${nome}`}
+                                    criadoEm={req.created_at} atualizadoEm={(req as any).updated_at} />
+                                )}
+                                {isProfessor && (
+                                  <ExcluirAdmin variante="menu"
+                                    endpoint="/api/requisicoesestoqueview"
+                                    id={ap.requisicao_estoque_id}
+                                    rotulo={`a requisição de ${nome}`}
+                                    alternativa={liberada
+                                      ? 'registre a entrada de devolução em Estoque → Movimentações e abra uma requisição nova.'
+                                      : 'use o botão de devolver ao lado: ela volta para Pendente e o gerente decide de novo.'}
+                                    showToast={showToast}
+                                    onExcluido={() => { reloadDecididas(); reloadReq(); }}
+                                  />
+                                )}
+                              </>
+                            )}
+                          </MenuMais>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
-          {decididasVisiveis.length > 15 && (
-            <p className="text-[10px] text-gray-600 mt-3">
-              Mostrando as 15 decisões mais recentes.
-            </p>
+          <Pagination page={paginaDecOk} totalCount={decididasVistas.length} pageSize={POR_PAGINA_DECIDIDAS}
+            onPrev={() => setPaginaDec(Math.max(0, paginaDecOk - 1))} onNext={() => setPaginaDec(paginaDecOk + 1)} />
+          </>
           )}
-        </div>
+        </SecaoFormulario>
       )}
     </motion.div>
   );

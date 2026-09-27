@@ -1507,7 +1507,7 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode, onNavigate }: { s
       {mostraAbas && (
         <div className="flex gap-3 flex-wrap shrink-0" role="tablist">
           {([
-            { id: 'cotacoes' as const, label: 'Cotações', n: totalCount ?? todasCotacoes.length, cor: 'navy' as const,
+            { id: 'cotacoes' as const, label: 'Cotações', n: totalCount ?? todasCotacoes.length, cor: 'vermelhoForte' as const,
               dica: 'Todas as propostas: aguardando o Financeiro, devolvidas, aprovadas e o histórico' },
             { id: 'gerar' as const, label: 'Gerar pedidos', n: prontasParaPedido.length, cor: 'verdeEscuro' as const,
               dica: 'Cotações aprovadas que ainda não viraram pedido' },
@@ -1707,9 +1707,12 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode, onNavigate }: { s
                   Todas as requisições aprovadas já têm proposta.
                 </p>
               )}
+              {/* Seções em pares lado a lado: empilhadas na largura toda, o
+                  aluno descia a tela inteira para preencher cinco campos. */}
+              <div className="grid grid-cols-1 @5xl:grid-cols-2 gap-5">
               <SecaoFormulario titulo="Item a cotar" icon={Package} cor="amarelo">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <FormField label="Requisição *" error={errors.requisicao_id} className="md:col-span-2">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <FormField label="Requisição *" error={errors.requisicao_id} className="sm:col-span-2">
                   <SelectBusca
                     value={form.requisicao_id}
                     error={undefined}
@@ -1798,7 +1801,7 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode, onNavigate }: { s
               </SecaoFormulario>
 
               <SecaoFormulario titulo="Fornecedor" icon={Truck} cor="vermelho">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <FormField label="Fornecedor PJ" error={errors.fornecedor_id}>
                   <SelectBusca
                     value={form.fornecedor_tipo === 'Empresa' ? form.fornecedor_id : ''}
@@ -1858,7 +1861,7 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode, onNavigate }: { s
                     caminho de volta (sair da tela, achar Cadastros, voltar
                     e refazer o formulário) custa o formulário inteiro. */}
                 {podeCadastrarFornecedor && (
-                  <div className="md:col-span-3 -mt-2 flex flex-wrap items-center gap-x-3 gap-y-2">
+                  <div className="sm:col-span-2 -mt-2 flex flex-wrap items-center gap-x-3 gap-y-2">
                     {!temPJ && <span className="text-[11px] text-yellow-400/90">Nenhum fornecedor PJ cadastrado.</span>}
                     {!temPF && <span className="text-[11px] text-yellow-400/90">Nenhum fornecedor PF cadastrado.</span>}
                     <span className="text-[11px] text-gray-500">Falta o fornecedor na lista?</span>
@@ -1872,7 +1875,7 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode, onNavigate }: { s
                   </div>
                 )}
                 {reserva.travado && (
-                  <p className="text-[11px] text-yellow-400 md:col-span-3 -mt-2">
+                  <p className="text-[11px] text-yellow-400 sm:col-span-2 -mt-2">
                     🔒 {reserva.dono?.usuario_nome} já está cotando este item agora.
                     Escolha outro item ou espere.
                   </p>
@@ -1881,7 +1884,7 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode, onNavigate }: { s
                     prazo prometido abaixo vale o que o fornecedor costuma
                     cumprir. */}
                 {desempenhoDisponivel && form.fornecedor_id && (
-                  <div className="flex flex-col gap-1 justify-end pb-1">
+                  <div className="sm:col-span-2 flex flex-col gap-1">
                     <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">
                       Histórico de entrega
                     </span>
@@ -1892,7 +1895,7 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode, onNavigate }: { s
               </SecaoFormulario>
 
               <SecaoFormulario titulo="Proposta" icon={DollarSign} cor="verde">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 {/* O ÚNICO campo de preço que se digita, na medida em que o
                     fornecedor fala: "R$ 135,00 o fardo" com embalagem
                     fechada (migr. 589), "R$ 4,50 a unidade" sem ela. O
@@ -1959,7 +1962,7 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode, onNavigate }: { s
               </SecaoFormulario>
 
               <SecaoFormulario titulo="Prazo e pagamento" icon={CalendarClock} cor="azul">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
                 <FormField label="Prazo de Entrega">
                   <input type="date" className={`neu-input py-2 px-3 rounded-xl text-sm ${prazoEstoura ? 'border border-red-500/40' : ''}`}
                     value={extras.prazo_entrega} onChange={e => setExtras(x => ({ ...x, prazo_entrega: e.target.value }))} />
@@ -2002,6 +2005,7 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode, onNavigate }: { s
                   aluno comparava dois preços fingindo que as condições
                   eram iguais — e é aqui que a diferença dos três nichos
                   aparece sem precisar de campo por nicho. */}
+              <div className="@5xl:col-span-2 @5xl:justify-self-center @5xl:w-[calc(50%-0.625rem)]">
               <SecaoFormulario titulo="Condições / observações do fornecedor" icon={MessageSquareText} cor="laranja">
                 <textarea maxLength={240}
                   className="neu-input py-2 px-3 rounded-xl text-sm resize-none campo-cresce w-full"
@@ -2009,6 +2013,8 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode, onNavigate }: { s
                   onChange={e => setExtras(x => ({ ...x, observacao: e.target.value }))}
                   placeholder="Ex.: frete incluso; garantia de 12 meses; troca em até 7 dias" />
               </SecaoFormulario>
+              </div>
+              </div>
             </>
           )}
         </ModalFormulario>

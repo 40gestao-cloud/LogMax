@@ -7,7 +7,7 @@ import { numeroOrcamento } from '../lib/documentos';
 import { useFetchData, dbInsert, dbUpdate } from '../hooks/useSupabaseData';
 import { useTravaAtualizacao } from '../hooks/useTravaAtualizacao';
 import { ehVendavel } from '../lib/tipoProduto';
-import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent, StatusBadge, Pagination, ExportButton, TextoModal, SecaoFormulario, ModalFormulario } from '../components/ui';
+import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent, StatusBadge, Pagination, ExportButton, TextoModal, SecaoFormulario, ModalFormulario, CardContador, type TomContador } from '../components/ui';
 import { useFormValidation, formatBRL, parseBRL, exportToPDFAgrupado, exportToExcelAgrupado, handleMoneyKeyDown } from '../lib/viewUtils';
 import {
   calcularCondicao, parcelasMaximas, rotuloCondicao, vencimentosPrevistos,
@@ -68,6 +68,10 @@ const FASES = [
 ] as const;
 
 type FaseId = typeof FASES[number]['id'] | 'todos';
+
+const TOM_FASE: Record<typeof FASES[number]['id'], TomContador> = {
+  elaboracao: 'azul', financeiro: 'amarelo', cliente: 'roxo', ganhos: 'verde', encerrados: 'vermelho',
+};
 
 const OrcamentosViewInner = ({
   showToast, profile, mode, filial,
@@ -601,35 +605,25 @@ const OrcamentosViewInner = ({
       {/* Filtro em duas camadas: a fase do ciclo (sempre visível) e, dentro
           dela, o status exato (só quando a fase reúne mais de um). */}
       <div className="flex flex-col gap-2 shrink-0">
-        <div className="flex gap-2 flex-wrap">
+        {/* Uma fase por card: o número é o contador e o clique filtra. */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
+          {FASES.map(f => (
+            <CardContador key={f.id} label={f.label} value={contarStatus(f.status)} tom={TOM_FASE[f.id]}
+              ativo={fase === f.id} corFixa
+              onClick={() => { setFase(fase === f.id ? 'todos' : f.id); setStatusFino(null); }} />
+          ))}
+        </div>
+        <div className="flex gap-2 flex-wrap items-center">
           <button
             type="button"
             onClick={() => { setFase('todos'); setStatusFino(null); }}
-            className={`py-2 px-3.5 rounded-xl text-[11px] font-bold uppercase tracking-widest border transition-all flex items-center gap-2 ${
-              fase === 'todos' ? 'border-accent text-accent' : 'border-white/5 text-gray-500 hover:text-gray-300 hover:border-white/15'
+            className={`py-1.5 px-3 rounded-lg text-[11px] font-bold uppercase tracking-widest border transition-all ${
+              fase === 'todos' ? 'bg-accent border-accent text-black' : 'border-white/10 text-gray-400 hover:text-gray-200'
             }`}
           >
-            Todos
-            <span className="font-mono tabular-nums text-gray-500">{totalGeral}</span>
+            Todos ({totalGeral})
           </button>
-          {FASES.map(f => {
-            const n = contarStatus(f.status);
-            const ativa = fase === f.id;
-            return (
-              <button
-                key={f.id}
-                type="button"
-                title={f.dica}
-                onClick={() => { setFase(f.id); setStatusFino(null); }}
-                className={`py-2 px-3.5 rounded-xl text-[11px] font-bold uppercase tracking-widest border transition-all flex items-center gap-2 ${
-                  ativa ? 'border-accent text-accent' : 'border-white/5 text-gray-500 hover:text-gray-300 hover:border-white/15'
-                } ${!ativa && n === 0 ? 'opacity-50' : ''}`}
-              >
-                {f.label}
-                <span className="font-mono tabular-nums text-gray-500">{n}</span>
-              </button>
-            );
-          })}
+          {faseAtual && <span className="text-xs text-gray-500">Filtrando: <b className="text-gray-300">{faseAtual.label}</b></span>}
         </div>
 
         {/* Refino: os status de dentro da fase. Fase de um status só não
@@ -680,9 +674,12 @@ const OrcamentosViewInner = ({
             </NeuButtonAccent>
           </>}
         >
+          {/* Seções em pares, como em Requisição e Cotação: empilhadas na
+              largura toda, o vendedor descia a tela inteira para montar a proposta. */}
+          <div className="grid grid-cols-1 @5xl:grid-cols-2 gap-5">
           <SecaoFormulario titulo="Cliente" icon={User} cor="amarelo">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <FormField label="Cliente *" error={errors.cliente_id} className="md:col-span-2">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 items-start">
+            <FormField label="Cliente *" error={errors.cliente_id} className="sm:col-span-2">
               <SelectBusca
                 value={form.cliente_id}
                 onChange={v => { setForm(f => ({ ...f, cliente_id: v })); clearError('cliente_id'); }}
@@ -702,77 +699,9 @@ const OrcamentosViewInner = ({
           </div>
           </SecaoFormulario>
 
-          <SecaoFormulario titulo="Itens da proposta" icon={ShoppingCart} cor="vermelho"
-            extra={`${itens.length} ite${itens.length === 1 ? 'm' : 'ns'}`}>
-          <div className="flex flex-col gap-2">
-            <div className="flex items-center justify-between gap-2 flex-wrap">
-              <div className="flex items-center gap-2 flex-1">
-                <input
-                  type="text"
-                  value={produtoBusca}
-                  onChange={e => setProdutoBusca(e.target.value)}
-                  placeholder="Buscar produto por nome ou código..."
-                  className="neu-input py-1.5 px-3 rounded-lg text-xs flex-1"
-                />
-                <button onClick={addItem} className="btn-solido btn-solido--amarelo !py-1.5 !px-3 !text-[11px] shrink-0">
-                  <Plus size={11} /> Adicionar item
-                </button>
-              </div>
-            </div>
-            {itens.length === 0 ? (
-              <p className="text-xs text-gray-600 py-3 text-center">Nenhum item ainda — adicione produtos do catálogo.</p>
-            ) : (
-              <div className="flex flex-col gap-2">
-                {itens.map((it, idx) => (
-                  <div key={idx} className="grid grid-cols-12 gap-2 items-center neu-pressed rounded-xl p-3">
-                    <SelectBusca
-                      compacto
-                      className="col-span-5"
-                      value={it.produto_id}
-                      onChange={v => escolherProduto(idx, v)}
-                      placeholder="Produto"
-                      opcoes={produtosFiltrados.map((p: any) => ({
-                        ...opcaoProduto(p, { saldo: true }),
-                        tag: p.preco != null ? { texto: `R$ ${formatBRL(Number(p.preco))}`, tom: 'cinza' as const } : null,
-                      }))}
-                    />
-                    <div className="col-span-2">
-                      <input
-                        type="number"
-                        min="1"
-                        className="neu-input py-1.5 px-2 rounded-lg text-xs w-full text-right"
-                        value={it.qtd}
-                        onChange={e => updateItem(idx, { qtd: Math.max(0, Number(e.target.value) || 0) })}
-                        placeholder="Qtd"
-                      />
-                    </div>
-                    <div className="col-span-2">
-                      <input
-                        type="text"
-                        inputMode="numeric"
-                        className="neu-input py-1.5 px-2 rounded-lg text-xs w-full text-right"
-                        value={it.preco_unitario ? formatBRL(it.preco_unitario) : ''}
-                        onChange={e => updateItem(idx, { preco_unitario: parseBRL(formatBRL(e.target.value)) })}
-                        onKeyDown={handleMoneyKeyDown}
-                        placeholder="Preço"
-                      />
-                    </div>
-                    <span className="col-span-2 text-xs font-mono text-accent text-right tabular-nums">
-                      R$ {formatBRL(it.subtotal)}
-                    </span>
-                    <button onClick={() => removeItem(idx)} className="col-span-1 mx-auto action-btn-delete">
-                      <Trash2 size={12} />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-          </SecaoFormulario>
-
           <SecaoFormulario titulo="Pagamento" icon={CreditCard} cor="azul">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <FormField label="Desconto comercial (R$)">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 items-start">
+            <FormField label="Desconto (R$)">
               <input
                 type="text"
                 inputMode="numeric"
@@ -859,13 +788,72 @@ const OrcamentosViewInner = ({
           )}
           </SecaoFormulario>
 
-          <SecaoFormulario titulo="Observações" icon={MessageSquareText} cor="laranja">
-            <textarea
-              className="neu-input py-2 px-3 rounded-xl text-sm min-h-[60px] w-full"
-              value={extras.observacoes}
-              onChange={e => setExtras(x => ({ ...x, observacoes: e.target.value }))}
-              placeholder="Condições, prazo de entrega, etc."
-            />
+          <SecaoFormulario titulo="Itens da proposta" icon={ShoppingCart} cor="vermelho"
+            extra={`${itens.length} ite${itens.length === 1 ? 'm' : 'ns'}`}>
+          <div className="flex flex-col gap-2">
+            <div className="flex items-center justify-between gap-2 flex-wrap">
+              <div className="flex items-center gap-2 flex-1">
+                <input
+                  type="text"
+                  value={produtoBusca}
+                  onChange={e => setProdutoBusca(e.target.value)}
+                  placeholder="Buscar produto por nome ou código..."
+                  className="neu-input py-1.5 px-3 rounded-lg text-xs flex-1"
+                />
+                <button onClick={addItem} className="btn-solido btn-solido--amarelo !py-1.5 !px-3 !text-[11px] shrink-0">
+                  <Plus size={11} /> Adicionar item
+                </button>
+              </div>
+            </div>
+            {itens.length === 0 ? (
+              <p className="text-xs text-gray-600 py-3 text-center">Nenhum item ainda — adicione produtos do catálogo.</p>
+            ) : (
+              <div className="flex flex-col gap-2">
+                {itens.map((it, idx) => (
+                  <div key={idx} className="grid grid-cols-12 gap-2 items-center neu-pressed rounded-xl p-3">
+                    <SelectBusca
+                      compacto
+                      className="col-span-5"
+                      value={it.produto_id}
+                      onChange={v => escolherProduto(idx, v)}
+                      placeholder="Produto"
+                      opcoes={produtosFiltrados.map((p: any) => ({
+                        ...opcaoProduto(p, { saldo: true }),
+                        tag: p.preco != null ? { texto: `R$ ${formatBRL(Number(p.preco))}`, tom: 'cinza' as const } : null,
+                      }))}
+                    />
+                    <div className="col-span-2">
+                      <input
+                        type="number"
+                        min="1"
+                        className="neu-input py-1.5 px-2 rounded-lg text-xs w-full text-right"
+                        value={it.qtd}
+                        onChange={e => updateItem(idx, { qtd: Math.max(0, Number(e.target.value) || 0) })}
+                        placeholder="Qtd"
+                      />
+                    </div>
+                    <div className="col-span-2">
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        className="neu-input py-1.5 px-2 rounded-lg text-xs w-full text-right"
+                        value={it.preco_unitario ? formatBRL(it.preco_unitario) : ''}
+                        onChange={e => updateItem(idx, { preco_unitario: parseBRL(formatBRL(e.target.value)) })}
+                        onKeyDown={handleMoneyKeyDown}
+                        placeholder="Preço"
+                      />
+                    </div>
+                    <span className="col-span-2 text-xs font-mono text-accent text-right tabular-nums">
+                      R$ {formatBRL(it.subtotal)}
+                    </span>
+                    <button onClick={() => removeItem(idx)} className="col-span-1 mx-auto action-btn-delete">
+                      <Trash2 size={12} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
           </SecaoFormulario>
 
           {/* Totais — a conta inteira, linha a linha. O aluno tem de ver
@@ -873,67 +861,73 @@ const OrcamentosViewInner = ({
               que a condição abateu, o que o parcelamento acrescentou, e o
               que a maquininha vai comer do que a loja recebe. */}
           <SecaoFormulario titulo="Resumo" icon={Calculator} cor="verde">
-          <div className="flex flex-col gap-3">
-            <div className="flex justify-end gap-6 text-xs flex-wrap">
-              <div className="flex flex-col items-end">
-                <span className="text-gray-500 uppercase tracking-widest text-[10px]">Mercadoria</span>
-                <span className="font-mono text-gray-300 tabular-nums">R$ {formatBRL(subtotal)}</span>
-              </div>
-              {descontoNum > 0 && (
-                <div className="flex flex-col items-end">
-                  <span className="text-gray-500 uppercase tracking-widest text-[10px]">Desc. comercial</span>
-                  <span className="font-mono text-gray-300 tabular-nums">- R$ {formatBRL(descontoNum)}</span>
-                </div>
-              )}
-              {resumo.descontoCondicao > 0 && (
-                <div className="flex flex-col items-end">
-                  <span className="text-gray-500 uppercase tracking-widest text-[10px]">Desc. à vista</span>
-                  <span className="font-mono text-emerald-400 tabular-nums">- R$ {formatBRL(resumo.descontoCondicao)}</span>
-                </div>
-              )}
-              {resumo.acrescimoJuros > 0 && (
-                <div className="flex flex-col items-end">
-                  <span className="text-gray-500 uppercase tracking-widest text-[10px]">Juros ({formatBRL(Number(formaEscolhida?.juros_mensal ?? 0))}% a.m.)</span>
-                  <span className="font-mono text-yellow-400 tabular-nums">+ R$ {formatBRL(resumo.acrescimoJuros)}</span>
-                </div>
-              )}
-              <div className="flex flex-col items-end">
-                <span className="text-gray-500 uppercase tracking-widest text-[10px]">Total ao cliente</span>
-                <span className="font-mono text-lg font-black text-accent tabular-nums">R$ {formatBRL(valorTotal)}</span>
-                {resumo.parcelas > 1 && (
-                  <span className="font-mono text-[11px] text-gray-400 tabular-nums">
-                    {resumo.parcelas}x de R$ {formatBRL(resumo.valorParcela)}
-                  </span>
-                )}
-              </div>
+          <div className="flex flex-col gap-1.5 text-sm">
+            <div className="flex justify-between gap-3">
+              <span className="text-gray-400">Mercadoria</span>
+              <span className="font-mono tabular-nums text-gray-200">R$ {formatBRL(subtotal)}</span>
             </div>
-
-            {formaEscolhida && (
-              <div className="flex justify-end gap-6 text-[11px] flex-wrap text-gray-500">
-                {resumo.taxaAdquirente > 0 && (
-                  <span>
-                    Taxa da maquininha ({formatBRL(Number(formaEscolhida.taxa ?? 0))}%):
-                    {' '}<span className="font-mono text-red-400 tabular-nums">- R$ {formatBRL(resumo.taxaAdquirente)}</span>
-                    {' '}<span className="text-gray-600">— custo da loja, não do cliente</span>
-                  </span>
-                )}
-                <span>
-                  A loja recebe:
-                  {' '}<span className="font-mono text-gray-300 tabular-nums">R$ {formatBRL(resumo.valorLiquido)}</span>
-                </span>
-                <span>
-                  1º vencimento:
-                  {' '}<span className="font-mono text-gray-300">
-                    {vencimentos[0]?.toLocaleDateString('pt-BR')}
-                  </span>
-                  {vencimentos.length > 1 && (
-                    <span className="text-gray-600"> · último em {vencimentos[vencimentos.length - 1].toLocaleDateString('pt-BR')}</span>
-                  )}
-                </span>
+            {descontoNum > 0 && (
+              <div className="flex justify-between gap-3">
+                <span className="text-gray-400">(−) Desconto comercial</span>
+                <span className="font-mono tabular-nums text-gray-200">- R$ {formatBRL(descontoNum)}</span>
               </div>
+            )}
+            {resumo.descontoCondicao > 0 && (
+              <div className="flex justify-between gap-3">
+                <span className="text-gray-400">(−) Desconto à vista</span>
+                <span className="font-mono tabular-nums text-emerald-400">- R$ {formatBRL(resumo.descontoCondicao)}</span>
+              </div>
+            )}
+            {resumo.acrescimoJuros > 0 && (
+              <div className="flex justify-between gap-3">
+                <span className="text-gray-400">(+) Juros ({formatBRL(Number(formaEscolhida?.juros_mensal ?? 0))}% a.m.)</span>
+                <span className="font-mono tabular-nums text-yellow-400">+ R$ {formatBRL(resumo.acrescimoJuros)}</span>
+              </div>
+            )}
+            <div className="rounded-xl bg-green-600 text-white px-3 py-2.5 my-1.5 flex items-center justify-between gap-3">
+              <span className="text-[11px] font-black uppercase tracking-widest">Total ao cliente</span>
+              <span className="text-right">
+                <span className="block text-lg font-black tabular-nums">R$ {formatBRL(valorTotal)}</span>
+                {resumo.parcelas > 1 && (
+                  <span className="block text-[11px] font-bold tabular-nums opacity-90">{resumo.parcelas}x de R$ {formatBRL(resumo.valorParcela)}</span>
+                )}
+              </span>
+            </div>
+            {formaEscolhida && (
+              <>
+                {resumo.taxaAdquirente > 0 && (
+                  <div className="flex justify-between gap-3 text-xs" title="Custo da loja, não do cliente">
+                    <span className="text-gray-500">Taxa da maquininha ({formatBRL(Number(formaEscolhida.taxa ?? 0))}%)</span>
+                    <span className="font-mono tabular-nums text-red-400">- R$ {formatBRL(resumo.taxaAdquirente)}</span>
+                  </div>
+                )}
+                <div className="flex justify-between gap-3 text-xs">
+                  <span className="text-gray-500">A loja recebe</span>
+                  <span className="font-mono tabular-nums text-gray-200">R$ {formatBRL(resumo.valorLiquido)}</span>
+                </div>
+                <div className="flex justify-between gap-3 text-xs">
+                  <span className="text-gray-500">Vencimentos</span>
+                  <span className="font-mono text-gray-300">
+                    {vencimentos[0]?.toLocaleDateString('pt-BR')}
+                    {vencimentos.length > 1 && ` a ${vencimentos[vencimentos.length - 1].toLocaleDateString('pt-BR')}`}
+                  </span>
+                </div>
+              </>
             )}
           </div>
           </SecaoFormulario>
+
+          <div className="@5xl:col-span-2 @5xl:justify-self-center @5xl:w-[calc(50%-0.625rem)]">
+          <SecaoFormulario titulo="Observações" icon={MessageSquareText} cor="laranja">
+            <textarea
+              className="neu-input py-2 px-3 rounded-xl text-sm w-full resize-none campo-cresce"
+              value={extras.observacoes}
+              onChange={e => setExtras(x => ({ ...x, observacoes: e.target.value }))}
+              placeholder="Condições, prazo de entrega, etc."
+            />
+          </SecaoFormulario>
+          </div>
+          </div>
         </ModalFormulario>
       </AnimatePresence>
 

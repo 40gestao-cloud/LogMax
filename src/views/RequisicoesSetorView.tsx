@@ -13,7 +13,7 @@ import { FluxoCompra } from '../components/FluxoCompra';
 import { BotaoModeloPlanilha } from '../components/BotaoModeloPlanilha';
 import { etapaDaRequisicao } from '../lib/fluxoCompra';
 import { numeroRequisicao } from '../lib/documentos';
-import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent, StatusBadge, UrgenciaBadge, SelecioneUnidade, AbaComContador, SecaoFormulario, ModalFormulario } from '../components/ui';
+import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent, StatusBadge, UrgenciaBadge, SelecioneUnidade, AbaComContador, SecaoFormulario, ModalFormulario, ProdutoThumb } from '../components/ui';
 import { todayBR } from '../lib/dates';
 import {
   unidadesDeRequisicao, exemploItemRequisicao, UNIDADES_FRACIONARIAS, normalizarUnidade,
@@ -187,6 +187,10 @@ const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: 
         Number(b.abaixoMin) - Number(a.abaixoMin)
         || String(a.nome ?? '').localeCompare(String(b.nome ?? ''), 'pt-BR'));
   }, [produtos, buscaCat, soAbaixoMin, podeReporMercadoria]);
+  // Os marcados, na ordem do clique — independem da busca e do filtro.
+  const itensRepo = useMemo(
+    () => [...repo.keys()].map(id => (produtos as any[]).find(p => p.id === id)).filter(Boolean),
+    [repo, produtos]);
 
   // Compra eventual de item que JÁ está no catálogo (24/09). Em Compras, a
   // requisição de texto livre só vira pedido depois de ligada a um produto, e
@@ -899,18 +903,19 @@ const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: 
           {/* O tipo é a primeira pergunta porque muda o destino do pedido:
               material sai da prateleira (Estoque libera), compra vai para
               a fila de cotação (gerente decide). */}
+          <div className="grid grid-cols-1 @5xl:grid-cols-2 gap-5">
           <SecaoFormulario titulo="O que você precisa" icon={HelpCircle} cor="amarelo">
-            <div className="flex flex-wrap gap-2">
+            <div className="flex-1 flex flex-wrap items-center content-center justify-center gap-3">
               {([
-                { id: 'eventual'  as TipoReq, label: 'Compra eventual', hint: 'item fora do catálogo ou serviço', cor: 'bg-yellow-500 border-yellow-600 text-black', sub: 'text-black/70' },
+                { id: 'eventual'  as TipoReq, label: 'Compra eventual', hint: 'item fora do catálogo ou serviço', cor: 'bg-green-800 border-green-900 text-white', sub: 'text-white/80' },
                 { id: 'reposicao' as TipoReq, label: 'Reposição',       hint: 'item do catálogo que acabou',     cor: 'bg-red-600 border-red-700 text-white',       sub: 'text-white/80' },
-                { id: 'estoque'   as TipoReq, label: 'Material do estoque', hint: 'retirar do almoxarifado',     cor: 'bg-blue-600 border-blue-700 text-white',     sub: 'text-white/80' },
+                { id: 'estoque'   as TipoReq, label: 'Material do estoque', hint: 'retirar do almoxarifado',     cor: 'bg-blue-900 border-blue-950 text-white',     sub: 'text-white/80' },
               ]).map(op => (
                 <button
                   key={op.id}
                   onClick={() => { setTipo(op.id); setErros({}); }}
                   aria-pressed={tipo === op.id}
-                  className={`flex-1 min-w-[180px] text-left py-2.5 px-4 rounded-xl border transition ${op.cor} ${
+                  className={`flex-1 min-w-[150px] max-w-[220px] text-center py-2.5 px-4 rounded-xl border transition ${op.cor} ${
                     tipo === op.id
                       ? 'ring-2 ring-offset-2 ring-offset-[color:var(--color-bg-base,#000)] ring-white/70'
                       : 'opacity-45 hover:opacity-75'
@@ -925,7 +930,7 @@ const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: 
 
           {tipo === 'estoque' ? (
             <SecaoFormulario titulo="Material do estoque" icon={Package} cor="azul">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <FormField label="Produto *" error={erros.produto_id}>
                 <SelectBusca
                   value={estoqueForm.produto_id}
@@ -984,7 +989,7 @@ const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: 
           ) : (
           <>
           <SecaoFormulario titulo="Prazo e prioridade" icon={CalendarClock} cor="azul">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
             <FormField label="Necessário até *" error={erros.data_necessidade}>
               <input
                 type="date"
@@ -1020,11 +1025,13 @@ const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: 
           </SecaoFormulario>
 
           {tipo === 'reposicao' ? (
-            <SecaoFormulario titulo="Itens a repor" icon={ListChecks} cor="vermelho"
-              extra={repo.size > 0 ? `${repo.size} selecionado${repo.size === 1 ? '' : 's'}` : 'nenhum selecionado'}>
-            <div className="flex flex-col gap-2">
-              <span className="text-[11px] text-gray-400">Marque no catálogo o que precisa repor.</span>
-
+            <>
+            {/* Catálogo e escolhidos lado a lado: na lista única a quantidade
+                ficava na ponta direita da linha, longe do nome, e a lista
+                rolava o que já tinha sido marcado para fora da vista. */}
+            <SecaoFormulario titulo="Catálogo" icon={Search} cor="vermelho"
+              extra={`${catalogoRepo.length} ite${catalogoRepo.length === 1 ? 'm' : 'ns'}`}>
+            <div className="flex flex-col gap-3">
               <div className="flex flex-wrap gap-2 items-center">
                 <div className="relative flex-1 min-w-[200px]">
                   <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
@@ -1049,128 +1056,156 @@ const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: 
                 </button>
               </div>
 
-              {erros.repo && <span className="text-[10px] text-red-500 font-semibold">{erros.repo}</span>}
-
-              {/* max-h menor abaixo de sm (plano mobile, item 1.7):
-                  a caixa e rolagem-dentro-de-rolagem por natureza (e uma
-                  lista com busca e checkbox, nao da pra virar select de
-                  valor unico), entao a correcao possivel e encolher a
-                  area presa pelo gesto, nao elimina-la. */}
-              <div className={`neu-pressed rounded-xl max-h-56 sm:max-h-72 overflow-y-auto main-scrollbar divide-y divide-white/5 ${erros.repo ? 'border border-red-500/40' : ''}`}>
+              {/* max-h menor abaixo de sm (plano mobile, item 1.7): lista
+                  com busca e checkbox não vira select, então o que dá é
+                  encolher a área presa pelo gesto. */}
+              <div className={`neu-pressed rounded-xl max-h-64 sm:max-h-[22rem] overflow-y-auto main-scrollbar p-1.5 flex flex-col gap-1 ${erros.repo ? 'border border-red-500/40' : ''}`}>
                 {catalogoRepo.length === 0 ? (
                   <p className="text-xs text-gray-500 p-4 text-center">
                     {soAbaixoMin ? 'Nenhum item no mínimo agora.' : 'Nenhum produto encontrado.'}
                   </p>
                 ) : catalogoRepo.map((p: any) => {
                   const marcado = repo.has(p.id);
+                  const emb = embalagemDoProduto(p);
                   return (
-                    <div key={p.id} className={`flex items-center gap-3 px-3 py-2 ${marcado ? 'bg-accent/5' : ''}`}>
-                      <button
-                        onClick={() => toggleRepo(p.id)}
-                        className={`w-4 h-4 rounded flex items-center justify-center border shrink-0 transition-colors ${
-                          marcado ? 'bg-accent border-accent' : 'border-white/20 hover:border-white/40'
-                        }`}
-                      >
-                        {marcado && <Check size={11} className="text-black" />}
-                      </button>
-                      <button onClick={() => toggleRepo(p.id)} className="flex-1 min-w-0 text-left">
-                        <span className="block text-xs font-semibold text-gray-200 truncate">{p.nome}</span>
-                        <span className="block text-[10px] text-gray-500">
-                          {p.codigo ? `${p.codigo} · ` : ''}saldo {qtdBR(p.saldo)}
-                          {p.minimo > 0 ? ` · mínimo ${qtdBR(p.minimo)}` : ''}
-                          {' '}{p.unidade ?? 'un'}
-                          {/* Migr. 589: dizer como o item é comprado antes
-                              de marcar. Quem não vê o fardo aqui pede 20
-                              unidades quando queria 20 fardos. */}
-                          {embalagemDoProduto(p) && (
-                            <span className="text-gray-600"> · {rotuloEmbalagem(embalagemDoProduto(p), p.unidade)}</span>
-                          )}
+                    <button key={p.id} type="button" onClick={() => toggleRepo(p.id)} aria-pressed={marcado}
+                      className={`shrink-0 flex items-center gap-3 px-2.5 py-2 rounded-lg text-left border transition-colors ${
+                        marcado ? 'bg-accent/10 border-accent/40' : 'border-transparent hover:bg-white/[0.04]'
+                      }`}>
+                      <span className={`w-5 h-5 rounded-md flex items-center justify-center border shrink-0 transition-colors ${
+                        marcado ? 'bg-accent border-accent' : 'border-white/25'
+                      }`}>
+                        {marcado && <Check size={13} className="text-black" />}
+                      </span>
+                      <ProdutoThumb url={p.imagem_url} size="xs" alt={p.nome} />
+                      <span className="flex-1 min-w-0">
+                        <span className="block text-sm font-semibold text-gray-100 truncate">{p.nome}</span>
+                        {/* Migr. 589: dizer como o item é comprado antes de
+                            marcar. Quem não vê o fardo aqui pede 20 unidades
+                            quando queria 20 fardos. */}
+                        <span className="block text-[11px] text-gray-500 truncate">
+                          {p.codigo ?? '—'}
+                          {emb && <> · {rotuloEmbalagem(emb, p.unidade)}</>}
                         </span>
-                      </button>
-                      {p.abaixoMin && (
-                        <span className="px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider bg-red-500/15 text-red-400 shrink-0">
-                          No mínimo
+                      </span>
+                      <span className="text-right shrink-0 tabular-nums">
+                        <span className={`block text-sm font-bold ${p.abaixoMin ? 'text-red-400' : 'text-gray-200'}`}>
+                          {qtdBR(p.saldo)} <span className="text-[10px] font-normal text-gray-500">{normalizarUnidade(p.unidade)}</span>
                         </span>
-                      )}
-                      {marcado && (() => {
-                        // Migr. 589: só oferece "em fardo" quem tem
-                        // embalagem cadastrada. Sem ela o botão não aparece
-                        // — e o cadastro é onde se resolve isso.
-                        const emb = embalagemDoProduto(p);
-                        const emFardo = !!emb && repoEmb.has(p.id);
-                        // Em fardo a quantidade é inteira: fornecedor não
-                        // abre fardo, e a RPC recusa 2,5 (mesma régua).
-                        const frac = emFardo ? false : ehFracionaria(p.unidade);
-                        const digitado = parseQtd(repo.get(p.id) ?? '1');
-                        return (
-                          <div className="flex items-center gap-2 shrink-0">
-                            {emb && (
-                              <div className="neu-pressed rounded-lg p-0.5 flex text-[9px] font-bold uppercase tracking-wider">
-                                {[
-                                  { modo: false, txt: normalizarUnidade(p.unidade) },
-                                  { modo: true,  txt: emb.nome },
-                                ].map(op => (
-                                  <button key={String(op.modo)}
-                                    onClick={() => {
-                                      setModoRepo(p.id, op.modo);
-                                      // Trocar de medida remascara: "2,5" em
-                                      // KG não sobrevive à virada para fardo.
-                                      setQtdRepo(p.id, formatQtd(repo.get(p.id) ?? '1', op.modo ? false : ehFracionaria(p.unidade)));
-                                    }}
-                                    title={op.modo
-                                      ? `Pedir em ${emb.nome.toLowerCase()} — ${rotuloEmbalagem(emb, p.unidade)}`
-                                      : `Pedir na unidade solta (${rotuloUnidade(p.unidade)})`}
-                                    className={`px-1.5 py-0.5 rounded transition-colors ${
-                                      (op.modo === emFardo) ? 'bg-accent text-black' : 'text-gray-500 hover:text-gray-300'
-                                    }`}>
-                                    {op.txt}
-                                  </button>
-                                ))}
-                              </div>
-                            )}
-                            <div className="w-24 shrink-0">
-                              <input
-                                type="text" inputMode="decimal"
-                                className="neu-input py-1 px-2 rounded-lg text-xs w-full tabular-nums"
-                                value={repo.get(p.id) ?? '1'}
-                                onChange={e => setQtdRepo(p.id, formatQtd(e.target.value, frac))}
-                                onKeyDown={handleQtdKeyDown(frac)}
-                                // Sem artigo: "caixa" é feminino e "fardo"
-                                // masculino, e a lista tem os dois.
-                                title={emFardo
-                                  ? `Quantidade a repor, em ${pluralEmbalagem(emb!.nome, 2).toLowerCase()}`
-                                  : `Quantidade a repor (${normalizarUnidade(p.unidade)})`}
-                              />
-                              {/* A conta aparece ANTES de enviar: é ela que
-                                  o aluno precisa aprender a fazer, e vê-la
-                                  é o que evita pedir 20 unidades achando
-                                  que pediu 20 fardos. */}
-                              {emFardo && digitado > 0 && (
-                                <span className="block text-[9px] text-accent/90 text-right mt-0.5 tabular-nums leading-tight">
-                                  = {qtdBR(digitado * emb!.fator)} {normalizarUnidade(p.unidade)}
-                                </span>
-                              )}
-                            </div>
-                          </div>
-                        );
-                      })()}
-                    </div>
+                        <span className={`block text-[10px] ${p.abaixoMin ? 'text-red-400/80' : 'text-gray-500'}`}>
+                          {p.minimo > 0 ? `mínimo ${qtdBR(p.minimo)}` : 'sem mínimo'}
+                        </span>
+                      </span>
+                    </button>
                   );
                 })}
               </div>
             </div>
             </SecaoFormulario>
+
+            <SecaoFormulario titulo="Itens a repor" icon={ListChecks} cor="verde"
+              extra={repo.size > 0 ? `${repo.size} selecionado${repo.size === 1 ? '' : 's'}` : 'nenhum selecionado'}>
+              {erros.repo && <span className="text-[10px] text-red-500 font-semibold mb-2">{erros.repo}</span>}
+              {itensRepo.length === 0 ? (
+                <div className="flex-1 flex flex-col items-center justify-center text-center gap-2 py-8 text-gray-500">
+                  <ListChecks size={22} className="opacity-60" />
+                  <p className="text-xs leading-relaxed">
+                    Marque no catálogo o que precisa repor.<br />A quantidade de cada item se ajusta aqui.
+                  </p>
+                </div>
+              ) : (
+                <div className="flex flex-col gap-2">
+                  {itensRepo.map((p: any) => {
+                    // Migr. 589: só oferece "em fardo" quem tem embalagem
+                    // cadastrada — o cadastro é onde se resolve isso.
+                    const emb = embalagemDoProduto(p);
+                    const emFardo = !!emb && repoEmb.has(p.id);
+                    // Em fardo a quantidade é inteira: fornecedor não abre
+                    // fardo, e a RPC recusa 2,5 (mesma régua).
+                    const frac = emFardo ? false : ehFracionaria(p.unidade);
+                    const digitado = parseQtd(repo.get(p.id) ?? '1');
+                    const saldo = Number(p.estoque ?? 0);
+                    const minimo = Number(p.estoque_minimo ?? 0);
+                    return (
+                      <div key={p.id} className="neu-pressed rounded-xl p-2.5 border border-white/5 flex flex-wrap items-center gap-3">
+                        <ProdutoThumb url={p.imagem_url} size="xs" alt={p.nome} />
+                        <div className="flex-1 min-w-[140px]">
+                          <span className="block text-sm font-semibold text-gray-100 truncate">{p.nome}</span>
+                          <span className="block text-[11px] text-gray-500 tabular-nums">
+                            saldo {qtdBR(saldo)}{minimo > 0 ? ` · mínimo ${qtdBR(minimo)}` : ''} {normalizarUnidade(p.unidade)}
+                          </span>
+                        </div>
+                        <div className="flex items-start gap-2 shrink-0 ml-auto">
+                          {emb && (
+                            <div className="neu-pressed rounded-lg p-0.5 flex text-[10px] font-bold uppercase tracking-wider mt-1">
+                              {[
+                                { modo: false, txt: normalizarUnidade(p.unidade) },
+                                { modo: true,  txt: emb.nome },
+                              ].map(op => (
+                                <button key={String(op.modo)} type="button"
+                                  onClick={() => {
+                                    setModoRepo(p.id, op.modo);
+                                    // Trocar de medida remascara: "2,5" em
+                                    // KG não sobrevive à virada para fardo.
+                                    setQtdRepo(p.id, formatQtd(repo.get(p.id) ?? '1', op.modo ? false : ehFracionaria(p.unidade)));
+                                  }}
+                                  title={op.modo
+                                    ? `Pedir em ${emb.nome.toLowerCase()} — ${rotuloEmbalagem(emb, p.unidade)}`
+                                    : `Pedir na unidade solta (${rotuloUnidade(p.unidade)})`}
+                                  className={`px-2 py-1 rounded transition-colors ${
+                                    (op.modo === emFardo) ? 'bg-accent text-black' : 'text-gray-500 hover:text-gray-300'
+                                  }`}>
+                                  {op.txt}
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                          <div className="w-24">
+                            <input
+                              type="text" inputMode="decimal"
+                              className="neu-input py-2 px-3 rounded-xl text-sm w-full tabular-nums text-center"
+                              value={repo.get(p.id) ?? '1'}
+                              onChange={e => setQtdRepo(p.id, formatQtd(e.target.value, frac))}
+                              onKeyDown={handleQtdKeyDown(frac)}
+                              // Sem artigo: "caixa" é feminino e "fardo"
+                              // masculino, e a lista tem os dois.
+                              title={emFardo
+                                ? `Quantidade a repor, em ${pluralEmbalagem(emb!.nome, 2).toLowerCase()}`
+                                : `Quantidade a repor (${normalizarUnidade(p.unidade)})`}
+                            />
+                            {/* A conta aparece ANTES de enviar: vê-la é o que
+                                evita pedir 20 unidades achando que pediu 20
+                                fardos. */}
+                            {emFardo && digitado > 0 && (
+                              <span className="block text-[10px] text-accent/90 text-center mt-0.5 tabular-nums leading-tight">
+                                = {qtdBR(digitado * emb!.fator)} {normalizarUnidade(p.unidade)}
+                              </span>
+                            )}
+                          </div>
+                          <button type="button" onClick={() => toggleRepo(p.id)}
+                            title="Tirar da reposição" aria-label="Tirar da reposição"
+                            className="action-btn-delete mt-1.5">
+                            <Trash2 size={12} />
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </SecaoFormulario>
+            </>
           ) : (
           <>
           {/* Itens: texto livre. O catálogo é sugestão, não obrigação. */}
           <SecaoFormulario titulo="Itens solicitados" icon={ListChecks} cor="vermelho"
             extra={`${itens.length} ite${itens.length === 1 ? 'm' : 'ns'}`}>
-          <div className="flex flex-col gap-2">
+          <div className="@container flex flex-col gap-2">
 
             {itens.map((row, i) => (
               <div key={row.uid} className="flex flex-col gap-1.5 neu-pressed rounded-xl p-3 border border-white/5">
-                <div className="flex flex-wrap xl:flex-nowrap gap-2 items-start">
-                  <div className="w-full xl:w-auto xl:flex-1 xl:min-w-[180px]">
+                <div className="flex flex-wrap @2xl:flex-nowrap gap-2 items-start">
+                  <div className="w-full @2xl:w-auto @2xl:flex-1 @2xl:min-w-[180px]">
                     <input
                       className={`neu-input py-2 px-3 rounded-xl text-sm w-full ${erros[`item_${i}`] ? 'border border-red-500/40' : ''}`}
                       placeholder={`Nome do produto — ${exemploItemRequisicao(filial)}`}
@@ -1220,7 +1255,7 @@ const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: 
                       );
                     })()}
                   </div>
-                  <div className="flex-1 min-w-[140px] xl:flex-none xl:w-44">
+                  <div className="flex-1 min-w-[140px] @2xl:flex-none @2xl:w-44">
                     <input
                       list="sugestoes-marcas"
                       className="neu-input py-2 px-3 rounded-xl text-sm w-full"
@@ -1345,8 +1380,7 @@ const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: 
             error={erros.justificativa}
           >
             <textarea
-              rows={2}
-              className={`neu-input py-2 px-3 rounded-xl text-sm resize-none ${erros.justificativa ? 'border border-red-500/40' : ''}`}
+              className={`neu-input py-2 px-3 rounded-xl text-sm resize-none campo-cresce ${erros.justificativa ? 'border border-red-500/40' : ''}`}
               placeholder="Por que a empresa precisa disto?"
               value={cab.justificativa}
               onChange={e => setCab(c => ({ ...c, justificativa: e.target.value }))}
@@ -1363,6 +1397,7 @@ const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: 
           )}
           </>
           )}
+          </div>
         </ModalFormulario>
       </AnimatePresence>
 
