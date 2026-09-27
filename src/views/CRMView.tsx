@@ -3,13 +3,13 @@ import React, { useState, useEffect } from 'react';
 import type { FilialOp } from '../components/FilialSelector';
 import { useFilial } from '../contexts/FilialContext';
 import { motion, AnimatePresence } from 'motion/react';
-import { Search, Edit2, Trash2, Mail, Phone as PhoneIcon, Plus, Save, FileDown, Sheet, MapPin, CreditCard, ExternalLink } from 'lucide-react';
+import { Search, Edit2, Trash2, Mail, Phone as PhoneIcon, Plus, Save, FileDown, Sheet, MapPin, CreditCard, ExternalLink, Truck } from 'lucide-react';
 import { HistoricoOperacoes } from '../components/HistoricoOperacoes';
 import { ImagemUploader, LogoCadastro } from '../components/ImagemCadastro';
 import { uploadImagem, removerImagem, CADASTRO_IMAGEM_BUCKET } from '../lib/imagemCadastro';
 import { BotaoModeloPlanilha } from '../components/BotaoModeloPlanilha';
 import { useFetchData, dbInsert, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
-import { LoadingSpinner, EmptyState, FormField, ExportButton, NeuButtonAccent, FilialBadge, Pagination, ModalFormulario } from '../components/ui';
+import { LoadingSpinner, EmptyState, FormField, ExportButton, NeuButtonAccent, StatusBadge, Pagination, ModalFormulario } from '../components/ui';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import { useFormValidation, exportToPDF, exportToExcel, formatPhone, formatCPF, formatCNPJ, formatBRL, parseBRL, handleMoneyKeyDown } from '../lib/viewUtils';
 import { useConfirm } from '../contexts/ConfirmContext';
@@ -447,35 +447,43 @@ const CRMViewInner = ({ type, showToast, filial }: {
 
       {/* Cards */}
       {isLoading ? <LoadingSpinner /> : filtered.length === 0 ? <EmptyState /> : (
-        <div className="flex flex-col gap-4 overflow-y-auto main-scrollbar pb-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 pr-2">
+        <div className="flex flex-col gap-4 pb-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
           {filtered.map((item: any, i: number) => {
-            const pessoaTipo: string = item.pessoa_tipo ?? (isClientes ? item.tipo : item.categoria) ?? '—';
-            const docLabel = item.pessoa_tipo === 'Pessoa Física' ? 'CPF' : 'CNPJ';
+            const pj = (item.pessoa_tipo ?? 'Empresa') !== 'Pessoa Física';
+            const docLabel = pj ? 'CNPJ' : 'CPF';
+            // Sem etiqueta de unidade: a lista já é da unidade ativa, e repetir
+            // "SuperMax" em todo card não dizia nada.
+            const atributos = !isClientes
+              ? (ATRIBUTOS_FORNECEDOR[item.filial] ?? [])
+                  .map(d => ({ label: d.label.replace(/\s*\(.*\)$/, ''), valor: item.atributos?.[d.key] }))
+                  .filter(a => a.valor !== undefined && a.valor !== null && String(a.valor).trim() !== '')
+              : [];
+            const inativo = item.status === 'Inativo';
             return (
-              <motion.div key={item.id} initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}
-                transition={{ delay: i * 0.03 }}
-                className="neu-flat p-6 rounded-3xl flex flex-col border border-white/5 gap-4 group">
-                <div className="flex justify-between items-start gap-3">
-                  {/* A identidade veio para a esquerda, ao lado do nome. Ficava
-                      solta na direita, com o mesmo ícone em todos os cards —
-                      trinta fornecedores eram trinta caixas idênticas. */}
-                  <div className="flex items-start gap-3 min-w-0">
-                    <LogoCadastro imagemUrl={item.logo_url} nome={item.nome} size={44} />
-                    <div className="min-w-0">
-                      <h3 className="text-sm font-bold text-gray-200 mb-2 tracking-wide">{item.nome}</h3>
-                      <div className="flex gap-2 items-center flex-wrap">
-                        <span className="text-[10px] uppercase px-2 py-0.5 rounded text-gray-400 tracking-widest neu-pressed" style={{ background: 'var(--color-badge-neutral-bg)' }}>{pessoaTipo}</span>
-                        <FilialBadge filial={item.filial} />
-                        <span className="w-1 h-1 rounded-full bg-accent"></span>
-                        <span className="text-xs text-accent font-medium">{item.status}</span>
-                      </div>
+              <motion.div key={item.id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: Math.min(i, 12) * 0.02 }}
+                className={`neu-flat rounded-2xl border border-white/10 flex flex-col overflow-hidden ${inativo ? 'opacity-60' : ''}`}>
+                {/* Identidade: logo, nome e as etiquetas que separam um
+                    fornecedor do outro — tipo de pessoa, categoria e situação. */}
+                <div className="p-4 flex items-start gap-3">
+                  <LogoCadastro imagemUrl={item.logo_url} nome={item.nome} size={48} />
+                  <div className="min-w-0 flex-1">
+                    <h3 className="text-sm font-bold text-gray-100 leading-snug line-clamp-2 break-words" title={item.nome}>{item.nome}</h3>
+                    {!isClientes && item.categoria && (
+                      <p className="text-[11px] text-gray-400 mt-0.5 line-clamp-1" title={item.categoria}>
+                        {item.categoria.split(',').map((c: string) => c.trim()).filter(Boolean).join(' · ')}
+                      </p>
+                    )}
+                    <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
+                      <span className={`px-2 py-0.5 rounded-md text-[9px] font-bold uppercase tracking-widest ${pj ? 'bg-blue-900 text-white' : 'bg-purple-700 text-white'}`}>
+                        {pj ? 'Empresa' : 'Pessoa física'}
+                      </span>
+                      {item.status && <StatusBadge status={item.status} solido />}
                     </div>
                   </div>
-                  {/* No toque não existe hover: as ações ficavam invisíveis e
-                      inalcançáveis no celular. Escondidas só a partir de md. */}
                   <div className="flex items-center gap-1.5 shrink-0">
-                    <button onClick={() => openEdit(item)} className="action-btn-edit"><Edit2 size={12} /></button>
+                    <button onClick={() => openEdit(item)} title="Editar" aria-label="Editar" className="action-btn-edit"><Edit2 size={12} /></button>
                     <MenuMais>
                       {fechar => (
                         <>
@@ -490,38 +498,69 @@ const CRMViewInner = ({ type, showToast, filial }: {
                   </div>
                 </div>
 
-                <div className="neu-pressed p-4 rounded-2xl flex flex-col gap-2.5 border border-white/5">
-                  <span className="text-[10px] text-gray-500 uppercase tracking-widest font-bold border-b border-white/5 pb-2">Contato</span>
-                  {item.email ? (
-                    <div className="flex items-center gap-2.5 text-xs text-gray-300">
-                      <Mail size={11} className="text-gray-500 shrink-0" />{item.email}
+                {/* Contato em linhas com ícone; e-mail e telefone clicáveis. */}
+                <div className="px-4 pb-4 flex flex-col gap-2 text-xs">
+                  {item.cpf_cnpj && (
+                    <div className="flex items-center gap-2.5 text-gray-300">
+                      <CreditCard size={13} className="text-accent shrink-0" />
+                      <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest w-9 shrink-0">{docLabel}</span>
+                      <span className="font-mono tabular-nums truncate">{item.cpf_cnpj}</span>
                     </div>
-                  ) : null}
-                  {item.telefone ? (
-                    <div className="flex items-center gap-2.5 text-xs text-gray-300">
-                      <PhoneIcon size={11} className="text-gray-500 shrink-0" />{item.telefone}
+                  )}
+                  {item.telefone && (
+                    <a href={`tel:${String(item.telefone).replace(/\D/g, '')}`} className="flex items-center gap-2.5 text-gray-300 hover:text-accent min-w-0">
+                      <PhoneIcon size={13} className="text-accent shrink-0" />
+                      <span className="tabular-nums truncate">{item.telefone}</span>
+                    </a>
+                  )}
+                  {item.email && (
+                    <a href={`mailto:${item.email}`} className="flex items-center gap-2.5 text-gray-300 hover:text-accent min-w-0" title={item.email}>
+                      <Mail size={13} className="text-accent shrink-0" />
+                      <span className="truncate">{item.email}</span>
+                    </a>
+                  )}
+                  {item.endereco && (
+                    <div className="flex items-start gap-2.5 text-gray-400 min-w-0" title={item.endereco}>
+                      <MapPin size={13} className="text-accent shrink-0 mt-0.5" />
+                      <span className="line-clamp-2 leading-snug">{item.endereco}</span>
                     </div>
-                  ) : null}
-                  {item.cpf_cnpj ? (
-                    <div className="flex items-center gap-2.5 text-xs text-gray-300">
-                      <CreditCard size={11} className="text-gray-500 shrink-0" />
-                      <span className="font-mono">{docLabel}: {item.cpf_cnpj}</span>
-                    </div>
-                  ) : null}
-                  {item.endereco ? (
-                    <div className="flex items-center gap-2.5 text-xs text-gray-400">
-                      <MapPin size={11} className="text-gray-500 shrink-0" />{item.endereco}
-                    </div>
-                  ) : null}
+                  )}
                   {!item.email && !item.telefone && !item.cpf_cnpj && !item.endereco && (
-                    <span className="text-xs text-gray-600">Sem informações de contato</span>
+                    <span className="text-gray-600">Sem dados de contato</span>
                   )}
                 </div>
 
-                {isClientes && (
-                  <div className="text-[11px] text-gray-500 border-t border-white/5 pt-3 mt-auto flex justify-between">
-                    <span>Última compra:</span>
-                    <strong className="text-gray-200">{item.ultima_compra ?? '—'}</strong>
+                {/* Rodapé com o que pesa na compra (ou na venda, no cliente). */}
+                {isClientes ? (
+                  <div className="mt-auto grid grid-cols-2 border-t border-white/10 text-center">
+                    <div className="py-2.5 px-2">
+                      <p className="text-[9px] font-bold text-gray-500 uppercase tracking-widest">Última compra</p>
+                      <p className="text-xs font-bold text-gray-200 mt-0.5">{item.ultima_compra ?? '—'}</p>
+                    </div>
+                    <div className="py-2.5 px-2 border-l border-white/10">
+                      <p className="text-[9px] font-bold text-gray-500 uppercase tracking-widest">Limite do fiado</p>
+                      <p className="text-xs font-bold text-gray-200 mt-0.5 tabular-nums">
+                        {item.limite_credito == null ? 'Sem limite' : `R$ ${formatBRL(Number(item.limite_credito))}`}
+                      </p>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="mt-auto border-t border-white/10 px-4 py-2.5 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-[11px]">
+                    <span className="flex items-center gap-1.5">
+                      <Truck size={13} className="text-accent" />
+                      <span className="text-gray-500">Entrega</span>
+                      <b className="text-gray-200 tabular-nums">
+                        {item.prazo_entrega_dias != null && item.prazo_entrega_dias !== ''
+                          ? `${item.prazo_entrega_dias} dia${Number(item.prazo_entrega_dias) === 1 ? '' : 's'}`
+                          : '—'}
+                      </b>
+                    </span>
+                    {atributos.map(a => (
+                      <span key={a.label} className="flex items-center gap-1.5 min-w-0 max-w-full">
+                        <span className="text-gray-500 shrink-0">{a.label}</span>
+                        <b className="text-gray-200 truncate" title={String(a.valor)}>{String(a.valor)}</b>
+                      </span>
+                    ))}
                   </div>
                 )}
               </motion.div>

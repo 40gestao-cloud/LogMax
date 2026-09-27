@@ -1,9 +1,10 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Search, Edit2, Trash2, Plus, Save, Tag } from 'lucide-react';
+import { Search, Edit2, Trash2, Plus, Save, Tag, Clock, ShieldCheck, Wrench, Power, Store, Handshake } from 'lucide-react';
+import { MenuMais, ItemMenu } from '../components/MenuMais';
 import { useFilial } from '../contexts/FilialContext';
 import { useFetchData, dbInsert, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
-import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent, StatusBadge, ModalFormulario } from '../components/ui';
+import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent, ModalFormulario, CardContador, SecaoFormulario } from '../components/ui';
 import { formatBRL, parseBRL, handleMoneyKeyDown } from '../lib/viewUtils';
 import { useConfirm } from '../contexts/ConfirmContext';
 import { MatrizConsolidado } from '../components/MatrizConsolidado';
@@ -325,8 +326,98 @@ export const ServicosView = ({ showToast, onNavigate }: { showToast: any; onNavi
     }
   };
 
+  const alternarStatus = async (s: any) => {
+    const novo = s.status === 'Inativo' ? 'Ativo' : 'Inativo';
+    try {
+      const updated = await dbUpdate('/api/servicosview', s.id, { status: novo });
+      setData((prev: any[]) => prev.map(d => d.id === s.id ? (updated ?? { ...d, status: novo }) : d));
+      showToast(novo === 'Ativo' ? 'Serviço ativado.' : 'Serviço inativado.', 'success', true);
+    } catch (err: any) {
+      showToast(err?.message ?? 'Erro ao alterar a situação.', 'error', true);
+    }
+  };
+
+  const prestados   = filtered.filter((s: any) => !ehContratado(s.natureza));
+  const contratados = filtered.filter((s: any) => ehContratado(s.natureza));
+  const inativos    = data.filter((s: any) => s.status === 'Inativo').length;
+
+  const cartao = (s: any) => {
+    const contratado = ehContratado(s.natureza);
+    const inativo = s.status === 'Inativo';
+    const a = s.atributos ?? {};
+    const tempo = a.tempo_estimado_min ? `${a.tempo_estimado_min} min`
+      : a.tempo_estimado_horas ? `${a.tempo_estimado_horas} h` : null;
+    const detalhes: { icon: any; texto: string; title?: string }[] = [
+      ...(tempo ? [{ icon: Clock, texto: tempo, title: 'Tempo estimado' }] : []),
+      ...(a.garantia_dias ? [{ icon: ShieldCheck, texto: `${a.garantia_dias} dias`, title: 'Garantia' }] : []),
+      ...(a.requer_peca ? [{ icon: Wrench, texto: 'requer peça' }] : []),
+      ...(a.marcas_atendidas ? [{ icon: Tag, texto: String(a.marcas_atendidas), title: 'Marcas atendidas' }] : []),
+    ];
+    return (
+      <motion.div key={s.id}
+        initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}
+        className={`neu-flat rounded-2xl border border-white/10 flex flex-col overflow-hidden ${inativo ? 'opacity-60' : ''}`}>
+        <div className="p-4 flex items-start gap-3">
+          {/* Imagem do serviço, ou as iniciais sobre uma cor derivada do
+              nome: numa grade de doze, achar "troca de bateria" sem ler os doze. */}
+          <LogoCadastro imagemUrl={s.imagem_url} nome={s.nome} size={48} ajuste="cover" />
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <span className="font-mono text-[10px] font-bold text-accent/80 tracking-wider">{s.codigo}</span>
+              {inativo && (
+                <span className="px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-widest bg-zinc-600 text-white">Inativo</span>
+              )}
+            </div>
+            <p className="text-sm font-bold text-gray-100 leading-snug mt-0.5 line-clamp-2 break-words" title={s.nome}>{s.nome}</p>
+            {(a.categoria_svc || s.tipo) && (
+              <p className="text-[11px] text-gray-400 mt-0.5 truncate">{a.categoria_svc ?? s.tipo}</p>
+            )}
+          </div>
+          <div className="flex items-center gap-1.5 shrink-0">
+            <button onClick={() => openEdit(s)} title="Editar" aria-label="Editar" className="action-btn-edit"><Edit2 size={12} /></button>
+            <MenuMais>
+              {fechar => (
+                <>
+                  <ItemMenu onClick={() => { fechar(); alternarStatus(s); }}
+                    cor="text-gray-200 hover:bg-white/5" icon={Power}>
+                    {inativo ? 'Ativar' : 'Inativar'}
+                  </ItemMenu>
+                  <ItemMenu onClick={() => { fechar(); handleDelete(s.id, s.nome); }}
+                    cor="text-red-400 hover:bg-red-500/10" icon={Trash2}>
+                    Excluir
+                  </ItemMenu>
+                </>
+              )}
+            </MenuMais>
+          </div>
+        </div>
+
+        {detalhes.length > 0 && (
+          <div className="px-4 pb-3 flex flex-wrap gap-1.5">
+            {detalhes.map(d => (
+              <span key={d.texto} title={d.title}
+                className="inline-flex items-center gap-1 max-w-full px-2 py-1 rounded-lg border border-white/10 bg-white/[0.03] text-[11px] text-gray-300">
+                <d.icon size={12} className="text-accent shrink-0" />
+                <span className="truncate">{d.texto}</span>
+              </span>
+            ))}
+          </div>
+        )}
+
+        <div className="mt-auto border-t border-white/10 px-4 py-2.5 flex items-center justify-between gap-3">
+          <span className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">
+            {contratado ? 'Custo de referência' : 'Preço de venda'}
+          </span>
+          <span className={`text-lg font-black tabular-nums ${contratado ? 'text-gray-200' : 'text-accent'}`}>
+            {Number(s.valor || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+          </span>
+        </div>
+      </motion.div>
+    );
+  };
+
   return (
-    <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col gap-4">
+    <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col gap-5 pb-6">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Serviços — {filial}</h2>
@@ -337,6 +428,12 @@ export const ServicosView = ({ showToast, onNavigate }: { showToast: any; onNavi
         </div>
       </div>
 
+      <div className="grid grid-cols-3 gap-4">
+        <CardContador label="Prestados (venda)" value={data.filter((s: any) => !ehContratado(s.natureza)).length} tom="dourado" />
+        <CardContador label="Contratados (compra)" value={data.filter((s: any) => ehContratado(s.natureza)).length} tom="azul" />
+        <CardContador label="Inativos" value={inativos} tom="neutro" />
+      </div>
+
       <div className="relative">
         <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
         <input className="neu-input py-2 pl-9 pr-3 rounded-xl text-sm w-full"
@@ -345,59 +442,26 @@ export const ServicosView = ({ showToast, onNavigate }: { showToast: any; onNavi
       </div>
 
       {filtered.length === 0 ? (
-        <EmptyState message={`Nenhum serviço cadastrado para ${filial}. Clique em "Novo serviço" para começar.`} />
+        <EmptyState message={search.trim()
+          ? 'Nenhum serviço bate com a busca.'
+          : `Nenhum serviço cadastrado para ${filial}. Clique em "Novo serviço" para começar.`} />
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-          {filtered.map((s: any) => (
-            <motion.div key={s.id}
-              initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}
-              className="neu-flat rounded-2xl p-4 border border-white/5 flex flex-col gap-2">
-              <div className="flex items-start justify-between gap-2">
-                {/* Imagem do serviço, ou as iniciais sobre uma cor derivada do
-                    nome. O card era só texto: numa grade de doze, achar "troca
-                    de bateria" exigia ler os doze. */}
-                <LogoCadastro imagemUrl={s.imagem_url} nome={s.nome} size={44} ajuste="cover" />
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-[10px] font-mono font-bold text-gray-500 uppercase tracking-widest">{s.codigo}</span>
-                    <StatusBadge status={s.status} />
-                    {ehContratado(s.natureza) && (
-                      <span className="text-[9px] font-bold uppercase tracking-widest text-gray-400 neu-pressed rounded-md px-1.5 py-0.5"
-                        title="Serviço que a unidade contrata de terceiro — entra em pedido de compra, não em venda.">
-                        Contratado
-                      </span>
-                    )}
-                  </div>
-                  <p className="text-sm font-bold text-gray-100 mt-1 leading-tight">{s.nome}</p>
-                  {s.atributos?.categoria_svc && (
-                    <p className="text-[11px] text-accent font-bold mt-1 uppercase tracking-wider">
-                      {s.atributos.categoria_svc}
-                    </p>
-                  )}
-                </div>
-                <div className="flex gap-1 shrink-0">
-                  <button onClick={() => openEdit(s)} className="action-btn-edit"><Edit2 size={12} /></button>
-                  <button onClick={() => handleDelete(s.id, s.nome)} className="action-btn-delete"><Trash2 size={12} /></button>
-                </div>
-              </div>
-              <div className="flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-gray-400">
-                {s.atributos?.tempo_estimado_min && <span>⏱ {s.atributos.tempo_estimado_min} min</span>}
-                {s.atributos?.tempo_estimado_horas && <span>⏱ {s.atributos.tempo_estimado_horas} h</span>}
-                {s.atributos?.marcas_atendidas && <span>🏷 {s.atributos.marcas_atendidas}</span>}
-                {s.atributos?.garantia_dias && <span>🛡 {s.atributos.garantia_dias} dias</span>}
-                {s.atributos?.requer_peca && <span>🔩 requer peça</span>}
-              </div>
-              <div className="flex items-end justify-between mt-1 pt-2 border-t border-white/5">
-                <span className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">
-                  {ehContratado(s.natureza) ? 'Custo ref.' : 'Preço'}
-                </span>
-                <span className="text-lg font-black text-accent tabular-nums">
-                  {Number(s.valor || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-                </span>
-              </div>
-            </motion.div>
-          ))}
-        </div>
+        <>
+          {/* Duas prateleiras: o que a loja vende e o que ela contrata de
+              terceiro — um vai para o PDV, o outro para o pedido de compra. */}
+          {prestados.length > 0 && (
+            <SecaoFormulario titulo="Serviços prestados · a loja vende" icon={Store} cor="dourado"
+              extra={`${prestados.length} serviço${prestados.length === 1 ? '' : 's'}`}>
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">{prestados.map(cartao)}</div>
+            </SecaoFormulario>
+          )}
+          {contratados.length > 0 && (
+            <SecaoFormulario titulo="Serviços contratados · a loja compra" icon={Handshake} cor="azul"
+              extra={`${contratados.length} serviço${contratados.length === 1 ? '' : 's'}`}>
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">{contratados.map(cartao)}</div>
+            </SecaoFormulario>
+          )}
+        </>
       )}
 
       <AnimatePresence>

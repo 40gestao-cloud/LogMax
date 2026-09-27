@@ -27,23 +27,6 @@ const Ctx = createContext<ComandosCtx>({ abrir: () => {} });
 
 export const useComandos = () => useContext(Ctx);
 
-/** Botão de chrome do topbar. A paleta é invisível por natureza — sem uma
- *  porta visível, só descobre os comandos quem foi avisado. */
-export function BotaoComandos() {
-  const { abrir } = useComandos();
-  return (
-    <button
-      onClick={abrir}
-      title="Comandos (Ctrl+K)"
-      aria-label="Abrir comandos"
-      className="neu-button h-9 px-3 rounded-xl hidden sm:flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest text-gray-400 hover:text-accent transition-colors shrink-0"
-    >
-      <Command size={13} />
-      <span className="hidden md:inline">Ctrl+K</span>
-    </button>
-  );
-}
-
 interface Props {
   /** Mesma régua do seletor pós-login: admin, CEO e conselheiro. */
   podeTrocarUnidade: boolean;

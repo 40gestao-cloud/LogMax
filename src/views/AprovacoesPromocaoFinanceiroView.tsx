@@ -1,20 +1,27 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
-import { Check, X, Loader2, Tag, TrendingDown, Info, Megaphone, Package } from 'lucide-react';
+import { Check, X, Loader2, Tag, TrendingDown, Megaphone, Package, Landmark, UserCog, Radio, Power, BadgePercent, ChevronDown } from 'lucide-react';
 import { useFetchData, dbUpdate } from '../hooks/useSupabaseData';
 import { supabase } from '../lib/supabase';
 import { useFilial } from '../contexts/FilialContext';
-import { EmptyState, LoadingSpinner } from '../components/ui';
+import { usePrompt } from '../contexts/PromptContext';
+import { EmptyState, LoadingSpinner, SecaoFormulario, CardContador, AbaComContador, StatusBadge } from '../components/ui';
+import { MenuMais, ItemMenu, CABECALHO_TABELA } from '../components/MenuMais';
 import { playPlim } from '../utils/audioUtils';
 
-// ── Aba Promoções (código original) ──────────────────────────────────────────
+const brl = (v: any) => `R$ ${Number(v || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+// Coluna `date` vem como 'AAAA-MM-DD': formata no texto, sem passar por Date
+// (que a leria em UTC e voltaria um dia no fuso do Acre).
+const dataCurta = (d?: string | null) => (d ? d.slice(0, 10).split('-').reverse().join('/') : null);
+
+// ── Aba Promoções ────────────────────────────────────────────────────────────
 function AbaPromocoes({ showToast, filial }: any) {
+  const prompt = usePrompt();
   // MIGR 576: a fila tem DOIS passos. 'Aguardando Aprovação' espera o parecer
   // do Financeiro; 'Em Análise' já tem parecer e espera o gerente liberar. Por
   // isso a busca não filtra mais por um status só.
   const { data: promocoes, setData } = useFetchData<any>('/api/marketingpromocoesview', { filial }, true);
   const [obs,       setObs]       = useState<Record<string, string>>({});
-  const [expanded,  setExpanded]  = useState<string | null>(null);
   const [processing,setProcessing]= useState<string | null>(null);
 
   useEffect(() => {
@@ -62,7 +69,6 @@ function AbaPromocoes({ showToast, filial }: any) {
     if (processing || !supabase) return;
     const parecer = (obs[promo.id] ?? '').trim();
     if (parecer.length < 5) {
-      setExpanded(promo.id);
       showToast('Escreva o parecer — é o que o gerente lê antes de liberar o preço.', 'error', true);
       return;
     }
@@ -111,10 +117,15 @@ function AbaPromocoes({ showToast, filial }: any) {
   // a cobrá-lo sozinho. Não há preço para restaurar.
   const handleEncerrar = async (promo: any) => {
     if (processing || !supabase) return;
-    const motivo = (obs[promo.id] ?? '').trim();
+    const resposta = await prompt({
+      message: `Tirar "${promo.nome_produto ?? 'a oferta'}" do ar agora? O preço de tabela volta a valer no caixa.`,
+      placeholder: 'Por quê? (ruptura de estoque, preço errado, campanha cancelada…)',
+      confirmLabel: 'Encerrar oferta', maxLength: 300,
+    });
+    if (resposta === null) return;
+    const motivo = resposta.trim();
     if (motivo.length < 5) {
       showToast('Diga por que a oferta está saindo do ar — o cliente vai perguntar.', 'error', true);
-      setExpanded(promo.id);
       return;
     }
     setProcessing(promo.id);
@@ -126,18 +137,18 @@ function AbaPromocoes({ showToast, filial }: any) {
       if (error) throw new Error(error.message);
       setData((prev: any[]) => prev.map(p => p.id === promo.id ? { ...p, status: 'Encerrada' } : p));
       showToast('Oferta encerrada. O preço de tabela volta a valer no caixa.', 'success', true);
-      setExpanded(null);
     } catch (err: any) {
       showToast(`Não foi possível encerrar: ${err?.message ?? 'verifique o console'}`, 'error', true);
     } finally { setProcessing(null); }
   };
 
   // Só o que está em curso aparece: aprovada já virou preço, reprovada morreu.
-  const naFila = (promocoes ?? []).filter(
-    (p: any) => p.status === 'Aguardando Aprovação' || p.status === 'Em Análise');
+  const passo1 = (promocoes ?? []).filter((p: any) => p.status === 'Aguardando Aprovação');
+  const passo2 = (promocoes ?? []).filter((p: any) => p.status === 'Em Análise');
   // O que está no ar agora. Fica nesta tela porque é aqui que mora a autoridade
   // sobre o preço — quem libera é quem tira do ar.
   const vigentes = (promocoes ?? []).filter((p: any) => p.status === 'Aprovado');
+  const semPrazo = vigentes.filter((p: any) => !p.data_fim).length;
 
   const calcDesconto = (promo: any) => {
     const atual = Number(promo.preco_atual || 0);
@@ -146,170 +157,198 @@ function AbaPromocoes({ showToast, filial }: any) {
     return ((atual - p) / atual * 100).toFixed(1);
   };
 
+  const cartao = (promo: any) => {
+    const desc = calcDesconto(promo);
+    const emAnalise = promo.status === 'Em Análise';
+    const ocupado = processing === promo.id;
+    const margem = promo.margem_pct != null ? Number(promo.margem_pct) : null;
+    const periodo = [dataCurta(promo.data_inicio), dataCurta(promo.data_fim)];
+    return (
+      <motion.div key={promo.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
+        className="rounded-xl border border-white/10 bg-white/[0.02] p-4 flex flex-col gap-3">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-sm font-bold text-gray-100 flex items-center gap-2 min-w-0">
+              <Tag size={14} className="text-accent shrink-0" />
+              <span className="truncate" title={promo.nome_produto ?? ''}>{promo.nome_produto ?? 'Produto'}</span>
+            </p>
+            {promo.descricao && <p className="text-xs text-gray-500 mt-1 line-clamp-2" title={promo.descricao}>{promo.descricao}</p>}
+            <p className="text-[10px] text-gray-500 mt-1">
+              {(periodo[0] || periodo[1]) && (
+                <span className="font-mono">{periodo[0] ?? '?'} → {periodo[1] ?? 'sem prazo'}</span>
+              )}
+              {promo.nome_criador && <span>{periodo[0] || periodo[1] ? ' · ' : ''}proposto por {promo.nome_criador}</span>}
+            </p>
+          </div>
+          {desc && (
+            <span className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-black bg-accent text-black shrink-0">
+              <TrendingDown size={11} />-{desc}%
+            </span>
+          )}
+        </div>
+
+        {/* Custo → preço de hoje → preço da oferta: a conta que o parecer faz. */}
+        <div className="grid grid-cols-3 rounded-xl overflow-hidden border border-white/10 text-center">
+          <div className="py-2 px-2 bg-white/[0.02]">
+            <p className="text-[9px] font-bold text-gray-500 uppercase tracking-widest">Custo</p>
+            <p className="text-xs font-mono font-bold text-gray-400 tabular-nums mt-0.5">{promo.preco_custo > 0 ? brl(promo.preco_custo) : '—'}</p>
+          </div>
+          <div className="py-2 px-2 border-x border-white/10">
+            <p className="text-[9px] font-bold text-gray-500 uppercase tracking-widest">Preço atual</p>
+            <p className="text-xs font-mono font-bold text-gray-200 tabular-nums mt-0.5">{brl(promo.preco_atual)}</p>
+          </div>
+          <div className="py-2 px-2 bg-accent/10">
+            <p className="text-[9px] font-bold text-accent uppercase tracking-widest">Oferta</p>
+            <p className="text-xs font-mono font-black text-accent tabular-nums mt-0.5">{brl(promo.preco_promocional)}</p>
+          </div>
+        </div>
+
+        {emAnalise && (
+          <div className={`rounded-xl border p-3 ${margem != null && margem < 0 ? 'border-red-500/40 bg-red-500/5' : 'border-white/10'}`}>
+            <p className="text-[9px] font-bold text-gray-500 uppercase tracking-widest mb-1 flex flex-wrap items-center gap-x-2 gap-y-1">
+              <span>Parecer do Financeiro{promo.analisado_por_nome ? ` · ${promo.analisado_por_nome}` : ''}</span>
+              {margem != null && (
+                <span className={`px-1.5 py-0.5 rounded text-[9px] font-black ${margem < 0 ? 'bg-red-600 text-white' : 'bg-green-600 text-white'}`}>
+                  margem {margem.toFixed(1)}%
+                </span>
+              )}
+            </p>
+            <p className="text-xs text-gray-300 whitespace-pre-wrap break-words">{promo.parecer_financeiro || '—'}</p>
+            {margem != null && margem < 0 && (
+              <p className="text-[11px] font-bold text-red-400 mt-1.5">
+                Vende abaixo do custo. Só libere se a oferta for assumida como custo de marketing.
+              </p>
+            )}
+          </div>
+        )}
+
+        <textarea className="neu-input py-2 px-3 rounded-xl text-xs resize-none h-14"
+          placeholder={emAnalise
+            ? 'Observação da liberação (obrigatória para reprovar)…'
+            : 'Parecer do Financeiro (obrigatório) — a margem e a decisão…'}
+          value={obs[promo.id] ?? ''} onChange={e => setObs(o => ({ ...o, [promo.id]: e.target.value }))} />
+
+        <div className="flex gap-2 justify-end items-center">
+          <button onClick={() => handleReprovar(promo)} disabled={!!processing}
+            className="btn-solido btn-solido--vermelho !py-1.5 !px-3 !text-xs disabled:opacity-50">
+            <X size={13} /> Reprovar
+          </button>
+          {emAnalise ? (
+            <button onClick={() => handleAprovar(promo)} disabled={!!processing}
+              title="Libera a oferta: o preço muda no PDV agora"
+              className="btn-solido btn-solido--verde-escuro !py-1.5 !px-3 !text-xs disabled:opacity-50">
+              {ocupado ? <Loader2 size={13} className="animate-spin" /> : <Check size={13} />} Liberar oferta
+            </button>
+          ) : (
+            <button onClick={() => handleParecer(promo)} disabled={!!processing}
+              title="Envia o parecer de viabilidade ao gerente da filial"
+              className="btn-solido btn-solido--amarelo !py-1.5 !px-3 !text-xs disabled:opacity-50">
+              {ocupado ? <Loader2 size={13} className="animate-spin" /> : <Check size={13} />} Enviar parecer
+            </button>
+          )}
+        </div>
+      </motion.div>
+    );
+  };
+
   return (
     <>
-      <div className="flex items-start gap-3 p-4 rounded-2xl border border-accent/20"
-        style={{ background: 'color-mix(in srgb, var(--color-accent) 5%, transparent)' }}>
-        <Info size={16} className="text-accent shrink-0 mt-0.5" />
-        <p className="text-xs text-gray-400 leading-relaxed">
-          A oferta anda em dois passos, como na loja: o <span className="text-accent font-bold">Financeiro</span> confere
-          o custo e dá o parecer de viabilidade; depois o <span className="text-accent font-bold">gerente da filial</span> revisa
-          e libera. É a liberação do gerente que troca o preço no PDV — e ao fim da campanha o preço original volta sozinho.
-        </p>
+      {/* O caminho da oferta em selos, no lugar do parágrafo explicativo: é a
+          liberação do gerente que troca o preço no PDV, e ao fim da campanha
+          o preço de tabela volta sozinho. */}
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-[10px] font-black uppercase tracking-widest text-gray-500 mr-1">Caminho da oferta</span>
+        <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-amber-500 text-black">
+          <Landmark size={13} /> 1 · Financeiro dá o parecer
+        </span>
+        <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-purple-600 text-white">
+          <UserCog size={13} /> 2 · Gerente libera
+        </span>
+        <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-green-600 text-white">
+          <Radio size={13} /> No ar · preço muda no PDV
+        </span>
       </div>
 
-      {naFila.length === 0 ? (
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <CardContador label="Esperando parecer" value={passo1.length} tom="amarelo" />
+        <CardContador label="Esperando o gerente" value={passo2.length} tom="roxo" />
+        <CardContador label="No ar agora" value={vigentes.length} tom="verde" />
+        <CardContador label="No ar sem prazo" value={semPrazo} tom="laranja"
+          sub={semPrazo > 0 ? 'o preço não volta sozinho' : undefined} />
+      </div>
+
+      {passo1.length === 0 && passo2.length === 0 ? (
         <EmptyState message="Nenhuma oferta na fila — nem para parecer do Financeiro, nem para liberação do gerente" />
       ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          {naFila.map((promo: any) => {
-            const desc = calcDesconto(promo);
-            return (
-              <motion.div key={promo.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
-                className="neu-flat rounded-2xl p-5 border border-white/5 flex flex-col gap-4">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2">
-                      <Tag size={14} className="text-accent shrink-0" />
-                      <p className="text-sm font-bold text-gray-200 truncate">{promo.nome_produto ?? 'Produto'}</p>
-                    </div>
-                    {promo.descricao && <p className="text-xs text-gray-500 mt-1 truncate">{promo.descricao}</p>}
-                    {(promo.data_inicio || promo.data_fim) && (
-                      <p className="text-[10px] font-mono text-gray-600 mt-1">Período: {promo.data_inicio ?? '?'} → {promo.data_fim ?? '?'}</p>
-                    )}
-                    {promo.nome_criador && <p className="text-[10px] text-gray-600 mt-0.5">Proposto por: {promo.nome_criador}</p>}
-                    <p className="text-[10px] font-bold uppercase tracking-widest mt-1"
-                      style={{ color: promo.status === 'Em Análise' ? 'var(--color-accent)' : '#9ca3af' }}>
-                      {promo.status === 'Em Análise'
-                        ? 'Passo 2 · com o gerente da filial'
-                        : 'Passo 1 · com o Financeiro'}
-                    </p>
-                  </div>
-                  {desc && (
-                    <div className="flex items-center gap-1 text-[10px] font-black text-accent shrink-0 px-2 py-1 rounded-full border border-accent/20"
-                      style={{ background: 'color-mix(in srgb, var(--color-accent) 10%, transparent)' }}>
-                      <TrendingDown size={10} />-{desc}%
-                    </div>
-                  )}
-                </div>
-                <div className="grid grid-cols-3 gap-2">
-                  <div className="neu-pressed rounded-xl p-3">
-                    <p className="text-[9px] font-bold text-gray-600 uppercase tracking-widest mb-1.5">Custo</p>
-                    <p className="text-xs font-mono font-bold text-gray-500">
-                      {promo.preco_custo > 0 ? `R$ ${Number(promo.preco_custo).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : '—'}
-                    </p>
-                  </div>
-                  <div className="neu-pressed rounded-xl p-3">
-                    <p className="text-[9px] font-bold text-gray-600 uppercase tracking-widest mb-1.5">Preço Atual</p>
-                    <p className="text-xs font-mono font-bold text-gray-200">
-                      R$ {Number(promo.preco_atual || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                    </p>
-                  </div>
-                  <div className="neu-pressed rounded-xl p-3 border border-accent/25">
-                    <p className="text-[9px] font-bold text-accent uppercase tracking-widest mb-1.5">Sugestão</p>
-                    <p className="text-xs font-mono font-black text-accent">
-                      R$ {Number(promo.preco_promocional || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                    </p>
-                  </div>
-                </div>
-                {promo.status === 'Em Análise' && (
-                  <div className="neu-pressed rounded-xl p-3">
-                    <p className="text-[9px] font-bold text-gray-600 uppercase tracking-widest mb-1.5">
-                      Parecer do Financeiro
-                      {promo.analisado_por_nome ? ` · ${promo.analisado_por_nome}` : ''}
-                      {promo.margem_pct != null ? ` · margem ${Number(promo.margem_pct).toFixed(1)}%` : ''}
-                    </p>
-                    <p className="text-xs text-gray-300 whitespace-pre-wrap break-words">
-                      {promo.parecer_financeiro || '—'}
-                    </p>
-                    {promo.margem_pct != null && Number(promo.margem_pct) < 0 && (
-                      <p className="text-[11px] font-bold text-red-500 mt-1.5">
-                        Margem negativa: este preço vende abaixo do custo. Só libere se a oferta for assumida como custo de marketing.
-                      </p>
-                    )}
-                  </div>
-                )}
-                {expanded === promo.id && (
-                  <textarea className="neu-input py-2 px-3 rounded-xl text-sm resize-none h-16"
-                    placeholder={promo.status === 'Em Análise'
-                      ? 'Observação da liberação (obrigatória para reprovar)...'
-                      : 'Parecer do Financeiro (obrigatório) — a margem e a decisão...'}
-                    value={obs[promo.id] ?? ''} onChange={e => setObs(o => ({ ...o, [promo.id]: e.target.value }))} />
-                )}
-                <div className="flex gap-2 justify-end items-center">
-                  {expanded !== promo.id && (
-                    <button onClick={() => setExpanded(promo.id)} disabled={!!processing}
-                      className="neu-button py-1.5 px-3 rounded-lg text-xs text-gray-400 disabled:opacity-40">
-                      {promo.status === 'Em Análise' ? 'Adicionar obs.' : 'Escrever parecer'}
-                    </button>
-                  )}
-                  <button onClick={() => handleReprovar(promo)} disabled={processing === promo.id}
-                    className="neu-button py-1.5 px-3 rounded-lg text-xs font-bold text-red-500 hover:bg-red-900/20 border border-red-500/10 disabled:opacity-40 flex items-center gap-1">
-                    {processing === promo.id ? <Loader2 size={11} className="animate-spin" /> : <X size={11} />}Reprovar
-                  </button>
-                  {promo.status === 'Em Análise' ? (
-                    <button onClick={() => handleAprovar(promo)} disabled={processing === promo.id}
-                      title="Libera a oferta: o preço muda no PDV agora"
-                      className="neu-button py-1.5 px-3 rounded-lg text-xs font-bold text-accent hover:bg-accent/10 border border-accent/20 disabled:opacity-40 flex items-center gap-1">
-                      {processing === promo.id ? <Loader2 size={11} className="animate-spin" /> : <Check size={11} />}Liberar (gerente)
-                    </button>
-                  ) : (
-                    <button onClick={() => handleParecer(promo)} disabled={processing === promo.id}
-                      title="Envia o parecer de viabilidade ao gerente da filial"
-                      className="neu-button py-1.5 px-3 rounded-lg text-xs font-bold text-accent hover:bg-accent/10 border border-accent/20 disabled:opacity-40 flex items-center gap-1">
-                      {processing === promo.id ? <Loader2 size={11} className="animate-spin" /> : <Check size={11} />}Enviar parecer
-                    </button>
-                  )}
-                </div>
-              </motion.div>
-            );
-          })}
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-5 items-start">
+          <SecaoFormulario titulo="Passo 1 · Parecer do Financeiro" icon={Landmark} cor="amarelo"
+            extra={`${passo1.length} oferta${passo1.length === 1 ? '' : 's'}`}>
+            {passo1.length === 0
+              ? <p className="text-xs text-gray-500 text-center py-6">Nenhuma oferta esperando parecer.</p>
+              : <div className="flex flex-col gap-3">{passo1.map(cartao)}</div>}
+          </SecaoFormulario>
+          <SecaoFormulario titulo="Passo 2 · Liberação do gerente" icon={UserCog} cor="roxo"
+            extra={`${passo2.length} oferta${passo2.length === 1 ? '' : 's'}`}>
+            {passo2.length === 0
+              ? <p className="text-xs text-gray-500 text-center py-6">Nenhuma oferta esperando o gerente.</p>
+              : <div className="flex flex-col gap-3">{passo2.map(cartao)}</div>}
+          </SecaoFormulario>
         </div>
       )}
 
       {/* Ofertas no ar — e o botão para tirá-las. */}
       {vigentes.length > 0 && (
-        <div className="mt-6">
-          <p className="text-[11px] font-bold uppercase tracking-widest text-gray-500 mb-2">
-            No ar agora · {vigentes.length}
-          </p>
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-            {vigentes.map((promo: any) => (
-              <div key={promo.id} className="neu-flat rounded-2xl p-4 border border-white/5 flex flex-col gap-3">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <p className="text-sm font-bold text-gray-200 truncate">{promo.nome_produto ?? 'Produto'}</p>
-                    <p className="text-[10px] font-mono text-gray-600 mt-0.5">
-                      até {promo.data_fim ?? 'sem prazo'}
-                    </p>
-                  </div>
-                  <p className="text-xs font-mono font-black text-accent shrink-0">
-                    R$ {Number(promo.preco_promocional || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                  </p>
-                </div>
-                {expanded === promo.id && (
-                  <textarea className="neu-input py-2 px-3 rounded-xl text-sm resize-none h-16"
-                    placeholder="Por que está saindo do ar? (ruptura de estoque, preço errado, campanha cancelada…)"
-                    value={obs[promo.id] ?? ''} onChange={e => setObs(o => ({ ...o, [promo.id]: e.target.value }))} />
-                )}
-                <div className="flex gap-2 justify-end">
-                  {expanded !== promo.id ? (
-                    <button onClick={() => setExpanded(promo.id)} disabled={!!processing}
-                      className="neu-button py-1.5 px-3 rounded-lg text-xs text-gray-400 disabled:opacity-40">
-                      Encerrar antes do prazo
-                    </button>
-                  ) : (
-                    <button onClick={() => handleEncerrar(promo)} disabled={processing === promo.id}
-                      title="Tira a oferta do ar agora. O preço de tabela volta a valer sozinho — não há preço a restaurar."
-                      className="neu-button py-1.5 px-3 rounded-lg text-xs font-bold text-orange-400 hover:bg-orange-900/20 border border-orange-500/20 disabled:opacity-40 flex items-center gap-1">
-                      {processing === promo.id ? <Loader2 size={11} className="animate-spin" /> : <X size={11} />}Confirmar encerramento
-                    </button>
-                  )}
-                </div>
-              </div>
-            ))}
+        <SecaoFormulario titulo="No ar agora" icon={Radio} cor="verdeEscuro"
+          extra={`${vigentes.length} oferta${vigentes.length === 1 ? '' : 's'}`}>
+          <div className="overflow-x-auto main-scrollbar">
+            <table className="tabela tabela--verde w-full text-left border-collapse">
+              <thead>
+                <tr className={CABECALHO_TABELA}>
+                  <th className="text-center">Produto</th>
+                  <th className="text-center w-32">Preço atual</th>
+                  <th className="text-center w-32">Oferta</th>
+                  <th className="text-center w-24">Desconto</th>
+                  <th className="text-center w-32">Até</th>
+                  <th className="text-center w-px">Ações</th>
+                </tr>
+              </thead>
+              <tbody>
+                {vigentes.map((promo: any) => {
+                  const desc = calcDesconto(promo);
+                  return (
+                    <tr key={promo.id} className="border-b border-accent/10 align-middle">
+                      <td className="py-3 px-3 min-w-[12rem]">
+                        <span className="block text-sm font-semibold text-gray-100 truncate" title={promo.nome_produto ?? ''}>{promo.nome_produto ?? 'Produto'}</span>
+                        {promo.descricao && <span className="block text-[10px] text-gray-500 truncate">{promo.descricao}</span>}
+                      </td>
+                      <td className="py-3 px-3 text-center text-xs font-mono text-gray-400 tabular-nums whitespace-nowrap">{brl(promo.preco_atual)}</td>
+                      <td className="py-3 px-3 text-center text-sm font-mono font-bold text-accent tabular-nums whitespace-nowrap">{brl(promo.preco_promocional)}</td>
+                      <td className="py-3 px-3 text-center text-xs font-bold text-gray-300 tabular-nums">{desc ? `-${desc}%` : '—'}</td>
+                      <td className="py-3 px-3 text-center whitespace-nowrap">
+                        {promo.data_fim
+                          ? <span className="text-xs font-mono text-gray-300">{dataCurta(promo.data_fim)}</span>
+                          : <span className="inline-block px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-widest bg-orange-500 text-black"
+                              title="Sem data de fim, o preço não volta sozinho">Sem prazo</span>}
+                      </td>
+                      <td className="py-3 px-3">
+                        <div className="flex justify-center items-center">
+                          <MenuMais>
+                            {fechar => (
+                              <ItemMenu onClick={() => { fechar(); handleEncerrar(promo); }} disabled={!!processing}
+                                cor="text-orange-400 hover:bg-orange-500/10" icon={Power}>
+                                Encerrar antes do prazo
+                              </ItemMenu>
+                            )}
+                          </MenuMais>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
-        </div>
+        </SecaoFormulario>
       )}
     </>
   );
@@ -426,100 +465,119 @@ function AbaCampanhas({ showToast, filial }: any) {
   if (campanhas.length === 0) return <EmptyState message="Nenhuma campanha aguardando aprovação do Financeiro." />;
 
   return (
-    <div className="space-y-4">
+    <div className="flex flex-col gap-4">
       {campanhas.map((camp: any) => {
         const itens  = itensDaCamp(camp.id);
         const aberta = campAberta === camp.id;
+        const nAprov = itens.filter((i: any) => i.status === 'Aprovado').length;
+        const nReprov = itens.filter((i: any) => i.status === 'Reprovado').length;
+        const nPend = itens.length - nAprov - nReprov;
         return (
-          <div key={camp.id} className="neu-flat rounded-2xl border border-white/5 overflow-hidden">
-            {/* Header da campanha */}
-            <button onClick={() => setCampAberta(aberta ? null : camp.id)}
-              className="w-full flex items-center justify-between p-4 hover:bg-white/3 transition-colors">
-              <div className="flex items-center gap-3">
-                <Megaphone size={16} className="text-accent shrink-0" />
-                <div className="text-left">
-                  <p className="text-sm font-bold text-gray-200">{camp.nome}</p>
-                  <p className="text-[10px] text-gray-500">{camp.data_inicio} → {camp.data_fim} · {itens.length} produto(s)</p>
-                </div>
-              </div>
-              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
-                aberta ? 'border-accent/30 text-accent' : 'border-gray-700 text-gray-500'
-              }`}>{aberta ? 'Fechar' : 'Revisar'}</span>
+          <section key={camp.id} className="rounded-2xl border border-white/10 overflow-hidden">
+            {/* Faixa da campanha: abre e fecha a revisão dos itens. */}
+            <button onClick={() => setCampAberta(aberta ? null : camp.id)} aria-expanded={aberta}
+              className="w-full btn-solido--roxo flex flex-wrap items-center justify-between gap-3 px-4 py-3 text-left">
+              <span className="flex items-center gap-2 min-w-0">
+                <Megaphone size={15} className="shrink-0" />
+                <span className="min-w-0">
+                  <span className="block text-sm font-black truncate">{camp.nome}</span>
+                  <span className="block text-[10px] font-bold opacity-90 font-mono">
+                    {dataCurta(camp.data_inicio) ?? '?'} → {dataCurta(camp.data_fim) ?? '?'}
+                  </span>
+                </span>
+              </span>
+              <span className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest">
+                <span className="px-2 py-1 rounded-md bg-black/25">{itens.length} produto{itens.length === 1 ? '' : 's'}</span>
+                {nPend > 0 && <span className="px-2 py-1 rounded-md bg-amber-500 text-black">{nPend} pendente{nPend === 1 ? '' : 's'}</span>}
+                {nAprov > 0 && <span className="px-2 py-1 rounded-md bg-green-600 text-white">{nAprov} ok</span>}
+                {nReprov > 0 && <span className="px-2 py-1 rounded-md bg-red-600 text-white">{nReprov} não</span>}
+                <ChevronDown size={16} className={`transition-transform ${aberta ? 'rotate-180' : ''}`} />
+              </span>
             </button>
 
             {aberta && (
-              <div className="px-4 pb-4 space-y-3 border-t border-white/5 pt-3">
-                {/* Itens */}
+              <div className="p-4 flex flex-col gap-4">
                 {itens.length === 0 ? (
                   <EmptyState message="Nenhum produto nesta campanha." />
-                ) : itens.map((item: any) => {
-                  const prod = prodMap[item.produto_id];
-                  const isProc = processing === item.id;
-                  const statusCls =
-                    item.status === 'Aprovado'  ? 'border-green-500/20 bg-green-500/5' :
-                    item.status === 'Reprovado' ? 'border-red-500/20  bg-red-500/5'   :
-                    'border-white/5 bg-white/2';
-                  return (
-                    <div key={item.id} className={`rounded-xl border p-3 space-y-2 transition-colors ${statusCls}`}>
-                      <div className="flex items-center gap-2">
-                        <Package size={13} className="text-gray-500 shrink-0" />
-                        <p className="text-sm font-semibold text-gray-200 flex-1 truncate">{prod?.nome ?? item.produto_id}</p>
-                        <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full border ${
-                          item.status === 'Aprovado'  ? 'border-green-500/30 text-green-400' :
-                          item.status === 'Reprovado' ? 'border-red-500/30  text-red-400'   :
-                          'border-gray-600 text-gray-500'
-                        }`}>{item.status}</span>
-                      </div>
-                      {(item.preco_atual || item.preco_promocional) && (
-                        <div className="flex gap-3 text-xs text-gray-500">
-                          {item.preco_atual     != null && <span>Atual: <strong className="text-gray-300">R$ {Number(item.preco_atual).toLocaleString('pt-BR',{minimumFractionDigits:2})}</strong></span>}
-                          {item.preco_promocional != null && <span>Promo: <strong className="text-accent">R$ {Number(item.preco_promocional).toLocaleString('pt-BR',{minimumFractionDigits:2})}</strong></span>}
-                        </div>
-                      )}
-                      {item.motivo_reprovacao && (
-                        <p className="text-[10px] text-red-400 italic">Motivo: {item.motivo_reprovacao}</p>
-                      )}
+                ) : (
+                  <div className="overflow-x-auto main-scrollbar">
+                    <table className="tabela w-full text-left border-collapse">
+                      <thead>
+                        <tr className={CABECALHO_TABELA}>
+                          <th className="text-center">Produto</th>
+                          <th className="text-center w-28">Atual</th>
+                          <th className="text-center w-28">Promo</th>
+                          <th className="text-center w-32">Situação</th>
+                          <th className="text-center w-72">Decisão</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {itens.map((item: any) => {
+                          const prod = prodMap[item.produto_id];
+                          const isProc = processing === item.id;
+                          return (
+                            <tr key={item.id} className="border-b border-accent/10 align-middle">
+                              <td className="py-2.5 px-3 min-w-[12rem]">
+                                <span className="flex items-center gap-2 text-sm font-semibold text-gray-100 min-w-0">
+                                  <Package size={13} className="text-gray-500 shrink-0" />
+                                  <span className="truncate">{prod?.nome ?? item.produto_id}</span>
+                                </span>
+                                {item.motivo_reprovacao && (
+                                  <span className="block text-[10px] text-red-400 mt-0.5 line-clamp-2">Motivo: {item.motivo_reprovacao}</span>
+                                )}
+                              </td>
+                              <td className="py-2.5 px-3 text-center text-xs font-mono text-gray-400 tabular-nums whitespace-nowrap">
+                                {item.preco_atual != null ? brl(item.preco_atual) : '—'}
+                              </td>
+                              <td className="py-2.5 px-3 text-center text-xs font-mono font-bold text-accent tabular-nums whitespace-nowrap">
+                                {item.preco_promocional != null ? brl(item.preco_promocional) : '—'}
+                              </td>
+                              <td className="py-2.5 px-3 text-center"><StatusBadge status={item.status} /></td>
+                              <td className="py-2.5 px-3">
+                                {item.status === 'Pendente' ? (
+                                  <div className="flex items-center gap-1.5">
+                                    <input className="neu-input flex-1 min-w-[8rem] text-xs px-2 py-1.5 rounded-lg"
+                                      placeholder="Motivo p/ reprovar"
+                                      value={motivos[item.id] ?? ''}
+                                      onChange={e => setMotivos(m => ({ ...m, [item.id]: e.target.value }))} />
+                                    <button onClick={() => handleItemAprovar(item)} disabled={isProc}
+                                      title="Aprovar o item" aria-label="Aprovar o item" className="action-btn-verde">
+                                      {isProc ? <Loader2 size={13} className="animate-spin" /> : <Check size={14} />}
+                                    </button>
+                                    <button onClick={() => handleItemReprovar(item)} disabled={isProc}
+                                      title="Reprovar — escreva o motivo ao lado" aria-label="Reprovar o item" className="action-btn-vermelho">
+                                      <X size={14} />
+                                    </button>
+                                  </div>
+                                ) : <span className="block text-center text-xs text-gray-600">decidido</span>}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
 
-                      {item.status === 'Pendente' && (
-                        <div className="flex gap-2 items-center pt-1">
-                          <input className="neu-input flex-1 text-xs px-2 py-1 rounded-lg"
-                            placeholder="Motivo (obrigatório para reprovar)…"
-                            value={motivos[item.id] ?? ''}
-                            onChange={e => setMotivos(m => ({ ...m, [item.id]: e.target.value }))} />
-                          <button onClick={() => handleItemReprovar(item)} disabled={isProc}
-                            className="neu-button px-3 py-1.5 rounded-lg text-xs font-bold text-red-400 hover:bg-red-900/20 border border-red-500/10 disabled:opacity-40 flex items-center gap-1">
-                            {isProc ? <Loader2 size={10} className="animate-spin" /> : <X size={10} />}Reprovar
-                          </button>
-                          <button onClick={() => handleItemAprovar(item)} disabled={isProc}
-                            className="neu-button px-3 py-1.5 rounded-lg text-xs font-bold text-accent hover:bg-accent/10 border border-accent/20 disabled:opacity-40 flex items-center gap-1">
-                            {isProc ? <Loader2 size={10} className="animate-spin" /> : <Check size={10} />}Aprovar
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-
-                {/* Ações bulk + finalizar */}
+                {/* Em lote + fechar a avaliação da campanha. */}
                 {itens.length > 0 && (
-                  <div className="pt-3 border-t border-white/5 space-y-2">
-                    <div className="flex gap-2 items-center">
-                      <input className="neu-input flex-1 text-xs px-2 py-1.5 rounded-lg"
-                        placeholder="Motivo para reprovar tudo…"
-                        value={motivos[`bulk-${camp.id}`] ?? ''}
-                        onChange={e => setMotivos(m => ({ ...m, [`bulk-${camp.id}`]: e.target.value }))} />
+                  <div className="flex flex-col lg:flex-row lg:items-center gap-2 pt-3 border-t border-white/10">
+                    <input className="neu-input flex-1 text-xs px-3 py-2 rounded-lg"
+                      placeholder="Motivo para reprovar todos os pendentes…"
+                      value={motivos[`bulk-${camp.id}`] ?? ''}
+                      onChange={e => setMotivos(m => ({ ...m, [`bulk-${camp.id}`]: e.target.value }))} />
+                    <div className="flex flex-wrap gap-2 justify-end">
                       <button onClick={() => handleReprovarTudo(camp)} disabled={!!processing}
-                        className="neu-button px-3 py-1.5 rounded-lg text-xs font-bold text-red-400 hover:bg-red-900/20 border border-red-500/10 disabled:opacity-40 flex items-center gap-1 whitespace-nowrap">
-                        <X size={10} />Reprovar Tudo
+                        className="btn-solido btn-solido--vermelho !py-1.5 !px-3 !text-xs disabled:opacity-50">
+                        <X size={13} /> Reprovar pendentes
                       </button>
                       <button onClick={() => handleAprovarTudo(camp)} disabled={!!processing}
-                        className="neu-button px-3 py-1.5 rounded-lg text-xs font-bold text-green-400 hover:bg-green-900/20 border border-green-500/10 disabled:opacity-40 flex items-center gap-1 whitespace-nowrap">
-                        <Check size={10} />Aprovar Tudo
+                        className="btn-solido btn-solido--verde !py-1.5 !px-3 !text-xs disabled:opacity-50">
+                        {processing === `bulk-${camp.id}` ? <Loader2 size={13} className="animate-spin" /> : <Check size={13} />} Aprovar pendentes
                       </button>
-                    </div>
-                    <div className="flex justify-end">
                       <button onClick={() => handleFinalizar(camp)} disabled={!!processing}
-                        className="neu-button px-4 py-1.5 rounded-lg text-xs font-bold text-gray-200 hover:text-accent border border-white/10 disabled:opacity-40">
+                        title="Fecha a avaliação e devolve a campanha ao Marketing"
+                        className="btn-solido btn-solido--preto-ouro !py-1.5 !px-3 !text-xs disabled:opacity-50">
                         Finalizar avaliação
                       </button>
                     </div>
@@ -527,7 +585,7 @@ function AbaCampanhas({ showToast, filial }: any) {
                 )}
               </div>
             )}
-          </div>
+          </section>
         );
       })}
     </div>
@@ -540,36 +598,22 @@ export const AprovacoesPromocaoFinanceiroView = ({ showToast }: any) => {
   const [aba, setAba] = useState<'promocoes' | 'campanhas'>('promocoes');
   if (!filialAtiva) return null;
 
-  const tabs = [
-    { id: 'promocoes' as const, label: 'Promoções', icon: Tag },
-    { id: 'campanhas' as const, label: 'Campanhas', icon: Megaphone },
-  ];
-
   return (
     // A tela rola inteira, no <main> do app — sem `h-full` e sem rolagem
     // própria no conteúdo das abas, que espremia a lista abaixo do cabeçalho.
-    <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col gap-6">
-      <div>
-        <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Aprovações — Marketing</h2>
+    <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col gap-6 pb-6">
+      <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight flex items-center gap-2">
+        <BadgePercent size={26} /> Aprovações de Promoções — {filialAtiva}
+      </h2>
+
+      <div className="flex gap-3 flex-wrap" role="tablist">
+        <AbaComContador label="Promoções" icon={Tag} cor="amarelo"
+          ativa={aba === 'promocoes'} onClick={() => setAba('promocoes')} />
+        <AbaComContador label="Campanhas" icon={Megaphone} cor="roxo"
+          ativa={aba === 'campanhas'} onClick={() => setAba('campanhas')} />
       </div>
 
-      {/* Tabs */}
-      <div className="flex gap-2 shrink-0">
-        {tabs.map(t => (
-          <button key={t.id} onClick={() => setAba(t.id)}
-            className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-semibold transition-colors border ${
-              aba === t.id
-                ? 'bg-accent/10 border-accent/30 text-accent'
-                : 'neu-button border-white/5 text-gray-400 hover:text-gray-200'
-            }`}>
-            <t.icon size={13} />{t.label}
-          </button>
-        ))}
-      </div>
-
-      <div className="pb-6 space-y-4">
-        {aba === 'promocoes' ? <AbaPromocoes showToast={showToast} filial={filialAtiva} /> : <AbaCampanhas showToast={showToast} filial={filialAtiva} />}
-      </div>
+      {aba === 'promocoes' ? <AbaPromocoes showToast={showToast} filial={filialAtiva} /> : <AbaCampanhas showToast={showToast} filial={filialAtiva} />}
     </motion.div>
   );
 };

@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState, lazy, Suspense } from 'react';
-import { Presentation, Trash2, Loader2, Eye, RotateCcw, Inbox, FileUp, FileText } from 'lucide-react';
+import { motion } from 'motion/react';
+import { Presentation, Trash2, Loader2, Eye, RotateCcw, Inbox, FileUp, FileText, Search, Users, X } from 'lucide-react';
 import { supabase } from '../lib/supabase';
-import { PageLoadingFallback } from '../components/ui';
+import { PageLoadingFallback, LoadingSpinner, AbaComContador, SecaoFormulario, CardContador, COR_ABA, type CorAba } from '../components/ui';
+import { MenuMais, ItemMenu, CABECALHO_TABELA } from '../components/MenuMais';
 import { useConfirm } from '../contexts/ConfirmContext';
 
 const MaxShowEditor = lazy(() =>
@@ -39,6 +41,13 @@ const diasAtras = (iso: string): number => {
   return Math.floor((Date.now() - d) / (1000 * 60 * 60 * 24));
 };
 
+const fmtBytes = (b: number | null): string => {
+  if (!b) return '—';
+  if (b < 1024) return `${b} B`;
+  if (b < 1024 * 1024) return `${Math.round(b / 1024)} KB`;
+  return `${(b / 1024 / 1024).toFixed(1)} MB`;
+};
+
 // Recupera o path dentro do bucket a partir da URL pública gerada pelo
 // getPublicUrl (`.../object/public/max-show-anexos/{path}`).
 const extractStoragePath = (publicUrl: string): string | null => {
@@ -47,23 +56,25 @@ const extractStoragePath = (publicUrl: string): string | null => {
   return idx < 0 ? null : decodeURIComponent(publicUrl.slice(idx + marker.length));
 };
 
+const normalizar = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+
 export const MaxShowsView = ({ showToast, profile }: any) => {
   const confirm = useConfirm();
   const [tab, setTab] = useState<'ativos' | 'lixeira'>('ativos');
+  // Ativas e lixeira numa consulta só: as abas mostram a contagem das duas,
+  // e trocar de aba deixa de recarregar a lista.
   const [shows, setShows] = useState<Show[]>([]);
   const [autores, setAutores] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [openId, setOpenId] = useState<string | null>(null);
   const [openMode, setOpenMode] = useState<'view' | 'edit'>('edit');
+  const [busca, setBusca] = useState('');
 
   const load = useCallback(async () => {
     if (!supabase) return;
-    setLoading(true);
-    let query = supabase.from('max_shows')
+    const { data, error } = await supabase.from('max_shows')
       .select('id,user_id,titulo,arquivo_url,arquivo_nome,arquivo_tamanho,updated_at,created_at,deleted_at')
       .order('updated_at', { ascending: false });
-    query = tab === 'lixeira' ? query.not('deleted_at', 'is', null) : query.is('deleted_at', null);
-    const { data, error } = await query;
     if (error) {
       showToast?.(`Erro ao carregar apresentações: ${error.message}`, 'error');
     } else {
@@ -80,31 +91,27 @@ export const MaxShowsView = ({ showToast, profile }: any) => {
       }
     }
     setLoading(false);
-  }, [tab, showToast, profile?.id]);
+  }, [showToast, profile?.id]);
 
-  useEffect(() => { load(); }, [load]);
-
-  // Auto-purge lazy — mesmo padrão de MaxDocsView.
+  // Auto-purge lazy da própria lixeira antes da primeira carga.
   useEffect(() => {
-    if (tab !== 'lixeira' || !supabase || !profile?.id) return;
+    if (!supabase || !profile?.id) { load(); return; }
     const cutoff = new Date(Date.now() - PURGE_DAYS * 24 * 60 * 60 * 1000).toISOString();
     supabase.from('max_shows').delete()
       .eq('user_id', profile.id)
       .not('deleted_at', 'is', null)
       .lt('deleted_at', cutoff)
-      .then(({ error }) => { if (!error) load(); });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tab, profile?.id]);
+      .then(() => load());
+  }, [load, profile?.id]);
 
   const abrir = (id: string, mode: 'view' | 'edit') => { setOpenMode(mode); setOpenId(id); };
 
   // Upload de PDF — pega file, valida, sobe pro bucket, INSERT no banco.
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [arrastando, setArrastando] = useState(false);
   const onPickPdf = () => fileInputRef.current?.click();
-  const onFileChosen = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    e.target.value = ''; // permite reescolher o mesmo arquivo depois
+  const importar = async (file: File | undefined) => {
     if (!file || !supabase || !profile?.id) return;
     if (file.type !== 'application/pdf') { showToast?.('Só aceito PDF por enquanto.', 'error'); return; }
     if (file.size > MAX_PDF_BYTES) { showToast?.(`PDF muito grande (máx ${Math.floor(MAX_PDF_BYTES / 1024 / 1024)} MB).`, 'error'); return; }
@@ -129,10 +136,16 @@ export const MaxShowsView = ({ showToast, profile }: any) => {
         showToast?.(`Erro ao cadastrar: ${insErr.message}`, 'error'); return;
       }
       showToast?.('PDF importado com sucesso.', 'success');
+      setTab('ativos');
       load();
     } finally {
       setUploading(false);
     }
+  };
+  const onFileChosen = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = ''; // permite reescolher o mesmo arquivo depois
+    importar(file);
   };
 
   const excluir = async (id: string) => {
@@ -165,13 +178,10 @@ export const MaxShowsView = ({ showToast, profile }: any) => {
   const excluirDefinitivo = async (id: string) => {
     if (!supabase) return;
     if (!(await confirm({ message: 'Excluir permanentemente? Some pra todos agora e não dá pra recuperar.', confirmLabel: 'Excluir agora', danger: true }))) return;
-    // Se for PDF, precisa remover o arquivo do storage antes (o hard delete
-    // do banco não cascateia pra storage.objects).
     // A linha cai primeiro. Na ordem antiga o PDF saia do storage ANTES do
-    // DELETE — e se a RLS recusasse a linha (o caso deste bug), o arquivo
-    // ja tinha sumido do bucket e sobrava um registro apontando para o
-    // vazio. O bucket nao cascateia do banco, entao a remocao continua
-    // manual; so deixou de acontecer antes da hora.
+    // DELETE — e se a RLS recusasse a linha, o arquivo ja tinha sumido do
+    // bucket e sobrava um registro apontando para o vazio. O bucket nao
+    // cascateia do banco, entao a remocao continua manual.
     const { data, error } = await supabase.from('max_shows').delete().eq('id', id).select('id');
     if (error) { showToast?.(`Erro ao excluir: ${error.message}`, 'error'); return; }
     if (!data?.length) { showToast?.('Sem permissão para excluir esta apresentação.', 'error'); return; }
@@ -184,8 +194,6 @@ export const MaxShowsView = ({ showToast, profile }: any) => {
     load();
   };
 
-  const meus = useMemo(() => shows.filter(s => s.user_id === profile?.id), [shows, profile?.id]);
-  const outros = useMemo(() => shows.filter(s => s.user_id !== profile?.id), [shows, profile?.id]);
   // Ver o material da turma e a premissa do modulo (migr. 253). MEXER nele
   // e outra coisa: CEO e conselheiro sao alunos, e apagar o trabalho de um
   // colega nao e papel de colega. A migr. 567 recorta a policy em
@@ -193,6 +201,21 @@ export const MaxShowsView = ({ showToast, profile }: any) => {
   // que so serve para dar erro.
   const ehDocente = profile?.role === 'admin' || profile?.role === 'ceo' || profile?.is_conselheiro;
   const podeGerirDeOutros = profile?.role === 'admin';
+
+  const nomeAutor = useCallback((s: Show) => autores[s.user_id] ?? s.user_id.slice(0, 8), [autores]);
+
+  const ativos = useMemo(() => shows.filter(s => !s.deleted_at), [shows]);
+  const lixeira = useMemo(() => shows.filter(s => s.deleted_at), [shows]);
+  const daAba = tab === 'ativos' ? ativos : lixeira;
+  const termo = normalizar(busca.trim());
+  const filtrados = useMemo(() => !termo ? daAba : daAba.filter(s =>
+    normalizar(`${s.titulo ?? ''} ${s.arquivo_nome ?? ''} ${s.user_id !== profile?.id ? nomeAutor(s) : ''}`).includes(termo)
+  ), [daAba, termo, profile?.id, nomeAutor]);
+  const meus = filtrados.filter(s => s.user_id === profile?.id);
+  const outros = filtrados.filter(s => s.user_id !== profile?.id);
+
+  const meusAtivos = ativos.filter(s => s.user_id === profile?.id);
+  const espacoUsado = meusAtivos.reduce((t, s) => t + (s.arquivo_tamanho ?? 0), 0);
 
   if (openId) {
     return (
@@ -207,168 +230,246 @@ export const MaxShowsView = ({ showToast, profile }: any) => {
   }
 
   return (
-    <div className="p-3 sm:p-6 max-w-5xl mx-auto">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
-        <div className="min-w-0">
-          <h1 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight flex items-center gap-2">
-            <Presentation size={22} className="text-accent shrink-0" /> Max Show
-          </h1>
+    <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
+      className="p-3 sm:p-6 max-w-6xl mx-auto flex flex-col gap-5"
+      onDragOver={e => { if (e.dataTransfer.types.includes('Files')) { e.preventDefault(); setArrastando(true); } }}
+      onDragLeave={e => { if (e.currentTarget === e.target) setArrastando(false); }}
+      onDrop={e => { if (!e.dataTransfer.files.length) return; e.preventDefault(); setArrastando(false); importar(e.dataTransfer.files[0]); }}>
+
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight flex items-center gap-2 min-w-0">
+          <Presentation size={26} className="shrink-0" /> Max Show
+        </h2>
+        <button onClick={onPickPdf} disabled={uploading}
+          className="btn-solido btn-solido--laranja self-start sm:self-auto disabled:opacity-60">
+          {uploading ? <Loader2 size={15} className="animate-spin" /> : <FileUp size={15} />}
+          {uploading ? 'Enviando…' : 'Importar PDF'}
+        </button>
+        <input ref={fileInputRef} type="file" accept="application/pdf" onChange={onFileChosen} className="hidden" />
+      </div>
+
+      <div className={`grid gap-3 ${ehDocente ? 'grid-cols-2 lg:grid-cols-4' : 'grid-cols-3'}`}>
+        <CardContador label="Minhas apresentações" value={meusAtivos.length} tom="azul" />
+        <CardContador label="Espaço usado" value={espacoUsado ? fmtBytes(espacoUsado) : '0'} tom="neutro" />
+        {ehDocente && <CardContador label="Da turma" value={ativos.length - meusAtivos.length} tom="roxo" />}
+        <CardContador label="Na lixeira" value={lixeira.length} tom="vermelho" />
+      </div>
+
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+        <div className="flex flex-wrap gap-3" role="tablist">
+          <AbaComContador label="Apresentações" icon={Presentation} cor="verdeEscuro" n={ativos.length}
+            ativa={tab === 'ativos'} onClick={() => setTab('ativos')} />
+          <AbaComContador label="Lixeira" icon={Inbox} cor="vermelho" n={lixeira.length}
+            ativa={tab === 'lixeira'} onClick={() => setTab('lixeira')} />
         </div>
-        {tab === 'ativos' && (
-          <div className="flex gap-2 self-start sm:self-auto">
-            <button onClick={onPickPdf} disabled={uploading} className="neu-button-accent px-4 py-2 rounded-xl font-bold text-sm flex items-center gap-2 whitespace-nowrap">
-              {uploading ? <Loader2 size={16} className="animate-spin" /> : <FileUp size={16} />}
-              <span className="sm:hidden">PDF</span><span className="hidden sm:inline">Importar PDF</span>
+        <div className="relative md:w-72">
+          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none" />
+          <input value={busca} onChange={e => setBusca(e.target.value)} placeholder="Buscar…"
+            className="neu-input w-full py-2 pl-9 pr-8 rounded-xl text-sm" />
+          {busca && (
+            <button type="button" onClick={() => setBusca('')} aria-label="Limpar busca"
+              className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-gray-500 hover:text-gray-300">
+              <X size={14} />
             </button>
-            <input ref={fileInputRef} type="file" accept="application/pdf" onChange={onFileChosen} className="hidden" />
-          </div>
-        )}
-      </div>
-
-      <div className="flex gap-2 mb-6 border-b border-white/5">
-        <TabBtn active={tab === 'ativos'} onClick={() => setTab('ativos')} icon={<Presentation size={14} />}>Minhas apresentações</TabBtn>
-        <TabBtn active={tab === 'lixeira'} onClick={() => setTab('lixeira')} icon={<Inbox size={14} />}>Lixeira</TabBtn>
-      </div>
-
-      {loading ? (
-        <div className="flex items-center justify-center py-16 text-gray-500">
-          <Loader2 size={20} className="animate-spin mr-2" /> Carregando…
+          )}
         </div>
-      ) : tab === 'ativos' ? (
+      </div>
+
+      {arrastando && (
+        <div className="rounded-2xl border-2 border-dashed border-accent bg-accent/5 py-8 text-center text-sm font-bold text-accent">
+          Solte o PDF para importar
+        </div>
+      )}
+
+      {loading ? <LoadingSpinner /> : tab === 'ativos' ? (
         <>
-          <Section titulo="Minhas apresentações" shows={meus}
-            onAbrir={abrir} onDelete={excluir}
-            emptyMsg="Você ainda não importou nenhum PDF." />
+          <SecaoFormulario titulo="Minhas apresentações" icon={Presentation} cor="azul" extra={contagem(meus.length)}>
+            {meus.length === 0 ? (
+              termo ? <Vazio>Nada encontrado para “{busca}”.</Vazio> : (
+                <button type="button" onClick={onPickPdf} disabled={uploading}
+                  className="w-full rounded-xl border-2 border-dashed border-white/10 hover:border-accent/60 py-10 flex flex-col items-center gap-2 text-gray-400 hover:text-accent transition-colors">
+                  <FileUp size={28} />
+                  <span className="text-sm font-semibold">Você ainda não importou nenhum PDF</span>
+                  <span className="text-[11px] text-gray-500">Clique aqui ou arraste o arquivo para a tela · até {MAX_PDF_BYTES / 1024 / 1024} MB</span>
+                </button>
+              )
+            ) : (
+              <TabelaAtivos shows={meus} onAbrir={abrir} onDelete={excluir} />
+            )}
+          </SecaoFormulario>
           {ehDocente && outros.length > 0 && (
-            <Section titulo="Apresentações de outros usuários (visão docente)" shows={outros}
-              showOwner autores={autores}
-              onAbrir={abrir} onDelete={podeGerirDeOutros ? excluir : undefined} emptyMsg="" />
+            <SecaoFormulario titulo="Da turma · visão docente" icon={Users} cor="roxo" extra={contagem(outros.length)}>
+              <TabelaAtivos shows={outros} autor={nomeAutor} onAbrir={abrir}
+                onDelete={podeGerirDeOutros ? excluir : undefined} />
+            </SecaoFormulario>
           )}
         </>
       ) : (
         <>
-          <p className="text-[11px] text-gray-500 italic mb-4">
+          <p className="text-[11px] text-gray-500 -mt-1">
             Itens na lixeira são apagados permanentemente após {PURGE_DAYS} dias.
           </p>
-          <TrashSection titulo="Minhas apresentações excluídas" shows={meus}
-            onRestore={restaurar} onDeleteForever={excluirDefinitivo}
-            emptyMsg="Sua lixeira está vazia." />
+          <SecaoFormulario titulo="Minhas excluídas" icon={Trash2} cor="vermelho" extra={contagem(meus.length)}>
+            {meus.length === 0
+              ? <Vazio>{termo ? `Nada encontrado para “${busca}”.` : 'Sua lixeira está vazia.'}</Vazio>
+              : <TabelaLixeira shows={meus} onRestore={restaurar} onDeleteForever={excluirDefinitivo} />}
+          </SecaoFormulario>
           {ehDocente && outros.length > 0 && (
-            <TrashSection titulo="Excluídas de outros usuários (visão docente)"
-              shows={outros} showOwner autores={autores}
-              onRestore={podeGerirDeOutros ? restaurar : undefined}
-              onDeleteForever={podeGerirDeOutros ? excluirDefinitivo : undefined} emptyMsg="" />
+            <SecaoFormulario titulo="Excluídas da turma · visão docente" icon={Users} cor="roxo" extra={contagem(outros.length)}>
+              <TabelaLixeira shows={outros} autor={nomeAutor}
+                onRestore={podeGerirDeOutros ? restaurar : undefined}
+                onDeleteForever={podeGerirDeOutros ? excluirDefinitivo : undefined} />
+            </SecaoFormulario>
           )}
         </>
       )}
-    </div>
+    </motion.div>
   );
 };
 
-const TabBtn = ({ active, onClick, icon, children }: any) => (
-  <button onClick={onClick}
-    className={`flex items-center gap-2 px-4 py-2 text-sm font-semibold border-b-2 -mb-px transition-all ${active ? 'border-accent text-accent' : 'border-transparent text-gray-500 hover:text-gray-300'}`}>
-    {icon}{children}
-  </button>
+const contagem = (n: number) => `${n} apresentaç${n === 1 ? 'ão' : 'ões'}`;
+
+const Vazio = ({ children }: { children: React.ReactNode }) => (
+  <p className="text-xs text-gray-500 text-center py-6">{children}</p>
 );
 
-const fmtBytes = (b: number | null): string => {
-  if (!b) return '';
-  if (b < 1024) return `${b} B`;
-  if (b < 1024 * 1024) return `${Math.round(b / 1024)} KB`;
-  return `${(b / 1024 / 1024).toFixed(1)} MB`;
+const CelulaTitulo = ({ s, riscado, onAbrir }: { s: Show; riscado?: boolean; onAbrir?: () => void }) => {
+  const conteudo = (
+    <span className="flex items-center gap-3 min-w-[11rem]">
+      <span className={`shrink-0 w-9 h-9 rounded-lg flex items-center justify-center ${riscado ? 'bg-white/5 text-gray-500' : 'bg-red-600 text-white'}`}>
+        <FileText size={17} />
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className={`block text-sm font-semibold leading-snug truncate ${riscado ? 'text-gray-400 line-through' : 'text-gray-100 group-hover/titulo:text-accent'}`}
+          title={s.titulo || 'Sem título'}>
+          {s.titulo || 'Sem título'}
+        </span>
+        {s.arquivo_nome && s.arquivo_nome.replace(/\.pdf$/i, '') !== s.titulo && <span className="block text-[10px] text-gray-500 truncate">{s.arquivo_nome}</span>}
+      </span>
+    </span>
+  );
+  return (
+    // w-full + max-w-0: o título truncado ocupa o que sobra em vez de empurrar
+    // Ações para fora da tela; o min-w do miolo segura um mínimo legível.
+    <td className="py-2.5 px-3 w-full max-w-0">
+      {onAbrir ? (
+        <button type="button" onClick={onAbrir} title="Abrir o PDF" className="w-full text-left group/titulo">
+          {conteudo}
+        </button>
+      ) : conteudo}
+    </td>
+  );
 };
 
-const Section = ({ titulo, shows, onAbrir, onDelete, emptyMsg, showOwner, autores }: {
-  titulo: string; shows: Show[];
+const TabelaAtivos = ({ shows, autor, onAbrir, onDelete }: {
+  shows: Show[];
+  /** Presente = coluna de autor (visão docente). */
+  autor?: (s: Show) => string;
   onAbrir: (id: string, mode: 'view' | 'edit') => void;
-  /** Ausente = secao so de leitura (aluno olhando o material de outro). */
+  /** Ausente = só leitura (docente sem permissão de mexer no de outro). */
   onDelete?: (id: string) => void;
-  emptyMsg: string; showOwner?: boolean;
-  autores?: Record<string, string>;
 }) => (
-  <div className="mb-8">
-    <h2 className="text-xs uppercase tracking-widest text-gray-500 font-bold mb-3">{titulo}</h2>
-    {shows.length === 0 ? (
-      <p className="text-sm text-gray-500 italic py-6 text-center neu-pressed rounded-xl">{emptyMsg}</p>
-    ) : (
-      <ul className="flex flex-col gap-2">
+  <div className="overflow-x-auto main-scrollbar">
+    <table className="tabela w-full text-left border-collapse">
+      <thead>
+        <tr className={CABECALHO_TABELA}>
+          <th className="text-center">Apresentação</th>
+          {autor && <th className="text-center w-48">Autor</th>}
+          <th className="text-center w-24 hidden lg:table-cell">Tamanho</th>
+          <th className="text-center w-36">Enviado em</th>
+          <th className="text-center w-px">Ações</th>
+        </tr>
+      </thead>
+      <tbody>
         {shows.map(s => (
-          <li key={s.id} className="neu-flat rounded-xl px-3 sm:px-4 py-3 flex flex-col sm:flex-row sm:items-center gap-3">
-            <div className="flex items-center gap-3 min-w-0">
-              <FileText size={18} className="text-red-400 shrink-0" />
-              <div className="flex-1 min-w-0">
-                <div className="text-sm font-semibold text-gray-200 truncate">{s.titulo || 'Sem título'}</div>
-                <div className="text-[11px] text-gray-500">
-                  {`PDF • ${fmtBytes(s.arquivo_tamanho)} • Enviado ${fmt(s.updated_at)}`}
-                  {showOwner && ` • autor: ${autores?.[s.user_id] ?? s.user_id.slice(0, 8)}`}
-                </div>
-              </div>
-            </div>
-            <div className="flex flex-wrap items-center gap-2 justify-end sm:shrink-0">
-              <button onClick={() => onAbrir(s.id, 'view')} className="btn-shimmer btn-shimmer--glass-yellow" title="Abrir o PDF">
-                <Eye size={13} /> Abrir
-              </button>
-              {onDelete && (
-                <button onClick={() => onDelete(s.id)} className="btn-shimmer btn-shimmer--glass-red" title="Mover para lixeira">
-                  <Trash2 size={13} /> Excluir
+          <tr key={s.id} className="border-b border-accent/10 align-middle hover:bg-accent/[0.04] transition-colors">
+            <CelulaTitulo s={s} onAbrir={() => onAbrir(s.id, 'view')} />
+            {autor && <td className="py-2.5 px-3 text-center text-xs text-gray-300">{autor(s)}</td>}
+            <td className="py-2.5 px-3 text-center text-xs text-gray-400 font-mono tabular-nums whitespace-nowrap hidden lg:table-cell">{fmtBytes(s.arquivo_tamanho)}</td>
+            <td className="py-2.5 px-3 text-center text-xs text-gray-400 font-mono tabular-nums whitespace-nowrap">{fmt(s.updated_at)}</td>
+            <td className="py-2.5 px-3">
+              <div className="flex justify-center items-center gap-1.5 flex-nowrap whitespace-nowrap">
+                <button onClick={() => onAbrir(s.id, 'view')} title="Abrir o PDF" aria-label="Abrir o PDF" className="action-btn-vermelho">
+                  <Eye size={14} />
                 </button>
-              )}
-            </div>
-          </li>
+                {onDelete && (
+                  <MenuMais>
+                    {fechar => (
+                      <ItemMenu onClick={() => { fechar(); onDelete(s.id); }}
+                        cor="text-red-400 hover:bg-red-500/10" icon={Trash2}>
+                        Mover para a lixeira
+                      </ItemMenu>
+                    )}
+                  </MenuMais>
+                )}
+              </div>
+            </td>
+          </tr>
         ))}
-      </ul>
-    )}
+      </tbody>
+    </table>
   </div>
 );
 
-const TrashSection = ({ titulo, shows, onRestore, onDeleteForever, emptyMsg, showOwner, autores }: {
-  titulo: string; shows: Show[];
-  /** Ausentes = secao so de leitura. Ver `podeGerirDeOutros`. */
+const TabelaLixeira = ({ shows, autor, onRestore, onDeleteForever }: {
+  shows: Show[];
+  autor?: (s: Show) => string;
+  /** Ausentes = só leitura. Ver `podeGerirDeOutros`. */
   onRestore?: (id: string) => void;
   onDeleteForever?: (id: string) => void;
-  emptyMsg: string; showOwner?: boolean;
-  autores?: Record<string, string>;
 }) => (
-  <div className="mb-8">
-    <h2 className="text-xs uppercase tracking-widest text-gray-500 font-bold mb-3">{titulo}</h2>
-    {shows.length === 0 ? (
-      <p className="text-sm text-gray-500 italic py-6 text-center neu-pressed rounded-xl">{emptyMsg}</p>
-    ) : (
-      <ul className="flex flex-col gap-2">
+  <div className="overflow-x-auto main-scrollbar">
+    <table className="tabela w-full text-left border-collapse">
+      <thead>
+        <tr className={CABECALHO_TABELA}>
+          <th className="text-center">Apresentação</th>
+          {autor && <th className="text-center w-48">Autor</th>}
+          <th className="text-center w-36">Excluída em</th>
+          <th className="text-center w-24">Some em</th>
+          <th className="text-center w-px">Ações</th>
+        </tr>
+      </thead>
+      <tbody>
         {shows.map(s => {
           const dias = s.deleted_at ? diasAtras(s.deleted_at) : 0;
           const restam = Math.max(0, PURGE_DAYS - dias);
-          // Max Show hoje so trabalha com PDF importado — ver commit 258f480.
-          const Icon = FileText;
+          const cor: CorAba = restam <= 3 ? 'vermelho' : restam <= 10 ? 'laranja' : 'cinza';
           return (
-            <li key={s.id} className="neu-flat rounded-xl px-3 sm:px-4 py-3 flex flex-col sm:flex-row sm:items-center gap-3 opacity-70">
-              <div className="flex items-center gap-3 min-w-0">
-                <Icon size={18} className="text-gray-500 shrink-0" />
-                <div className="flex-1 min-w-0">
-                  <div className="text-sm font-semibold text-gray-300 truncate line-through">{s.titulo || 'Sem título'}</div>
-                  <div className="text-[11px] text-gray-500">
-                    Excluída há {dias === 0 ? 'menos de 1 dia' : `${dias} dia${dias > 1 ? 's' : ''}`} • some em {restam} dia{restam !== 1 ? 's' : ''}
-                    {showOwner && ` • autor: ${autores?.[s.user_id] ?? s.user_id.slice(0, 8)}`}
-                  </div>
+            <tr key={s.id} className="border-b border-accent/10 align-middle">
+              <CelulaTitulo s={s} riscado />
+              {autor && <td className="py-2.5 px-3 text-center text-xs text-gray-300">{autor(s)}</td>}
+              <td className="py-2.5 px-3 text-center text-xs text-gray-400 font-mono tabular-nums whitespace-nowrap">
+                {s.deleted_at ? fmt(s.deleted_at) : '—'}
+              </td>
+              <td className="py-2.5 px-3 text-center whitespace-nowrap">
+                <span className={`btn-solido ${COR_ABA[cor].botao} !py-1 !px-2.5 !text-[10px] pointer-events-none`}>
+                  {restam} dia{restam !== 1 ? 's' : ''}
+                </span>
+              </td>
+              <td className="py-2.5 px-3">
+                <div className="flex justify-center items-center gap-1.5 flex-nowrap whitespace-nowrap">
+                  {onRestore && (
+                    <button onClick={() => onRestore(s.id)} title="Restaurar" aria-label="Restaurar" className="action-btn-verde">
+                      <RotateCcw size={14} />
+                    </button>
+                  )}
+                  {onDeleteForever && (
+                    <MenuMais>
+                      {fechar => (
+                        <ItemMenu onClick={() => { fechar(); onDeleteForever(s.id); }}
+                          cor="text-red-400 hover:bg-red-500/10" icon={Trash2}>
+                          Excluir permanentemente
+                        </ItemMenu>
+                      )}
+                    </MenuMais>
+                  )}
+                  {!onRestore && !onDeleteForever && <span className="text-xs text-gray-600">—</span>}
                 </div>
-              </div>
-              <div className="flex flex-wrap items-center gap-2 justify-end sm:shrink-0">
-                {onRestore && (
-                  <button onClick={() => onRestore(s.id)} className="btn-shimmer btn-shimmer--glass-green" title="Restaurar">
-                    <RotateCcw size={13} /> Restaurar
-                  </button>
-                )}
-                {onDeleteForever && (
-                  <button onClick={() => onDeleteForever(s.id)} className="btn-shimmer btn-shimmer--glass-red" title="Excluir permanentemente">
-                    <Trash2 size={13} /> Excluir agora
-                  </button>
-                )}
-              </div>
-            </li>
+              </td>
+            </tr>
           );
         })}
-      </ul>
-    )}
+      </tbody>
+    </table>
   </div>
 );

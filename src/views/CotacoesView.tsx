@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Plus, Save, Check, X, ShoppingBag, MessageSquare, Send, Loader2, Search, GitCompare, Award, RotateCcw, Ban, CornerUpLeft, Pencil, AlertTriangle, Copy, Package, Truck, DollarSign, CalendarClock, MessageSquareText } from 'lucide-react';
 import { HistoricoOperacoes } from '../components/HistoricoOperacoes';
 import { useFetchData, dbInsert, dbUpdate } from '../hooks/useSupabaseData';
-import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent, StatusBadge, Pagination, SelecioneUnidade, FilaDeTrabalho, TextoModal, AbaComContador, SecaoFormulario, ModalFormulario } from '../components/ui';
+import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent, StatusBadge, Pagination, SelecioneUnidade, FilaDeTrabalho, TextoModal, AbaComContador, SecaoFormulario, ModalFormulario, CardContador } from '../components/ui';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import { todayBR } from '../lib/dates';
 import { useFormValidation, formatBRL, parseBRL, handleMoneyKeyDown, qtdBR } from '../lib/viewUtils';
@@ -1497,7 +1497,25 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode, onNavigate }: { s
         </div>
       </div>
 
-      <FilaDeTrabalho itens={filaDaTela} />
+      {/* Na porta do Financeiro a fila tem um tipo só; em vez da linha de
+          aviso, o painel do que pesa na decisão: quanto dinheiro espera, quanto
+          passa da alçada e quanto já perdeu a validade do preço. */}
+      {modoFinanceiro ? (() => {
+        const naFila = todasCotacoes.filter((c: any) => c.status === 'Aguardando Financeiro');
+        const valorFila = naFila.reduce((t: number, c: any) => t + Number(c.valor_total ?? 0), 0);
+        const acima = naFila.filter((c: any) => Number(c.valor_total ?? 0) > limiteEfetivo).length;
+        const vencidas = naFila.filter((c: any) => propostaVencida(c.validade)).length;
+        return (
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 shrink-0">
+            <CardContador label="Aguardando decisão" value={naFila.length} tom="amarelo" />
+            <CardContador label="Valor na fila" value={`R$ ${formatBRL(valorFila)}`} tom="azul" />
+            <CardContador label="Acima da alçada" value={acima} tom="laranja"
+              sub={alcadaLimite !== null ? `decide o gerente · limite R$ ${formatBRL(alcadaLimite)}` : 'alçada não configurada'} />
+            <CardContador label="Preço vencido" value={vencidas} tom="vermelho"
+              sub={vencidas > 0 ? 'devolva para Compras revalidar' : undefined} />
+          </div>
+        );
+      })() : <FilaDeTrabalho itens={filaDaTela} />}
 
       {/* Abas da porta de Compras — ver o comentário de `abaEscolhida`. Na
           ordem do trabalho: primeiro se cota, depois se gera o pedido. Cada

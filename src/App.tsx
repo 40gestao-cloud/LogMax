@@ -31,7 +31,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { ThemeProvider, useTheme } from './contexts/ThemeContext';
 import { FilialProvider, useFilial } from './contexts/FilialContext';
 import { FilialSelector, type FilialOp } from './components/FilialSelector';
-import { ComandosProvider, BotaoComandos } from './components/ComandosGlobais';
+import { ComandosProvider } from './components/ComandosGlobais';
 import {
   Home, BarChart3, Building2, ShoppingCart, Package, DollarSign, Users,
   LogOut, User, ChevronDown, Loader2, Menu, X, UserCog, ShoppingBag,
@@ -1060,7 +1060,7 @@ function LogMaxAppInner() {
     setActiveView(h[idx]);
     setViewHistory(h.slice(0, idx));
   }, []);
-  const [openModules, setOpenModules] = useState<Record<string, boolean>>({ empresa: true });
+  const [openModules, setOpenModules] = useState<Record<string, boolean>>({});
   const [toast, setToast] = useState({ show: false, message: '', type: 'info' });
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [sidebarRecolhida, setSidebarRecolhida] = useState(() => {
@@ -1624,7 +1624,10 @@ function LogMaxAppInner() {
   };
 
   const userEmail = user?.email ?? 'Administrador';
-  const displayName = userEmail.split('@')[0];
+  const nomeCompleto = profile?.nome?.trim() || userEmail.split('@')[0];
+  // "Melissa Amanda Souza" vira "Melissa Souza": o card é estreito.
+  const partesNome = nomeCompleto.split(/\s+/);
+  const displayName = partesNome.length > 2 ? `${partesNome[0]} ${partesNome[partesNome.length - 1]}` : nomeCompleto;
 
   // MaxAI disponível apenas para admin/CEO (visão global) e setor Financeiro.
   // Endpoint /api/ai-chat também valida server-side (defense-in-depth).
@@ -1737,9 +1740,11 @@ function LogMaxAppInner() {
                 <ArrowLeft size={18} />
               </button>
             )}
-            <div className="min-w-0 hidden sm:block">
-              <img src={assinaturaSrc} alt="Assinatura" className="h-16 w-auto opacity-85 mt-1" />
-            </div>
+          </div>
+
+          {/* Assinatura no meio do vão entre os botões da esquerda e os da direita. */}
+          <div className="flex-1 min-w-0 hidden sm:flex justify-center px-3">
+            <img src={assinaturaSrc} alt="Assinatura" className="h-11 w-auto opacity-85 mt-1" />
           </div>
 
           <div className="flex items-center gap-2 sm:gap-3">
@@ -1764,7 +1769,6 @@ function LogMaxAppInner() {
                 <span className="hidden sm:inline">{filialAtiva ?? 'Matriz'}</span>
               </button>
             )}
-            <BotaoComandos />
             <ThemeToggle />
             <AccentPicker />
 
@@ -1782,15 +1786,16 @@ function LogMaxAppInner() {
                   <User size={16} className="text-accent" />
                 )}
               </button>
-              <div className="hidden sm:flex flex-col pr-2">
-                <span className="text-sm font-bold text-gray-200 capitalize">{displayName}</span>
-                <div className="flex items-center gap-2 text-[10px] text-gray-500 mt-0.5 uppercase tracking-widest font-bold">
-                  <span className="text-gray-600">{userEmail}</span>
-                  <span className="text-accent">•</span>
-                  <button onClick={handleSignOut} className="hover:text-red-500 transition-colors cursor-pointer">Sair</button>
-                </div>
+              <div className="hidden sm:flex flex-col pr-2 min-w-0">
+                <span className="text-sm font-bold text-gray-200 truncate max-w-[14rem]" title={nomeCompleto}>{displayName}</span>
+                <span className="text-[10px] text-gray-500 mt-0.5 font-bold truncate max-w-[14rem]" title={userEmail}>{userEmail}</span>
               </div>
             </div>
+            <button onClick={handleSignOut} title="Sair" aria-label="Sair"
+              className="neu-button h-9 px-3 rounded-xl flex items-center gap-1.5 text-xs font-bold text-accent border border-accent/20 hover:bg-accent hover:text-black transition-colors shrink-0">
+              <LogOut size={15} />
+              <span className="hidden md:inline">Sair</span>
+            </button>
           </div>
         </header>
 

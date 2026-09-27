@@ -123,7 +123,7 @@ const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: 
 
   const confirm = useConfirm();
 
-  const [tipo, setTipo] = useState<TipoReq>('eventual');
+  const [tipo, setTipo] = useState<TipoReq | null>(null);
   const [estoqueForm, setEstoqueForm] = useState({ produto_id: '', qtd: '1', destino: '', centro_custo_id: '' });
   // Reposição: catálogo com multi-seleção. `Map<produto_id, qtd>` porque a
   // ordem não importa e a pergunta que a tela faz o tempo todo é "este já está
@@ -561,6 +561,7 @@ const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: 
 
   const closeForm = () => {
     setShowForm(false);
+    setTipo(null);
     setCab({ urgencia: 'Normal', centro_custo: '', justificativa: '', data_necessidade: '' });
     setItens([linhaVazia()]);
     setJustPorItem(false);
@@ -890,9 +891,11 @@ const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: 
           titulo="Nova Requisição"
           onCancelar={closeForm}
           acoes={<>
-            <NeuButtonAccent onClick={tipo === 'estoque' ? handleEnviarEstoque : handleEnviar} isLoading={saving}>
+            <NeuButtonAccent onClick={tipo === 'estoque' ? handleEnviarEstoque : handleEnviar} isLoading={saving} disabled={tipo === null}>
               <Send size={15} />
-              {tipo === 'estoque'
+              {tipo === null
+                ? 'Enviar'
+                : tipo === 'estoque'
                 ? 'Enviar para o Estoque'
                 : tipo === 'reposicao'
                   ? (repo.size > 1 ? `Repor ${repo.size} itens` : 'Enviar reposição')
@@ -928,7 +931,13 @@ const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: 
             </div>
           </SecaoFormulario>
 
-          {tipo === 'estoque' ? (
+          {/* Sem tipo escolhido o resto não aparece: nada vem marcado de
+              fábrica, e o modal abre sem campo para focar. */}
+          {tipo === null ? (
+            <div className="rounded-2xl border-2 border-dashed border-white/10 flex items-center justify-center text-center p-6 text-sm text-gray-500">
+              Escolha o tipo do pedido para preencher o resto.
+            </div>
+          ) : tipo === 'estoque' ? (
             <SecaoFormulario titulo="Material do estoque" icon={Package} cor="azul">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <FormField label="Produto *" error={erros.produto_id}>

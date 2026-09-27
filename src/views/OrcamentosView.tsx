@@ -1,4 +1,4 @@
-import { MenuMais, ItemMenu } from '../components/MenuMais';
+import { MenuMais, ItemMenu, CABECALHO_TABELA } from '../components/MenuMais';
 import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Plus, Save, Trash2, Check, X, Send, MessageSquare, Loader2, ShoppingBag, Clock, FileText, FileDown, Sheet, Eye, AlertTriangle, User, ShoppingCart, CreditCard, MessageSquareText, Calculator } from 'lucide-react';
@@ -572,6 +572,17 @@ const OrcamentosViewInner = ({
   // Expirado helper (visual): considera expirado se passa data_emissao + validade_dias
   // e ainda está em status que esperam ação. Não muda no banco aqui (cliente_especial
   // ou um cron futuro fariam o flip oficial); só destaca em vermelho.
+  // `data_emissao` chega como 'AAAA-MM-DD'; a conta é feita em UTC puro para
+  // o fuso do navegador não puxar a data um dia para trás.
+  const dataCurta = (d?: string | null) => (d ? d.slice(0, 10).split('-').reverse().join('/') : null);
+  const validadeAte = (orc: any) => {
+    if (!orc.data_emissao) return null;
+    const [y, m, d] = String(orc.data_emissao).slice(0, 10).split('-').map(Number);
+    if (!y || !m || !d) return null;
+    const fim = new Date(Date.UTC(y, m - 1, d + Number(orc.validade_dias ?? 3)));
+    return `${String(fim.getUTCDate()).padStart(2, '0')}/${String(fim.getUTCMonth() + 1).padStart(2, '0')}`;
+  };
+
   const isExpirado = (orc: any) => {
     if (!orc.data_emissao) return false;
     const emissao = new Date(orc.data_emissao);
@@ -931,23 +942,25 @@ const OrcamentosViewInner = ({
         </ModalFormulario>
       </AnimatePresence>
 
-      {/* Lista */}
+      {/* Lista — mesma régua das outras tabelas: cliente é o texto principal,
+          emissão e validade dividem a célula de prazos, e o feedback saiu da
+          coluna própria (quase sempre vazia) para o "⋯". */}
       {isLoading ? <LoadingSpinner /> : filtrados.length === 0 ? (
-        <EmptyState message="Nenhum orçamento encontrado com este filtro." />
+        <EmptyState message={modoFinanceiro && fase === 'financeiro'
+          ? 'Nenhum orçamento esperando a decisão do Financeiro.'
+          : 'Nenhum orçamento encontrado com este filtro.'} />
       ) : (
-        <div className="neu-flat rounded-3xl p-6 border border-white/5 flex flex-col mb-6">
+        <div className="neu-flat rounded-3xl p-4 sm:p-6 border border-white/5 flex flex-col mb-6">
           <div className="overflow-x-auto main-scrollbar">
             <table className="tabela w-full text-left border-collapse">
               <thead>
-                <tr className="border-b border-white/10 text-[10px] text-gray-500 uppercase tracking-widest">
-                  <th className="pb-4 font-bold px-4">Cliente</th>
-                  <th className="pb-4 font-bold px-4">Vendedor</th>
-                  <th className="pb-4 font-bold px-4 text-center">Emitido</th>
-                  <th className="pb-4 font-bold px-4 text-center">Validade</th>
-                  <th className="pb-4 font-bold px-4 text-right">Total</th>
-                  <th className="pb-4 font-bold px-4 text-center">Status</th>
-                  <th className="pb-4 font-bold px-4">Feedback</th>
-                  <th className="pb-4 font-bold px-4 text-right">Ações</th>
+                <tr className={CABECALHO_TABELA}>
+                  <th className="text-center">Cliente</th>
+                  <th className="text-center w-44 hidden md:table-cell">Vendedor</th>
+                  <th className="text-center w-36">Prazos</th>
+                  <th className="text-center w-40">Total</th>
+                  <th className="text-center w-40">Situação</th>
+                  <th className="text-center w-px">Ações</th>
                 </tr>
               </thead>
               <tbody>
@@ -958,80 +971,82 @@ const OrcamentosViewInner = ({
                     const podeEnviarCliente = isVendas && o.status === 'Aprovado Financeiro';
                     const podeConverter = isVendas && o.status === 'Aprovado Cliente';
                     const podeDecidirAgora = podeDecidirFin && o.status === 'Aguardando Financeiro';
+                    const podeCancelar = o.status !== 'Convertido em Pedido' && o.status !== 'Cancelado' && (isVendas || isAdminOuCeo);
+                    const valeAte = validadeAte(o);
                     return (
-                      <motion.tr key={o.id} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} className="border-b border-white/5 hover:bg-white/5 transition-colors group">
-                        <td className="py-3 px-4 text-sm font-semibold text-gray-200">
+                      <motion.tr key={o.id} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }}
+                        className="border-b border-accent/10 hover:bg-accent/[0.04] transition-colors align-middle">
+                        <td className="py-3 px-3 min-w-[13rem]">
                           {/* O orçamento vai ao cliente: é por este número que
                               ele volta perguntando. */}
-                          <span className="block font-credencial text-[10px] text-gray-500 tracking-wider">{numeroOrcamento(o)}</span>
-                          {o.cliente?.nome ?? '—'}
+                          <span className="block font-credencial text-[10px] text-accent/70 tracking-wider">{numeroOrcamento(o)}</span>
+                          <button type="button" onClick={() => setDetalhes(o)} title="Ver detalhes da proposta"
+                            className="block text-left text-sm font-semibold text-gray-100 leading-snug mt-0.5 line-clamp-2 break-words hover:text-accent">
+                            {o.cliente?.nome ?? '—'}
+                          </button>
+                          <span className="md:hidden block text-[10px] text-gray-500 mt-0.5">{o.vendedor_nome ?? '—'}</span>
                         </td>
-                        <td className="py-3 px-4 text-xs text-gray-400">{o.vendedor_nome ?? '—'}</td>
-                        <td className="py-3 px-4 text-xs font-mono text-gray-500 text-center">{o.data_emissao ?? '—'}</td>
-                        <td className="py-3 px-4 text-xs font-mono text-center">
-                          <span className={expirado ? 'text-red-500 font-bold flex items-center gap-1 justify-center' : 'text-gray-500'}>
-                            {expirado && <Clock size={11} />}
-                            {o.validade_dias}d
+                        <td className="py-3 px-3 text-center text-xs text-gray-300 hidden md:table-cell">{o.vendedor_nome ?? '—'}</td>
+                        <td className="py-3 px-3 text-center whitespace-nowrap text-[11px] leading-relaxed">
+                          <span className="block">
+                            <span className="text-gray-500">Emitido </span>
+                            <span className="font-mono text-gray-300">{dataCurta(o.data_emissao) ?? '—'}</span>
+                          </span>
+                          <span className="block" title={`Validade de ${o.validade_dias ?? 3} dia(s)`}>
+                            <span className="text-gray-500">{expirado ? 'Venceu ' : 'Vale até '}</span>
+                            <span className={`font-mono ${expirado ? 'text-red-400 font-bold' : 'text-gray-300'}`}>
+                              {expirado && <Clock size={10} className="inline -mt-0.5 mr-0.5" />}
+                              {valeAte ?? `${o.validade_dias}d`}
+                            </span>
                           </span>
                         </td>
-                        <td className="py-3 px-4 text-xs font-mono text-gray-200 text-right">
-                          R$ {formatBRL(Number(o.valor_total ?? 0))}
+                        <td className="py-3 px-3 text-center whitespace-nowrap">
+                          <span className="block text-sm font-semibold text-gray-100 tabular-nums">R$ {formatBRL(Number(o.valor_total ?? 0))}</span>
                           {o.forma_pagamento && (
-                            <span className="block text-[10px] text-gray-500 font-sans">
+                            <span className="block text-[10px] text-gray-500">
                               {rotuloCondicao(o.forma_pagamento, o.parcelas, o.valor_parcela)}
                             </span>
                           )}
                         </td>
-                        <td className="py-3 px-4 text-center"><StatusBadge status={o.status} /></td>
-                        <td className="py-3 px-4 text-xs max-w-xs">
-                          {o.feedback_financeiro || o.feedback_cliente ? (
-                            <span className="text-gray-400 italic line-clamp-2" title={[o.feedback_financeiro, o.feedback_cliente].filter(Boolean).join(' • ')}>
-                              "{o.feedback_financeiro ?? o.feedback_cliente}"
+                        <td className="py-3 px-3 text-center whitespace-nowrap">
+                          <StatusBadge status={o.status} solido />
+                          {(o.feedback_financeiro || o.feedback_cliente) && (
+                            <span className="flex justify-center items-center gap-1 mt-1 text-[10px] text-gray-500"
+                              title={[o.feedback_financeiro, o.feedback_cliente].filter(Boolean).join(' • ')}>
+                              <MessageSquare size={10} /> com feedback
                             </span>
-                          ) : <span className="text-gray-700">—</span>}
+                          )}
                         </td>
-                        <td className="py-3 px-4 text-right">
-                          <div className="flex justify-center items-center gap-1.5 whitespace-nowrap">
-                            <button onClick={() => setDetalhes(o)} title="Ver detalhes da proposta"
-                              className="action-btn-neutral">
-                              <Eye size={12} />
-                            </button>
+                        <td className="py-3 px-3">
+                          <div className="flex justify-center items-center gap-1.5 flex-nowrap whitespace-nowrap">
                             {podeDecidirAgora && (
                               <>
                                 <button onClick={() => { setDecisao({ orc: o, tipo: 'aprovar' }); setFeedbackInput(''); }}
-                                  className="neu-button py-1.5 px-3 rounded-lg text-xs font-bold text-emerald-400 hover:bg-emerald-400/10 flex items-center gap-1">
-                                  <Check size={11} /> Aprovar
+                                  title="Aprovar a proposta" aria-label="Aprovar a proposta" className="action-btn-verde">
+                                  <Check size={14} />
                                 </button>
                                 <button onClick={() => { setDecisao({ orc: o, tipo: 'reprovar' }); setFeedbackInput(''); }}
-                                  className="neu-button py-1.5 px-3 rounded-lg text-xs font-bold text-red-400 hover:bg-red-400/10 flex items-center gap-1">
-                                  <X size={11} /> Reprovar
+                                  title="Reprovar a proposta" aria-label="Reprovar a proposta" className="action-btn-vermelho">
+                                  <X size={14} />
                                 </button>
                               </>
                             )}
                             {podeEnviarCliente && (
                               <button onClick={() => handleEnviarCliente(o)} disabled={enviandoCliente === o.id}
-                                className="neu-button py-1.5 px-3 rounded-lg text-xs font-bold text-cyan-400 hover:bg-cyan-400/10 flex items-center gap-1 disabled:opacity-50">
-                                {enviandoCliente === o.id ? <Loader2 size={11} className="animate-spin" /> : <Send size={11} />}
-                                Enviar ao cliente
+                                title="Enviar ao cliente" aria-label="Enviar ao cliente" className="action-btn-blue disabled:opacity-50">
+                                {enviandoCliente === o.id ? <Loader2 size={13} className="animate-spin" /> : <Send size={13} />}
                               </button>
                             )}
                             {podeConverter && (
                               <button onClick={() => handleConverter(o)} disabled={convertendo === o.id}
-                                className="neu-button py-1.5 px-3 rounded-lg text-xs font-bold text-yellow-400 hover:bg-yellow-400/10 border border-yellow-400/15 flex items-center gap-1 disabled:opacity-50">
-                                {convertendo === o.id ? <Loader2 size={11} className="animate-spin" /> : <ShoppingBag size={11} />}
-                                Gerar Pedido
+                                title="Gerar o pedido de venda" aria-label="Gerar pedido" className="action-btn-accent disabled:opacity-50">
+                                {convertendo === o.id ? <Loader2 size={13} className="animate-spin" /> : <ShoppingBag size={13} />}
                               </button>
                             )}
                             {podeEditar && (
-                              <button onClick={() => openEdit(o)} title="Editar rascunho"
+                              <button onClick={() => openEdit(o)} title="Editar rascunho" aria-label="Editar rascunho"
                                 className="action-btn-edit">
-                                <FileText size={12} />
-                              </button>
-                            )}
-                            {o.feedback_financeiro && (
-                              <button onClick={() => setFeedbackAberto(o.feedback_financeiro)} title="Ver feedback"
-                                className="w-8 h-8 neu-button rounded-lg flex items-center justify-center text-gray-400 hover:text-cyan-400">
-                                <MessageSquare size={12} />
+                                <FileText size={13} />
                               </button>
                             )}
                             {/* Cancelar cobre todo orçamento que ainda não virou
@@ -1041,8 +1056,24 @@ const OrcamentosViewInner = ({
                             <MenuMais>
                               {fechar => (
                                 <>
+                                  <ItemMenu onClick={() => { fechar(); setDetalhes(o); }}
+                                    cor="text-gray-200 hover:bg-white/5" icon={Eye}>
+                                    Ver detalhes
+                                  </ItemMenu>
+                                  {o.feedback_financeiro && (
+                                    <ItemMenu onClick={() => { fechar(); setFeedbackAberto(o.feedback_financeiro); }}
+                                      cor="text-gray-200 hover:bg-white/5" icon={MessageSquare}>
+                                      Ver feedback do Financeiro
+                                    </ItemMenu>
+                                  )}
+                                  {o.feedback_cliente && (
+                                    <ItemMenu onClick={() => { fechar(); setFeedbackAberto(o.feedback_cliente); }}
+                                      cor="text-gray-200 hover:bg-white/5" icon={MessageSquare}>
+                                      Ver retorno do cliente
+                                    </ItemMenu>
+                                  )}
                                   <HistoricoOperacoes variante="menu" onAbrir={fechar} entidade="orcamentos" entidadeId={o.id} titulo={`${numeroOrcamento(o)} · ${o.cliente?.nome ?? 'Orçamento'}`} criadoEm={o.created_at} atualizadoEm={o.updated_at} />
-                                  {o.status !== 'Convertido em Pedido' && o.status !== 'Cancelado' && (isVendas || isAdminOuCeo) && (
+                                  {podeCancelar && (
                                     <ItemMenu onClick={() => { fechar(); handleCancelar(o.id); }}
                                       cor="text-amber-400 hover:bg-amber-500/10" icon={X}>
                                       Cancelar orçamento
@@ -1105,15 +1136,16 @@ const OrcamentosViewInner = ({
                   className="neu-button py-2 px-4 rounded-xl text-sm text-gray-400 disabled:opacity-50">Cancelar</button>
                 {decisao.tipo === 'reprovar' ? (
                   <button onClick={handleConfirmDecisao} disabled={decidindo}
-                    className="py-2 px-5 rounded-xl text-sm font-bold flex items-center gap-2 transition-all disabled:opacity-50"
-                    style={{ background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.35)', color: '#f87171' }}>
+                    className="btn-solido btn-solido--vermelho disabled:opacity-50">
                     {decidindo ? <Loader2 size={14} className="animate-spin" /> : <X size={14} />}
                     Reprovar
                   </button>
                 ) : (
-                  <NeuButtonAccent onClick={handleConfirmDecisao} isLoading={decidindo}>
-                    <Check size={14} /> Aprovar
-                  </NeuButtonAccent>
+                  <button onClick={handleConfirmDecisao} disabled={decidindo}
+                    className="btn-solido btn-solido--verde-escuro disabled:opacity-50">
+                    {decidindo ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
+                    Aprovar
+                  </button>
                 )}
               </div>
             </motion.div>
