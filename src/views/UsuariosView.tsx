@@ -434,10 +434,13 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
   const [resetOpen, setResetOpen] = useState(false);
   const [resetConfirm, setResetConfirm] = useState('');
   const [resetRunning, setResetRunning] = useState(false);
+  // (638) Turma nova ou recomeço de treino da mesma turma. Sem default: os
+  // dois erros custam caro (ver a migração), então o professor escolhe sempre.
+  const [resetEncerraTurma, setResetEncerraTurma] = useState<boolean | null>(null);
   const TEXTO_CONFIRMACAO = 'APAGAR TUDO';
   const handleReset = async () => {
     if (!supabase) return;
-    if (resetConfirm !== TEXTO_CONFIRMACAO) return;
+    if (resetConfirm !== TEXTO_CONFIRMACAO || resetEncerraTurma === null) return;
     setResetRunning(true);
     try {
       // `_admin` e não a original: a migr. 412 tirou o grant da original para
@@ -445,7 +448,9 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
       // literal. A original continua intocada — é a lista de TRUNCATE, e
       // reescrevê-la só para trocar um guard reverteria o que as migrs. 377 e
       // 395 mandaram preservar.
-      const { data, error } = await supabase.rpc('resetar_dados_operacionais_admin');
+      const { data, error } = await supabase.rpc('resetar_dados_operacionais_admin', {
+        p_encerra_turma: resetEncerraTurma,
+      });
       if (error) throw error;
       const d = data as any;
       const partes = [
@@ -466,7 +471,9 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
         d?.emprestimos_preservados  != null ? `${d.emprestimos_preservados} empréstimo(s)` : null,
         // (505) O reset carimba a virada de turma. Sem isto na mensagem, a
         // trava que aparece depois ("dia da turma anterior") não tem origem.
+        // (638) Recomeço de treino não carimba — o corte volta ao que era.
         d?.corte_turma              != null ? `ponto anterior a ${d.corte_turma} vira histórico` : null,
+        d?.turma_encerrada === false ? 'ponto da turma segue valendo' : null,
         // Blocos que a migração 377 tirou do TRUNCATE — mostrar aqui é o que
         // dá ao professor a confirmação de que a competição das filiais
         // atravessou o reset.
@@ -1360,7 +1367,7 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
             </div>
           </div>
           <div className="flex flex-wrap gap-2">
-            <button onClick={() => { setResetConfirm(''); setResetOpen(true); }}
+            <button onClick={() => { setResetConfirm(''); setResetEncerraTurma(null); setResetOpen(true); }}
               className="btn-apagar-tudo inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold uppercase tracking-widest
                          bg-red-500/10 text-red-400 border border-red-500/30
                          hover:bg-red-500/20 hover:text-red-300 transition-colors">
@@ -1448,8 +1455,9 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
                     {/* Migr. 505: a contrapartida de preservar. Sem dizer isto, a
                         turma nova esbarra numa trava sem entender de onde veio. */}
                     <p className="text-gray-400 text-xs">
-                      A partir deste reset, tudo o que foi lançado <strong>até hoje</strong> vira histórico fechado:
-                      segue visível na tela, mas não conta na folha da turma nova e não se reescreve por lá.
+                      Se você marcar <strong>turma nova</strong>, tudo o que foi lançado <strong>até hoje</strong> vira
+                      histórico fechado: segue visível na tela, mas não conta na folha da turma nova e não se reescreve
+                      por lá. Em <strong>recomeço de treino</strong> nada disso acontece — o ponto continua valendo.
                     </p>
                     <p className="text-emerald-400 text-xs">
                       ✓ E os <strong>Documentos</strong> publicados pela Matriz, com os arquivos no bucket. Sempre
@@ -1486,6 +1494,31 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
               </div>
 
               <div className="px-6 pb-6 pt-4 shrink-0 border-t border-white/5">
+              {/* (638) O reset serve a dois propósitos, e só a virada de turma
+                  deve fechar o ponto de antes. */}
+              <fieldset className="mb-4" disabled={resetRunning}>
+                <legend className="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-2">
+                  Por que está apagando?
+                </legend>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {([
+                    [false, 'Recomeçar o treino', 'Mesma turma. O ponto e a folha seguem valendo.'],
+                    [true,  'Turma nova',         'Outros alunos. O ponto até hoje vira histórico.'],
+                  ] as const).map(([valor, titulo, texto]) => (
+                    <label key={titulo}
+                      className={`relative cursor-pointer rounded-xl border px-3 py-2 text-left transition-colors ${
+                        resetEncerraTurma === valor
+                          ? 'border-red-500/60 bg-red-500/10'
+                          : 'border-white/10 hover:border-white/20'}`}>
+                      <input type="radio" name="reset-motivo" className="sr-only"
+                        checked={resetEncerraTurma === valor}
+                        onChange={() => setResetEncerraTurma(valor)} />
+                      <span className="block text-xs font-bold text-gray-200">{titulo}</span>
+                      <span className="block text-[11px] text-gray-400">{texto}</span>
+                    </label>
+                  ))}
+                </div>
+              </fieldset>
               <div className="flex flex-col gap-2 mb-4">
                 <label htmlFor="reset-confirm" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">
                   Digite <span className="text-red-400">{TEXTO_CONFIRMACAO}</span> para liberar o botão
@@ -1502,7 +1535,7 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
                   Cancelar
                 </button>
                 <button onClick={handleReset}
-                  disabled={resetRunning || resetConfirm !== TEXTO_CONFIRMACAO}
+                  disabled={resetRunning || resetConfirm !== TEXTO_CONFIRMACAO || resetEncerraTurma === null}
                   className="px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-widest
                              bg-red-500 text-white hover:bg-red-600 transition-colors
                              disabled:opacity-30 disabled:cursor-not-allowed">
