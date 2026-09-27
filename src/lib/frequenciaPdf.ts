@@ -60,6 +60,36 @@ const COR_STATUS: Record<FrequenciaStatusPdf, [number, number, number]> = {
   'Justificada': [30, 90, 170],
 };
 
+/**
+ * Logo do cabeçalho, lida do próprio site na hora de gerar. Não vai em base64
+ * no bundle pelo mesmo motivo do modelo de planilha: pesaria para todo mundo e
+ * só serve a quem baixa o PDF. Usa o recorte da sidebar (a mesma arte do
+ * icon-logmax.png sem a moldura preta de 512×512), que cabe na faixa do topo
+ * sem encolher o desenho. Falhou o fetch: volta ao texto "LogMax".
+ */
+async function carregarLogo(): Promise<{ dataUrl: string; w: number; h: number } | null> {
+  try {
+    const r = await fetch('/logo-sidebar.png');
+    if (!r.ok) return null;
+    const blob = await r.blob();
+    const dataUrl = await new Promise<string>((ok, erro) => {
+      const fr = new FileReader();
+      fr.onload = () => ok(String(fr.result));
+      fr.onerror = () => erro(fr.error);
+      fr.readAsDataURL(blob);
+    });
+    const { w, h } = await new Promise<{ w: number; h: number }>((ok, erro) => {
+      const img = new Image();
+      img.onload = () => ok({ w: img.naturalWidth, h: img.naturalHeight });
+      img.onerror = erro;
+      img.src = dataUrl;
+    });
+    return { dataUrl, w, h };
+  } catch {
+    return null;
+  }
+}
+
 const contar = (f: FrequenciaFuncionarioPdf, s: FrequenciaStatusPdf) =>
   f.dias.filter(d => d.status === s).length;
 
@@ -70,9 +100,10 @@ export async function exportFrequenciaPDF(
   profile?: { id: string } | null,
   showToast?: (msg: string, tone?: 'success' | 'error' | 'info') => void,
 ) {
-  const [{ default: jsPDF }, { default: autoTable }] = await Promise.all([
+  const [{ default: jsPDF }, { default: autoTable }, logo] = await Promise.all([
     import('jspdf'),
     import('jspdf-autotable'),
+    carregarLogo(),
   ]);
 
   const doc = new jsPDF();
@@ -82,18 +113,37 @@ export async function exportFrequenciaPDF(
   const periodoLabel = `${fmtData(rel.inicio)} a ${fmtData(rel.fim)}`;
 
   // ─── Cabeçalho ────────────────────────────────────────────────────
-  doc.setFillColor(...BLACK);
+  // Com logo, a faixa é preto puro: o PNG tem fundo #000 e o BLACK da paleta
+  // (#0A0A0A) deixaria o retângulo da imagem aparecendo no papel.
+  doc.setFillColor(...(logo ? [0, 0, 0] as [number, number, number] : BLACK));
   doc.rect(0, 0, pageWidth, 30, 'F');
   doc.setFillColor(...GOLD);
   doc.rect(0, 30, pageWidth, 1.2, 'F');
-  doc.setTextColor(...GOLD);
-  doc.setFontSize(20);
-  doc.setFont('helvetica', 'bold');
-  doc.text('LogMax', margin, 15);
-  doc.setFontSize(8.5);
-  doc.setTextColor(...GRAY_SOFT);
-  doc.setFont('helvetica', 'normal');
-  doc.text('Relatório de Frequência', margin, 22);
+  if (logo) {
+    const h = 24;
+    const w = h * (logo.w / logo.h);
+    doc.addImage(logo.dataUrl, 'PNG', margin - 2, 3, w, h, 'logo', 'FAST');
+    doc.setDrawColor(70, 70, 70);
+    doc.setLineWidth(0.3);
+    doc.line(margin + w + 1, 8, margin + w + 1, 22);
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(13);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Relatório de Frequência', margin + w + 5, 14.5);
+    doc.setFontSize(8);
+    doc.setTextColor(...GRAY_SOFT);
+    doc.setFont('helvetica', 'normal');
+    doc.text('Registro de Ponto', margin + w + 5, 20.5);
+  } else {
+    doc.setTextColor(...GOLD);
+    doc.setFontSize(20);
+    doc.setFont('helvetica', 'bold');
+    doc.text('LogMax', margin, 15);
+    doc.setFontSize(8.5);
+    doc.setTextColor(...GRAY_SOFT);
+    doc.setFont('helvetica', 'normal');
+    doc.text('Relatório de Frequência', margin, 22);
+  }
   doc.setFontSize(9);
   doc.setTextColor(...GOLD);
   doc.text(rel.escopo, pageWidth - margin, 15, { align: 'right' });
@@ -214,29 +264,45 @@ export async function exportFrequenciaPDF(
       );
 
       const dias = [...f.dias].sort((a, b) => a.data.localeCompare(b.data));
+      // A coluna Justificativa só entra quando algum dia deste funcionário tem
+      // o que mostrar nela: motivo escrito, ou uma Justificada (que precisa
+      // dizer "sem motivo registrado" — justificada muda seria falta com nome
+      // bonito). Coluna inteira de "—" só ocupava a largura da página.
+      const temJustificativa = dias.some(d => d.status === 'Justificada' || !!d.justificativa?.trim());
       autoTable(doc, {
         startY: cursorY + 2.5,
-        head: [['Data', 'Dia', 'Situação', 'Entrada', 'Justificativa']],
+        head: [['Data', 'Dia', 'Situação', 'Entrada', ...(temJustificativa ? ['Justificativa'] : [])]],
         body: dias.map(d => [
           fmtData(d.data),
           fmtDiaSemana(d.data),
           d.status,
           d.entrada ?? '—',
-          d.status === 'Justificada'
-            ? (d.justificativa?.trim() || 'Sem motivo registrado')
-            : (d.justificativa?.trim() || '—'),
+          ...(temJustificativa
+            ? [d.status === 'Justificada'
+                ? (d.justificativa?.trim() || 'Sem motivo registrado')
+                : (d.justificativa?.trim() || '')]
+            : []),
         ]),
         theme: 'grid',
         styles: { fontSize: 7, cellPadding: 1.5, textColor: GRAY_INK, lineColor: [228, 228, 228] },
-        headStyles: { fillColor: BLACK, textColor: GOLD, fontSize: 6.8, fontStyle: 'bold' },
+        headStyles: { fillColor: BLACK, textColor: GOLD, fontSize: 6.8, fontStyle: 'bold', halign: 'center' },
         alternateRowStyles: { fillColor: GOLD_TINT },
-        columnStyles: {
-          0: { cellWidth: 22 },
-          1: { cellWidth: 14 },
-          2: { cellWidth: 26, fontStyle: 'bold' },
-          3: { cellWidth: 18, halign: 'center' },
-          4: { cellWidth: 'auto' },
-        },
+        // Sem a coluna de justificativa, as quatro dividem a largura e ficam
+        // centralizadas — larguras fixas deixariam um vão à direita.
+        columnStyles: temJustificativa
+          ? {
+              0: { cellWidth: 22, halign: 'center' },
+              1: { cellWidth: 14, halign: 'center' },
+              2: { cellWidth: 26, fontStyle: 'bold', halign: 'center' },
+              3: { cellWidth: 18, halign: 'center' },
+              4: { cellWidth: 'auto' },
+            }
+          : {
+              0: { halign: 'center' },
+              1: { halign: 'center' },
+              2: { fontStyle: 'bold', halign: 'center' },
+              3: { halign: 'center' },
+            },
         // Cor só na coluna da situação: pintar a linha inteira deixa a tabela
         // ilegível num mês com muita falta.
         didParseCell: (data: any) => {
@@ -244,6 +310,8 @@ export async function exportFrequenciaPDF(
             const s = dias[data.row.index]?.status;
             if (s) data.cell.styles.textColor = COR_STATUS[s];
           }
+          // Motivo é texto corrido: título à esquerda, junto com ele.
+          if (data.section === 'head' && data.column.index === 4) data.cell.styles.halign = 'left';
         },
         margin: { left: margin, right: margin },
       });

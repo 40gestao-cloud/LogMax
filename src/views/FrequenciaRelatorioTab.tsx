@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { motion } from 'motion/react';
-import { FileDown, Loader2, Search, Users, CalendarRange } from 'lucide-react';
+import { FileDown, Loader2, Search, Users, CalendarRange, FileText, Check } from 'lucide-react';
+import { SecaoFormulario, FilialBadge } from '../components/ui';
 import { supabase } from '../lib/supabase';
 import { todayBR } from '../lib/dates';
 import { exportFrequenciaPDF, type FrequenciaFuncionarioPdf, type FrequenciaStatusPdf } from '../lib/frequenciaPdf';
@@ -73,6 +74,19 @@ export const FrequenciaRelatorioTab = ({
     if (!s) return elegiveis;
     return elegiveis.filter(f => (f.nome ?? '').toLowerCase().includes(s));
   }, [elegiveis, busca]);
+
+  // Agrupado por unidade, na ordem fixa da casa; Matriz (desligados) por último.
+  const grupos = useMemo(() => {
+    const ordem = ['SuperMax', 'MaxLook', 'TechMax', 'Matriz'];
+    const m = new Map<string, Funcionario[]>();
+    visiveis.forEach(f => {
+      const u = unidadeDe(f);
+      if (!m.has(u)) m.set(u, []);
+      m.get(u)!.push(f);
+    });
+    const pos = (u: string) => { const i = ordem.indexOf(u); return i < 0 ? ordem.length - 1 : i; };
+    return [...m.entries()].sort((a, b) => pos(a[0]) - pos(b[0]) || a[0].localeCompare(b[0]));
+  }, [visiveis]);
 
   // Ninguém marcado = todos. É o default pedido: quem abre a tela e clica em
   // baixar leva a unidade inteira, sem ter que marcar nome por nome.
@@ -167,117 +181,180 @@ export const FrequenciaRelatorioTab = ({
     }
   };
 
+  // Atalho de período marcado, para o botão aceso dizer o que está valendo.
+  const atalhos: { label: string; ini: string; fim: string }[] = (() => {
+    const [y, m] = hoje.split('-').map(Number);
+    const iniPass = new Date(Date.UTC(y, m - 2, 1)).toISOString().slice(0, 10);
+    const fimPass = new Date(Date.UTC(y, m - 1, 0)).toISOString().slice(0, 10);
+    return [
+      { label: 'Hoje',        ini: hoje,                   fim: hoje },
+      { label: 'Este mês',    ini: primeiroDiaDoMes(hoje), fim: hoje },
+      { label: 'Mês passado', ini: iniPass,                fim: fimPass },
+    ];
+  })();
+
+  const diasCorridos = inicio <= fim
+    ? Math.round((Date.parse(fim + 'T12:00:00Z') - Date.parse(inicio + 'T12:00:00Z')) / 86_400_000) + 1
+    : 0;
+
+  const fmt = (iso: string) => iso.split('-').reverse().join('/');
+
   return (
-    <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col gap-5">
-      {/* Período */}
-      <div className="neu-flat rounded-3xl p-5 border border-white/5">
-        <div className="flex items-center gap-2 mb-4">
-          <CalendarRange size={14} className="text-accent" />
-          <h3 className="text-sm font-bold text-gray-300">Período do relatório</h3>
-        </div>
-        <div className="flex flex-wrap items-end gap-4">
-          <div className="flex flex-col gap-1">
-            <label htmlFor="freq-pdf-inicio" className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">De</label>
-            <input id="freq-pdf-inicio" type="date" value={inicio} max={fim}
-              onChange={e => setInicio(e.target.value || primeiroDiaDoMes(hoje))}
-              className="neu-input rounded-xl px-3 py-2 text-sm tabular-nums" />
-          </div>
-          <div className="flex flex-col gap-1">
-            <label htmlFor="freq-pdf-fim" className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">Até</label>
-            <input id="freq-pdf-fim" type="date" value={fim} min={inicio}
-              onChange={e => setFim(e.target.value || hoje)}
-              className="neu-input rounded-xl px-3 py-2 text-sm tabular-nums" />
-          </div>
-          <div className="flex gap-2">
-            {([
-              ['Este mês', () => { setInicio(primeiroDiaDoMes(hoje)); setFim(hoje); }],
-              ['Mês passado', () => {
-                const [y, m] = hoje.split('-').map(Number);
-                const ini = new Date(Date.UTC(y, m - 2, 1));
-                const f = new Date(Date.UTC(y, m - 1, 0));
-                setInicio(ini.toISOString().slice(0, 10));
-                setFim(f.toISOString().slice(0, 10));
-              }],
-              ['Hoje', () => { setInicio(hoje); setFim(hoje); }],
-            ] as [string, () => void][]).map(([label, fn]) => (
-              <button key={label} type="button" onClick={fn}
-                className="neu-button px-3 py-2 rounded-xl text-[11px] font-bold text-gray-400 hover:text-gray-200 border border-white/5">
-                {label}
-              </button>
-            ))}
-          </div>
-        </div>
-      </div>
+    <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
+      className="grid grid-cols-1 lg:grid-cols-[minmax(0,340px)_minmax(0,1fr)] gap-5 items-start">
 
-      {/* Funcionários */}
-      <div className="neu-flat rounded-3xl p-5 border border-white/5">
-        <div className="flex flex-wrap items-center gap-2 mb-1">
-          <Users size={14} className="text-accent" />
-          <h3 className="text-sm font-bold text-gray-300">Funcionários</h3>
-          <span className="text-[10px] font-bold text-accent bg-accent/10 px-2 py-0.5 rounded-full border border-accent/20">
-            {selecionados.size === 0 ? `Todos (${elegiveis.length})` : `${selecionados.size} selecionado(s)`}
-          </span>
-          <div className="ml-auto flex gap-2">
-            <button type="button" onClick={() => setSelecionados(new Set(visiveis.map(f => f.id)))}
-              className="text-[11px] text-gray-500 hover:text-gray-200 font-bold uppercase tracking-widest transition-colors">
-              Marcar listados
-            </button>
-            <button type="button" onClick={() => setSelecionados(new Set())}
-              className="text-[11px] text-gray-500 hover:text-gray-200 font-bold uppercase tracking-widest transition-colors">
-              Limpar
-            </button>
+      {/* Esquerda: o que vai no PDF, na ordem em que se decide, e o botão no fim.
+          Fica presa no topo enquanto a lista rola: a lista não tem rolagem
+          própria (duas barras prendiam a roda do mouse no card). */}
+      <div className="flex flex-col gap-5 min-w-0 lg:sticky lg:top-0">
+        <SecaoFormulario titulo="Período" icon={CalendarRange} cor="azul"
+          extra={diasCorridos > 0 ? `${diasCorridos} dia(s)` : 'datas invertidas'}>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="flex flex-col gap-1 min-w-0">
+              <label htmlFor="freq-pdf-inicio" className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">De</label>
+              <input id="freq-pdf-inicio" type="date" value={inicio} max={fim}
+                onChange={e => setInicio(e.target.value || primeiroDiaDoMes(hoje))}
+                className="neu-input rounded-xl px-3 py-2 text-sm tabular-nums w-full" />
+            </div>
+            <div className="flex flex-col gap-1 min-w-0">
+              <label htmlFor="freq-pdf-fim" className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">Até</label>
+              <input id="freq-pdf-fim" type="date" value={fim} min={inicio}
+                onChange={e => setFim(e.target.value || hoje)}
+                className="neu-input rounded-xl px-3 py-2 text-sm tabular-nums w-full" />
+            </div>
           </div>
-        </div>
-        <p className="text-[11px] text-gray-500 mb-4">Sem ninguém marcado, o PDF sai com todos os funcionários da lista.</p>
-
-        <div className="relative mb-3">
-          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
-          <input type="text" value={busca} onChange={e => setBusca(e.target.value)}
-            placeholder="Buscar funcionário..."
-            className="neu-input w-full pl-9 pr-3 py-2 rounded-xl text-sm" />
-        </div>
-
-        {visiveis.length === 0 ? (
-          <p className="text-xs text-gray-500 py-6 text-center">Nenhum funcionário encontrado.</p>
-        ) : (
-          <div className="max-h-72 overflow-y-auto main-scrollbar grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-1.5">
-            {visiveis.map(f => {
-              const on = selecionados.has(f.id);
+          <div className="grid grid-cols-3 gap-2 mt-3">
+            {atalhos.map(a => {
+              const on = a.ini === inicio && a.fim === fim;
               return (
-                <button key={f.id} type="button" onClick={() => toggle(f.id)}
-                  className={`flex items-center gap-2.5 px-3 py-2 rounded-xl border text-left transition ${
-                    on ? 'bg-accent/15 border-accent/30' : 'border-white/5 hover:border-white/20 hover:bg-white/5'}`}>
-                  <span className={`w-4 h-4 rounded-md border flex items-center justify-center text-[10px] font-black shrink-0 ${
-                    on ? 'bg-accent/30 border-accent/50 text-accent' : 'border-white/20 text-transparent'}`}>✓</span>
-                  <span className="min-w-0">
-                    <span className="block text-xs font-semibold text-gray-200 truncate">{f.nome}</span>
-                    <span className="block text-[10px] text-gray-500 truncate">
-                      {[unidadeDe(f), f.cargo].filter(Boolean).join(' · ') || '—'}
-                    </span>
-                  </span>
+                <button key={a.label} type="button" aria-pressed={on}
+                  onClick={() => { setInicio(a.ini); setFim(a.fim); }}
+                  className={`px-2 py-2 rounded-xl text-[11px] font-bold border transition-colors ${
+                    on ? 'bg-blue-500/15 border-blue-500/40 text-blue-300'
+                       : 'neu-button border-white/5 text-gray-400 hover:text-gray-200'}`}>
+                  {a.label}
                 </button>
               );
             })}
           </div>
-        )}
+        </SecaoFormulario>
+
+        <SecaoFormulario titulo="Conteúdo" icon={FileText} cor="verde">
+          <div className="grid grid-cols-2 gap-2" role="radiogroup" aria-label="Conteúdo do PDF">
+            {([
+              [false, 'Só resumo', 'Uma linha por funcionário.'],
+              [true,  'Dia a dia', 'Resumo e cada dia lançado.'],
+            ] as const).map(([valor, titulo, texto]) => {
+              const on = detalhar === valor;
+              return (
+                <button key={titulo} type="button" role="radio" aria-checked={on}
+                  onClick={() => setDetalhar(valor)}
+                  className={`px-3 py-2.5 rounded-xl border text-left transition-colors ${
+                    on ? 'bg-emerald-500/15 border-emerald-500/40' : 'border-white/10 hover:border-white/20'}`}>
+                  <span className={`block text-xs font-bold ${on ? 'text-emerald-300' : 'text-gray-200'}`}>{titulo}</span>
+                  <span className="block text-[10px] text-gray-500 leading-snug">{texto}</span>
+                </button>
+              );
+            })}
+          </div>
+        </SecaoFormulario>
+
+        {/* Conferência antes de baixar: o que o papel vai trazer. */}
+        <div className="neu-flat rounded-2xl border border-white/10 p-4 flex flex-col gap-3">
+          <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5 text-xs">
+            <dt className="text-gray-500">Unidade</dt>
+            <dd className="text-gray-200 font-semibold text-right truncate">{filial ?? 'Todas as unidades'}</dd>
+            <dt className="text-gray-500">Período</dt>
+            <dd className="text-gray-200 font-semibold text-right tabular-nums">{fmt(inicio)} a {fmt(fim)}</dd>
+            <dt className="text-gray-500">Funcionários</dt>
+            <dd className="text-gray-200 font-semibold text-right tabular-nums">
+              {alvos.length}{selecionados.size === 0 ? ' (todos)' : ''}
+            </dd>
+            <dt className="text-gray-500">Conteúdo</dt>
+            <dd className="text-gray-200 font-semibold text-right">{detalhar ? 'Resumo + dia a dia' : 'Só resumo'}</dd>
+          </dl>
+          <button type="button" onClick={baixar} disabled={gerando || diasCorridos === 0 || alvos.length === 0}
+            className="btn-solido btn-solido--vermelho w-full justify-center">
+            {gerando ? <Loader2 size={14} className="animate-spin" /> : <FileDown size={14} />}
+            {gerando ? 'Gerando...' : 'Baixar PDF'}
+          </button>
+        </div>
       </div>
 
-      {/* Saída */}
-      <div className="neu-flat rounded-3xl p-5 border border-white/5 flex flex-wrap items-center justify-between gap-4">
-        <label className="flex items-center gap-2.5 cursor-pointer">
-          <input type="checkbox" checked={detalhar} onChange={e => setDetalhar(e.target.checked)}
-            className="w-4 h-4 accent-[var(--color-accent)]" />
-          <span className="text-xs text-gray-300">
-            Detalhar dia a dia
-            <span className="block text-[10px] text-gray-500">Sem isso, o PDF sai só com o resumo por funcionário.</span>
-          </span>
-        </label>
-        <button type="button" onClick={baixar} disabled={gerando}
-          className="btn-solido btn-solido--vermelho">
-          {gerando ? <Loader2 size={14} className="animate-spin" /> : <FileDown size={14} />}
-          {gerando ? 'Gerando...' : 'Baixar PDF'}
-        </button>
-      </div>
+      {/* Direita: quem entra. */}
+      <SecaoFormulario titulo="Funcionários" icon={Users} cor="roxo"
+        extra={selecionados.size === 0 ? `Todos (${elegiveis.length})` : `${selecionados.size} de ${elegiveis.length}`}>
+        <div className="flex flex-col sm:flex-row gap-2 mb-2">
+          <div className="relative flex-1 min-w-0">
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
+            <input type="text" value={busca} onChange={e => setBusca(e.target.value)}
+              placeholder="Buscar funcionário..."
+              className="neu-input w-full pl-9 pr-3 py-2 rounded-xl text-sm" />
+          </div>
+          <div className="flex gap-2 shrink-0">
+            <button type="button" onClick={() => setSelecionados(prev => new Set([...prev, ...visiveis.map(f => f.id)]))}
+              className="neu-button px-3 py-2 rounded-xl text-[11px] font-bold text-gray-400 hover:text-gray-200 border border-white/5">
+              Marcar listados
+            </button>
+            <button type="button" onClick={() => setSelecionados(new Set())} disabled={selecionados.size === 0}
+              className="neu-button px-3 py-2 rounded-xl text-[11px] font-bold text-gray-400 hover:text-gray-200 border border-white/5 disabled:opacity-40">
+              Limpar
+            </button>
+          </div>
+        </div>
+        <p className="text-[11px] text-gray-500 mb-3">Sem ninguém marcado, o PDF sai com todos da lista.</p>
+
+        {visiveis.length === 0 ? (
+          <p className="text-xs text-gray-500 py-8 text-center">Nenhum funcionário encontrado.</p>
+        ) : (
+          <div className="flex flex-col gap-4">
+            {grupos.map(([unidade, lista]) => {
+              const marcados = lista.filter(f => selecionados.has(f.id)).length;
+              const todos = marcados === lista.length;
+              return (
+                <div key={unidade}>
+                  {/* Cabeçalho por unidade só quando há mais de uma: dentro da filial repetiria o título. */}
+                  {grupos.length > 1 && (
+                    <div className="flex items-center gap-2 mb-1.5">
+                      <FilialBadge filial={unidade} />
+                      <span className="text-[10px] text-gray-500 tabular-nums">{marcados > 0 ? `${marcados}/` : ''}{lista.length}</span>
+                      <div className="flex-1 h-px bg-white/5" />
+                      <button type="button"
+                        onClick={() => setSelecionados(prev => {
+                          const n = new Set(prev);
+                          lista.forEach(f => (todos ? n.delete(f.id) : n.add(f.id)));
+                          return n;
+                        })}
+                        className="text-[10px] text-gray-500 hover:text-gray-200 font-bold uppercase tracking-widest transition-colors">
+                        {todos ? 'Desmarcar' : 'Marcar'} unidade
+                      </button>
+                    </div>
+                  )}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-1.5">
+                    {lista.map(f => {
+                      const on = selecionados.has(f.id);
+                      return (
+                        <button key={f.id} type="button" onClick={() => toggle(f.id)} aria-pressed={on}
+                          className={`flex items-center gap-2.5 px-3 py-2 rounded-xl border text-left transition ${
+                            on ? 'bg-purple-500/15 border-purple-500/40' : 'border-white/5 hover:border-white/20 hover:bg-white/5'}`}>
+                          <span className={`w-4 h-4 rounded-md border flex items-center justify-center shrink-0 ${
+                            on ? 'bg-purple-500 border-purple-500 text-white' : 'border-white/20 text-transparent'}`}>
+                            <Check size={11} strokeWidth={3} />
+                          </span>
+                          <span className="min-w-0">
+                            <span className="block text-xs font-semibold text-gray-200 truncate">{f.nome}</span>
+                            <span className="block text-[10px] text-gray-500 truncate">{f.cargo || '—'}</span>
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </SecaoFormulario>
     </motion.div>
   );
 };
