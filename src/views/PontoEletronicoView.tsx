@@ -1,14 +1,14 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import type { FilialOp } from '../components/FilialSelector';
 import { useFilial } from '../contexts/FilialContext';
 import { motion, AnimatePresence } from 'motion/react';
-import { Clock, Trash2, ClipboardList, ListChecks, FileDown } from 'lucide-react';
+import { Clock, Trash2, ClipboardList, ListChecks, FileDown, Settings } from 'lucide-react';
 import { FrequenciaTrabalhoView } from './FrequenciaTrabalhoView';
 import { FrequenciaRelatorioTab } from './FrequenciaRelatorioTab';
 import { JornadaTurmaFaixa } from './JornadaTurmaConfig';
 import { useFetchData } from '../hooks/useSupabaseData';
 import { supabase } from '../lib/supabase';
-import { LoadingSpinner, EmptyState, FilialBadge, CardContador, type TomContador, corDoStatus } from '../components/ui';
+import { LoadingSpinner, EmptyState, FilialBadge, CardContador, AbaColorida, type TomContador, type CorAba, corDoStatus } from '../components/ui';
 import type { UserProfile } from '../hooks/useUserProfile';
 import { hasSetor, isConselheiro } from '../lib/rbac';
 import { todayBR } from '../lib/dates';
@@ -64,7 +64,10 @@ const PontoEletronicoViewInner = ({ showToast, profile, filial }: { showToast: a
     '/api/funcionariosview', filial ? { filial } : undefined);
   // Sem o totem, o lançamento manual é a única forma de entrada — então é ele
   // que abre. 'registros' é a listagem de ponto_eletronico.
-  const [tab, setTab] = useState<'manual' | 'registros' | 'relatorio'>('manual');
+  const [tab, setTab] = useState<'manual' | 'registros' | 'relatorio' | 'configuracao'>('manual');
+  // Configuração só existe na Matriz: trocar para uma filial com ela aberta
+  // deixaria a tela vazia.
+  useEffect(() => { if (!modoMatriz && tab === 'configuracao') setTab('registros'); }, [modoMatriz, tab]);
 
   // Exclusão de linha de ponto continua restrita a admin.
   const isAdmin = profile?.role === 'admin';
@@ -116,25 +119,31 @@ const PontoEletronicoViewInner = ({ showToast, profile, filial }: { showToast: a
         </h2>
       </div>
 
-      {/* Dias e horários da turma — cada turma é um projeto, então é uma jornada só,
-          e ela é da Matriz: dentro de uma filial a faixa não aparece. */}
-      {modoMatriz && <JornadaTurmaFaixa profile={profile} showToast={showToast} />}
-
-      {/* Tab switcher */}
-      <div className="flex gap-1 neu-pressed rounded-2xl p-1 w-fit border border-white/5 shrink-0">
+      {/* Abas. Configuração (dias e horários da turma) é da Matriz: cada turma
+          é um projeto, então é uma jornada só — dentro de uma filial ela não
+          aparece. Antes era uma faixa fixa acima das abas. O padding é a folga
+          do anel e do traço da aba ativa: a tela rola, e sem ele a borda do
+          rolamento cortava a aba selecionada. */}
+      <div role="tablist" className="flex flex-wrap gap-2 shrink-0 p-1 pb-2.5">
         {([
           ...(podeLancarManual
-            ? [{ key: 'manual', label: 'Lançamento', Icon: ClipboardList } as const]
+            ? [{ key: 'manual', label: 'Lançamento', Icon: ClipboardList, cor: 'verde' } as const]
             : []),
-          { key: 'registros', label: 'Registros',  Icon: ListChecks },
-          { key: 'relatorio', label: 'Relatório',  Icon: FileDown },
-        ] as const).map(({ key, label, Icon }) => (
-          <button key={key} onClick={() => setTab(key)}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-widest transition-all ${tab === key ? 'neu-flat text-gray-200 border border-white/10' : 'text-gray-600 hover:text-gray-400'}`}>
-            <Icon size={12} />{label}
-          </button>
+          { key: 'registros', label: 'Registros', Icon: ListChecks, cor: 'azul' } as const,
+          { key: 'relatorio', label: 'Relatório', Icon: FileDown,   cor: 'roxo' } as const,
+          ...(modoMatriz
+            ? [{ key: 'configuracao', label: 'Configuração', Icon: Settings, cor: 'laranja' } as const]
+            : []),
+        ] as { key: typeof tab; label: string; Icon: any; cor: CorAba }[]).map(({ key, label, Icon, cor }) => (
+          <AbaColorida key={key} label={label} icon={Icon} cor={cor}
+            ativa={tab === key} onClick={() => setTab(key)} />
         ))}
       </div>
+
+      {/* ── Aba Configuração ── */}
+      {tab === 'configuracao' && modoMatriz && (
+        <JornadaTurmaFaixa profile={profile} showToast={showToast} />
+      )}
 
       {/* ── Aba Registros ── */}
       {tab === 'registros' && (
