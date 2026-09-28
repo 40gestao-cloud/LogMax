@@ -821,6 +821,10 @@ const ContasPagarViewInner = ({ showToast, filial }: { showToast: any; filial: F
                     <p className="text-[10px] text-amber-300 mt-1">
                       R$ {Math.abs(dif).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}{' '}
                       {dif > 0 ? 'a mais' : 'a menos'} que o pedido — informe o motivo.
+                      {/* Migr. 645: a diferença vira custo, não só conta. */}
+                      {conferindo.ped?.produto_id && (
+                        <> A diferença entra no custo do produto: a parte ainda em estoque ajusta o custo médio, e a já vendida vai para o CMV do mês.</>
+                      )}
                     </p>
                   );
                 })()}

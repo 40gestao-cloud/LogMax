@@ -26,6 +26,9 @@ type Dre = {
   // Migr. 442. `consumo_material` já está DENTRO de `despesas` e dos grupos —
   // aqui ele vem separado só para a tela poder dizer de onde veio aquele pedaço.
   consumo_material?: number; consumos_sem_custo?: number;
+  // Migr. 645. Já está DENTRO de `cmv`: a diferença entre nota e pedido na
+  // parte da mercadoria que já tinha sido vendida quando a nota foi conferida.
+  cmv_ajuste_compras?: number;
   resultado: number; margem_liquida_pct: number | null;
   itens_vendidos: number; itens_sem_custo: number;
 };
@@ -84,6 +87,7 @@ const DREViewInner = ({ showToast, filial }: { showToast: any; filial: FilialOp 
         despesas_grupos: (d?.despesas_grupos ?? []).map((g: any) => ({ grupo: g.grupo, valor: Number(g.valor ?? 0) })),
         consumo_material:   Number(d?.consumo_material ?? 0),
         consumos_sem_custo: Number(d?.consumos_sem_custo ?? 0),
+        cmv_ajuste_compras: Number(d?.cmv_ajuste_compras ?? 0),
       });
     }
     setCarregando(false);
@@ -104,7 +108,9 @@ const DREViewInner = ({ showToast, filial }: { showToast: any; filial: FilialOp 
     { rotulo: '(−) Descontos e cupons',      valor: -dre.descontos,      nivel: 'item' as const },
     { rotulo: '(−) Devoluções de venda',     valor: -dre.devolucoes,     nivel: 'item' as const },
     { rotulo: '= Receita líquida',           valor: dre.receita_liquida, nivel: 'subtotal' as const },
-    { rotulo: '(−) CMV — custo da mercadoria vendida', valor: -dre.cmv,  nivel: 'item' as const },
+    { rotulo: '(−) CMV — custo da mercadoria vendida', valor: -dre.cmv,  nivel: 'item' as const,
+      extra: Math.abs(Number(dre.cmv_ajuste_compras ?? 0)) >= 0.01
+        ? `inclui ${brl(Number(dre.cmv_ajuste_compras))} de ajuste pela nota fiscal das compras` : undefined },
     { rotulo: '= Lucro bruto',               valor: dre.lucro_bruto,     nivel: 'subtotal' as const,
       extra: dre.margem_bruta_pct !== null ? `margem ${dre.margem_bruta_pct}%` : undefined },
     { rotulo: '(−) Despesas operacionais',   valor: -dre.despesas,       nivel: 'item' as const,
