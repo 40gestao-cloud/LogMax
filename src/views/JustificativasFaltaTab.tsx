@@ -3,6 +3,8 @@
 // O aluno envia pelo Meu Crachá; aqui o gerente da unidade dá o parecer e o
 // Admin decide. Parecer não muda o ponto — só a decisão do Admin, e só quando
 // aceita, vira o dia em 'Justificado' (fora da conta do placar e da folha).
+// O Admin pode mudar a decisão depois (migr. 651); negar um aceite devolve o
+// ponto ao que era antes.
 //
 // Os botões seguem as RPCs, que são quem decide de verdade:
 //   parecer_justificativa_falta — role 'gerente', mesma unidade, não a própria;
@@ -10,9 +12,9 @@
 // RH, CEO e conselheiro leem (justfalta_select) e não agem.
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Check, X, UserCheck, Gavel } from 'lucide-react';
+import { Check, X, UserCheck, Gavel, Send, CalendarX2, Quote } from 'lucide-react';
 import { supabase } from '../lib/supabase';
-import { formatDataHoraBR, dataBR } from '../lib/dates';
+import { formatDataHoraBR, dataSimplesBR } from '../lib/dates';
 import { LoadingSpinner, EmptyState, FilialBadge, AbaComContador } from '../components/ui';
 import type { UserProfile } from '../hooks/useUserProfile';
 
@@ -24,12 +26,19 @@ type Just = {
   decisao_obs: string | null; decidido_por_nome: string | null; decidido_em: string | null;
 };
 
-const PILL = 'inline-block text-[11px] font-bold px-2 py-0.5 rounded-md border';
+const PILL = 'inline-flex items-center text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md border';
 const TOM_STATUS: Record<string, string> = {
   Pendente: 'bg-amber-500/15 text-amber-300 border-amber-500/40',
   Aceita:   'bg-sky-500/15 text-sky-300 border-sky-500/40',
   Negada:   'bg-red-500/15 text-red-300 border-red-500/40',
 };
+// Faixa lateral do card: a cor do status lida de relance na lista.
+const FAIXA: Record<string, string> = { Pendente: 'bg-amber-500', Aceita: 'bg-sky-500', Negada: 'bg-red-500' };
+const SEMANA = ['domingo', 'segunda', 'terça', 'quarta', 'quinta', 'sexta', 'sábado'];
+/** Dia da semana de uma coluna `date`, sem passar pelo fuso do navegador. */
+const diaDaSemana = (d: string) => SEMANA[new Date(`${d.slice(0, 10)}T12:00:00Z`).getUTCDay()];
+const iniciais = (nome: string) =>
+  nome.trim().split(/\s+/).filter(Boolean).slice(0, 2).map(p => p[0]!.toUpperCase()).join('');
 
 export function JustificativasFaltaTab({ profile, filial, showToast }: {
   profile: UserProfile; filial: string | null; showToast: any;
@@ -86,73 +95,138 @@ export function JustificativasFaltaTab({ profile, filial, showToast }: {
       {mostradas.length === 0 ? (
         <EmptyState message={aba === 'pendentes' ? 'Nenhuma justificativa esperando decisão.' : 'Nenhuma justificativa decidida ainda.'} />
       ) : (
-        <div className="grid gap-3">
-          {mostradas.map(j => {
-            const gerente = j.status === 'Pendente' && podeParecer(j);
-            const admin = j.status === 'Pendente' && ehAdmin;
-            return (
-              <article key={j.id} className="neu-flat rounded-2xl border border-white/5 p-4 flex flex-col gap-3">
-                <header className="flex flex-wrap items-center gap-2">
-                  <span className="font-bold text-gray-100">{j.nome_funcionario}</span>
-                  {!filial && j.filial && <FilialBadge filial={j.filial} />}
-                  <span className="text-sm text-gray-400">falta de <b className="text-gray-200 font-mono">{dataBR(j.data)}</b></span>
-                  <span className={`${PILL} ${TOM_STATUS[j.status]} ml-auto`}>{j.status}</span>
-                </header>
-
-                <p className="text-sm text-gray-300 whitespace-pre-wrap">{j.motivo}</p>
-                <p className="text-[11px] text-gray-500">Enviada em {formatDataHoraBR(j.created_at)}</p>
-
-                <div className="grid sm:grid-cols-2 gap-2 text-xs">
-                  <div className="rounded-xl border border-white/5 bg-white/[0.02] p-2.5">
-                    <div className="flex items-center gap-1.5 font-bold text-gray-400 uppercase tracking-widest text-[10px] mb-1">
-                      <UserCheck size={12} /> Parecer do gerente
-                    </div>
-                    {j.parecer_gerente ? (
-                      <>
-                        <span className={`${PILL} ${TOM_STATUS[j.parecer_gerente]}`}>{j.parecer_gerente}</span>
-                        <span className="text-gray-500 ml-2">{j.parecer_gerente_nome} · {formatDataHoraBR(j.parecer_gerente_em)}</span>
-                        {j.parecer_gerente_obs && <p className="text-gray-300 mt-1">{j.parecer_gerente_obs}</p>}
-                      </>
-                    ) : <span className="text-gray-500">{j.status === 'Pendente' ? 'Ainda não deu.' : 'Não deu.'}</span>}
-                  </div>
-                  <div className="rounded-xl border border-white/5 bg-white/[0.02] p-2.5">
-                    <div className="flex items-center gap-1.5 font-bold text-gray-400 uppercase tracking-widest text-[10px] mb-1">
-                      <Gavel size={12} /> Decisão do Admin
-                    </div>
-                    {j.status !== 'Pendente' ? (
-                      <>
-                        <span className={`${PILL} ${TOM_STATUS[j.status]}`}>{j.status}</span>
-                        <span className="text-gray-500 ml-2">{j.decidido_por_nome} · {formatDataHoraBR(j.decidido_em)}</span>
-                        {j.decisao_obs && <p className="text-gray-300 mt-1">{j.decisao_obs}</p>}
-                      </>
-                    ) : <span className="text-gray-500">Aguardando — é ela que vale.</span>}
-                  </div>
-                </div>
-
-                {(gerente || admin) && (
-                  <div className="flex flex-col sm:flex-row gap-2 sm:items-end">
-                    <textarea value={obs[j.id] ?? ''} onChange={e => setObs(o => ({ ...o, [j.id]: e.target.value }))}
-                      maxLength={500} placeholder={admin ? 'Observação da decisão (obrigatória para negar)' : 'Observação do parecer (obrigatória para negar)'}
-                      className="neu-input py-2 px-3 rounded-xl text-sm resize-none h-16 flex-1" />
-                    <div className="flex gap-2 shrink-0">
-                      <button type="button" disabled={gravando === j.id}
-                        onClick={() => agir(j, admin ? 'decidir_justificativa_falta' : 'parecer_justificativa_falta', true)}
-                        className="btn-solido btn-solido--verde !py-2 !text-xs inline-flex items-center gap-1 disabled:opacity-50">
-                        <Check size={14} /> {admin ? 'Aceitar' : j.parecer_gerente ? 'Mudar p/ aceita' : 'Parecer: aceitar'}
-                      </button>
-                      <button type="button" disabled={gravando === j.id}
-                        onClick={() => agir(j, admin ? 'decidir_justificativa_falta' : 'parecer_justificativa_falta', false)}
-                        className="btn-solido btn-solido--vermelho !py-2 !text-xs inline-flex items-center gap-1 disabled:opacity-50">
-                        <X size={14} /> {admin ? 'Negar' : j.parecer_gerente ? 'Mudar p/ negada' : 'Parecer: negar'}
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </article>
-            );
-          })}
+        <div className="grid gap-4">
+          {mostradas.map(j => (
+            <CardJustificativa key={j.id} j={j} mostrarFilial={!filial}
+              gerente={j.status === 'Pendente' && podeParecer(j)} admin={ehAdmin}
+              obs={obs[j.id] ?? ''} onObs={v => setObs(o => ({ ...o, [j.id]: v }))}
+              gravando={gravando === j.id} agir={agir} />
+          ))}
         </div>
       )}
     </div>
+  );
+}
+
+type Acao = 'parecer_justificativa_falta' | 'decidir_justificativa_falta';
+
+// Duas colunas, como nas Aprovações: à esquerda quem, quando e por quê; à
+// direita o caminho da decisão (aluno → gerente → Admin) com os botões embaixo.
+// No celular a coluna da decisão desce para depois do motivo.
+function CardJustificativa({ j, mostrarFilial, gerente, admin, obs, onObs, gravando, agir }: {
+  j: Just; mostrarFilial: boolean; gerente: boolean; admin: boolean;
+  obs: string; onObs: (v: string) => void; gravando: boolean;
+  agir: (j: Just, rpc: Acao, aceita: boolean) => void;
+}) {
+  const mudando = admin && j.status !== 'Pendente';
+  const rpc: Acao = admin ? 'decidir_justificativa_falta' : 'parecer_justificativa_falta';
+  return (
+    <article className="neu-flat rounded-2xl border border-white/5 overflow-hidden flex">
+      <div aria-hidden className={`w-1.5 shrink-0 ${FAIXA[j.status]}`} />
+      <div className="flex-1 min-w-0 grid lg:grid-cols-[minmax(0,1fr)_24rem]">
+        <div className="p-5 flex flex-col gap-4 min-w-0">
+          <header className="flex items-start gap-3">
+            <div className="w-11 h-11 rounded-full bg-accent/10 border border-accent/30 text-accent font-black text-sm flex items-center justify-center shrink-0">
+              {iniciais(j.nome_funcionario)}
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="font-bold text-gray-100 truncate">{j.nome_funcionario}</span>
+                {mostrarFilial && j.filial && <FilialBadge filial={j.filial} />}
+              </div>
+              <p className="text-[11px] text-gray-500 mt-0.5">Enviada em {formatDataHoraBR(j.created_at)}</p>
+            </div>
+            <span className={`${PILL} ${TOM_STATUS[j.status]} shrink-0`}>{j.status}</span>
+          </header>
+
+          <div className="flex items-center gap-3 rounded-xl border border-red-500/20 bg-red-500/[0.06] px-3 py-2.5 w-fit">
+            <CalendarX2 size={18} className="text-red-300 shrink-0" />
+            <div className="leading-tight">
+              <p className="text-[10px] font-bold uppercase tracking-widest text-red-300/80">Falta de {diaDaSemana(j.data)}</p>
+              <p className="text-base font-black text-gray-100 tabular-nums">{dataSimplesBR(j.data)}</p>
+            </div>
+          </div>
+
+          <blockquote className="relative rounded-xl bg-white/[0.03] border border-white/5 pl-10 pr-4 py-3">
+            <Quote size={16} className="absolute left-3.5 top-3.5 text-accent/60" />
+            <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-1">Motivo do aluno</p>
+            <p className="text-sm text-gray-200 whitespace-pre-wrap leading-relaxed">{j.motivo}</p>
+          </blockquote>
+        </div>
+
+        <aside className="p-5 flex flex-col gap-4 border-t lg:border-t-0 lg:border-l border-white/5 bg-white/[0.015]">
+          <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500">Caminho da decisão</p>
+          <ol className="flex flex-col">
+            <Etapa icone={Send} tom="ok" titulo="Aluno enviou" detalhe={formatDataHoraBR(j.created_at)} />
+            <Etapa icone={UserCheck} titulo="Parecer do gerente"
+              tom={j.parecer_gerente === 'Aceita' ? 'aceita' : j.parecer_gerente === 'Negada' ? 'negada' : 'espera'}
+              resultado={j.parecer_gerente}
+              detalhe={j.parecer_gerente
+                ? `${j.parecer_gerente_nome ?? ''} · ${formatDataHoraBR(j.parecer_gerente_em)}`
+                : j.status === 'Pendente' ? 'Aguardando o gerente' : 'Não deu parecer'}
+              obs={j.parecer_gerente_obs} />
+            <Etapa icone={Gavel} titulo="Decisão do Admin" ultima
+              tom={j.status === 'Aceita' ? 'aceita' : j.status === 'Negada' ? 'negada' : 'espera'}
+              resultado={j.status === 'Pendente' ? null : j.status}
+              detalhe={j.status === 'Pendente' ? 'Aguardando — é ela que vale' : `${j.decidido_por_nome ?? ''} · ${formatDataHoraBR(j.decidido_em)}`}
+              obs={j.decisao_obs} />
+          </ol>
+
+          {(gerente || admin) && (
+            <div className="flex flex-col gap-2 pt-3 border-t border-white/5">
+              <textarea value={obs} onChange={e => onObs(e.target.value)} maxLength={500}
+                placeholder={mudando ? 'Por que a decisão mudou (obrigatório para negar)'
+                  : admin ? 'Observação da decisão (obrigatória para negar)' : 'Observação do parecer (obrigatória para negar)'}
+                className="neu-input py-2 px-3 rounded-xl text-sm resize-none h-16 w-full" />
+              <div className="flex gap-2">
+                {j.status !== 'Aceita' && (
+                  <button type="button" disabled={gravando} onClick={() => agir(j, rpc, true)}
+                    className="btn-solido btn-solido--verde flex-1 justify-center !py-2 !text-xs inline-flex items-center gap-1 disabled:opacity-50">
+                    <Check size={14} /> {mudando ? 'Mudar p/ aceita' : admin ? 'Aceitar' : j.parecer_gerente ? 'Mudar p/ aceita' : 'Parecer: aceitar'}
+                  </button>
+                )}
+                {j.status !== 'Negada' && (
+                  <button type="button" disabled={gravando} onClick={() => agir(j, rpc, false)}
+                    className="btn-solido btn-solido--vermelho flex-1 justify-center !py-2 !text-xs inline-flex items-center gap-1 disabled:opacity-50">
+                    <X size={14} /> {mudando ? 'Mudar p/ negada' : admin ? 'Negar' : j.parecer_gerente ? 'Mudar p/ negada' : 'Parecer: negar'}
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+        </aside>
+      </div>
+    </article>
+  );
+}
+
+const TOM_ETAPA = {
+  ok:     'bg-emerald-500/15 border-emerald-500/50 text-emerald-300',
+  aceita: 'bg-sky-500/15 border-sky-500/50 text-sky-300',
+  negada: 'bg-red-500/15 border-red-500/50 text-red-300',
+  espera: 'bg-transparent border-dashed border-gray-600 text-gray-500',
+} as const;
+
+function Etapa({ icone: Icone, titulo, tom, resultado, detalhe, obs, ultima }: {
+  icone: any; titulo: string; tom: keyof typeof TOM_ETAPA; resultado?: string | null;
+  detalhe: string; obs?: string | null; ultima?: boolean;
+}) {
+  return (
+    <li className="flex gap-3">
+      <div className="flex flex-col items-center">
+        <span className={`w-7 h-7 rounded-full border flex items-center justify-center shrink-0 ${TOM_ETAPA[tom]}`}>
+          <Icone size={13} />
+        </span>
+        {!ultima && <span aria-hidden className="w-px flex-1 bg-white/10 my-1" />}
+      </div>
+      <div className={`min-w-0 flex-1 ${ultima ? '' : 'pb-4'}`}>
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-xs font-bold text-gray-200">{titulo}</span>
+          {resultado && <span className={`${PILL} ${TOM_STATUS[resultado]}`}>{resultado}</span>}
+        </div>
+        <p className="text-[11px] text-gray-500 mt-0.5">{detalhe}</p>
+        {obs && <p className="text-xs text-gray-300 mt-1.5 rounded-lg bg-white/[0.03] px-2.5 py-1.5">{obs}</p>}
+      </div>
+    </li>
   );
 }
