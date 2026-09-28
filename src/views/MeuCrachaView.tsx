@@ -18,6 +18,7 @@ import { IdCard, AlertTriangle, Printer } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { LoadingSpinner } from '../components/ui';
 import { CrachaVirtual, type CrachaPessoa } from '../components/CrachaVirtual';
+import { MinhaFrequencia } from '../components/MinhaFrequencia';
 import type { UserProfile } from '../hooks/useUserProfile';
 
 // O papel serve de "cargo" no crachá de quem não tem cadastro de funcionário.
@@ -120,7 +121,10 @@ export const MeuCrachaView = ({ profile }: { profile: UserProfile }) => {
           <p className="text-sm text-gray-300">{erro}</p>
         </div>
       ) : (
-        <div className="flex-1 flex flex-col items-center justify-center gap-5 shrink-0 py-2">
+        <>
+        {/* Com cadastro, o cartão sobe e a frequência vem logo abaixo; sem
+            cadastro não há ponto a mostrar e o cartão segue centralizado. */}
+        <div className={`${pessoa ? '' : 'flex-1 justify-center'} flex flex-col items-center gap-5 shrink-0 py-2`}>
           {/* Aviso antes do cartão: explica por que ele saiu sem QR. */}
           {(semFuncionario || inativo) && (
             <div className="w-full max-w-[340px] rounded-xl px-4 py-3 bg-amber-500/10 border border-amber-500/30 flex items-start gap-2.5">
@@ -136,6 +140,9 @@ export const MeuCrachaView = ({ profile }: { profile: UserProfile }) => {
             <CrachaVirtual pessoa={pessoa ?? pessoaDoPerfil} semQr={semFuncionario || inativo} />
           </div>
         </div>
+        {/* O próprio ponto, na régua do placar (migr. 648). Só leitura. */}
+        {pessoa && <MinhaFrequencia />}
+        </>
       )}
     </motion.div>
   );
