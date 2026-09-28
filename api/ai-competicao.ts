@@ -1,6 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { authenticate, applyCors, getAdminClient } from '../lib/auth.js';
 import { createLogger } from '../lib/log.js';
+import { barrarExcessoIa } from '../lib/limiteIa.js';
 import { callLLM } from '../lib/llm.js';
 
 // Endpoint da Fase 2: análise IA do placar da competição.
@@ -113,6 +114,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       log.error('rpc.failed', placarErr);
       return res.status(500).json({ error: `Erro ao calcular placar: ${placarErr.message}` });
     }
+
+    if (await barrarExcessoIa(res, user, log)) return;
 
     const llm = await callLLM({
       systemPrompt: SYSTEM_PROMPT,

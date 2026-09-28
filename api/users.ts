@@ -750,9 +750,12 @@ async function handleCriarAcesso(
     return res.status(400).json({ error: 'Só funcionário ativo recebe acesso.' });
   }
 
-  // Gerente e RH de filial não criam acesso em outra unidade.
+  // Gerente e RH de filial não criam acesso em outra unidade. Conta SEM
+  // unidade também não: o `callerProfile.filial &&` que havia aqui fazia a
+  // trava pular justamente para ela, e um RH não alocado dava login em
+  // qualquer filial.
   if (callerProfile.role !== 'admin' && callerProfile.role !== 'ceo'
-      && callerProfile.filial && func.filial !== callerProfile.filial) {
+      && (!callerProfile.filial || func.filial !== callerProfile.filial)) {
     log.warn('acesso.permission_denied', { caller_id: callerId, alvo_filial: func.filial, reason: 'outra_filial' });
     return res.status(403).json({ error: 'Só é possível dar acesso a funcionário da própria unidade.' });
   }

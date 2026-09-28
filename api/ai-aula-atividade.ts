@@ -1,6 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { authenticate, applyCors, getAdminClient } from '../lib/auth.js';
 import { createLogger, type Logger } from '../lib/log.js';
+import { barrarExcessoIa } from '../lib/limiteIa.js';
 import { callLLM } from '../lib/llm.js';
 import type { AuthedUser } from '../lib/auth.js';
 
@@ -397,6 +398,8 @@ async function handleConferencia(
   const categorias = [...new Set(((cats ?? []) as { nome: string }[])
     .map(c => (c.nome ?? '').trim()).filter(Boolean))];
 
+  if (await barrarExcessoIa(res, user, log)) return;
+
   const llm = await callLLM({
     systemPrompt: SYSTEM_PROMPT_CONFERENCIA,
     userPrompt: buildPromptConferencia(itens, categorias),
@@ -604,6 +607,8 @@ async function handlePendencias(
     return res.status(500).json({ error: 'IA não configurada no servidor.' });
   }
 
+  if (await barrarExcessoIa(res, user, log)) return;
+
   const llm = await callLLM({
     systemPrompt: SYSTEM_PROMPT_PENDENCIAS,
     userPrompt: buildPromptPendencias(itens, filial),
@@ -707,6 +712,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       .slice(0, 12)
       .map((p: any) => ({ label: str(p?.label, 160), onde: str(p?.onde, 160) }))
       .filter((p: any) => p.label);
+
+    if (await barrarExcessoIa(res, user, log)) return;
 
     const llm = await callLLM({
       systemPrompt: SYSTEM_PROMPT,

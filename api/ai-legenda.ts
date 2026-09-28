@@ -1,6 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { authenticate, applyCors, userHasSetor } from '../lib/auth.js';
 import { createLogger } from '../lib/log.js';
+import { barrarExcessoIa } from '../lib/limiteIa.js';
 import { callLLM } from '../lib/llm.js';
 
 // Endpoint dedicado pra geração de copy/legenda de promoções via Gemini.
@@ -145,6 +146,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (!payload.produto || typeof payload.produto !== 'string' || !payload.produto.trim()) {
       return res.status(400).json({ error: 'Informe o produto/serviço da promoção.' });
     }
+
+    if (await barrarExcessoIa(res, user, log)) return;
 
     // ─── LLM com fallback Gemini → OpenRouter ───────────────────────
     const llm = await callLLM({

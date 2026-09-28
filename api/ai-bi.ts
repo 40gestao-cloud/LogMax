@@ -1,6 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { authenticate, applyCors, getAdminClient } from '../lib/auth.js';
 import { createLogger } from '../lib/log.js';
+import { barrarExcessoIa } from '../lib/limiteIa.js';
 import { callLLM } from '../lib/llm.js';
 
 // Endpoint dedicado pro Painel BI. Diferente de /api/ai-chat (chat
@@ -207,6 +208,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       log.error('rpc.failed', rpcErr);
       return res.status(500).json({ error: `Erro ao agregar dados: ${rpcErr.message}` });
     }
+
+    if (await barrarExcessoIa(res, user, log)) return;
 
     // ─── LLM com fallback Gemini → OpenRouter ───────────────────────
     const llm = await callLLM({

@@ -1,6 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { authenticate, applyCors, userHasSetor } from '../lib/auth.js';
 import { createLogger } from '../lib/log.js';
+import { barrarExcessoIa } from '../lib/limiteIa.js';
 import { callLLM, type LLMMessage } from '../lib/llm.js';
 
 type ChatMessage = { role: 'user' | 'assistant' | 'model'; content: string };
@@ -95,6 +96,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       role: m.role === 'model' ? 'assistant' : m.role,
       content: m.content,
     }));
+
+    if (await barrarExcessoIa(res, user, log)) return;
 
     // ─── LLM com fallback Gemini → OpenRouter ───────────────────────
     // Google Search grounding só roda no Gemini (geminiTools). Se cair pro

@@ -1,6 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { authenticate, applyCors, getAdminClient } from '../lib/auth.js';
 import { createLogger } from '../lib/log.js';
+import { barrarExcessoIa } from '../lib/limiteIa.js';
 import { callLLM } from '../lib/llm.js';
 
 // Endpoint: MaxAI Briefing por tarefa da Matriz. Admin/CEO abre uma
@@ -156,6 +157,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (!tarefa) {
       return res.status(404).json({ error: 'Tarefa não encontrada ou inativa.' });
     }
+
+    if (await barrarExcessoIa(res, user, log)) return;
 
     const llm = await callLLM({
       systemPrompt: SYSTEM_PROMPT,
