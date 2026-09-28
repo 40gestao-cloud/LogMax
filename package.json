@@ -13,7 +13,8 @@
     "doc:fluxo": "node scripts/gerar-pdf-fluxo.mjs docs/LogMax-Fluxo-Compras-Estoque.pdf",
     "drift": "node scripts/schema-drift.mjs",
     "rls:check": "node scripts/rls-check.mjs",
-    "saude": "node scripts/saude-turmas.mjs"
+    "saude": "node scripts/saude-turmas.mjs",
+    "mapa": "node scripts/mapa-dependencias.mjs"
   },
   "dependencies": {
     "@sentry/react": "^10.53.1",
