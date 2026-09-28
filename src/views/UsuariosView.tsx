@@ -2,7 +2,7 @@ import { MenuMais, ItemMenu } from '../components/MenuMais';
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { todayBR } from '../lib/dates';
 import { motion, AnimatePresence } from 'motion/react';
-import { Plus, Users, X, Eye, EyeOff, Shield, User, Trash2, Pencil, FileDown, FileSpreadsheet, AlertTriangle, Camera, KeyRound, Copy, Building2, ChevronRight, CalendarDays, UserPlus, Link2, Briefcase, Check, Lock, Layers, ShieldCheck, type LucideIcon } from 'lucide-react';
+import { Plus, Users, X, Eye, EyeOff, Shield, User, Trash2, Pencil, FileDown, FileSpreadsheet, AlertTriangle, Camera, KeyRound, Copy, Building2, ChevronRight, CalendarDays, UserPlus, Link2, Briefcase, Check, Lock, Layers, ShieldCheck, RotateCcw, Loader2, type LucideIcon } from 'lucide-react';
 import { uploadFotoPerfil, validarFotoPerfil, PERFIL_FOTO_ACCEPT } from '../lib/perfilFoto';
 import { supabase } from '../lib/supabase';
 import { freshToken } from '../lib/authFetch';
@@ -434,13 +434,14 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
   const [resetOpen, setResetOpen] = useState(false);
   const [resetConfirm, setResetConfirm] = useState('');
   const [resetRunning, setResetRunning] = useState(false);
-  // (638) Turma nova ou recomeço de treino da mesma turma. Sem default: os
-  // dois erros custam caro (ver a migração), então o professor escolhe sempre.
-  const [resetEncerraTurma, setResetEncerraTurma] = useState<boolean | null>(null);
+  // (654) Este é o RESET PARCIAL: recomeço da mesma turma, sempre sem corte.
+  // A escolha "turma nova" da 638 saiu daqui — turma nova é o RESET GERAL,
+  // que apaga tudo e não deixa ponto antigo para travar. Carimbar corte num
+  // recomeço foi o que travou setembro na ERP e na Contabilidade.
   const TEXTO_CONFIRMACAO = 'APAGAR TUDO';
   const handleReset = async () => {
     if (!supabase) return;
-    if (resetConfirm !== TEXTO_CONFIRMACAO || resetEncerraTurma === null) return;
+    if (resetConfirm !== TEXTO_CONFIRMACAO) return;
     setResetRunning(true);
     try {
       // `_admin` e não a original: a migr. 412 tirou o grant da original para
@@ -449,7 +450,7 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
       // reescrevê-la só para trocar um guard reverteria o que as migrs. 377 e
       // 395 mandaram preservar.
       const { data, error } = await supabase.rpc('resetar_dados_operacionais_admin', {
-        p_encerra_turma: resetEncerraTurma,
+        p_encerra_turma: false,
       });
       if (error) throw error;
       const d = data as any;
@@ -494,6 +495,54 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
       showToast(`Erro no reset: ${err?.message ?? 'verifique o console'}`, 'error');
     } finally {
       setResetRunning(false);
+    }
+  };
+
+  // ── RESET GERAL (migr. 654) ─────────────────────────────────────────────
+  // Turma nova: apaga tudo — funcionários, contas (menos a do admin), ponto,
+  // folha, competição, histórico — e os arquivos enviados. Fica só a
+  // estrutura (filiais, categorias, cargos, bancos, jornada…). O banco zera
+  // numa transação só; os arquivos saem depois pelo Storage API, com a lista
+  // que a RPC devolve (apagar a linha de storage.objects por SQL deixaria o
+  // arquivo no disco).
+  const TEXTO_GERAL = 'RESET GERAL';
+  const [geralOpen, setGeralOpen] = useState(false);
+  const [geralConfirm, setGeralConfirm] = useState('');
+  const [geralRunning, setGeralRunning] = useState(false);
+  const [geralProgresso, setGeralProgresso] = useState('');
+  const handleResetGeral = async () => {
+    if (!supabase || geralConfirm !== TEXTO_GERAL) return;
+    setGeralRunning(true);
+    setGeralProgresso('Apagando os dados…');
+    try {
+      const { data, error } = await supabase.rpc('resetar_geral_admin', { p_confirmacao: TEXTO_GERAL });
+      if (error) throw error;
+      const d = data as any;
+      const arquivos = (d?.arquivos ?? {}) as Record<string, string[]>;
+      const total = Object.values(arquivos).reduce((s, l) => s + l.length, 0);
+      let removidos = 0, falhas = 0;
+      for (const [bucket, nomes] of Object.entries(arquivos)) {
+        for (let i = 0; i < nomes.length; i += 100) {
+          const lote = nomes.slice(i, i + 100);
+          const { error: e } = await supabase.storage.from(bucket).remove(lote);
+          if (e) falhas += lote.length; else removidos += lote.length;
+          setGeralProgresso(`Apagando arquivos… ${removidos + falhas}/${total}`);
+        }
+      }
+      showToast(
+        `Reset geral concluído: ${d?.contas_apagadas ?? 0} conta(s), ${d?.funcionarios_apagados ?? 0} funcionário(s) e `
+        + `${d?.tabelas_zeradas ?? 0} tabela(s) zeradas, ${removidos} arquivo(s) apagado(s)`
+        + (falhas ? ` — ${falhas} arquivo(s) não saíram do storage.` : '.'),
+        falhas ? 'error' : 'success', !!falhas,
+      );
+      setGeralOpen(false);
+      setGeralConfirm('');
+      setTimeout(() => window.location.reload(), falhas ? 4000 : 1200);
+    } catch (err: any) {
+      showToast(`Erro no reset geral: ${err?.message ?? 'verifique o console'}`, 'error', true);
+    } finally {
+      setGeralRunning(false);
+      setGeralProgresso('');
     }
   };
 
@@ -1352,26 +1401,32 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
             </div>
             <div className="flex-1 min-w-0">
               <h3 className="text-sm font-bold text-red-400 uppercase tracking-widest">Zona de Perigo</h3>
-              <p className="text-xs text-gray-400 mt-1 leading-relaxed">
-                Apaga <strong className="text-gray-200">TODOS os dados operacionais</strong> (vendas, estoque, financeiro,
-                folha, avaliações, marketing, histórico MaxBank, produtos, serviços e clientes).
-                Preserva os <strong className="text-gray-200">usuários</strong> (login + perfil + setor + filial),
-                os <strong className="text-gray-200">funcionários</strong>, o <strong className="text-gray-200">Registro de Ponto</strong>{' '}
-                (frequência lançada, afastamentos e justificativas — migr. 504),
-                as <strong className="text-gray-200">carteiras MaxBank</strong> (saldos atuais), as <strong className="text-gray-200">filiais</strong>
-                e — desde a migr. 482 — os <strong className="text-gray-200">fornecedores</strong> e as{' '}
-                <strong className="text-gray-200">categorias de produto</strong>.
-                Use ao trocar a turma de setor pra começar do zero.
-                Operação irreversível.
-              </p>
+              <div className="text-xs text-gray-400 mt-1 leading-relaxed space-y-1.5">
+                <p>
+                  <strong className="text-gray-200">Reset parcial — mesma turma, recomeço.</strong> Apaga os dados
+                  operacionais (vendas, estoque, financeiro, avaliações, marketing, histórico MaxBank, produtos,
+                  serviços e clientes). Mantém usuários, funcionários, ponto, folha, carteiras, filiais, fornecedores e
+                  categorias. Nada fica travado como "turma anterior".
+                </p>
+                <p>
+                  <strong className="text-gray-200">Reset geral — turma nova.</strong> Apaga <strong className="text-red-400">tudo</strong>:
+                  usuários (menos o administrador), funcionários, ponto, folha, competição, histórico e os arquivos
+                  enviados. Fica só a estrutura do app (filiais, categorias, cargos, bancos, jornada).
+                </p>
+                <p>Operações irreversíveis.</p>
+              </div>
             </div>
           </div>
           <div className="flex flex-wrap gap-2">
-            <button onClick={() => { setResetConfirm(''); setResetEncerraTurma(null); setResetOpen(true); }}
+            <button onClick={() => { setResetConfirm(''); setResetOpen(true); }}
               className="btn-apagar-tudo inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold uppercase tracking-widest
                          bg-red-500/10 text-red-400 border border-red-500/30
                          hover:bg-red-500/20 hover:text-red-300 transition-colors">
-              <Trash2 size={13} /> Apagar tudo (manter usuários)
+              <RotateCcw size={13} /> Reset parcial (recomeço)
+            </button>
+            <button onClick={() => { setGeralConfirm(''); setGeralOpen(true); }}
+              className="btn-solido btn-solido--vermelho !py-2.5 !px-4 !text-xs uppercase tracking-widest">
+              <Trash2 size={13} /> Reset geral (turma nova)
             </button>
             {/* Âmbar, não vermelho: apagar uma unidade é menor que apagar a
                 holding, e dar a mesma cor às duas faria a diferença sumir
@@ -1406,7 +1461,7 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
                   crescia até não caber e não rolava. */}
               <div className="flex items-center gap-3 px-6 pt-6 pb-4 shrink-0">
                 <AlertTriangle size={20} className="text-red-500" />
-                <h3 className="text-base font-bold text-red-400">Apagar TODOS os dados?</h3>
+                <h3 className="text-base font-bold text-red-400">Reset parcial — recomeçar a mesma turma?</h3>
               </div>
 
               <div className="px-6 overflow-y-auto main-scrollbar flex-1 min-h-0">
@@ -1455,9 +1510,8 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
                     {/* Migr. 505: a contrapartida de preservar. Sem dizer isto, a
                         turma nova esbarra numa trava sem entender de onde veio. */}
                     <p className="text-gray-400 text-xs">
-                      Se você marcar <strong>turma nova</strong>, tudo o que foi lançado <strong>até hoje</strong> vira
-                      histórico fechado: segue visível na tela, mas não conta na folha da turma nova e não se reescreve
-                      por lá. Em <strong>recomeço de treino</strong> nada disso acontece — o ponto continua valendo.
+                      É a mesma turma: o ponto e a folha continuam valendo e nada fica travado. Para turma nova, use
+                      o <strong>Reset geral</strong>, que apaga tudo.
                     </p>
                     <p className="text-emerald-400 text-xs">
                       ✓ E os <strong>Documentos</strong> publicados pela Matriz, com os arquivos no bucket. Sempre
@@ -1494,31 +1548,6 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
               </div>
 
               <div className="px-6 pb-6 pt-4 shrink-0 border-t border-white/5">
-              {/* (638) O reset serve a dois propósitos, e só a virada de turma
-                  deve fechar o ponto de antes. */}
-              <fieldset className="mb-4" disabled={resetRunning}>
-                <legend className="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-2">
-                  Por que está apagando?
-                </legend>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                  {([
-                    [false, 'Recomeçar o treino', 'Mesma turma. O ponto e a folha seguem valendo.'],
-                    [true,  'Turma nova',         'Outros alunos. O ponto até hoje vira histórico.'],
-                  ] as const).map(([valor, titulo, texto]) => (
-                    <label key={titulo}
-                      className={`relative cursor-pointer rounded-xl border px-3 py-2 text-left transition-colors ${
-                        resetEncerraTurma === valor
-                          ? 'border-red-500/60 bg-red-500/10'
-                          : 'border-white/10 hover:border-white/20'}`}>
-                      <input type="radio" name="reset-motivo" className="sr-only"
-                        checked={resetEncerraTurma === valor}
-                        onChange={() => setResetEncerraTurma(valor)} />
-                      <span className="block text-xs font-bold text-gray-200">{titulo}</span>
-                      <span className="block text-[11px] text-gray-400">{texto}</span>
-                    </label>
-                  ))}
-                </div>
-              </fieldset>
               <div className="flex flex-col gap-2 mb-4">
                 <label htmlFor="reset-confirm" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">
                   Digite <span className="text-red-400">{TEXTO_CONFIRMACAO}</span> para liberar o botão
@@ -1535,13 +1564,89 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
                   Cancelar
                 </button>
                 <button onClick={handleReset}
-                  disabled={resetRunning || resetConfirm !== TEXTO_CONFIRMACAO || resetEncerraTurma === null}
+                  disabled={resetRunning || resetConfirm !== TEXTO_CONFIRMACAO}
                   className="px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-widest
                              bg-red-500 text-white hover:bg-red-600 transition-colors
                              disabled:opacity-30 disabled:cursor-not-allowed">
-                  {resetRunning ? 'Apagando...' : 'Confirmar e apagar tudo'}
+                  {resetRunning ? 'Apagando...' : 'Confirmar reset parcial'}
                 </button>
               </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Modal do RESET GERAL (migr. 654) */}
+      <AnimatePresence>
+        {geralOpen && (
+          <motion.div
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4"
+            onClick={() => !geralRunning && setGeralOpen(false)}>
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 10 }}
+              onClick={e => e.stopPropagation()}
+              className="neu-flat rounded-3xl border border-red-500/60 w-full max-w-lg max-h-[85vh] flex flex-col overflow-hidden"
+              style={{ background: 'var(--color-bg-base)' }}>
+              <div className="flex items-center gap-3 px-6 pt-6 pb-4 shrink-0">
+                <span className="w-10 h-10 rounded-xl bg-red-600 text-white flex items-center justify-center shrink-0">
+                  <AlertTriangle size={18} />
+                </span>
+                <h3 className="text-base font-black text-red-400">Reset geral — apagar a turma inteira?</h3>
+              </div>
+
+              <div className="px-6 overflow-y-auto main-scrollbar flex-1 min-h-0">
+                <div className="text-sm text-gray-300 space-y-3 pb-4">
+                  <p>Para começar uma <strong>turma nova</strong>. Apaga <strong className="text-red-400">permanentemente</strong>, sem deixar histórico:</p>
+                  <ul className="text-xs text-gray-400 space-y-1 pl-4 list-disc">
+                    <li><strong className="text-gray-200">Todas as contas de usuário</strong>, menos a do administrador</li>
+                    <li>Funcionários, Registro de Ponto, afastamentos, justificativas e folha de pagamento</li>
+                    <li>Carteiras e histórico MaxBank, competição, avaliações, notas do placar</li>
+                    <li>Todo o operacional: vendas, estoque, compras, financeiro, fornecedores, clientes, produtos</li>
+                    <li>Histórico de operações, notificações, documentos e contratos</li>
+                    <li>Arquivos enviados: fotos de perfil, imagens de produto, anexos, planilhas, currículos</li>
+                  </ul>
+                  <p className="text-emerald-400 text-xs">
+                    ✓ <strong>Fica só a estrutura:</strong> filiais, categorias e subcategorias, cargos, departamentos,
+                    centros de custo, formas e condições de pagamento, bancos (saldo zerado), alçadas, jornada e
+                    calendário da turma, configurações.
+                  </p>
+                  <p className="text-amber-300 text-xs">
+                    Depois do reset, os alunos antigos não entram mais. Cadastre as contas e os funcionários da turma nova.
+                  </p>
+                </div>
+              </div>
+
+              <div className="px-6 pb-6 pt-4 shrink-0 border-t border-white/5">
+                <div className="flex flex-col gap-2 mb-4">
+                  <label htmlFor="reset-geral-confirm" className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">
+                    Digite <span className="text-red-400">{TEXTO_GERAL}</span> para liberar o botão
+                  </label>
+                  <input id="reset-geral-confirm" type="text" value={geralConfirm} autoFocus
+                    onChange={e => setGeralConfirm(e.target.value)}
+                    disabled={geralRunning}
+                    className="neu-input rounded-xl px-3 py-2.5 text-sm font-mono"
+                    placeholder={TEXTO_GERAL} />
+                </div>
+                {geralProgresso && (
+                  <p className="flex items-center gap-2 text-xs text-gray-300 mb-3">
+                    <Loader2 size={13} className="animate-spin" /> {geralProgresso}
+                  </p>
+                )}
+                <div className="flex justify-end gap-2">
+                  <button onClick={() => setGeralOpen(false)} disabled={geralRunning}
+                    className="btn-solido btn-solido--preto">
+                    Cancelar
+                  </button>
+                  <button onClick={handleResetGeral}
+                    disabled={geralRunning || geralConfirm !== TEXTO_GERAL}
+                    className="btn-solido btn-solido--vermelho">
+                    <Trash2 size={13} /> {geralRunning ? 'Apagando…' : 'Apagar tudo'}
+                  </button>
+                </div>
               </div>
             </motion.div>
           </motion.div>
