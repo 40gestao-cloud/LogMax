@@ -10,7 +10,7 @@ import { GField, formatBRL, parseBRL, handleMoneyKeyDown } from '../lib/viewUtil
 import { useConfirm } from '../contexts/ConfirmContext';
 import { useFilial } from '../contexts/FilialContext';
 
-export const GenericCRUDView = ({ title, endpoint, fields, defaultStatus = 'Ativo', showToast, filialScoped = false, permiteMatriz = false }: {
+export const GenericCRUDView = ({ title, endpoint, fields, defaultStatus = 'Ativo', showToast, filialScoped = false, permiteMatriz = false, podeEditar = true }: {
   title: string; endpoint: string; fields: GField[]; defaultStatus?: string; showToast: any;
   /** Cada filial só vê/edita os próprios registros; Matriz vê o consolidado (só leitura). */
   filialScoped?: boolean;
@@ -25,6 +25,8 @@ export const GenericCRUDView = ({ title, endpoint, fields, defaultStatus = 'Ativ
    * e sem isto o cargo deles não teria onde ser cadastrado.
    */
   permiteMatriz?: boolean;
+  /** Quem abre a tela mas não grava (a RLS é quem barra; isto só esconde os botões). */
+  podeEditar?: boolean;
 }) => {
   const confirm = useConfirm();
   const { filialAtiva } = useFilial();
@@ -32,7 +34,7 @@ export const GenericCRUDView = ({ title, endpoint, fields, defaultStatus = 'Ativ
   // Matriz sem permiteMatriz). Fora de filialScoped, filialAtiva é ignorado —
   // comportamento global de sempre.
   const escopo = filialScoped ? (filialAtiva ?? (permiteMatriz ? 'Matriz' : null)) : null;
-  const canWrite = !filialScoped || !!escopo;
+  const canWrite = podeEditar && (!filialScoped || !!escopo);
   const { data, setData, isLoading } = useFetchData<any>(endpoint, escopo ? { filial: escopo } : undefined);
   // A trilha é indexada por (entidade, entidade_id), e `entidade` é o nome da
   // tabela — que aqui só se conhece pelo endpoint. Endpoint fora do mapa não

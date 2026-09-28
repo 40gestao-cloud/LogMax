@@ -1509,6 +1509,9 @@ function LogMaxAppInner() {
 
   const renderContent = () => {
     const st = showToast;
+    // Formas/Condições de pagamento e Projetos: todo setor abre, só Financeiro
+    // e gerente gravam (migr. 649). hasSetor já deixa admin/CEO passar.
+    const podeEditarEmpresa = hasSetor(profile, 'financeiro') || profile?.role === 'gerente';
     // Terceira camada de defesa do Modo Aula: se por qualquer motivo a view
     // atual está fora da whitelist (navigate/goBack já filtram; useEffect
     // defensivo redireciona), mostra a tela dedicada em vez de tentar
@@ -1541,7 +1544,7 @@ function LogMaxAppInner() {
       case 'cadastros-produtos':              return <ProdutosView showToast={st} profile={profile} onNavigate={navigate} />;
       case 'cadastros-serviços':              return <ServicosView showToast={st} onNavigate={navigate} />;
       case 'cadastros-lixeira':               return <LixeiraView showToast={st} profile={profile} />;
-      case 'empresa-projetos':                return <GenericCRUDView showToast={st} filialScoped title="Projetos" endpoint="/api/projetosview"
+      case 'empresa-projetos':                return <GenericCRUDView showToast={st} filialScoped podeEditar={podeEditarEmpresa} title="Projetos" endpoint="/api/projetosview"
         fields={[{ key: 'codigo', label: 'Código', required: true, placeholder: 'Ex: PROJ-001' }, { key: 'nome', label: 'Nome', required: true, placeholder: 'Ex: Implantação ERP' }, { key: 'responsavel', label: 'Responsável', placeholder: 'Ex: Maria Santos' }, { key: 'data_inicio', label: 'Início', type: 'date' }, { key: 'data_fim', label: 'Fim', type: 'date' }, { key: 'orcamento', label: 'Orçamento (R$)', type: 'currency', placeholder: '0,00' }, { key: 'status', label: 'Status', type: 'select', options: ['Ativo', 'Concluído', 'Cancelado'] }, { key: 'descricao', label: 'Descrição', type: 'textarea', placeholder: 'Objetivos, escopo, observações…' }]} />;
       // Sem filialScoped: centros_custo não tem coluna `filial` — o catálogo é
       // da holding inteira e todo authenticated lê (policy read_authenticated).
@@ -1551,7 +1554,7 @@ function LogMaxAppInner() {
       // "Não classificado" no relatório, e classificar é a aula.
       case 'financeiro-centrosdecusto':       return <GenericCRUDView showToast={st} title="Centros de Custo" endpoint="/api/centroscustoview"
         fields={[{ key: 'codigo', label: 'Código', required: true, placeholder: 'Ex: CC-001' }, { key: 'nome', label: 'Nome', required: true, placeholder: 'Ex: TI & Infraestrutura' }, { key: 'responsavel', label: 'Responsável', placeholder: 'Ex: Ana Lima' }, { key: 'orcamento', label: 'Orçamento (R$)', type: 'currency', placeholder: '0,00' }, { key: 'grupo_dre', label: 'Grupo no DRE', type: 'select', options: ['Pessoal', 'Comerciais', 'Administrativas', 'Ocupação', 'Outras'] }, { key: 'status', label: 'Status', type: 'select', options: ['Ativo', 'Inativo'] }]} />;
-      case 'empresa-condiçõesdepagamento':    return <GenericCRUDView showToast={st} filialScoped title="Condições de Pagamento" endpoint="/api/condicoespagamentoview"
+      case 'empresa-condiçõesdepagamento':    return <GenericCRUDView showToast={st} filialScoped podeEditar={podeEditarEmpresa} title="Condições de Pagamento" endpoint="/api/condicoespagamentoview"
         fields={[{ key: 'descricao', label: 'Descrição', required: true, placeholder: 'Ex: 30/60/90 dias' }, { key: 'parcelas', label: 'Parcelas', type: 'number', placeholder: '3' }, { key: 'dias', label: 'Dias', placeholder: 'Ex: 30, 60, 90' }, { key: 'status', label: 'Status', type: 'select', options: ['Ativo', 'Inativo'] }]} />;
       // Migr. 568: este cadastro deixou de ser decorativo. Cada campo aqui
       // MUDA o preço da proposta em Vendas → Orçamentos:
@@ -1559,7 +1562,7 @@ function LogMaxAppInner() {
       //   · Juros a.m. + Parcelas sem juros acrescem pela Tabela Price;
       //   · Taxa é CUSTO DA LOJA — sai do líquido, não entra no preço;
       //   · Prazo é o D+n do 1º vencimento e Intervalo o espaço entre parcelas.
-      case 'empresa-formasdepagamento':       return <GenericCRUDView showToast={st} filialScoped title="Formas de Pagamento" endpoint="/api/formaspagamentoview"
+      case 'empresa-formasdepagamento':       return <GenericCRUDView showToast={st} filialScoped podeEditar={podeEditarEmpresa} title="Formas de Pagamento" endpoint="/api/formaspagamentoview"
         fields={[
           { key: 'descricao', label: 'Descrição', required: true, placeholder: 'Ex: Cartão de Crédito' },
           { key: 'desconto_percentual', label: 'Desconto à vista (%)', type: 'number', placeholder: '0' },
