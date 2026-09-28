@@ -1403,8 +1403,8 @@ Para cada tela: o que ela lê e grava, as funções do banco que chama, e **quem
 - **Rota:** `meu-cracha` · **Componente:** `MeuCrachaView` ([src/views/MeuCrachaView.tsx](../../src/views/MeuCrachaView.tsx))
 - **Lê:** [funcionarios](tabelas.md#t-funcionarios), [user_profiles](tabelas.md#t-user_profiles)
 - **Grava direto:** —
-- **Chama (RPC):** —
-- **Arquivos que acessam dados:** `src/hooks/useUserProfile.ts`, `src/views/MeuCrachaView.tsx`
+- **Chama (RPC):** [minha_frequencia](funcoes.md#f-minha_frequencia)
+- **Arquivos que acessam dados:** `src/components/MinhaFrequencia.tsx`, `src/hooks/useUserProfile.ts`, `src/views/MeuCrachaView.tsx`
 
 <a id="s-minhas-pesquisas"></a>
 ### Minhas pesquisas *(rota minhas-pesquisas)*

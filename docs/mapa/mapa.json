@@ -2702,7 +2702,9 @@
     "user_profiles"
    ],
    "grava": [],
-   "rpcs": [],
+   "rpcs": [
+    "minha_frequencia"
+   ],
    "grava_via_rpc": [],
    "apis": []
   },
@@ -7439,6 +7441,24 @@
    "grava": [],
    "le": [],
    "chama": []
+  },
+  "minha_frequencia": {
+   "gatilho": false,
+   "secdef": true,
+   "grava": [],
+   "le": [
+    "funcionarios",
+    "justificativas_falta",
+    "ponto_eletronico",
+    "ponto_jornada",
+    "user_profiles"
+   ],
+   "chama": [
+    "_assert_rpc",
+    "_freq_credito_dia",
+    "acre_today",
+    "dias_letivos_periodo"
+   ]
   },
   "mov_estoque_delta": {
    "gatilho": false,
