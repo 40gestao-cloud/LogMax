@@ -2,9 +2,10 @@ import React, { useEffect, useMemo, useState } from 'react';
 import type { FilialOp } from '../components/FilialSelector';
 import { useFilial } from '../contexts/FilialContext';
 import { motion, AnimatePresence } from 'motion/react';
-import { Clock, Trash2, ClipboardList, ListChecks, FileDown, Settings } from 'lucide-react';
+import { Clock, Trash2, ClipboardList, ListChecks, FileDown, Settings, FileText } from 'lucide-react';
 import { FrequenciaTrabalhoView } from './FrequenciaTrabalhoView';
 import { FrequenciaRelatorioTab } from './FrequenciaRelatorioTab';
+import { JustificativasFaltaTab } from './JustificativasFaltaTab';
 import { JornadaTurmaFaixa } from './JornadaTurmaConfig';
 import { useFetchData } from '../hooks/useSupabaseData';
 import { supabase } from '../lib/supabase';
@@ -64,7 +65,7 @@ const PontoEletronicoViewInner = ({ showToast, profile, filial }: { showToast: a
     '/api/funcionariosview', filial ? { filial } : undefined);
   // Sem o totem, o lançamento manual é a única forma de entrada — então é ele
   // que abre. 'registros' é a listagem de ponto_eletronico.
-  const [tab, setTab] = useState<'manual' | 'registros' | 'relatorio' | 'configuracao'>('manual');
+  const [tab, setTab] = useState<'manual' | 'registros' | 'justificativas' | 'relatorio' | 'configuracao'>('manual');
   // Configuração só existe na Matriz: trocar para uma filial com ela aberta
   // deixaria a tela vazia.
   useEffect(() => { if (!modoMatriz && tab === 'configuracao') setTab('registros'); }, [modoMatriz, tab]);
@@ -130,6 +131,7 @@ const PontoEletronicoViewInner = ({ showToast, profile, filial }: { showToast: a
             ? [{ key: 'manual', label: 'Lançamento', Icon: ClipboardList, cor: 'verde' } as const]
             : []),
           { key: 'registros', label: 'Registros', Icon: ListChecks, cor: 'azul' } as const,
+          { key: 'justificativas', label: 'Justificativas', Icon: FileText, cor: 'amarelo' } as const,
           { key: 'relatorio', label: 'Relatório', Icon: FileDown,   cor: 'roxo' } as const,
           ...(modoMatriz
             ? [{ key: 'configuracao', label: 'Configuração', Icon: Settings, cor: 'laranja' } as const]
@@ -257,6 +259,10 @@ const PontoEletronicoViewInner = ({ showToast, profile, filial }: { showToast: a
           profile={profile}
           showToast={showToast}
         />
+      )}
+
+      {tab === 'justificativas' && (
+        <JustificativasFaltaTab profile={profile} filial={filial} showToast={showToast} />
       )}
 
       {/* ── Aba Histórico ── */}

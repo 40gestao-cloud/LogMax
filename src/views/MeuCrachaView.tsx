@@ -30,7 +30,7 @@ const ROTULO_PAPEL: Record<string, string> = {
   colaborador: 'Colaborador',
 };
 
-export const MeuCrachaView = ({ profile }: { profile: UserProfile }) => {
+export const MeuCrachaView = ({ profile, showToast }: { profile: UserProfile; showToast?: (msg: string, tipo?: string) => void }) => {
   const [pessoa, setPessoa] = useState<CrachaPessoa | null>(null);
   // Vínculo encerrado: o crachá continua existindo como identificação, mas o QR
   // sai de cena. A leitura do professor já recusaria essa pessoa (a lista dele
@@ -141,7 +141,7 @@ export const MeuCrachaView = ({ profile }: { profile: UserProfile }) => {
           </div>
         </div>
         {/* O próprio ponto, na régua do placar (migr. 648). Só leitura. */}
-        {pessoa && <MinhaFrequencia />}
+        {pessoa && <MinhaFrequencia showToast={showToast} />}
         </>
       )}
     </motion.div>

@@ -2699,13 +2699,18 @@
    "arquivo": "src/views/MeuCrachaView.tsx",
    "le": [
     "funcionarios",
+    "justificativas_falta",
     "user_profiles"
    ],
    "grava": [],
    "rpcs": [
+    "enviar_justificativa_falta",
     "minha_frequencia"
    ],
-   "grava_via_rpc": [],
+   "grava_via_rpc": [
+    "justificativas_falta",
+    "notificacoes"
+   ],
    "apis": []
   },
   "minhas-pesquisas": {
@@ -3125,6 +3130,16 @@
     "acre_today",
     "dias_letivos_periodo"
    ]
+  },
+  "_funcionario_da_conta": {
+   "gatilho": false,
+   "secdef": true,
+   "grava": [],
+   "le": [
+    "funcionarios",
+    "user_profiles"
+   ],
+   "chama": []
   },
   "_funcionario_desligado": {
    "gatilho": false,
@@ -5203,6 +5218,25 @@
     "rescisao_gravar"
    ]
   },
+  "decidir_justificativa_falta": {
+   "gatilho": false,
+   "secdef": true,
+   "grava": [
+    "justificativas_falta",
+    "ponto_eletronico"
+   ],
+   "le": [
+    "justificativas_falta",
+    "ponto_eletronico",
+    "user_profiles"
+   ],
+   "chama": [
+    "_assert_rpc",
+    "_funcionario_da_conta",
+    "auth_user_role",
+    "ponto_corte_turma"
+   ]
+  },
   "decidir_requisicao_compra": {
    "gatilho": false,
    "secdef": true,
@@ -5871,6 +5905,28 @@
    "le": [],
    "chama": [
     "_assert_rpc"
+   ]
+  },
+  "enviar_justificativa_falta": {
+   "gatilho": false,
+   "secdef": true,
+   "grava": [
+    "justificativas_falta"
+   ],
+   "le": [
+    "justificativas_falta",
+    "ponto_eletronico",
+    "ponto_jornada",
+    "user_profiles"
+   ],
+   "chama": [
+    "_assert_rpc",
+    "_freq_credito_dia",
+    "_funcionario_da_conta",
+    "acre_today",
+    "dias_letivos_periodo",
+    "notificar_setor",
+    "ponto_corte_turma"
    ]
   },
   "estornar_aporte_capital": {
@@ -7636,6 +7692,23 @@
     "emprestimos_filial"
    ],
    "chama": []
+  },
+  "parecer_justificativa_falta": {
+   "gatilho": false,
+   "secdef": true,
+   "grava": [
+    "justificativas_falta"
+   ],
+   "le": [
+    "justificativas_falta",
+    "user_profiles"
+   ],
+   "chama": [
+    "_assert_rpc",
+    "auth_user_filial",
+    "auth_user_role",
+    "notificar_setor"
+   ]
   },
   "participantes_sem_nota_competicao": {
    "gatilho": false,

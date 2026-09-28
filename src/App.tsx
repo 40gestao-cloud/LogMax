@@ -1667,7 +1667,7 @@ function LogMaxAppInner() {
       case 'minhas-pesquisas':             return <MinhasPesquisasView showToast={st} profile={profile} />;
       case 'artes-promocionais':           return <ArtesPromocionaisView />;
       case 'usuarios':                     return <UsuariosView showToast={st} profile={profile} />;
-      case 'meu-cracha':                   return <MeuCrachaView profile={profile} />;
+      case 'meu-cracha':                   return <MeuCrachaView profile={profile} showToast={st} />;
       case 'cracha-virtual':               return <CrachaVirtualView showToast={st} profile={profile} />;
       case 'catalogo-produtos':            return <CatalogoProdutosView showToast={st} profile={profile} />;
       case 'avaliacoes':                   return <CentralAvaliacaoView showToast={st} profile={profile} />;

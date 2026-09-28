@@ -657,7 +657,7 @@ Para cada tela: o que ela lê e grava, as funções do banco que chama, e **quem
   - por [ponto_calendario_excecoes](tabelas.md#t-ponto_calendario_excecoes): [Central de Avaliação](telas.md#s-avaliacoes), [Matriz avaliacoes *(rota matriz-avaliacoes)*](telas.md#s-matriz-avaliacoes)
   - por [ponto_eletronico](tabelas.md#t-ponto_eletronico): [Crachá Virtual](telas.md#s-cracha-virtual), [Recursos Humanos › Afastamentos](telas.md#s-rh-afastamentos)
   - por [ponto_jornada](tabelas.md#t-ponto_jornada): [Central de Avaliação](telas.md#s-avaliacoes), [Matriz avaliacoes *(rota matriz-avaliacoes)*](telas.md#s-matriz-avaliacoes)
-- **Arquivos que acessam dados:** `src/hooks/useJornadaTurma.ts`, `src/hooks/useUserProfile.ts`, `src/lib/maxShowUpload.ts`, `src/views/FrequenciaRelatorioTab.tsx`, `src/views/FrequenciaTrabalhoView.tsx`, `src/views/JornadaTurmaConfig.tsx`, `src/views/PontoEletronicoView.tsx`
+- **Arquivos que acessam dados:** `src/hooks/useJornadaTurma.ts`, `src/hooks/useUserProfile.ts`, `src/lib/maxShowUpload.ts`, `src/views/FrequenciaRelatorioTab.tsx`, `src/views/FrequenciaTrabalhoView.tsx`, `src/views/JornadaTurmaConfig.tsx`, `src/views/JustificativasFaltaTab.tsx`, `src/views/PontoEletronicoView.tsx`
 
 <a id="s-rh-férias"></a>
 ### Recursos Humanos › Férias
@@ -1401,9 +1401,10 @@ Para cada tela: o que ela lê e grava, as funções do banco que chama, e **quem
 ### Meu Crachá
 
 - **Rota:** `meu-cracha` · **Componente:** `MeuCrachaView` ([src/views/MeuCrachaView.tsx](../../src/views/MeuCrachaView.tsx))
-- **Lê:** [funcionarios](tabelas.md#t-funcionarios), [user_profiles](tabelas.md#t-user_profiles)
+- **Lê:** [funcionarios](tabelas.md#t-funcionarios), [justificativas_falta](tabelas.md#t-justificativas_falta), [user_profiles](tabelas.md#t-user_profiles)
 - **Grava direto:** —
-- **Chama (RPC):** [minha_frequencia](funcoes.md#f-minha_frequencia)
+- **Chama (RPC):** [enviar_justificativa_falta](funcoes.md#f-enviar_justificativa_falta), [minha_frequencia](funcoes.md#f-minha_frequencia)
+- **Grava via RPC:** [justificativas_falta](tabelas.md#t-justificativas_falta), [notificacoes](tabelas.md#t-notificacoes)
 - **Arquivos que acessam dados:** `src/components/MinhaFrequencia.tsx`, `src/hooks/useUserProfile.ts`, `src/views/MeuCrachaView.tsx`
 
 <a id="s-minhas-pesquisas"></a>

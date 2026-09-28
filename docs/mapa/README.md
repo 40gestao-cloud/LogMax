@@ -11,7 +11,7 @@
 
 **Tabelas transversais** (aparecem nas listas, mas não entram no "Confira também", porque quase toda tela as toca por uma ferramenta comum): `documento_sequencias`, `historico_operacoes`, `max_shows`, `notificacoes`, `notificacoes_lidas`, `planilhas_trabalho`, `trabalho_reservas`.
 
-**Tamanho:** 115 telas · 192 tabelas · 10 views · 387 RPCs · 150 funções de gatilho · 258 gatilhos
+**Tamanho:** 115 telas · 192 tabelas · 10 views · 391 RPCs · 150 funções de gatilho · 258 gatilhos
 
 ## Menus
 

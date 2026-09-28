@@ -1058,7 +1058,7 @@ const FrequenciaTrabalhoViewInner = ({ showToast, profile, filial, embedded }: a
                             // Selo sólido na cor da situação + horário. Origem e
                             // autor ficam na dica: "manual" em toda linha era
                             // ruído, já que sem totem quase tudo é manual.
-                            const origem = freq.origem === 'totem' ? 'no totem' : freq.origem === 'cracha' ? 'por crachá' : 'manualmente';
+                            const origem = freq.origem === 'totem' ? 'no totem' : freq.origem === 'cracha' ? 'por crachá' : freq.origem === 'justificativa' ? 'por justificativa aceita' : 'manualmente';
                             const hora = freq.entrada ?? (freq.origem === 'totem' ? fmtHorario(freq.created_at) : null);
                             return (
                               <span className="inline-flex items-stretch h-6 rounded-md overflow-hidden text-[11px] font-bold leading-none"

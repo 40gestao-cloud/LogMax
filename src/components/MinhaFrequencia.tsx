@@ -1,4 +1,4 @@
-// Minha frequência — o aluno vê o próprio ponto, no Meu Crachá (só leitura).
+// Minha frequência — o aluno vê o próprio ponto, no Meu Crachá.
 //
 // Os números vêm da RPC `minha_frequencia` (migr. 648), que usa AS MESMAS
 // peças do placar (_frequencia_competicao): dias letivos até hoje, dia de aula
@@ -6,12 +6,16 @@
 // que foi lançado antes do calendário da turma — ou em dia sem aula — aparece
 // mas não entra. A tela não refaz regra nenhuma: só conta e pinta o que a RPC
 // devolveu. É isso que garante que o aluno veja o mesmo que o placar.
+//
+// A única escrita daqui é a justificativa de falta (migr. 650): o aluno envia,
+// o gerente dá o parecer e o Admin decide. Só a decisão do Admin muda o ponto —
+// até lá o dia continua falta, e a tela diz que está em análise.
 
 import React, { useEffect, useMemo, useState } from 'react';
-import { ChevronLeft, ChevronRight, CalendarCheck, Info } from 'lucide-react';
+import { ChevronLeft, ChevronRight, CalendarCheck, Info, FileText, Send } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { todayBR } from '../lib/dates';
-import { CardContador, LoadingSpinner, EmptyState } from './ui';
+import { CardContador, LoadingSpinner, EmptyState, ModalFormulario, FormField, NeuButtonAccent } from './ui';
 
 type Situacao = 'Presente' | 'Atraso' | 'Falta' | 'Sem registro' | 'Justificada';
 type Dia = {
@@ -26,6 +30,11 @@ const TOM: Record<Situacao, { fundo: string; texto: string; borda: string }> = {
   'Falta':        { fundo: 'bg-red-500/20',     texto: 'text-red-300',     borda: 'border-red-500/50' },
   'Sem registro': { fundo: 'bg-rose-500/10',    texto: 'text-rose-300',    borda: 'border-rose-500/40' },
   'Justificada':  { fundo: 'bg-sky-500/20',     texto: 'text-sky-300',     borda: 'border-sky-500/50' },
+};
+
+type Justificativa = {
+  id: string; data: string; motivo: string; status: 'Pendente' | 'Aceita' | 'Negada';
+  parecer_gerente: 'Aceita' | 'Negada' | null; parecer_gerente_obs: string | null; decisao_obs: string | null;
 };
 
 const SEMANA = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
@@ -49,11 +58,16 @@ const nomeDoMes = (ym: string) => {
 const diaDaSemana = (iso: string) => new Date(`${iso}T12:00:00Z`).getUTCDay();
 const dataBR = (iso: string) => iso.split('-').reverse().slice(0, 2).join('/');
 
-export function MinhaFrequencia() {
+export function MinhaFrequencia({ showToast }: { showToast?: (msg: string, tipo?: string) => void }) {
   const hoje = todayBR();
   const [mes, setMes] = useState(hoje.slice(0, 7));
   const [dias, setDias] = useState<Dia[] | null>(null);
   const [erro, setErro] = useState<string | null>(null);
+  const [justs, setJusts] = useState<Justificativa[]>([]);
+  const [recarga, setRecarga] = useState(0);
+  const [justificando, setJustificando] = useState<string | null>(null);
+  const [motivo, setMotivo] = useState('');
+  const [enviando, setEnviando] = useState(false);
 
   useEffect(() => {
     if (!supabase) return;
@@ -66,8 +80,38 @@ export function MinhaFrequencia() {
       if (error) { setErro(error.message); setDias([]); return; }
       setDias(((data ?? []) as any[]).map(d => ({ ...d, credito: d.credito == null ? null : Number(d.credito) })));
     });
+    // Só as minhas: a policy também deixa gerente/RH lerem as da unidade.
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (cancelado || !session) return;
+      supabase!.from('justificativas_falta')
+        .select('id, data, motivo, status, parecer_gerente, parecer_gerente_obs, decisao_obs')
+        .eq('funcionario_id', session.user.id).eq('ativo', true)
+        .gte('data', inicio).lte('data', fim)
+        .order('created_at', { ascending: false })
+        .then(({ data }) => { if (!cancelado) setJusts((data ?? []) as Justificativa[]); });
+    });
     return () => { cancelado = true; };
-  }, [mes]);
+  }, [mes, recarga]);
+
+  // A mais recente de cada dia (uma negada pode ter sido reenviada).
+  const justPorDia = useMemo(() => {
+    const m = new Map<string, Justificativa>();
+    for (const j of justs) if (!m.has(j.data)) m.set(j.data, j);
+    return m;
+  }, [justs]);
+
+  const enviar = async () => {
+    if (!supabase || !justificando) return;
+    if (motivo.trim().length < 10) { showToast?.('Escreva o motivo com pelo menos 10 caracteres.', 'error'); return; }
+    setEnviando(true);
+    const { error } = await supabase.rpc('enviar_justificativa_falta', { p_data: justificando, p_motivo: motivo.trim() });
+    setEnviando(false);
+    if (error) { showToast?.(error.message, 'error'); return; }
+    showToast?.('Justificativa enviada. O gerente dá o parecer e o Admin decide.', 'success');
+    setJustificando(null);
+    setMotivo('');
+    setRecarga(n => n + 1);
+  };
 
   const resumo = useMemo(() => {
     const r = { presentes: 0, atrasos: 0, faltas: 0, semRegistro: 0, justificadas: 0, creditos: 0, denominador: 0, foraDaConta: 0 };
@@ -153,7 +197,7 @@ export function MinhaFrequencia() {
               <table className="tabela w-full border-collapse text-sm">
                 <thead>
                   <tr className="text-[10px] uppercase tracking-widest whitespace-nowrap [&>th]:py-3 [&>th]:px-3 [&>th]:font-bold [&>th+th]:border-l [&>th:first-child]:rounded-l-xl [&>th:last-child]:rounded-r-xl">
-                    <th>Dia</th><th>Entrada</th><th>Saída</th><th>Situação</th><th>Observação</th>
+                    <th>Dia</th><th>Entrada</th><th>Saída</th><th>Situação</th><th>Observação</th><th>Justificativa</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -170,7 +214,11 @@ export function MinhaFrequencia() {
                         </span>
                       </td>
                       <td className="py-2 px-3 text-left text-xs text-gray-400">
-                        {[d.motivo, d.conta ? null : 'fora da conta do placar'].filter(Boolean).join(' · ') || '—'}
+                        {[d.situacao === 'Justificada' ? d.motivo : null, d.conta ? null : 'fora da conta do placar'].filter(Boolean).join(' · ') || '—'}
+                      </td>
+                      <td className="py-2 px-3 text-center text-xs">
+                        <CelulaJustificativa dia={d} j={justPorDia.get(d.dia)}
+                          onJustificar={() => { setMotivo(''); setJustificando(d.dia); }} />
                       </td>
                     </tr>
                   ))}
@@ -186,10 +234,65 @@ export function MinhaFrequencia() {
               justificada não entra na conta. Dias antes do calendário da turma começar, ou sem aula, aparecem
               tracejados — ficam registrados, mas não contam.
               {resumo.foraDaConta > 0 && ` Neste mês, ${resumo.foraDaConta} dia(s) estão fora da conta.`}
+              {' '}Falta pode ser justificada: o gerente dá o parecer e a decisão final é do Admin — só depois
+              dela o dia sai da conta.
             </span>
           </p>
         </>
       )}
+
+      <ModalFormulario aberto={!!justificando} largura="md"
+        titulo="Justificar falta" subtitulo={justificando ? dataBR(justificando) : undefined}
+        onCancelar={() => setJustificando(null)} cancelarDesabilitado={enviando}
+        acoes={<NeuButtonAccent onClick={enviar} isLoading={enviando}><Send size={14} /> Enviar</NeuButtonAccent>}>
+        <FormField label="Motivo">
+          <textarea value={motivo} onChange={e => setMotivo(e.target.value)} maxLength={500}
+            placeholder="Ex.: consulta médica — levo o atestado na próxima aula."
+            className="neu-input py-2 px-3 rounded-xl text-sm resize-none h-28" />
+        </FormField>
+        <p className="text-xs text-gray-500">
+          O gerente da sua unidade dá o parecer e o Admin decide. Se for aceita, o dia vira
+          "Justificada" e sai da conta do placar; se for negada, continua falta e você pode enviar de novo.
+        </p>
+      </ModalFormulario>
     </section>
+  );
+}
+
+/** Coluna "Justificativa" da lista: o botão para a falta, ou onde a justificativa está. */
+function CelulaJustificativa({ dia, j, onJustificar }: { dia: Dia; j?: Justificativa; onJustificar: () => void }) {
+  const ehFalta = dia.conta && (dia.situacao === 'Falta' || dia.situacao === 'Sem registro');
+  if (j && j.status === 'Pendente') {
+    const parecer = j.parecer_gerente
+      ? `Gerente ${j.parecer_gerente === 'Aceita' ? 'aceitou' : 'negou'}${j.parecer_gerente_obs ? `: ${j.parecer_gerente_obs}` : ''}`
+      : 'Aguardando o gerente';
+    return (
+      <span title={`${j.motivo} — ${parecer}`}
+        className="inline-block text-[11px] font-bold px-2 py-0.5 rounded-md border bg-amber-500/15 text-amber-300 border-amber-500/40">
+        Em análise{j.parecer_gerente ? ' · falta o Admin' : ''}
+      </span>
+    );
+  }
+  if (j && j.status === 'Aceita') {
+    return (
+      <span title={j.motivo}
+        className="inline-block text-[11px] font-bold px-2 py-0.5 rounded-md border bg-sky-500/15 text-sky-300 border-sky-500/40">Aceita</span>
+    );
+  }
+  return (
+    <div className="flex flex-col items-center gap-1">
+      {j?.status === 'Negada' && (
+        <span className="inline-block text-[11px] font-bold px-2 py-0.5 rounded-md border bg-red-500/15 text-red-300 border-red-500/40">
+          Negada{j.decisao_obs ? `: ${j.decisao_obs}` : ''}
+        </span>
+      )}
+      {ehFalta && (
+        <button type="button" onClick={onJustificar}
+          className="neu-button inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-semibold text-accent">
+          <FileText size={12} /> {j?.status === 'Negada' ? 'Enviar de novo' : 'Justificar'}
+        </button>
+      )}
+      {!ehFalta && !j && <span className="text-gray-600">—</span>}
+    </div>
   );
 }
