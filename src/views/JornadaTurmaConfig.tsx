@@ -27,7 +27,7 @@ const DIAS_CURTO = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
 const ORDEM_SEMANA = [1, 2, 3, 4, 5, 6, 0];
 const TOLERANCIAS = [0, 1, 2, 3, 5, 10, 15];
 
-type Excecao = { data: string; tipo: 'sem_aula' | 'aula_extra'; motivo: string | null };
+type Excecao = { data: string; tipo: 'sem_aula' | 'feriado' | 'aula_extra'; motivo: string | null };
 
 const hhmm = (v: string) => /^\d{1,2}:\d{2}$/.test(v);
 const fmtData = (d: string) => d.split('-').reverse().join('/');
@@ -153,7 +153,7 @@ function JornadaTurmaModal({ jornada, showToast, onClose }: {
 
   const [excecoes, setExcecoes] = useState<Excecao[]>([]);
   const [novaData, setNovaData] = useState('');
-  const [novoTipo, setNovoTipo] = useState<'sem_aula' | 'aula_extra'>('sem_aula');
+  const [novoTipo, setNovoTipo] = useState<'sem_aula' | 'feriado' | 'aula_extra'>('sem_aula');
   const [novoMotivo, setNovoMotivo] = useState('');
   const [gravandoExc, setGravandoExc] = useState(false);
 
@@ -317,9 +317,10 @@ function JornadaTurmaModal({ jornada, showToast, onClose }: {
             <div className="grid grid-cols-1 sm:grid-cols-[auto_auto_1fr_auto] gap-2">
               <input type="date" value={novaData} onChange={e => setNovaData(e.target.value)}
                 className="neu-input py-2 px-3 text-sm rounded-xl text-gray-100" />
-              <select value={novoTipo} onChange={e => setNovoTipo(e.target.value as 'sem_aula' | 'aula_extra')}
+              <select value={novoTipo} onChange={e => setNovoTipo(e.target.value as 'sem_aula' | 'feriado' | 'aula_extra')}
                 className="neu-input py-2 px-3 text-sm rounded-xl text-gray-100">
-                <option value="sem_aula">Sem aula</option>
+                <option value="feriado">Feriado</option>
+            <option value="sem_aula">Sem aula</option>
                 <option value="aula_extra">Aula extra</option>
               </select>
               <input type="text" value={novoMotivo} onChange={e => setNovoMotivo(e.target.value)}
@@ -337,11 +338,11 @@ function JornadaTurmaModal({ jornada, showToast, onClose }: {
                   <div key={e.data} className="flex items-center gap-3 px-3 py-2 text-sm">
                     <span className="text-gray-200 font-mono tabular-nums">{fmtData(e.data)}</span>
                     <span className={`text-[10px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full border ${
-                      e.tipo === 'sem_aula'
+                      e.tipo !== 'aula_extra'
                         ? 'border-red-500/40 bg-red-500/10 text-red-300'
                         : 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300'
                     }`}>
-                      {e.tipo === 'sem_aula' ? 'Sem aula' : 'Aula extra'}
+                      {e.tipo === 'feriado' ? 'Feriado' : e.tipo === 'sem_aula' ? 'Sem aula' : 'Aula extra'}
                     </span>
                     <span className="text-gray-500 truncate flex-1">{e.motivo ?? ''}</span>
                     <button onClick={() => removerExcecao(e.data)} title="Remover data" className="action-btn-delete">
@@ -352,7 +353,7 @@ function JornadaTurmaModal({ jornada, showToast, onClose }: {
               </div>
             ) : (
               <p className="text-xs text-gray-500 mt-3">
-                Nenhuma data cadastrada. Use “Sem aula” para feriado ou recesso e “Aula extra” para reposição.
+                Nenhuma data cadastrada. Use “Feriado” ou “Sem aula” (recesso) e “Aula extra” para reposição.
               </p>
             )}
           </SecaoFormulario>

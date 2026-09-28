@@ -1,13 +1,14 @@
-import React, { useMemo, useState, useCallback } from 'react';
+import React, { useMemo, useState, useCallback, useEffect } from 'react';
 import type { FilialOp } from '../components/FilialSelector';
 import { useFilial } from '../contexts/FilialContext';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   CheckCircle2, XCircle, Clock, X, User, Search, Save, Loader2, MessageSquarePlus, Building2, FileCheck, Lock, Trash2, Eraser,
+  CalendarX2, CalendarOff, Undo2,
 } from 'lucide-react';
 import { useConfirm } from '../contexts/ConfirmContext';
 import { useFetchData } from '../hooks/useSupabaseData';
-import { useJornadaTurma, usePontoCorteTurma, horasDaJornada, useDiasLetivos } from '../hooks/useJornadaTurma';
+import { useJornadaTurma, usePontoCorteTurma, horasDaJornada, useDiasLetivos, EVENTO_JORNADA_ATUALIZADA } from '../hooks/useJornadaTurma';
 import { useAuth } from '../hooks/useAuth';
 import { supabase } from '../lib/supabase';
 import { todayBR } from '../lib/dates';
@@ -127,6 +128,33 @@ const pontoParaFrequencia = (p: PontoRow, alvoEntrada: string, corte?: string | 
 };
 
 type Funcionario = { id: string; nome: string; status: string | null; cargo: string | null; departamento: string | null; filial: string | null };
+
+// Dia de folga do calendário da turma (migr. 653). O banco recusa ponto nesse
+// dia (gatilho `trg_ponto_dia_de_folga`) e a frequência não o conta.
+type TipoFolga = 'feriado' | 'sem_aula';
+type Folga = { data: string; tipo: TipoFolga; motivo: string | null };
+const FOLGA_LABEL: Record<TipoFolga, string> = { feriado: 'Feriado', sem_aula: 'Sem aula' };
+
+/** Feriados e dias sem aula entre `inicio` e `fim`. A tabela não tem
+ *  `created_at`, então nada de useFetchData (o ORDER BY padrão dá 400). */
+function useFolgasPeriodo(inicio: string, fim: string) {
+  const [folgas, setFolgas] = useState<Map<string, Folga>>(new Map());
+  const carregar = useCallback(async () => {
+    if (!supabase) return;
+    const { data } = await supabase
+      .from('ponto_calendario_excecoes')
+      .select('data, tipo, motivo')
+      .gte('data', inicio).lte('data', fim)
+      .in('tipo', ['feriado', 'sem_aula']);
+    setFolgas(new Map(((data ?? []) as Folga[]).map(f => [f.data, f])));
+  }, [inicio, fim]);
+  useEffect(() => {
+    carregar();
+    window.addEventListener(EVENTO_JORNADA_ATUALIZADA, carregar);
+    return () => window.removeEventListener(EVENTO_JORNADA_ATUALIZADA, carregar);
+  }, [carregar]);
+  return { folgas, recarregarFolgas: carregar };
+}
 
 type FilterPeriod = 'dia' | 'semana' | 'mes';
 
@@ -314,6 +342,8 @@ const FrequenciaTrabalhoViewInner = ({ showToast, profile, filial, embedded }: a
   // fallback enquanto a turma não confirmar o horário.
   const jornada = useJornadaTurma();
   const corteTurma = usePontoCorteTurma();
+  const { folgas, recarregarFolgas } = useFolgasPeriodo(periodoRange.gte, periodoRange.lte);
+  const folgaDoDia = folgas.get(dataSelecionada) ?? null;
   const frequencias = useMemo(
     () => (pontos ?? []).map(p => pontoParaFrequencia(p, jornada.entrada, corteTurma)),
     [pontos, jornada.entrada, corteTurma],
@@ -508,6 +538,72 @@ const FrequenciaTrabalhoViewInner = ({ showToast, profile, filial, embedded }: a
     showToast(`Registro de ${func.nome} excluído.`, 'success');
   }, [ehProfessor, confirm, reload, showToast]);
 
+  // ── Feriado / Sem aula (migr. 653) ────────────────────────────────────
+  //
+  // Mesma porta do calendário da turma (`definir_excecao_calendario`), por
+  // isso a mesma régua: admin/CEO da Matriz. O dia marcado nasce vazio — o
+  // banco recusa marcar dia com lançamento, porque a falta lançada ali
+  // continuaria descontando na folha. Aqui o professor (único que exclui
+  // ponto, migr. 635) resolve os dois passos numa confirmação só.
+  const podeMarcarFolga = (profile?.role === 'admin' || profile?.role === 'ceo') && profile?.filial === 'Matriz';
+  const [folgaModal, setFolgaModal] = useState<{ tipo: TipoFolga; motivo: string } | null>(null);
+  const [gravandoFolga, setGravandoFolga] = useState(false);
+
+  const marcarFolga = useCallback(async (tipo: TipoFolga, motivo: string) => {
+    if (!supabase || !podeMarcarFolga) return;
+    const data = dataSelecionada;
+    const lancados = (frequencias ?? []).filter(f => f.data === data && !f.bloqueado);
+    if (lancados.length) {
+      if (!ehProfessor) {
+        showToast(`${fmtData(data)} já tem ${lancados.length} registro(s) de ponto. Só o professor exclui registros — peça a ele para limpar o dia antes de marcar.`, 'error', true);
+        return;
+      }
+      const ok = await confirm({
+        message: `${fmtData(data)} já tem ${lancados.length} registro(s) de ponto. Excluir todos e marcar o dia como ${FOLGA_LABEL[tipo]}?`,
+        confirmLabel: `Excluir e marcar`,
+        danger: true,
+      });
+      if (!ok) return;
+    }
+    setGravandoFolga(true);
+    try {
+      for (const f of [...lancados].sort((a, b) => a.id.localeCompare(b.id))) {
+        const { error } = await supabase.rpc('remover_ponto', { p_ponto_id: f.id });
+        if (error) throw error;
+      }
+      const { error } = await supabase.rpc('definir_excecao_calendario', {
+        p_data: data, p_tipo: tipo, p_motivo: motivo.trim() || null,
+      });
+      if (error) throw error;
+      setEdits({});
+      setFolgaModal(null);
+      window.dispatchEvent(new Event(EVENTO_JORNADA_ATUALIZADA));
+      await Promise.all([recarregarFolgas(), reload({ silent: true })]);
+      showToast(`${fmtData(data)} marcado como ${FOLGA_LABEL[tipo]}. O lançamento está travado e o dia não conta na frequência.`, 'success');
+    } catch (err: any) {
+      await reload({ silent: true });
+      showToast(err?.message ?? 'Erro ao marcar o dia.', 'error', true);
+    } finally {
+      setGravandoFolga(false);
+    }
+  }, [podeMarcarFolga, ehProfessor, dataSelecionada, frequencias, confirm, recarregarFolgas, reload, showToast]);
+
+  const desmarcarFolga = useCallback(async () => {
+    if (!supabase || !podeMarcarFolga || !folgaDoDia) return;
+    const ok = await confirm({
+      message: `Desmarcar ${FOLGA_LABEL[folgaDoDia.tipo]} de ${fmtData(folgaDoDia.data)}? O dia volta a ser de aula: libera o lançamento e passa a contar na frequência.`,
+      confirmLabel: 'Desmarcar',
+    });
+    if (!ok) return;
+    setGravandoFolga(true);
+    const { error } = await supabase.rpc('remover_excecao_calendario', { p_data: folgaDoDia.data });
+    setGravandoFolga(false);
+    if (error) { showToast(error.message, 'error', true); return; }
+    window.dispatchEvent(new Event(EVENTO_JORNADA_ATUALIZADA));
+    await recarregarFolgas();
+    showToast(`${fmtData(folgaDoDia.data)} voltou a ser dia de aula.`, 'success');
+  }, [podeMarcarFolga, folgaDoDia, confirm, recarregarFolgas, showToast]);
+
   // ── Lançamento em lote ────────────────────────────────────────────────
   //
   // O dia normal de uma turma é "todo mundo veio, menos um". Lançar isso a
@@ -648,10 +744,12 @@ const FrequenciaTrabalhoViewInner = ({ showToast, profile, filial, embedded }: a
     () => diasPeriodo.filter(d => {
       if (d > today) return false;
       if (diasLetivos) return diasLetivos.has(d);
+      // Sem calendário, feriado e dia sem aula saem do seg–sex (653).
+      if (folgas.has(d)) return false;
       const dow = new Date(d + 'T12:00:00').getDay();
       return dow >= 1 && dow <= 5;
     }),
-    [diasPeriodo, today, diasLetivos],
+    [diasPeriodo, today, diasLetivos, folgas],
   );
 
   // Cumprimento por unidade: quantos lançamentos existem vs. quantos deveriam existir.
@@ -789,8 +887,36 @@ const FrequenciaTrabalhoViewInner = ({ showToast, profile, filial, embedded }: a
         </div>
       </div>
 
+      {/* Dia marcado como feriado / sem aula: trava o lançamento. */}
+      {filtro === 'dia' && folgaDoDia && (
+        <div className="neu-flat rounded-3xl border border-sky-500/40 p-5 flex flex-col sm:flex-row sm:items-center gap-4 shrink-0">
+          <span className="w-12 h-12 shrink-0 rounded-2xl bg-sky-600 text-white flex items-center justify-center">
+            {folgaDoDia.tipo === 'feriado' ? <CalendarX2 size={22} /> : <CalendarOff size={22} />}
+          </span>
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2 flex-wrap">
+              <h3 className="text-base font-black text-gray-100">{fmtData(folgaDoDia.data)} · {FOLGA_LABEL[folgaDoDia.tipo]}</h3>
+              <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide bg-sky-600 text-white">
+                <Lock size={10} /> Lançamento travado
+              </span>
+            </div>
+            {folgaDoDia.motivo && <p className="text-sm text-gray-300 mt-0.5">{folgaDoDia.motivo}</p>}
+            <p className="text-xs text-gray-500 mt-1">
+              Não há aula neste dia: ninguém fica "sem registro", e o dia não entra na frequência nem no placar.
+            </p>
+          </div>
+          {podeMarcarFolga && (
+            <button type="button" onClick={desmarcarFolga} disabled={gravandoFolga}
+              title="O dia volta a ser de aula e o lançamento é liberado"
+              className="btn-solido btn-solido--preto !py-2.5 !px-4 !text-xs shrink-0">
+              {gravandoFolga ? <Loader2 size={14} className="animate-spin" /> : <Undo2 size={14} />} Desmarcar dia
+            </button>
+          )}
+        </div>
+      )}
+
       {/* Resumo cards */}
-      {filtro === 'dia' && (
+      {filtro === 'dia' && !folgaDoDia && (
         <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 shrink-0">
           {/* Mesmas cores dos botões da linha: a cor é a legenda, fica mesmo com zero. */}
           <CardContador label="Presentes" value={statsForDate.presentes} tom="verde" corFixa />
@@ -866,7 +992,7 @@ const FrequenciaTrabalhoViewInner = ({ showToast, profile, filial, embedded }: a
       </div>
 
       {/* Lançamento em lote — só na visão de um dia, que é onde se lança. */}
-      {filtro === 'dia' && (
+      {filtro === 'dia' && !folgaDoDia && (
         <div className="shrink-0 flex flex-wrap items-center gap-2.5" title="Marque todos e corrija só quem faltou — a linha continua editável antes de salvar.">
           <button
             type="button"
@@ -900,6 +1026,23 @@ const FrequenciaTrabalhoViewInner = ({ showToast, profile, filial, embedded }: a
             )}
           </button>
 
+          {podeMarcarFolga && (
+            <div className="flex items-center gap-2 ml-auto">
+              <button type="button" disabled={salvandoLote || gravandoFolga}
+                onClick={() => setFolgaModal({ tipo: 'feriado', motivo: '' })}
+                title={`Marca ${fmtData(dataSelecionada)} como feriado: trava o lançamento e o dia sai da frequência`}
+                className="btn-solido btn-solido--azul !py-2.5 !px-4 !text-xs">
+                <CalendarX2 size={15} /> Feriado
+              </button>
+              <button type="button" disabled={salvandoLote || gravandoFolga}
+                onClick={() => setFolgaModal({ tipo: 'sem_aula', motivo: '' })}
+                title={`Marca ${fmtData(dataSelecionada)} como dia sem aula: trava o lançamento e o dia sai da frequência`}
+                className="btn-solido btn-solido--preto !py-2.5 !px-4 !text-xs">
+                <CalendarOff size={15} /> Sem aula
+              </button>
+            </div>
+          )}
+
           {ehProfessor && (() => {
             // Dia sem aula lançado por engano: apaga todos os registros do dia
             // que podem sair (turma anterior e afastamento ficam).
@@ -931,7 +1074,7 @@ const FrequenciaTrabalhoViewInner = ({ showToast, profile, filial, embedded }: a
                     : `${removiveis.length} registro(s) de ${fmtData(dataSelecionada)} excluído(s).`, falhas ? 'error' : 'success');
                 }}
                 title="Exclui os registros deste dia — para dia sem aula lançado por engano"
-                className="btn-solido btn-solido--vermelho !py-2.5 !px-4 !text-xs ml-auto"
+                className={`btn-solido btn-solido--vermelho !py-2.5 !px-4 !text-xs ${podeMarcarFolga ? '' : 'ml-auto'}`}
               >
                 <Eraser size={15} /> Limpar dia
                 {removiveis.length > 0 && (
@@ -944,7 +1087,7 @@ const FrequenciaTrabalhoViewInner = ({ showToast, profile, filial, embedded }: a
       )}
 
       {/* Visão DIA — tabela editável */}
-      {filtro === 'dia' && (
+      {filtro === 'dia' && !folgaDoDia && (
         <div className="neu-flat rounded-3xl p-5 border border-white/5 shrink-0">
           {filteredFuncs.length === 0 ? (
             <EmptyState message="Nenhum funcionário ativo encontrado." />
@@ -1140,12 +1283,18 @@ const FrequenciaTrabalhoViewInner = ({ showToast, profile, filial, embedded }: a
                 <thead>
                   <tr className="border-b border-white/10 text-[10px] text-gray-500 uppercase tracking-widest">
                     <th className="pb-3 font-bold px-3 sticky left-0 bg-[var(--color-bg-base)] z-10 min-w-[160px]">Funcionário</th>
-                    {diasPeriodo.map(d => (
-                      <th key={d} className="pb-3 font-bold px-1 text-center min-w-[40px]">
-                        <div>{d.slice(8)}</div>
-                        <div className="text-[8px] text-gray-600 normal-case">{fmtDiaSemana(d)}</div>
-                      </th>
-                    ))}
+                    {diasPeriodo.map(d => {
+                      const folga = folgas.get(d);
+                      return (
+                        <th key={d} className={`pb-3 font-bold px-1 text-center min-w-[40px] ${folga ? 'text-sky-400' : ''}`}
+                          title={folga ? `${FOLGA_LABEL[folga.tipo]}${folga.motivo ? ` — ${folga.motivo}` : ''}` : undefined}>
+                          <div>{d.slice(8)}</div>
+                          <div className={`text-[8px] normal-case ${folga ? 'text-sky-400' : 'text-gray-600'}`}>
+                            {folga ? (folga.tipo === 'feriado' ? 'feriado' : 'sem aula') : fmtDiaSemana(d)}
+                          </div>
+                        </th>
+                      );
+                    })}
                   </tr>
                 </thead>
                 <tbody>
@@ -1161,6 +1310,11 @@ const FrequenciaTrabalhoViewInner = ({ showToast, profile, filial, embedded }: a
                       </td>
                       {diasPeriodo.map(d => {
                         const freq = getFreq(func.id, d);
+                        if (!freq && folgas.has(d)) return (
+                          <td key={d} className="py-2 px-1 text-center bg-sky-500/5">
+                            <CalendarOff size={12} className="inline text-sky-500/60" />
+                          </td>
+                        );
                         if (!freq) return (
                           <td key={d} className="py-2 px-1 text-center">
                             <span className="text-gray-700 text-[10px]">—</span>
@@ -1345,6 +1499,70 @@ const FrequenciaTrabalhoViewInner = ({ showToast, profile, filial, embedded }: a
             </motion.div>
           );
         })()}
+      </AnimatePresence>
+
+      {/* Modal Feriado / Sem aula */}
+      <AnimatePresence>
+        {folgaModal && (
+          <motion.div
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center p-4"
+            style={{ background: 'rgba(0,0,0,0.6)' }}
+            onClick={() => !gravandoFolga && setFolgaModal(null)}
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }}
+              className="neu-flat rounded-3xl border border-white/10 max-w-md w-full overflow-hidden"
+              style={{ background: 'var(--color-bg-base)' }}
+              onClick={e => e.stopPropagation()}
+            >
+              <div className="p-5 flex items-center gap-3 border-b border-white/5">
+                <span className="w-11 h-11 shrink-0 rounded-xl bg-sky-600 text-white flex items-center justify-center">
+                  {folgaModal.tipo === 'feriado' ? <CalendarX2 size={20} /> : <CalendarOff size={20} />}
+                </span>
+                <div className="min-w-0 flex-1">
+                  <h3 className="text-base font-black text-gray-100 leading-tight">Marcar {fmtData(dataSelecionada)}</h3>
+                  <p className="text-xs text-gray-500">Vale para a turma inteira, em todas as unidades.</p>
+                </div>
+                <button onClick={() => setFolgaModal(null)} disabled={gravandoFolga} className="modal-close-btn shrink-0" aria-label="Fechar"><X size={16} /></button>
+              </div>
+              <form className="p-5 flex flex-col gap-4"
+                onSubmit={e => { e.preventDefault(); marcarFolga(folgaModal.tipo, folgaModal.motivo); }}>
+                <div className="grid grid-cols-2 gap-2">
+                  {(['feriado', 'sem_aula'] as TipoFolga[]).map(t => (
+                    <button key={t} type="button" aria-pressed={folgaModal.tipo === t}
+                      onClick={() => setFolgaModal(m => (m ? { ...m, tipo: t } : m))}
+                      className={`flex items-center justify-center gap-1.5 py-2.5 rounded-xl border text-sm font-bold transition-colors ${
+                        folgaModal.tipo === t
+                          ? 'bg-sky-600 text-white border-sky-500'
+                          : 'border-white/10 text-gray-400 hover:text-gray-200'
+                      }`}>
+                      {t === 'feriado' ? <CalendarX2 size={14} /> : <CalendarOff size={14} />} {FOLGA_LABEL[t]}
+                    </button>
+                  ))}
+                </div>
+                <input
+                  type="text"
+                  autoFocus
+                  value={folgaModal.motivo}
+                  onChange={e => setFolgaModal(m => (m ? { ...m, motivo: e.target.value } : m))}
+                  placeholder={folgaModal.tipo === 'feriado' ? 'Qual feriado? (ex.: Dia da Independência)' : 'Motivo (ex.: recesso, evento na escola)'}
+                  data-trava-atualizacao="nao"
+                  className="neu-input w-full px-3 py-2.5 rounded-xl text-sm"
+                />
+                <p className="text-xs text-gray-500">
+                  O lançamento deste dia fica travado e ninguém aparece como "sem registro". O dia não conta na frequência nem no placar.
+                </p>
+                <div className="flex justify-end gap-2">
+                  <button type="button" onClick={() => setFolgaModal(null)} disabled={gravandoFolga} className="btn-solido btn-solido--preto">Cancelar</button>
+                  <button type="submit" disabled={gravandoFolga} className="btn-solido btn-solido--azul">
+                    {gravandoFolga ? <Loader2 size={13} className="animate-spin" /> : <Lock size={13} />} Marcar e travar
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </motion.div>
+        )}
       </AnimatePresence>
 
       {/* Modal histórico do funcionário */}

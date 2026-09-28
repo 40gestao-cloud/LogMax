@@ -274,7 +274,7 @@ function JornadaNaoConfigurada({ profile, showToast, onSalvo }: {
 // contabilidade e aprendiz têm 2 dias por semana e adm tem 1 — e a próxima
 // turma pode ter 5.
 // ─────────────────────────────────────────────────────────────────────────────
-type Excecao = { data: string; tipo: 'sem_aula' | 'aula_extra'; motivo: string | null };
+type Excecao = { data: string; tipo: 'sem_aula' | 'feriado' | 'aula_extra'; motivo: string | null };
 
 function CalendarioTurma({ profile, showToast, onSalvo, configurado, entradaAtual }: {
   profile: UserProfile;
@@ -288,7 +288,7 @@ function CalendarioTurma({ profile, showToast, onSalvo, configurado, entradaAtua
   const [dias, setDias] = useState<number[]>([]);
   const [excecoes, setExcecoes] = useState<Excecao[]>([]);
   const [novaData, setNovaData] = useState('');
-  const [novoTipo, setNovoTipo] = useState<'sem_aula' | 'aula_extra'>('sem_aula');
+  const [novoTipo, setNovoTipo] = useState<'sem_aula' | 'feriado' | 'aula_extra'>('sem_aula');
   const [novoMotivo, setNovoMotivo] = useState('');
   const [salvando, setSalvando] = useState(false);
 
@@ -396,8 +396,8 @@ function EditorCalendario({ dias, setDias, salvarDias, salvando, excecoes, novaD
   excecoes: Excecao[];
   novaData: string;
   setNovaData: (v: string) => void;
-  novoTipo: 'sem_aula' | 'aula_extra';
-  setNovoTipo: (v: 'sem_aula' | 'aula_extra') => void;
+  novoTipo: 'sem_aula' | 'feriado' | 'aula_extra';
+  setNovoTipo: (v: 'sem_aula' | 'feriado' | 'aula_extra') => void;
   novoMotivo: string;
   setNovoMotivo: (v: string) => void;
   addExcecao: () => void;
@@ -441,8 +441,9 @@ function EditorCalendario({ dias, setDias, salvarDias, salvando, excecoes, novaD
         <div className="flex items-center gap-1.5 flex-wrap">
           <input type="date" value={novaData} onChange={e => setNovaData(e.target.value)}
             className="neu-input py-1.5 px-2 text-xs rounded-lg text-gray-100" />
-          <select value={novoTipo} onChange={e => setNovoTipo(e.target.value as 'sem_aula' | 'aula_extra')}
+          <select value={novoTipo} onChange={e => setNovoTipo(e.target.value as 'sem_aula' | 'feriado' | 'aula_extra')}
             className="neu-input py-1.5 px-2 text-xs rounded-lg text-gray-100">
+            <option value="feriado">Feriado</option>
             <option value="sem_aula">Sem aula</option>
             <option value="aula_extra">Aula extra</option>
           </select>
@@ -459,9 +460,9 @@ function EditorCalendario({ dias, setDias, salvarDias, salvando, excecoes, novaD
             {excecoes.map(e => (
               <div key={e.data} className="flex items-center gap-2 text-[11px]">
                 <span className={`text-[9px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded ${
-                  e.tipo === 'sem_aula' ? 'bg-red-500/15 text-red-300' : 'bg-emerald-500/15 text-emerald-300'
+                  e.tipo !== 'aula_extra' ? 'bg-red-500/15 text-red-300' : 'bg-emerald-500/15 text-emerald-300'
                 }`}>
-                  {e.tipo === 'sem_aula' ? 'sem aula' : 'aula extra'}
+                  {e.tipo === 'feriado' ? 'feriado' : e.tipo === 'sem_aula' ? 'sem aula' : 'aula extra'}
                 </span>
                 <span className="text-gray-300 tabular-nums">{e.data.split('-').reverse().join('/')}</span>
                 <span className="text-gray-500 truncate flex-1">{e.motivo ?? '—'}</span>
