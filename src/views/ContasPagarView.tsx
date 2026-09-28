@@ -536,8 +536,15 @@ const ContasPagarViewInner = ({ showToast, filial }: { showToast: any; filial: F
             </FormField>
             </div>
             <FormField label="Valor (R$)">
-              <input type="text" inputMode="numeric" className="neu-input py-2 px-3 rounded-xl text-sm tabular-nums"
-                value={extras.valor} onChange={e => setExtras(x => ({ ...x, valor: formatBRL(e.target.value) }))} onKeyDown={handleMoneyKeyDown} placeholder="0,00" />
+              {/* Conta de pedido: o valor passa a ser o da nota, em "Conferir
+                  nota" — o banco recusa mudança por aqui (migr. 642). */}
+              <input type="text" inputMode="numeric"
+                className={`neu-input py-2 px-3 rounded-xl text-sm tabular-nums ${editItem?.pedido_id ? 'opacity-60 cursor-not-allowed' : ''}`}
+                readOnly={!!editItem?.pedido_id}
+                value={extras.valor} onChange={e => { if (!editItem?.pedido_id) setExtras(x => ({ ...x, valor: formatBRL(e.target.value) })); }} onKeyDown={handleMoneyKeyDown} placeholder="0,00" />
+              {editItem?.pedido_id && (
+                <span className="text-[10px] text-gray-500">Conta de pedido de compra: o valor muda em "Conferir nota".</span>
+              )}
             </FormField>
             <FormField label="Vencimento">
               <input type="date" className="neu-input py-2 px-3 rounded-xl text-sm"
@@ -547,6 +554,7 @@ const ContasPagarViewInner = ({ showToast, filial }: { showToast: any; filial: F
               <SelectBusca
                 value={extras.fornecedor_id}
                 onChange={v => setExtras(x => ({ ...x, fornecedor_id: v }))}
+                disabled={!!editItem?.pedido_id}
                 placeholder="Nenhum"
                 permitirVazio="Nenhum"
                 grupos={gruposDeCadastro(fornecedores)}

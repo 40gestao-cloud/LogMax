@@ -25,7 +25,11 @@ import { opcaoProduto } from '../lib/opcoesSelect';
 // Saldo por pedido vem da view v_pedido_saldo (migr. 202) — soma qtd_recebida
 // de recebimentos ativos e devolve quanto ainda cabe. Bloqueia recebimento
 // que ultrapasse o pedido (defesa em INSERT + Confirmar).
-type SaldoPedido = { qtd_pedida: number; qtd_recebida_total: number; qtd_saldo: number };
+type SaldoPedido = {
+  qtd_pedida: number; qtd_recebida_total: number; qtd_saldo: number;
+  /** Só as cargas já conferidas (migr. 642). */
+  qtd_conferida: number; qtd_devolvida_reenvio: number;
+};
 
 // O cadastro rápido saiu daqui (2026-08-17). Ele existia porque compra de item
 // novo é a regra — o pedido nasce da requisição com `item_descricao` em texto
@@ -209,7 +213,7 @@ const RecebimentosViewInner = ({ showToast, filial }: { showToast: any; filial: 
     if (!supabase) return;
     const { data: rows, error } = await supabase
       .from('v_pedido_saldo')
-      .select('pedido_id, qtd_pedida, qtd_recebida_total, qtd_saldo')
+      .select('pedido_id, qtd_pedida, qtd_recebida_total, qtd_saldo, qtd_conferida, qtd_devolvida_reenvio')
       .eq('filial', filial);
     if (error) {
       // View pode não existir ainda (migração 202 pendente) — degrada
@@ -223,6 +227,8 @@ const RecebimentosViewInner = ({ showToast, filial }: { showToast: any; filial: 
         qtd_pedida: Number(r.qtd_pedida ?? 0),
         qtd_recebida_total: Number(r.qtd_recebida_total ?? 0),
         qtd_saldo: Number(r.qtd_saldo ?? 0),
+        qtd_conferida: Number(r.qtd_conferida ?? 0),
+        qtd_devolvida_reenvio: Number(r.qtd_devolvida_reenvio ?? 0),
       };
     });
     setSaldos(map);
@@ -280,8 +286,11 @@ const RecebimentosViewInner = ({ showToast, filial }: { showToast: any; filial: 
     if (!s || !(s.qtd_pedida > 0)) {
       return { conhecido: false, fecha: false, falta: 0 };
     }
-    // A view já conta este recebimento: a linha existe desde o Registrar.
-    return { conhecido: true, fecha: s.qtd_saldo <= 0.0005, falta: Math.max(s.qtd_saldo, 0) };
+    // O que fecha o pedido é o CONFERIDO (migr. 642): outra carga registrada e
+    // ainda Pendente não conta. Antes, com 80 + 70 de 150 lançadas, confirmar a
+    // primeira já prometia "fecha o pedido" — e o banco fechava de fato.
+    const falta = s.qtd_pedida + s.qtd_devolvida_reenvio - (s.qtd_conferida + parseQtd(item.qtd_recebida));
+    return { conhecido: true, fecha: falta <= 0.0005, falta: Math.max(falta, 0) };
   };
   const produtosOrdenados = useMemo(() => {
     // Normaliza nome: remove diacríticos, faz trim e baixa caixa.
@@ -540,38 +549,26 @@ const RecebimentosViewInner = ({ showToast, filial }: { showToast: any; filial: 
     confirmingRef.current = item.id;
     setConfirmSaving(true);
     try {
-      const today = todayBR();
-      // Movimentação PRIMEIRO — se falhar, status fica Pendente e o botão "Confirmar" reaparesce para retry.
-      // Só atualiza o status após a movimentação estar salva no banco.
-      // A entrada acontece sempre: a mercadoria que chegou entrou, seja a
-      // entrega completa ou não. O que o saldo decide é se o PEDIDO fecha.
+      // A entrada no estoque nasce no BANCO, na mesma transação da confirmação
+      // (migr. 642, `fn_recebimento_da_entrada`). Antes esta tela gravava a
+      // entrada primeiro e confirmava depois: se o banco recusasse a
+      // confirmação (quem emitiu o pedido conferindo, nota, data), o estoque
+      // ficava subido com o recebimento Pendente. Agora é tudo ou nada.
       //
-      // Serviço não passa por aqui: não há saldo a mover. O banco recusaria de
-      // qualquer jeito (migr. 499), mas mandar o insert só para ver o erro
-      // voltar seria transformar a régua certa em mensagem vermelha na cara de
-      // quem fez tudo certo.
-      if (!servico) {
-        try {
-          await dbInsert('/api/movimentacoesestoqueview', {
-            produto_id:     confirmProduto,
-            tipo:           'Entrada',
-            qtd:            parseQtd(item.qtd_recebida),
-            origem:         numeroPedido(item.ped ?? { id: item.pedido_id }),
-            destino:        'Almoxarifado',
-            data:           today,
-            recebimento_id: item.id,
-            filial,
-          });
-        } catch (movErr: any) {
-          // 23505 = violação de UNIQUE: este recebimento já gerou movimento
-          // (race em outra aba/clique). Idempotência: tratamos como sucesso.
-          const msg = String(movErr?.message ?? '');
-          const isDuplicate = msg.includes('uq_mov_estoque_por_recebimento')
-                            || msg.includes('23505')
-                            || /duplicate key value/i.test(msg);
-          if (!isDuplicate) throw movErr;
-        }
-      }
+      // Manda a INTENÇÃO ('Concluído') e a decisão de encerrar; quem grava o
+      // status é a trigger da migr. 489, a partir do saldo. `salvo.status` é o
+      // que de fato ficou no banco — usar o palpite do cliente aqui era como o
+      // bug começava.
+      const salvo = await dbUpdate<any>('/api/recebimentosview', item.id, {
+        status: 'Concluído',
+        encerrado_com_saldo: !conf.fecha && encerrarComSaldo,
+        motivo_encerramento: !conf.fecha && encerrarComSaldo ? motivoEncerramento.trim() : null,
+        nf_numero:  confirmNf.numero.trim(),
+        nf_serie:   confirmNf.serie.trim() || null,
+        nf_emissao: confirmNf.emissao || null,
+      });
+      const statusFinal = salvo?.status ?? (conf.fecha ? 'Concluído' : 'Parcial');
+
       // Lote com validade (migr. 424). Depois da entrada e fora do caminho
       // crítico: se falhar, o estoque já subiu e o lote pode ser registrado
       // depois em Estoque → Validades — travar a confirmação por causa disto
@@ -609,19 +606,6 @@ const RecebimentosViewInner = ({ showToast, filial }: { showToast: any; filial: 
         }
       }
 
-      // Manda a INTENÇÃO ('Concluído') e a decisão de encerrar; quem grava o
-      // status é a trigger da migr. 489, a partir do saldo. `salvo.status` é o
-      // que de fato ficou no banco — usar o palpite do cliente aqui era como o
-      // bug começava.
-      const salvo = await dbUpdate<any>('/api/recebimentosview', item.id, {
-        status: 'Concluído',
-        encerrado_com_saldo: !conf.fecha && encerrarComSaldo,
-        motivo_encerramento: !conf.fecha && encerrarComSaldo ? motivoEncerramento.trim() : null,
-        nf_numero:  confirmNf.numero.trim(),
-        nf_serie:   confirmNf.serie.trim() || null,
-        nf_emissao: confirmNf.emissao || null,
-      });
-      const statusFinal = salvo?.status ?? (conf.fecha ? 'Concluído' : 'Parcial');
       setData((prev: any[]) => prev.map(r => r.id === item.id ? { ...r, ...(salvo ?? { status: statusFinal }) } : r));
       await reloadSaldos();
 
