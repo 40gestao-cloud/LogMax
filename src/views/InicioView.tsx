@@ -232,7 +232,7 @@ export const InicioView = ({
                   Abrir Central de Tempo <ArrowRight size={14} />
                 </BotaoCard>
               }>
-                <img src={relogioIcon} alt="" className="w-20 h-20 sm:w-24 sm:h-24 object-contain" />
+                <img src={relogioIcon} alt="" className="w-28 h-28 sm:w-36 sm:h-36 object-contain" />
                 <div className="text-center">
                   <HoraAcreAoVivo />
                   <span className="text-xs text-gray-500 block mt-1">Relógio, alarmes, cronômetro e timer</span>
@@ -248,10 +248,14 @@ export const InicioView = ({
                 Abrir PortalMax <ExternalLink size={14} />
               </BotaoCard>
             }>
-              <div className={`w-full max-w-[220px] rounded-2xl px-4 py-3 ${
+              <div className={`w-full max-w-[300px] rounded-2xl px-1 py-3 ${
                 theme === 'light' ? 'bg-[#0A0A0A] border border-white/10' : ''
               }`}>
-                <img src="/icon-portalmax.png" alt="PortalMax" className="w-full h-auto" />
+                {/* O PNG tem margem transparente (7% à esquerda, 3,5% à direita).
+                    112% de largura e -7,9% de margem deixam a margem vazar e a
+                    parte desenhada ocupar a caixa inteira — no card estreito a
+                    largura é o limite, e isso é o que sobra para crescer. */}
+                <img src="/icon-portalmax.png" alt="PortalMax" className="w-[112%] max-w-none ml-[-7.9%] h-auto" />
               </div>
               <span className="text-xs text-gray-500 leading-snug text-center">Ecossistema Max Educacional</span>
             </CardResumo>
@@ -320,7 +324,9 @@ function HoraAcreAoVivo() {
     return () => clearInterval(id);
   }, []);
   return (
-    <span className="font-mono tabular-nums text-3xl sm:text-4xl font-black text-accent leading-none block">
+    // Cresce com o card (@container do CardResumo): "00:00:00" em mono ocupa
+    // ~4,8em, então 19cqi é o teto que ainda cabe numa linha no card estreito.
+    <span className="font-mono tabular-nums text-[clamp(1.875rem,19cqi,3.5rem)] font-black text-accent leading-none block whitespace-nowrap">
       {HORA_ACRE.format(agora)}
     </span>
   );
