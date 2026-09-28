@@ -17,6 +17,7 @@ import { supabase } from '../lib/supabase';
 import { formatDataHoraBR, dataSimplesBR } from '../lib/dates';
 import { LoadingSpinner, EmptyState, FilialBadge, AbaComContador } from '../components/ui';
 import type { UserProfile } from '../hooks/useUserProfile';
+import { usePontoCorteTurma } from '../hooks/useJornadaTurma';
 
 type Just = {
   id: string; funcionario_id: string; nome_funcionario: string; data: string; motivo: string;
@@ -60,7 +61,13 @@ export function JustificativasFaltaTab({ profile, filial, showToast }: {
 
   useEffect(() => { setLista(null); carregar(); }, [carregar]);
 
-  const pendentes = useMemo(() => (lista ?? []).filter(j => j.status === 'Pendente'), [lista]);
+  // A tabela atravessa o APAGAR TUDO (504). Pendente de antes do corte não tem
+  // mais decisão possível (o ponto da turma passada não se reescreve) e só
+  // entupiria a fila da turma nova.
+  const corte = usePontoCorteTurma();
+  const pendentes = useMemo(
+    () => (lista ?? []).filter(j => j.status === 'Pendente' && (!corte || j.data >= corte)),
+    [lista, corte]);
   const decididas = useMemo(() => (lista ?? []).filter(j => j.status !== 'Pendente'), [lista]);
 
   const ehAdmin = profile?.role === 'admin';
@@ -72,7 +79,12 @@ export function JustificativasFaltaTab({ profile, filial, showToast }: {
     const texto = (obs[j.id] ?? '').trim();
     if (!aceita && !texto) { showToast('Para negar, diga o porquê no campo de observação.', 'error'); return; }
     setGravando(j.id);
-    const { error } = await supabase.rpc(rpc, { p_id: j.id, p_aceita: aceita, p_obs: texto || null });
+    // Nomes por extenso (e não `rpc(rpc, …)`): o mapa de dependências só
+    // enxerga chamada com o nome literal.
+    const args = { p_id: j.id, p_aceita: aceita, p_obs: texto || null };
+    const { error } = rpc === 'decidir_justificativa_falta'
+      ? await supabase.rpc('decidir_justificativa_falta', args)
+      : await supabase.rpc('parecer_justificativa_falta', args);
     setGravando(null);
     if (error) { showToast(error.message, 'error'); return; }
     showToast(rpc === 'decidir_justificativa_falta'

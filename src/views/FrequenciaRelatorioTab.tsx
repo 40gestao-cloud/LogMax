@@ -130,16 +130,27 @@ export const FrequenciaRelatorioTab = ({
       // veio de afastamento ou de justificativa enviada pelo colaborador não
       // tem observação — sem este segundo caminho o papel sairia com
       // "Justificada" e nenhuma razão ao lado.
-      const { data: justs, error: errJ } = await supabase
-        .from('justificativas_falta')
-        .select('funcionario_id, data, motivo')
-        .in('funcionario_id', ids)
-        .gte('data', inicio)
-        .lte('data', fim);
+      //
+      // (650) `justificativas_falta.funcionario_id` é a CONTA (auth.users), não
+      // o cadastro de funcionário — o filtro por `ids` nunca casava. A ponte é
+      // `funcionarios.user_profile_id`. E só a aceita justifica: pendente ou
+      // negada não é razão de dia nenhum.
+      const funcDaConta = new Map<string, string>();
+      alvos.forEach((f: any) => { if (f.user_profile_id) funcDaConta.set(f.user_profile_id, f.id); });
+      const { data: justs, error: errJ } = funcDaConta.size
+        ? await supabase
+          .from('justificativas_falta')
+          .select('funcionario_id, data, motivo')
+          .in('funcionario_id', [...funcDaConta.keys()])
+          .eq('status', 'Aceita')
+          .gte('data', inicio)
+          .lte('data', fim)
+        : { data: [], error: null };
       if (errJ) throw errJ;
       const motivoDe = new Map<string, string>();
       (justs ?? []).forEach((j: any) => {
-        if (j.motivo) motivoDe.set(`${j.funcionario_id}|${j.data}`, j.motivo);
+        const func = funcDaConta.get(j.funcionario_id);
+        if (func && j.motivo) motivoDe.set(`${func}|${j.data}`, j.motivo);
       });
 
       const porFunc = new Map<string, FrequenciaFuncionarioPdf>();

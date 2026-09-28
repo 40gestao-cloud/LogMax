@@ -650,10 +650,11 @@ Para cada tela: o que ela lê e grava, as funções do banco que chama, e **quem
 - **Rota:** `rh-registrodeponto` · **Componente:** `PontoEletronicoView` ([src/views/PontoEletronicoView.tsx](../../src/views/PontoEletronicoView.tsx))
 - **Lê:** [configuracoes](tabelas.md#t-configuracoes), [funcionarios](tabelas.md#t-funcionarios), [justificativas_falta](tabelas.md#t-justificativas_falta), [ponto_calendario_excecoes](tabelas.md#t-ponto_calendario_excecoes), [ponto_eletronico](tabelas.md#t-ponto_eletronico), [ponto_jornada](tabelas.md#t-ponto_jornada), [user_profiles](tabelas.md#t-user_profiles)
 - **Grava direto:** [max_shows](tabelas.md#t-max_shows)
-- **Chama (RPC):** [definir_excecao_calendario](funcoes.md#f-definir_excecao_calendario), [definir_ponto_jornada](funcoes.md#f-definir_ponto_jornada), [dias_letivos_periodo](funcoes.md#f-dias_letivos_periodo), [registrar_ponto_manual](funcoes.md#f-registrar_ponto_manual), [remover_excecao_calendario](funcoes.md#f-remover_excecao_calendario), [remover_ponto](funcoes.md#f-remover_ponto)
-- **Grava via RPC:** [ponto_calendario_excecoes](tabelas.md#t-ponto_calendario_excecoes), [ponto_eletronico](tabelas.md#t-ponto_eletronico), [ponto_jornada](tabelas.md#t-ponto_jornada)
+- **Chama (RPC):** [decidir_justificativa_falta](funcoes.md#f-decidir_justificativa_falta), [definir_excecao_calendario](funcoes.md#f-definir_excecao_calendario), [definir_ponto_jornada](funcoes.md#f-definir_ponto_jornada), [dias_letivos_periodo](funcoes.md#f-dias_letivos_periodo), [parecer_justificativa_falta](funcoes.md#f-parecer_justificativa_falta), [registrar_ponto_manual](funcoes.md#f-registrar_ponto_manual), [remover_excecao_calendario](funcoes.md#f-remover_excecao_calendario), [remover_ponto](funcoes.md#f-remover_ponto)
+- **Grava via RPC:** [justificativas_falta](tabelas.md#t-justificativas_falta), [notificacoes](tabelas.md#t-notificacoes), [ponto_calendario_excecoes](tabelas.md#t-ponto_calendario_excecoes), [ponto_eletronico](tabelas.md#t-ponto_eletronico), [ponto_jornada](tabelas.md#t-ponto_jornada)
 - **Storage:** `max-show-anexos`
 - **⚠ Confira também — outras telas que gravam as mesmas tabelas:**
+  - por [justificativas_falta](tabelas.md#t-justificativas_falta): [Meu Crachá](telas.md#s-meu-cracha)
   - por [ponto_calendario_excecoes](tabelas.md#t-ponto_calendario_excecoes): [Central de Avaliação](telas.md#s-avaliacoes), [Matriz avaliacoes *(rota matriz-avaliacoes)*](telas.md#s-matriz-avaliacoes)
   - por [ponto_eletronico](tabelas.md#t-ponto_eletronico): [Crachá Virtual](telas.md#s-cracha-virtual), [Recursos Humanos › Afastamentos](telas.md#s-rh-afastamentos)
   - por [ponto_jornada](tabelas.md#t-ponto_jornada): [Central de Avaliação](telas.md#s-avaliacoes), [Matriz avaliacoes *(rota matriz-avaliacoes)*](telas.md#s-matriz-avaliacoes)
@@ -1405,6 +1406,8 @@ Para cada tela: o que ela lê e grava, as funções do banco que chama, e **quem
 - **Grava direto:** —
 - **Chama (RPC):** [enviar_justificativa_falta](funcoes.md#f-enviar_justificativa_falta), [minha_frequencia](funcoes.md#f-minha_frequencia)
 - **Grava via RPC:** [justificativas_falta](tabelas.md#t-justificativas_falta), [notificacoes](tabelas.md#t-notificacoes)
+- **⚠ Confira também — outras telas que gravam as mesmas tabelas:**
+  - por [justificativas_falta](tabelas.md#t-justificativas_falta): [Recursos Humanos › Registro de Ponto](telas.md#s-rh-registrodeponto)
 - **Arquivos que acessam dados:** `src/components/MinhaFrequencia.tsx`, `src/hooks/useUserProfile.ts`, `src/views/MeuCrachaView.tsx`
 
 <a id="s-minhas-pesquisas"></a>

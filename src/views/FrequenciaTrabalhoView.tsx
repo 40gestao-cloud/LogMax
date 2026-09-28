@@ -378,6 +378,17 @@ const FrequenciaTrabalhoViewInner = ({ showToast, profile, filial, embedded }: a
     ),
     [funcionarios, filialEfetiva],
   );
+  // (650) `justificativas_falta.funcionario_id` é a CONTA, não o cadastro de
+  // funcionário — comparar com `funcIdsFilial` nunca casava, e o painel abaixo
+  // ficava sempre vazio. A ponte é `funcionarios.user_profile_id`.
+  const justificativasFilial = useMemo(() => {
+    const contas = new Set(
+      (funcionarios ?? [])
+        .filter((f: any) => f.user_profile_id && (filialEfetiva === null || filialDoFunc(f) === filialEfetiva))
+        .map((f: any) => f.user_profile_id as string),
+    );
+    return (justificativas ?? []).filter((j: any) => contas.has(j.funcionario_id));
+  }, [justificativas, funcionarios, filialEfetiva]);
 
   const filteredFuncs = useMemo(() => {
     if (!search.trim()) return funcionariosAtivos;
@@ -1173,13 +1184,13 @@ const FrequenciaTrabalhoViewInner = ({ showToast, profile, filial, embedded }: a
       )}
 
       {/* Justificativas de falta recebidas */}
-      {(justificativas ?? []).filter((j: any) => funcIdsFilial.has(j.funcionario_id)).length > 0 && (
+      {justificativasFilial.length > 0 && (
         <div className="neu-flat rounded-3xl p-5 border border-white/5 shrink-0">
           <div className="flex items-center gap-2 mb-4">
             <MessageSquarePlus size={14} className="text-yellow-400" />
             <h3 className="text-sm font-bold text-gray-300">Justificativas de Falta Recebidas</h3>
             <span className="ml-auto text-[10px] font-bold text-accent bg-accent/10 px-2 py-0.5 rounded-full border border-accent/20">
-              {(justificativas ?? []).filter((j: any) => funcIdsFilial.has(j.funcionario_id)).length}
+              {justificativasFilial.length}
             </span>
           </div>
           <div className="overflow-x-auto main-scrollbar">
@@ -1189,20 +1200,22 @@ const FrequenciaTrabalhoViewInner = ({ showToast, profile, filial, embedded }: a
                   <th className="pb-3 font-bold px-3">Funcionário</th>
                   <th className="pb-3 font-bold px-3">Data</th>
                   <th className="pb-3 font-bold px-3">Motivo</th>
-                  <th className="pb-3 font-bold px-3">Enviado por</th>
-                  <th className="pb-3 font-bold px-3">Cargo</th>
+                  <th className="pb-3 font-bold px-3">Situação</th>
                 </tr>
               </thead>
               <tbody>
-                {(justificativas ?? []).filter((j: any) => funcIdsFilial.has(j.funcionario_id)).map((j: any) => (
+                {justificativasFilial.map((j: any) => (
                   <tr key={j.id} className="border-b border-white/5 hover:bg-white/5 transition-colors">
                     <td className="py-2.5 px-3 text-sm font-semibold text-gray-200">{j.nome_funcionario ?? '—'}</td>
                     <td className="py-2.5 px-3 text-xs font-mono text-gray-400">{j.data ? fmtData(j.data) : '—'}</td>
                     <td className="py-2.5 px-3 text-xs text-gray-300 max-w-[300px]">{j.motivo ?? '—'}</td>
-                    <td className="py-2.5 px-3 text-xs text-gray-500">{j.nome_criador ?? '—'}</td>
                     <td className="py-2.5 px-3">
-                      <span className="text-[10px] font-bold uppercase tracking-widest text-yellow-400 bg-yellow-400/10 px-1.5 py-0.5 rounded border border-yellow-400/20">
-                        {j.role_criador ?? '—'}
+                      {/* Só a aceita pelo Admin justifica; a decisão é na aba Justificativas. */}
+                      <span className={`text-[10px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded border ${
+                        j.status === 'Aceita' ? 'text-sky-300 bg-sky-500/10 border-sky-500/30'
+                        : j.status === 'Negada' ? 'text-red-300 bg-red-500/10 border-red-500/30'
+                        : 'text-yellow-400 bg-yellow-400/10 border-yellow-400/20'}`}>
+                        {j.status === 'Pendente' ? 'Em análise' : j.status}
                       </span>
                     </td>
                   </tr>

@@ -197,7 +197,7 @@ Para cada função: quem a chama (tela, servidor, outra função, gatilho), o qu
 ## _freq_credito_dia (RPC)
 
 - **Telas que chamam:** —
-- **Chamada por outras funções:** [_frequencia_competicao](funcoes.md#f-_frequencia_competicao), [enviar_justificativa_falta](funcoes.md#f-enviar_justificativa_falta), [minha_frequencia](funcoes.md#f-minha_frequencia)
+- **Chamada por outras funções:** [_frequencia_competicao](funcoes.md#f-_frequencia_competicao), [decidir_justificativa_falta](funcoes.md#f-decidir_justificativa_falta), [enviar_justificativa_falta](funcoes.md#f-enviar_justificativa_falta), [minha_frequencia](funcoes.md#f-minha_frequencia)
 - **Grava:** —
 
 <a id="f-_frequencia_competicao"></a>
@@ -1504,11 +1504,11 @@ Para cada função: quem a chama (tela, servidor, outra função, gatilho), o qu
 <a id="f-decidir_justificativa_falta"></a>
 ## decidir_justificativa_falta (RPC, SECURITY DEFINER)
 
-- **Telas que chamam:** —
+- **Telas que chamam:** [Recursos Humanos › Registro de Ponto](telas.md#s-rh-registrodeponto)
 - **Grava:** [justificativas_falta](tabelas.md#t-justificativas_falta), [ponto_eletronico](tabelas.md#t-ponto_eletronico)
 - **Ao gravar, acorda os gatilhos de:** [ponto_eletronico](tabelas.md#t-ponto_eletronico) ([fn_ponto_filial_from_funcionario](funcoes.md#f-fn_ponto_filial_from_funcionario))
-- **Lê:** [justificativas_falta](tabelas.md#t-justificativas_falta), [ponto_eletronico](tabelas.md#t-ponto_eletronico), [user_profiles](tabelas.md#t-user_profiles)
-- **Chama:** [_assert_rpc](funcoes.md#f-_assert_rpc), [_funcionario_da_conta](funcoes.md#f-_funcionario_da_conta), [auth_user_role](funcoes.md#f-auth_user_role), [ponto_corte_turma](funcoes.md#f-ponto_corte_turma)
+- **Lê:** [justificativas_falta](tabelas.md#t-justificativas_falta), [ponto_eletronico](tabelas.md#t-ponto_eletronico), [ponto_jornada](tabelas.md#t-ponto_jornada), [user_profiles](tabelas.md#t-user_profiles)
+- **Chama:** [_assert_rpc](funcoes.md#f-_assert_rpc), [_freq_credito_dia](funcoes.md#f-_freq_credito_dia), [_funcionario_da_conta](funcoes.md#f-_funcionario_da_conta), [auth_user_role](funcoes.md#f-auth_user_role), [ponto_corte_turma](funcoes.md#f-ponto_corte_turma)
 
 <a id="f-decidir_requisicao_compra"></a>
 ## decidir_requisicao_compra (RPC, SECURITY DEFINER)
@@ -1903,7 +1903,7 @@ Para cada função: quem a chama (tela, servidor, outra função, gatilho), o qu
 
 - **Telas que chamam:** [Meu Crachá](telas.md#s-meu-cracha)
 - **Grava:** [justificativas_falta](tabelas.md#t-justificativas_falta)
-- **Lê:** [justificativas_falta](tabelas.md#t-justificativas_falta), [ponto_eletronico](tabelas.md#t-ponto_eletronico), [ponto_jornada](tabelas.md#t-ponto_jornada), [user_profiles](tabelas.md#t-user_profiles)
+- **Lê:** [funcionarios](tabelas.md#t-funcionarios), [justificativas_falta](tabelas.md#t-justificativas_falta), [ponto_eletronico](tabelas.md#t-ponto_eletronico), [ponto_jornada](tabelas.md#t-ponto_jornada), [user_profiles](tabelas.md#t-user_profiles)
 - **Chama:** [_assert_rpc](funcoes.md#f-_assert_rpc), [_freq_credito_dia](funcoes.md#f-_freq_credito_dia), [_funcionario_da_conta](funcoes.md#f-_funcionario_da_conta), [acre_today](funcoes.md#f-acre_today), [dias_letivos_periodo](funcoes.md#f-dias_letivos_periodo), [notificar_setor](funcoes.md#f-notificar_setor), [ponto_corte_turma](funcoes.md#f-ponto_corte_turma)
 
 <a id="f-estornar_aporte_capital"></a>
@@ -3060,7 +3060,7 @@ Para cada função: quem a chama (tela, servidor, outra função, gatilho), o qu
 <a id="f-parecer_justificativa_falta"></a>
 ## parecer_justificativa_falta (RPC, SECURITY DEFINER)
 
-- **Telas que chamam:** —
+- **Telas que chamam:** [Recursos Humanos › Registro de Ponto](telas.md#s-rh-registrodeponto)
 - **Grava:** [justificativas_falta](tabelas.md#t-justificativas_falta)
 - **Lê:** [justificativas_falta](tabelas.md#t-justificativas_falta), [user_profiles](tabelas.md#t-user_profiles)
 - **Chama:** [_assert_rpc](funcoes.md#f-_assert_rpc), [auth_user_filial](funcoes.md#f-auth_user_filial), [auth_user_role](funcoes.md#f-auth_user_role), [notificar_setor](funcoes.md#f-notificar_setor)

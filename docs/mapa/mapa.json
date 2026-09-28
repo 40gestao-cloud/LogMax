@@ -1198,14 +1198,18 @@
     "max_shows"
    ],
    "rpcs": [
+    "decidir_justificativa_falta",
     "definir_excecao_calendario",
     "definir_ponto_jornada",
     "dias_letivos_periodo",
+    "parecer_justificativa_falta",
     "registrar_ponto_manual",
     "remover_excecao_calendario",
     "remover_ponto"
    ],
    "grava_via_rpc": [
+    "justificativas_falta",
+    "notificacoes",
     "ponto_calendario_excecoes",
     "ponto_eletronico",
     "ponto_jornada"
@@ -5228,10 +5232,12 @@
    "le": [
     "justificativas_falta",
     "ponto_eletronico",
+    "ponto_jornada",
     "user_profiles"
    ],
    "chama": [
     "_assert_rpc",
+    "_freq_credito_dia",
     "_funcionario_da_conta",
     "auth_user_role",
     "ponto_corte_turma"
@@ -5914,6 +5920,7 @@
     "justificativas_falta"
    ],
    "le": [
+    "funcionarios",
     "justificativas_falta",
     "ponto_eletronico",
     "ponto_jornada",
