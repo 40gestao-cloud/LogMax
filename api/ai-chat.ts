@@ -76,6 +76,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(400).json({ error: 'Conversa muito longa. Reinicie o chat.' });
     }
     for (const m of messages) {
+      // Papel fora da lista chegava cru ao Groq/Cerebras/OpenRouter: um
+      // `role: 'system'` vindo do navegador virava instrução de sistema e
+      // passava por cima das regras do MaxAI.
+      if (m?.role !== 'user' && m?.role !== 'assistant' && m?.role !== 'model') {
+        return res.status(400).json({ error: 'Mensagem inválida.' });
+      }
       if (typeof m?.content !== 'string' || !m.content.trim()) {
         return res.status(400).json({ error: 'Mensagem inválida.' });
       }

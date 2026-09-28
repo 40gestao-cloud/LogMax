@@ -414,10 +414,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       let cupomAplicado: string | null = null;
 
       if (cupomCodigo) {
+        // ILIKE só pela caixa: o banco compara `UPPER(codigo)` na confirmação.
+        // Mas o texto vem do comprador, e `%`, `_` e `*` (curinga do PostgREST)
+        // viravam padrão: `%` achava "qualquer cupom", e as mensagens de erro
+        // diferentes ensinavam o código letra a letra. `*` não tem escape no
+        // PostgREST, então cupom com ele simplesmente não existe.
+        if (cupomCodigo.includes('*') || cupomCodigo.length > 40) {
+          return res.status(400).json({ error: 'Cupom não encontrado.' });
+        }
+        const cupomPadrao = cupomCodigo.replace(/[\\%_]/g, (c: string) => `\\${c}`);
         const { data: cupom } = await admin
           .from('marketing_cupons')
           .select('codigo, tipo, valor, valor_minimo, desconto_maximo, filial, validade_inicio, validade_fim, limite_uso, usos')
-          .ilike('codigo', cupomCodigo)
+          .ilike('codigo', cupomPadrao)
           .eq('ativo', true)
           .maybeSingle();
 

@@ -10,9 +10,13 @@ import {
   acreDayBoundsIso,
   acreTimeString,
   computeStatus,
+  currentWindowId,
   verifyCodigo,
   windowIsValid,
 } from '../lib/ponto.js';
+
+/** Chutes do código de 6 dígitos por aluno a cada janela de 2 min (migr. 639). */
+const MAX_TENTATIVAS_CODIGO = 5;
 
 // Endpoint unificado de registro de ponto. Roteia por body.method ('codigo'|'qr').
 // Substitui /api/register-ponto-codigo e /api/register-ponto-qr (fusão pra caber
@@ -52,6 +56,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (typeof codigo !== 'string' || !/^\d{6}$/.test(codigo)) {
         log.warn('request.validation_failed', { user_id: user.id, motivo: 'formato_codigo' });
         return res.status(400).json({ error: 'Código deve ter 6 dígitos.' });
+      }
+      // Teto de tentativas (migr. 639). Seis códigos valem a cada chute, e sem
+      // teto um script com o próprio login acha um em minutos. O contador sobe
+      // ANTES de conferir e é atômico no banco, então disparar em paralelo não
+      // fura. Sem resposta do contador, ninguém registra — mesma régua do dedup.
+      const { data: tentativas, error: tentErr } = await admin.rpc('contar_tentativa_codigo_ponto', {
+        p_user: user.id,
+        p_janela: currentWindowId(),
+      });
+      if (tentErr || typeof tentativas !== 'number') {
+        log.error('codigo.contador_unavailable', tentErr, { user_id: user.id, ...descreverErro(tentErr) });
+        return res.status(503).json({ error: MSG_CONEXAO });
+      }
+      if (tentativas > MAX_TENTATIVAS_CODIGO) {
+        log.warn('codigo.rate_limited', { user_id: user.id, tentativas });
+        return res.status(429).json({ error: 'Muitas tentativas. Aguarde o próximo código (até 2 minutos).' });
       }
       checkpoint = verifyCodigo(codigo, qrSecret);
       if (!checkpoint) {

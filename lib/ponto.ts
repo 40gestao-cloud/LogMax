@@ -94,7 +94,8 @@ export function acreDayBoundsIso(now: Date = new Date()): { inicio: string; fim:
  *
  * Domínio efetivo: 10^6 = 1.000.000 valores por checkpoint a cada 2 min.
  * Risco de brute-force aceitável: 6 dígitos ≈ 1 em 1M por tentativa, com
- * janela curta. Considerar rate-limit no endpoint se virar alvo.
+ * janela curta. O endpoint limita a 5 tentativas por aluno por janela
+ * (migr. 639), o que tira a força bruta do alcance.
  */
 export function generateCodigo(checkpoint: string, windowId: number, secret: string): string {
   const hmac = createHmac('sha256', secret)
