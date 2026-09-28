@@ -8794,7 +8794,7 @@
   },
   "responder_pesquisa": {
    "gatilho": false,
-   "secdef": false,
+   "secdef": true,
    "grava": [
     "pesquisa_resposta_itens",
     "pesquisa_respostas"
@@ -8804,7 +8804,10 @@
     "pesquisas",
     "user_profiles"
    ],
-   "chama": []
+   "chama": [
+    "_assert_rpc",
+    "auth_pode_filial"
+   ]
   },
   "responder_revisao_auditoria": {
    "gatilho": false,

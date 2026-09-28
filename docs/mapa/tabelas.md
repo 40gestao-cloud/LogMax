@@ -80,7 +80,7 @@ Para cada tabela: quem grava (tela, RPC, gatilho, servidor), quem lê, os gatilh
 - **Gatilhos nesta tabela:**
   - `trg_historico` — AFTER INSERT/UPDATE → [registrar_historico](funcoes.md#f-registrar_historico) · grava em [historico_operacoes](tabelas.md#t-historico_operacoes)
 - **Aponta para:** requisicao_id → [requisicoes](tabelas.md#t-requisicoes)
-- **RLS:** DELETE `compras_delete` (setores: compras · gerente da filial · Matriz/professor); INSERT `compras_insert` (qualquer um da própria filial · Matriz/professor); SELECT `compras_select` (setores: compras · gerente da filial · Matriz/professor); UPDATE `compras_update` (setores: compras · gerente da filial · Matriz/professor)
+- **RLS:** DELETE `compras_delete` (setores: compras · gerente da filial · Matriz/professor); SELECT `compras_select` (setores: compras · gerente da filial · Matriz/professor); UPDATE `compras_update` (setores: compras · gerente da filial · Matriz/professor)
 
 <a id="t-aprovacoes_estoque"></a>
 ## aprovacoes_estoque
@@ -94,7 +94,7 @@ Para cada tabela: quem grava (tela, RPC, gatilho, servidor), quem lê, os gatilh
 - **Gatilhos nesta tabela:**
   - `trg_historico` — AFTER INSERT/UPDATE → [registrar_historico](funcoes.md#f-registrar_historico) · grava em [historico_operacoes](tabelas.md#t-historico_operacoes)
 - **Aponta para:** requisicao_estoque_id → [requisicoes_estoque](tabelas.md#t-requisicoes_estoque)
-- **RLS:** DELETE `logist_delete` (setores: logistica · gerente da filial · Matriz/professor); INSERT `logist_insert` (qualquer um da própria filial · Matriz/professor); SELECT `logist_select` (setores: logistica · gerente da filial · Matriz/professor); UPDATE `logist_update` (setores: logistica · gerente da filial · Matriz/professor)
+- **RLS:** DELETE `logist_delete` (setores: logistica · gerente da filial · Matriz/professor); SELECT `logist_select` (setores: logistica · gerente da filial · Matriz/professor); UPDATE `logist_update` (setores: logistica · gerente da filial · Matriz/professor)
 
 <a id="t-apuracao_bonus_itens"></a>
 ## apuracao_bonus_itens
@@ -400,7 +400,7 @@ Para cada tabela: quem grava (tela, RPC, gatilho, servidor), quem lê, os gatilh
   - `trg_carimba_exclusao` — BEFORE UPDATE → [fn_carimba_exclusao](funcoes.md#f-fn_carimba_exclusao)
   - `trg_taxonomia_padrao_protege` — BEFORE INSERT/UPDATE/DELETE → [fn_taxonomia_padrao_protege](funcoes.md#f-fn_taxonomia_padrao_protege)
 - **Ao apagar uma linha daqui:** [orcamento_mensal_categoria](tabelas.md#t-orcamento_mensal_categoria).categoria_id APAGA JUNTO (CASCADE); [produtos](tabelas.md#t-produtos).categoria_id zera o vínculo (SET NULL); [subcategorias_produto](tabelas.md#t-subcategorias_produto).categoria_id APAGA JUNTO (CASCADE)
-- **RLS:** ALL `categorias_produto_write` (qualquer um da própria filial · Matriz/professor); SELECT `categorias_produto_select` (qualquer um da própria filial · Matriz/professor)
+- **RLS:** ALL `categorias_produto_write` (setores: compras, logistica · gerente da filial · Matriz/professor); SELECT `categorias_produto_select` (qualquer um da própria filial · Matriz/professor)
 
 <a id="t-centros_custo"></a>
 ## centros_custo
@@ -638,7 +638,7 @@ Para cada tabela: quem grava (tela, RPC, gatilho, servidor), quem lê, os gatilh
   - 1. [contas_pagar](tabelas.md#t-contas_pagar) → [conta_pagar_avancar_rescisao](funcoes.md#f-conta_pagar_avancar_rescisao) → [maxbank_transacoes](tabelas.md#t-maxbank_transacoes)
 - **Ao apagar uma linha daqui:** [conciliacoes_maquininha](tabelas.md#t-conciliacoes_maquininha).conta_pagar_id zera o vínculo (SET NULL); [contas_pagar_baixas](tabelas.md#t-contas_pagar_baixas).conta_id APAGA JUNTO (CASCADE); [filial_investimentos](tabelas.md#t-filial_investimentos).conta_pagar_id zera o vínculo (SET NULL); [folha_credito_falhas](tabelas.md#t-folha_credito_falhas).conta_pagar_id zera o vínculo (SET NULL); [notas_recebidas](tabelas.md#t-notas_recebidas).conta_pagar_id zera o vínculo (SET NULL); [parcelas_emprestimo](tabelas.md#t-parcelas_emprestimo).contas_pagar_id zera o vínculo (SET NULL); [rateio_administrativo_itens](tabelas.md#t-rateio_administrativo_itens).conta_pagar_id zera o vínculo (SET NULL)
 - **Aponta para:** banco_id → [caixa_bancos](tabelas.md#t-caixa_bancos); centro_custo_id → [centros_custo](tabelas.md#t-centros_custo); filial_investimento_id → [filial_investimentos](tabelas.md#t-filial_investimentos); folha_pagamento_id → [folha_pagamento](tabelas.md#t-folha_pagamento); fornecedor_id → [fornecedores](tabelas.md#t-fornecedores); pedido_id → [pedidos](tabelas.md#t-pedidos); rescisao_id → [rescisoes](tabelas.md#t-rescisoes)
-- **RLS:** DELETE `fin_delete` (setores: financeiro · gerente da filial · Matriz/professor); INSERT `fin_insert` (qualquer um da própria filial · Matriz/professor); SELECT `fin_select` (setores: financeiro · gerente da filial · Matriz/professor); UPDATE `fin_update` (setores: financeiro · gerente da filial · Matriz/professor)
+- **RLS:** DELETE `fin_delete` (setores: financeiro · gerente da filial · Matriz/professor); INSERT `fin_insert` (setores: financeiro · gerente da filial · Matriz/professor); SELECT `fin_select` (setores: financeiro · gerente da filial · Matriz/professor); UPDATE `fin_update` (setores: financeiro · gerente da filial · Matriz/professor)
 
 <a id="t-contas_pagar_baixas"></a>
 ## contas_pagar_baixas
@@ -672,7 +672,7 @@ Para cada tabela: quem grava (tela, RPC, gatilho, servidor), quem lê, os gatilh
   - 1. [contas_receber](tabelas.md#t-contas_receber) → [_conta_receber_fecha_pedido_venda](funcoes.md#f-_conta_receber_fecha_pedido_venda) → [pedidos_venda](tabelas.md#t-pedidos_venda)
 - **Ao apagar uma linha daqui:** [conciliacao_maquininha_itens](tabelas.md#t-conciliacao_maquininha_itens).conta_receber_id APAGA JUNTO (CASCADE); [contas_receber_baixas](tabelas.md#t-contas_receber_baixas).conta_id APAGA JUNTO (CASCADE); [notas_emitidas](tabelas.md#t-notas_emitidas).conta_receber_id zera o vínculo (SET NULL); [parcelas_emprestimo](tabelas.md#t-parcelas_emprestimo).contas_receber_id zera o vínculo (SET NULL); [pedidos_venda](tabelas.md#t-pedidos_venda).conta_receber_id zera o vínculo (SET NULL); [rateio_administrativo_itens](tabelas.md#t-rateio_administrativo_itens).conta_receber_id zera o vínculo (SET NULL)
 - **Aponta para:** banco_id → [caixa_bancos](tabelas.md#t-caixa_bancos); cliente_id → [clientes](tabelas.md#t-clientes); forma_pagamento_id → [formas_pagamento](tabelas.md#t-formas_pagamento); pedido_venda_id → [pedidos_venda](tabelas.md#t-pedidos_venda); produto_patrimonio_id → [produtos](tabelas.md#t-produtos); venda_id → [vendas](tabelas.md#t-vendas)
-- **RLS:** DELETE `fin_delete` (setores: financeiro · gerente da filial · Matriz/professor); INSERT `fin_insert` (qualquer um da própria filial · Matriz/professor); SELECT `fin_select` (setores: financeiro · gerente da filial · Matriz/professor); UPDATE `fin_update` (setores: financeiro · gerente da filial · Matriz/professor)
+- **RLS:** DELETE `fin_delete` (setores: financeiro · gerente da filial · Matriz/professor); INSERT `fin_insert` (setores: financeiro · gerente da filial · Matriz/professor); SELECT `fin_select` (setores: financeiro · gerente da filial · Matriz/professor); UPDATE `fin_update` (setores: financeiro · gerente da filial · Matriz/professor)
 
 <a id="t-contas_receber_baixas"></a>
 ## contas_receber_baixas
@@ -1261,7 +1261,7 @@ Para cada tabela: quem grava (tela, RPC, gatilho, servidor), quem lê, os gatilh
 - **Telas que leem:** —
 - **Gatilhos nesta tabela:**
   - `trg_auditoria` — BEFORE INSERT/UPDATE → [set_auditoria_campos](funcoes.md#f-set_auditoria_campos)
-- **RLS:** ALL `mapeamentos_rateio_write` (qualquer um da própria filial · Matriz/professor); SELECT `mapeamentos_rateio_select` (qualquer um da própria filial · Matriz/professor)
+- **RLS:** SELECT `mapeamentos_rateio_select` (qualquer um da própria filial · Matriz/professor)
 
 <a id="t-marketing_arte_feedback"></a>
 ## marketing_arte_feedback
@@ -1621,7 +1621,7 @@ Para cada tabela: quem grava (tela, RPC, gatilho, servidor), quem lê, os gatilh
 - **Telas que leem:** [Matriz › Briefing Diário](telas.md#s-briefing-diario), [Compras › Cotações](telas.md#s-compras-cotações), [Compras › Pedidos](telas.md#s-compras-pedidos), [Financeiro › Aprovações de Cotação](telas.md#s-financeiro-aprovaçõesdecotação), [Financeiro › Aprovações de Orçamento](telas.md#s-financeiro-aprovaçõesdeorçamento), [Marketing › Promoções](telas.md#s-marketing-promoções), [Recursos Humanos › Treinamentos](telas.md#s-rh-treinamentos), [Matriz › Governança › Cliente Especial](telas.md#s-vendas-clienteespecial), [Vendas › Orçamentos](telas.md#s-vendas-orçamentos)
 - **RPCs que leem:** [lembrar_avaliacoes_pendentes](funcoes.md#f-lembrar_avaliacoes_pendentes), [marcar_notificacoes_lidas](funcoes.md#f-marcar_notificacoes_lidas), [marcar_todas_lidas](funcoes.md#f-marcar_todas_lidas)
 - **Ao apagar uma linha daqui:** [notificacoes_lidas](tabelas.md#t-notificacoes_lidas).notificacao_id APAGA JUNTO (CASCADE)
-- **RLS:** DELETE `notif_delete` (Matriz/professor); INSERT `notif_insert` (Matriz/professor); SELECT `notif_read` (qualquer um da própria filial · Matriz/professor); UPDATE `notif_update` (qualquer um da própria filial · Matriz/professor)
+- **RLS:** DELETE `notif_delete` (Matriz/professor); INSERT `notif_insert` (Matriz/professor); SELECT `notif_read` (qualquer um da própria filial · Matriz/professor)
 
 <a id="t-notificacoes_lidas"></a>
 ## notificacoes_lidas
@@ -1784,7 +1784,7 @@ Para cada tabela: quem grava (tela, RPC, gatilho, servidor), quem lê, os gatilh
 - **Telas que leem:** [Minhas pesquisas *(rota minhas-pesquisas)*](telas.md#s-minhas-pesquisas), [Recursos Humanos › Pesquisas](telas.md#s-rh-pesquisas)
 - **Ao apagar uma linha daqui:** [pesquisa_resposta_itens](tabelas.md#t-pesquisa_resposta_itens).pergunta_id APAGA JUNTO (CASCADE)
 - **Aponta para:** pesquisa_id → [pesquisas](tabelas.md#t-pesquisas)
-- **RLS:** ALL `pesquisa_perguntas_write` (Matriz/professor); SELECT `pesquisa_perguntas_select` (Matriz/professor)
+- **RLS:** ALL `pesquisa_perguntas_write` (setores: rh · gerente da filial · Matriz/professor); SELECT `pesquisa_perguntas_select` (Matriz/professor)
 
 <a id="t-pesquisa_resposta_itens"></a>
 ## pesquisa_resposta_itens
@@ -1794,7 +1794,7 @@ Para cada tabela: quem grava (tela, RPC, gatilho, servidor), quem lê, os gatilh
 - **RPCs que gravam:** [responder_pesquisa](funcoes.md#f-responder_pesquisa)
 - **Telas que leem:** [Recursos Humanos › Pesquisas](telas.md#s-rh-pesquisas)
 - **Aponta para:** pergunta_id → [pesquisa_perguntas](tabelas.md#t-pesquisa_perguntas); resposta_id → [pesquisa_respostas](tabelas.md#t-pesquisa_respostas)
-- **RLS:** ALL `pesquisa_resposta_itens_write` (Matriz/professor); SELECT `pesquisa_resposta_itens_select` (Matriz/professor)
+- **RLS:** SELECT `pesquisa_resposta_itens_select` (setores: rh · gerente da filial · Matriz/professor)
 
 <a id="t-pesquisa_respostas"></a>
 ## pesquisa_respostas
@@ -1806,7 +1806,7 @@ Para cada tabela: quem grava (tela, RPC, gatilho, servidor), quem lê, os gatilh
 - **RPCs que leem:** [resetar_dados_da_filial](funcoes.md#f-resetar_dados_da_filial), [responder_pesquisa](funcoes.md#f-responder_pesquisa)
 - **Ao apagar uma linha daqui:** [pesquisa_resposta_itens](tabelas.md#t-pesquisa_resposta_itens).resposta_id APAGA JUNTO (CASCADE)
 - **Aponta para:** pesquisa_id → [pesquisas](tabelas.md#t-pesquisas)
-- **RLS:** ALL `pesquisa_respostas_write` (Matriz/professor); SELECT `pesquisa_respostas_select` (Matriz/professor)
+- **RLS:** SELECT `pesquisa_respostas_select` (setores: rh · gerente da filial · Matriz/professor)
 
 <a id="t-pesquisas"></a>
 ## pesquisas
@@ -1816,7 +1816,7 @@ Para cada tabela: quem grava (tela, RPC, gatilho, servidor), quem lê, os gatilh
 - **Telas que leem:** [Início](telas.md#s-inicio), [Minhas pesquisas *(rota minhas-pesquisas)*](telas.md#s-minhas-pesquisas), [Recursos Humanos › Pesquisas](telas.md#s-rh-pesquisas)
 - **RPCs que leem:** [resetar_dados_da_filial](funcoes.md#f-resetar_dados_da_filial), [responder_pesquisa](funcoes.md#f-responder_pesquisa)
 - **Ao apagar uma linha daqui:** [pesquisa_perguntas](tabelas.md#t-pesquisa_perguntas).pesquisa_id APAGA JUNTO (CASCADE); [pesquisa_respostas](tabelas.md#t-pesquisa_respostas).pesquisa_id APAGA JUNTO (CASCADE)
-- **RLS:** ALL `pesquisas_write` (qualquer um da própria filial · Matriz/professor); SELECT `pesquisas_select` (qualquer um da própria filial · Matriz/professor)
+- **RLS:** ALL `pesquisas_write` (setores: rh · gerente da filial · Matriz/professor); SELECT `pesquisas_select` (qualquer um da própria filial · Matriz/professor)
 
 <a id="t-pix_pendentes"></a>
 ## pix_pendentes
@@ -1976,7 +1976,7 @@ Para cada tabela: quem grava (tela, RPC, gatilho, servidor), quem lê, os gatilh
   - `trg_unidade_imutavel_com_saldo` — BEFORE UPDATE → [fn_unidade_imutavel_com_saldo](funcoes.md#f-fn_unidade_imutavel_com_saldo)
 - **Ao apagar uma linha daqui:** [ajustes_custo_compra](tabelas.md#t-ajustes_custo_compra).produto_id zera o vínculo (SET NULL); [consumos_material](tabelas.md#t-consumos_material).produto_id bloqueia (NO ACTION); [contas_receber](tabelas.md#t-contas_receber).produto_patrimonio_id bloqueia (NO ACTION); [devolucoes_fornecedor](tabelas.md#t-devolucoes_fornecedor).produto_id zera o vínculo (SET NULL); [expedicao](tabelas.md#t-expedicao).produto_id zera o vínculo (SET NULL); [filial_investimentos](tabelas.md#t-filial_investimentos).produto_patrimonio_id zera o vínculo (SET NULL); [inventarios](tabelas.md#t-inventarios).produto_id zera o vínculo (SET NULL); [itens_campanha](tabelas.md#t-itens_campanha).produto_id APAGA JUNTO (CASCADE); [itens_devolucao](tabelas.md#t-itens_devolucao).produto_id bloqueia (NO ACTION); [itens_venda](tabelas.md#t-itens_venda).produto_id zera o vínculo (SET NULL); [marketing_promocoes](tabelas.md#t-marketing_promocoes).produto_id zera o vínculo (SET NULL); [movimentacoes_estoque](tabelas.md#t-movimentacoes_estoque).produto_id zera o vínculo (SET NULL); [pedidos](tabelas.md#t-pedidos).produto_id bloqueia (NO ACTION); [pedidos_online_itens](tabelas.md#t-pedidos_online_itens).produto_id bloqueia (RESTRICT); [produto_unidades](tabelas.md#t-produto_unidades).produto_id APAGA JUNTO (CASCADE); [produtos_custo](tabelas.md#t-produtos_custo).produto_id APAGA JUNTO (CASCADE); [requisicoes](tabelas.md#t-requisicoes).produto_id bloqueia (NO ACTION); [requisicoes_estoque](tabelas.md#t-requisicoes_estoque).produto_id zera o vínculo (SET NULL); [vencimentos_estoque](tabelas.md#t-vencimentos_estoque).produto_id zera o vínculo (SET NULL)
 - **Aponta para:** categoria_id → [categorias_produto](tabelas.md#t-categorias_produto); fornecedor_id → [fornecedores](tabelas.md#t-fornecedores); subcategoria_id → [subcategorias_produto](tabelas.md#t-subcategorias_produto); correcao_responsavel_id → [user_profiles](tabelas.md#t-user_profiles); correcao_solicitada_por → [user_profiles](tabelas.md#t-user_profiles)
-- **RLS:** DELETE `delete_produtos` (setores: compras, logistica · gerente da filial · Matriz/professor); INSERT `write_produtos` (qualquer um da própria filial · Matriz/professor); SELECT `produtos_select_filial` (qualquer um da própria filial · Matriz/professor); UPDATE `update_produtos` (qualquer um da própria filial · Matriz/professor)
+- **RLS:** DELETE `delete_produtos` (setores: compras, logistica · gerente da filial · Matriz/professor); INSERT `write_produtos` (setores: compras, logistica · gerente da filial · Matriz/professor); SELECT `produtos_select_filial` (qualquer um da própria filial · Matriz/professor); UPDATE `update_produtos` (setores: compras, logistica, vendas · gerente da filial · Matriz/professor)
 
 <a id="t-produtos_codigo_reserva"></a>
 ## produtos_codigo_reserva
@@ -2145,7 +2145,7 @@ Para cada tabela: quem grava (tela, RPC, gatilho, servidor), quem lê, os gatilh
   - 1. [requisicoes](tabelas.md#t-requisicoes) → [aprovacao_segue_a_requisicao](funcoes.md#f-aprovacao_segue_a_requisicao) → [aprovacoes_compras](tabelas.md#t-aprovacoes_compras)
 - **Ao apagar uma linha daqui:** [aprovacoes_compras](tabelas.md#t-aprovacoes_compras).requisicao_id APAGA JUNTO (CASCADE); [cotacoes](tabelas.md#t-cotacoes).requisicao_id zera o vínculo (SET NULL); [pedidos](tabelas.md#t-pedidos).requisicao_id zera o vínculo (SET NULL); [requisicao_ciencia](tabelas.md#t-requisicao_ciencia).requisicao_id APAGA JUNTO (CASCADE)
 - **Aponta para:** produto_id → [produtos](tabelas.md#t-produtos); servico_id → [servicos](tabelas.md#t-servicos); correcao_solicitada_por → [user_profiles](tabelas.md#t-user_profiles)
-- **RLS:** DELETE `compras_delete` (Matriz/professor); INSERT `compras_insert` (qualquer um da própria filial · Matriz/professor); SELECT `compras_select` (setores: compras, financeiro, logistica · gerente da filial · Matriz/professor); UPDATE `compras_update` (setores: compras · gerente da filial · Matriz/professor)
+- **RLS:** DELETE `compras_delete` (Matriz/professor); SELECT `compras_select` (setores: compras, financeiro, logistica · gerente da filial · Matriz/professor); UPDATE `compras_update` (setores: compras · gerente da filial · Matriz/professor)
 
 <a id="t-requisicoes_estoque"></a>
 ## requisicoes_estoque
@@ -2166,7 +2166,7 @@ Para cada tabela: quem grava (tela, RPC, gatilho, servidor), quem lê, os gatilh
   - 1. [requisicoes_estoque](tabelas.md#t-requisicoes_estoque) → [aprovacao_estoque_segue_a_requisicao](funcoes.md#f-aprovacao_estoque_segue_a_requisicao) → [aprovacoes_estoque](tabelas.md#t-aprovacoes_estoque)
 - **Ao apagar uma linha daqui:** [aprovacoes_estoque](tabelas.md#t-aprovacoes_estoque).requisicao_estoque_id APAGA JUNTO (CASCADE); [consumos_material](tabelas.md#t-consumos_material).requisicao_estoque_id APAGA JUNTO (CASCADE); [expedicao](tabelas.md#t-expedicao).requisicao_id zera o vínculo (SET NULL); [movimentacoes_estoque](tabelas.md#t-movimentacoes_estoque).requisicao_estoque_id zera o vínculo (SET NULL); [requisicao_estoque_ciencia](tabelas.md#t-requisicao_estoque_ciencia).requisicao_estoque_id APAGA JUNTO (CASCADE)
 - **Aponta para:** centro_custo_id → [centros_custo](tabelas.md#t-centros_custo); produto_id → [produtos](tabelas.md#t-produtos); correcao_solicitada_por → [user_profiles](tabelas.md#t-user_profiles)
-- **RLS:** DELETE `logist_delete` (setores: logistica · gerente da filial · Matriz/professor); INSERT `logist_insert` (qualquer um da própria filial · Matriz/professor); SELECT `logist_select` (setores: logistica · gerente da filial · Matriz/professor); UPDATE `logist_update` (setores: logistica · gerente da filial · Matriz/professor)
+- **RLS:** DELETE `logist_delete` (setores: logistica · gerente da filial · Matriz/professor); SELECT `logist_select` (setores: logistica · gerente da filial · Matriz/professor); UPDATE `logist_update` (setores: logistica · gerente da filial · Matriz/professor)
 
 <a id="t-rescisoes"></a>
 ## rescisoes
@@ -2257,7 +2257,7 @@ Para cada tabela: quem grava (tela, RPC, gatilho, servidor), quem lê, os gatilh
   - `trg_taxonomia_padrao_protege` — BEFORE INSERT/UPDATE/DELETE → [fn_taxonomia_padrao_protege](funcoes.md#f-fn_taxonomia_padrao_protege)
 - **Ao apagar uma linha daqui:** [produtos](tabelas.md#t-produtos).subcategoria_id zera o vínculo (SET NULL)
 - **Aponta para:** categoria_id → [categorias_produto](tabelas.md#t-categorias_produto)
-- **RLS:** ALL `subcategorias_write` (Matriz/professor); SELECT `subcategorias_select` (Matriz/professor)
+- **RLS:** ALL `subcategorias_write` (setores: compras, logistica · gerente da filial · Matriz/professor); SELECT `subcategorias_select` (Matriz/professor)
 
 <a id="t-tarefas"></a>
 ## tarefas
@@ -2266,7 +2266,7 @@ Para cada tabela: quem grava (tela, RPC, gatilho, servidor), quem lê, os gatilh
 - **RPCs que gravam:** [descartar_tarefa_briefing](funcoes.md#f-descartar_tarefa_briefing), [editar_tarefa_briefing](funcoes.md#f-editar_tarefa_briefing), [encerrar_revisao_auditoria](funcoes.md#f-encerrar_revisao_auditoria), [excluir_briefing_cascade](funcoes.md#f-excluir_briefing_cascade)
 - **Telas que leem:** —
 - **Aponta para:** briefing_id → [briefings_diarios](tabelas.md#t-briefings_diarios)
-- **RLS:** ALL `tarefas_write` (qualquer um da própria filial · Matriz/professor); SELECT `tarefas_select` (qualquer um da própria filial · Matriz/professor)
+- **RLS:** ALL `tarefas_write` (Matriz/professor); SELECT `tarefas_select` (qualquer um da própria filial · Matriz/professor)
 
 <a id="t-tarefas_taticas"></a>
 ## tarefas_taticas
