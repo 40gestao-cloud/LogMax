@@ -38,8 +38,9 @@ const DDL_POLICY = /\b(?:CREATE|ALTER)\s+POLICY\b[\s\S]*?;/gi;
 const PADROES: { nome: string; re: RegExp; conserto: string }[] = [
   {
     nome: 'helper auth_* sem argumento, crua',
-    // Lookbehind: `( SELECT auth_x() ...)` já está certo.
-    re: /(?<!SELECT\s)\bauth_[a-z_]+\(\)/g,
+    // Lookbehind: `( SELECT auth_x() ...)` já está certo, com ou sem `public.`
+    // na frente — a 654 escreve `(SELECT public.auth_user_role())`.
+    re: /(?<!SELECT\s(?:public\.)?)\bauth_[a-z_]+\(\)/g,
     conserto: 'troque por (SELECT auth_x()) — array precisa de cast: ((SELECT auth_user_setores())::text[])',
   },
   {

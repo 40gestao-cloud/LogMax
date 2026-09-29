@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, lazy, Suspense } from 'react';
 import { motion } from 'motion/react';
-import { Presentation, Trash2, Loader2, Eye, RotateCcw, Inbox, FileUp, FileText, Search, Users } from 'lucide-react';
+import { Presentation, Trash2, Loader2, Eye, RotateCcw, Inbox, FileUp, FileText, Search, Users, ShieldCheck, User } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { PageLoadingFallback, LoadingSpinner, AbaComContador, SecaoFormulario, CardContador, COR_ABA, type CorAba } from '../components/ui';
 import { MenuMais, ItemMenu, CABECALHO_TABELA } from '../components/MenuMais';
@@ -57,15 +57,41 @@ const extractStoragePath = (publicUrl: string): string | null => {
   return idx < 0 ? null : decodeURIComponent(publicUrl.slice(idx + marker.length));
 };
 
+// ── Abas por autor: Admin Master · Gerente · Colaborador ─────────────────
+//
+// Quem vê o quê é a RLS que decide (migr. 655): o admin vê tudo; o gerente vê
+// as dele e as dos colaboradores da unidade; o colaborador, só as próprias. A
+// tela só não oferece aba que para aquele papel viria sempre vazia.
+//
+// CEO e conselheiro caem em Gerente: são a liderança da turma e nenhuma das
+// outras duas caixas descreve o que eles publicam. O admin não aparece no
+// `user_profiles` de quem não é admin (a RLS esconde `role='admin'`), por isso
+// autor sem perfil visível cai em Admin Master — mesma leitura de Documentos.
+type Papel = 'admin' | 'gerente' | 'colaborador';
+type Aba = Papel | 'lixeira';
+const papelDe = (role: string | null | undefined): Papel =>
+  role === undefined || role === 'admin' ? 'admin' : role === 'colaborador' ? 'colaborador' : 'gerente';
+
 const normalizar = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
 
 export const MaxShowsView = ({ showToast, profile }: any) => {
   const confirm = useConfirm();
-  const [tab, setTab] = useState<'ativos' | 'lixeira'>('ativos');
+  const meuPapel = papelDe(profile?.role ?? 'colaborador');
+  // Docente (admin, CEO, conselheiro) enxerga a turma inteira; o gerente, a
+  // equipe dele; o colaborador fica só com a aba dele.
+  const ehDocente = profile?.role === 'admin' || profile?.role === 'ceo' || profile?.is_conselheiro;
+  const abasVisiveis: Papel[] = ehDocente ? ['admin', 'gerente', 'colaborador']
+    : meuPapel === 'gerente' ? ['gerente', 'colaborador'] : ['colaborador'];
+  const [tabEscolhida, setTab] = useState<Aba | null>(null);
+  // Até a pessoa escolher, abre na aba do próprio papel (o perfil pode chegar
+  // depois do primeiro render).
+  const tab: Aba = tabEscolhida && (tabEscolhida === 'lixeira' || abasVisiveis.includes(tabEscolhida))
+    ? tabEscolhida : (abasVisiveis.includes(meuPapel) ? meuPapel : abasVisiveis[0]);
   // Ativas e lixeira numa consulta só: as abas mostram a contagem das duas,
   // e trocar de aba deixa de recarregar a lista.
   const [shows, setShows] = useState<Show[]>([]);
   const [autores, setAutores] = useState<Record<string, string>>({});
+  const [papeis, setPapeis] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [openId, setOpenId] = useState<string | null>(null);
   const [openMode, setOpenMode] = useState<'view' | 'edit'>('edit');
@@ -85,12 +111,18 @@ export const MaxShowsView = ({ showToast, profile }: any) => {
       setShows(rows);
       const ids = [...new Set(rows.map(r => r.user_id).filter(id => id && id !== profile?.id))];
       if (ids.length) {
-        const { data: profs } = await supabase.from('user_profiles').select('id,nome').in('id', ids);
+        const { data: profs } = await supabase.from('user_profiles').select('id,nome,role').in('id', ids);
         const map: Record<string, string> = {};
-        (profs ?? []).forEach((p: any) => { if (p?.id && p?.nome) map[p.id] = p.nome; });
+        const roles: Record<string, string> = {};
+        (profs ?? []).forEach((p: any) => {
+          if (p?.id && p?.nome) map[p.id] = p.nome;
+          if (p?.id) roles[p.id] = String(p.role ?? '');
+        });
         setAutores(map);
+        setPapeis(roles);
       } else {
         setAutores({});
+        setPapeis({});
       }
     }
     setLoading(false);
@@ -139,7 +171,7 @@ export const MaxShowsView = ({ showToast, profile }: any) => {
         showToast?.(`Erro ao cadastrar: ${insErr.message}`, 'error'); return;
       }
       showToast?.('PDF importado com sucesso.', 'success');
-      setTab('ativos');
+      setTab(meuPapel);
       load();
     } finally {
       setUploading(false);
@@ -202,14 +234,16 @@ export const MaxShowsView = ({ showToast, profile }: any) => {
   // colega nao e papel de colega. A migr. 567 recorta a policy em
   // role='admin'; aqui o botao segue a mesma regua, para nao existir botao
   // que so serve para dar erro.
-  const ehDocente = profile?.role === 'admin' || profile?.role === 'ceo' || profile?.is_conselheiro;
   const podeGerirDeOutros = profile?.role === 'admin';
 
   const nomeAutor = useCallback((s: Show) => autores[s.user_id] ?? s.user_id.slice(0, 8), [autores]);
 
   const ativos = useMemo(() => shows.filter(s => !s.deleted_at), [shows]);
   const lixeira = useMemo(() => shows.filter(s => s.deleted_at), [shows]);
-  const daAba = tab === 'ativos' ? ativos : lixeira;
+  const papelDoShow = useCallback((s: Show): Papel =>
+    s.user_id === profile?.id ? meuPapel : papelDe(papeis[s.user_id]), [papeis, profile?.id, meuPapel]);
+  const daAba = useMemo(() => tab === 'lixeira' ? lixeira : ativos.filter(s => papelDoShow(s) === tab),
+    [tab, ativos, lixeira, papelDoShow]);
   const termo = normalizar(busca.trim());
   const filtrados = useMemo(() => !termo ? daAba : daAba.filter(s =>
     normalizar(`${s.titulo ?? ''} ${s.arquivo_nome ?? ''} ${s.user_id !== profile?.id ? nomeAutor(s) : ''}`).includes(termo)
@@ -218,7 +252,11 @@ export const MaxShowsView = ({ showToast, profile }: any) => {
   const outros = filtrados.filter(s => s.user_id !== profile?.id);
 
   const meusAtivos = ativos.filter(s => s.user_id === profile?.id);
-  const espacoUsado = meusAtivos.reduce((t, s) => t + (s.arquivo_tamanho ?? 0), 0);
+  // Soma o que a pessoa enxerga, não só o dela: com "Minhas apresentações" ao
+  // lado, o card antigo (só o próprio) fazia o admin ler 74 KB com um PDF de
+  // 6,7 MB do gerente na lista. Lixeira fora — ela tem contador próprio.
+  const espacoUsado = ativos.reduce((t, s) => t + (s.arquivo_tamanho ?? 0), 0);
+  const rotuloEspaco = abasVisiveis.length === 1 ? 'Espaço usado' : ehDocente ? 'Espaço da turma' : 'Espaço da equipe';
 
   if (openId) {
     return (
@@ -251,17 +289,20 @@ export const MaxShowsView = ({ showToast, profile }: any) => {
         <input ref={fileInputRef} type="file" accept="application/pdf" onChange={onFileChosen} className="hidden" />
       </div>
 
-      <div className={`grid gap-3 ${ehDocente ? 'grid-cols-2 lg:grid-cols-4' : 'grid-cols-3'}`}>
+      <div className={`grid gap-3 ${abasVisiveis.length > 1 ? 'grid-cols-2 lg:grid-cols-4' : 'grid-cols-3'}`}>
         <CardContador label="Minhas apresentações" value={meusAtivos.length} tom="azul" />
-        <CardContador label="Espaço usado" value={espacoUsado ? fmtBytes(espacoUsado) : '0'} tom="neutro" />
-        {ehDocente && <CardContador label="Da turma" value={ativos.length - meusAtivos.length} tom="roxo" />}
+        <CardContador label={rotuloEspaco} value={espacoUsado ? fmtBytes(espacoUsado) : '0'} tom="neutro" />
+        {abasVisiveis.length > 1 && <CardContador label={ehDocente ? 'Da turma' : 'Da equipe'} value={ativos.length - meusAtivos.length} tom="roxo" />}
         <CardContador label="Na lixeira" value={lixeira.length} tom="vermelho" />
       </div>
 
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
         <div className="flex flex-wrap gap-3" role="tablist">
-          <AbaComContador label="Apresentações" icon={Presentation} cor="verdeEscuro" n={ativos.length}
-            ativa={tab === 'ativos'} onClick={() => setTab('ativos')} />
+          {ABAS_AUTOR.filter(a => abasVisiveis.includes(a.key)).map(a => (
+            <AbaComContador key={a.key} label={a.label} icon={a.icon} cor={a.cor}
+              n={ativos.filter(s => papelDoShow(s) === a.key).length}
+              ativa={tab === a.key} onClick={() => setTab(a.key)} />
+          ))}
           <AbaComContador label="Lixeira" icon={Inbox} cor="vermelho" n={lixeira.length}
             ativa={tab === 'lixeira'} onClick={() => setTab('lixeira')} />
         </div>
@@ -278,8 +319,9 @@ export const MaxShowsView = ({ showToast, profile }: any) => {
         </div>
       )}
 
-      {loading ? <LoadingSpinner /> : tab === 'ativos' ? (
+      {loading ? <LoadingSpinner /> : tab !== 'lixeira' ? (
         <>
+          {tab === meuPapel && (
           <SecaoFormulario titulo="Minhas apresentações" icon={Presentation} cor="azul" extra={contagem(meus.length)}>
             {meus.length === 0 ? (
               termo ? <Vazio>Nada encontrado para “{busca}”.</Vazio> : (
@@ -294,10 +336,13 @@ export const MaxShowsView = ({ showToast, profile }: any) => {
               <TabelaAtivos shows={meus} onAbrir={abrir} onDelete={excluir} />
             )}
           </SecaoFormulario>
-          {ehDocente && outros.length > 0 && (
-            <SecaoFormulario titulo="Da turma · visão docente" icon={Users} cor="roxo" extra={contagem(outros.length)}>
-              <TabelaAtivos shows={outros} autor={nomeAutor} onAbrir={abrir}
-                onDelete={podeGerirDeOutros ? excluir : undefined} />
+          )}
+          {(tab !== meuPapel || outros.length > 0) && (
+            <SecaoFormulario titulo={tituloOutros(tab, meuPapel, !!ehDocente)} icon={Users} cor="roxo" extra={contagem(outros.length)}>
+              {outros.length === 0
+                ? <Vazio>{termo ? `Nada encontrado para “${busca}”.` : 'Nenhuma apresentação por aqui ainda.'}</Vazio>
+                : <TabelaAtivos shows={outros} autor={nomeAutor} onAbrir={abrir}
+                    onDelete={podeGerirDeOutros ? excluir : undefined} />}
             </SecaoFormulario>
           )}
         </>
@@ -322,6 +367,21 @@ export const MaxShowsView = ({ showToast, profile }: any) => {
       )}
     </motion.div>
   );
+};
+
+const ABAS_AUTOR: { key: Papel; label: string; cor: CorAba; icon: any }[] = [
+  { key: 'admin',       label: 'Admin Master', cor: 'amareloEscuro',  icon: ShieldCheck },
+  { key: 'gerente',     label: 'Gerente',      cor: 'verdeEscuro', icon: Users },
+  { key: 'colaborador', label: 'Colaborador',  cor: 'azul',           icon: User },
+];
+
+// Na aba do próprio papel a seção de baixo é "os outros do mesmo papel"; nas
+// demais, é a aba inteira. O gerente só enxerga colaboradores da unidade dele.
+const tituloOutros = (tab: Papel, meu: Papel, docente: boolean): string => {
+  if (tab === 'admin') return 'Do Admin Master';
+  if (tab === 'gerente') return tab === meu ? 'Outros gerentes' : 'Dos gerentes';
+  if (!docente && meu === 'gerente') return 'Colaboradores da unidade';
+  return tab === meu ? 'Outros colaboradores' : 'Dos colaboradores';
 };
 
 const contagem = (n: number) => `${n} apresentaç${n === 1 ? 'ão' : 'ões'}`;
