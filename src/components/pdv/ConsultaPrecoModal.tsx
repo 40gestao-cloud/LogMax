@@ -63,7 +63,7 @@ export function ConsultaPrecoModal({ produtos, onClose }: {
                 >
                   <span className="tabular-nums text-gray-500 truncate">{p.codigo || p.ean || '—'}</span>
                   <span className="truncate font-semibold text-gray-900">{(p.nome || '').toUpperCase()}</span>
-                  <span className="text-right tabular-nums text-gray-600">Est: {Number(p.estoque ?? 0)}</span>
+                  <span className="text-right tabular-nums text-gray-600">{p.servico_id ? 'Serviço' : `Est: ${Number(p.estoque ?? 0)}`}</span>
                   <span className="text-right font-bold tabular-nums" style={{ color: MONEY }}>R$ {formatBRL(Number(p.preco ?? 0))}</span>
                 </div>
               );

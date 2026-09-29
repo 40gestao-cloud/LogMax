@@ -3,6 +3,7 @@ import { motion } from 'motion/react';
 import { Loader2 } from 'lucide-react';
 import { useFetchData } from '../hooks/useSupabaseData';
 import { ehVendavel } from '../lib/tipoProduto';
+import { ehPrestado } from '../lib/naturezaServico';
 import type { CaixaAberto } from '../hooks/useCaixaAberto';
 import { PDVFecharCaixa } from '../components/PDVFecharCaixa';
 import { useAuth } from '../hooks/useAuth';
@@ -98,6 +99,8 @@ export const PDVViewSupermax = ({
   // continua como rede de segurança pro caso raro de filial nula.
   const { data: produtos, isLoading: loadingProd } = useFetchData<any>('/api/produtosview', { filial: [filial, 'Matriz'] }, true);
   const { data: clientes } = useFetchData<any>('/api/crmview', { filial });
+  // Migr. 659: serviços PRESTADOS (entrega, recarga, montagem de cesta).
+  const { data: servicosCad } = useFetchData<any>('/api/servicosview', { filial });
 
   // Cobranças abandonadas da SuperMax (Pix e cartão). Até agora só o PDV de
   // MaxLook/TechMax varria, e só Pix — a SuperMax acumulava as duas coisas.
@@ -400,10 +403,25 @@ export const PDVViewSupermax = ({
   // o UNIQUE global de produtos.codigo: agora dois produtos ativos podem ter
   // "001" em filiais distintas, e o match por código em processCode/scanner
   // não teria como escolher o certo.
-  const produtosDisponiveis = useMemo(() => produtos
-    .filter((p: any) => (p.status === 'Ativo' || !p.status) && ehVendavel(p.tipo))
-    .filter((p: any) => p.filial === filial),
-  [produtos, filial]);
+  // Migr. 659: o serviço prestado entra na MESMA lista — CÓDIGO, sugestão e
+  // F8 acham "delivery" ou o código do serviço como acham um produto. Chave
+  // `srv:<id>` para não colidir com produto; sem estoque (não há ruptura);
+  // o preço é o do cadastro, que o banco confere de novo.
+  const servicosComoItem = useMemo(() => (servicosCad ?? [])
+    .filter((s: any) => s.filial === filial && ehPrestado(s.natureza) && s.ativo !== false
+      && !s.excluido_em && (s.status ?? 'Ativo') === 'Ativo' && Number(s.valor ?? 0) > 0)
+    .map((s: any) => ({
+      id: `srv:${s.id}`, servico_id: s.id, nome: s.nome, codigo: s.codigo,
+      preco: Number(s.valor), estoque: Number.MAX_SAFE_INTEGER, unidade: 'SV',
+      status: 'Ativo', tipo: 'estoque_venda', filial: s.filial, categoria: 'Serviços',
+    })), [servicosCad, filial]);
+
+  const produtosDisponiveis = useMemo(() => [
+    ...produtos
+      .filter((p: any) => (p.status === 'Ativo' || !p.status) && ehVendavel(p.tipo))
+      .filter((p: any) => p.filial === filial),
+    ...servicosComoItem,
+  ], [produtos, filial, servicosComoItem]);
 
   const subtotal   = cart.reduce((s, i) => s + i.subtotal, 0);
   const { descontoAplicado, totalFinal } = totaisComDesconto(subtotal, desconto);
@@ -503,6 +521,7 @@ export const PDVViewSupermax = ({
         ? { ...jaTem, qtd: novaQtd, subtotal: novaQtd * jaTem.preco_unitario }
         : {
             produto_id:     id,
+            servico_id:     produto?.servico_id,
             nome_produto:   nome,
             ean:            produto?.ean,
             codigo:         produto?.codigo,

@@ -4,7 +4,10 @@ import { fmtQtdArmada as fmtQtd } from '../../lib/pdv/quantidade';
 import { NAVY_DARK, MONEY, RED } from './coresMaxPos';
 
 export interface ItemCupom {
+  /** Chave do cupom. No serviço é `srv:<id>` (migr. 659). */
   produto_id: string;
+  /** Serviço prestado (entrega, recarga): sem estoque, NFS-e, Anexo III. */
+  servico_id?: string;
   nome_produto: string;
   ean?: string;
   codigo?: string;
@@ -72,6 +75,13 @@ export function CupomItens({
               <div className="text-gray-500 truncate">{item.ean || item.codigo || '—'}</div>
               <div className="truncate font-semibold flex items-center gap-2">
                 <span className="truncate">{(item.nome_produto || '').toUpperCase()}</span>
+                {item.servico_id && (
+                  <span className="shrink-0 px-1.5 py-0.5 text-[10px] font-black uppercase tracking-wider rounded border"
+                    style={{ background: '#ccfbf1', color: '#115e59', borderColor: '#14b8a6' }}
+                    title="Serviço prestado: não sai do estoque, vai na NFS-e e é tributado pelo Anexo III do Simples">
+                    Serviço
+                  </span>
+                )}
                 {ofertaDoItem(item.produto_id, item.preco_unitario) && (
                   <span
                     className="shrink-0 px-1.5 py-0.5 text-[10px] font-black uppercase tracking-wider rounded border"
