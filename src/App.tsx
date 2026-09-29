@@ -116,6 +116,7 @@ const PedidosOnlineView                    = lazyView(() => import('./views/Pedi
 const TreinamentoVendasView                = lazyView(() => import('./views/TreinamentoVendasView').then(m => ({ default: m.TreinamentoVendasView })));
 const AlcadasView                          = lazyView(() => import('./views/AlcadasView').then(m => ({ default: m.AlcadasView })));
 const DREView                              = lazyView(() => import('./views/DREView').then(m => ({ default: m.DREView })));
+const PrecificacaoView                     = lazyView(() => import('./views/PrecificacaoView').then(m => ({ default: m.PrecificacaoView })));
 const PromocoesMarketingView               = lazyView(() => import('./views/PromocoesMarketingView').then(m => ({ default: m.PromocoesMarketingView })));
 const CampanhasMarketingView               = lazyView(() => import('./views/CampanhasMarketingView').then(m => ({ default: m.CampanhasMarketingView })));
 const CuponsMarketingView                  = lazyView(() => import('./views/CuponsMarketingView').then(m => ({ default: m.CuponsMarketingView })));
@@ -197,6 +198,7 @@ const PREFETCH_VIEW: Record<string, { preload: () => Promise<unknown> }> = {
   'cadastros-lixeira': LixeiraView,
   'empresa-projetos': GenericCRUDView,
   'financeiro-dre': DREView,
+  'financeiro-precificação': PrecificacaoView,
   'financeiro-centrosdecusto': GenericCRUDView,
   'empresa-condiçõesdepagamento': GenericCRUDView,
   'empresa-formasdepagamento': GenericCRUDView,
@@ -439,6 +441,9 @@ const menuModules: { id: string; label: string; icon: any; submenus: SubmenuItem
       // resultado, não fila de trabalho — e é a tela que responde "deu lucro?",
       // que o resto do módulo não respondia.
       'DRE',
+      // Precificação (migr. 656): regime tributário, taxas, despesas e lucro
+      // desejado por categoria — o markup divisor que o cadastro de produto usa.
+      'Precificação',
       { label: 'Juros & Multa', requireSetor: ['financeiro'] },
       'Aprovações de Cotação', 'Aprovações de Orçamento', 'Aprovações de Promoções', 'Aprovações de Conteúdo',
       { label: 'Alçadas', requireRole: ['admin', 'ceo'] },
@@ -1549,6 +1554,7 @@ function LogMaxAppInner() {
       // Sem filialScoped: centros_custo não tem coluna `filial` — o catálogo é
       // da holding inteira e todo authenticated lê (policy read_authenticated).
       case 'financeiro-dre':                  return <DREView showToast={st} />;
+      case 'financeiro-precificação':         return <PrecificacaoView showToast={st} />;
       // `grupo_dre` (migr. 425) é o que o DRE usa para agrupar despesa. Nasce
       // vazio de propósito: o que ninguém classificou aparece como linha
       // "Não classificado" no relatório, e classificar é a aula.

@@ -38,11 +38,12 @@ import {
   rotuloEmbalagem,
 } from '../lib/unidades';
 import { ATRIBUTOS_PRODUTO, rotuloVariante, atributosPadrao } from '../lib/atributosProduto';
-import { calcMarkup, calcMargem, precoPorMarkup, fmtPct, vendaAbaixoDoCusto } from '../lib/precificacao';
+import { calcMarkup, calcMargem, precoPorMarkupDivisor, deducoesDe, fmtPct, vendaAbaixoDoCusto } from '../lib/precificacao';
 import { TIPOS_PRODUTO, TIPO_LABEL, normalizarTipo, ehVendavel, temEstoque } from '../lib/tipoProduto';
 import { supabase } from '../lib/supabase';
 import { acompanharReservas, RESERVA_COLUNAS, type ReservaLinha } from '../lib/reservasTrabalho';
 import { useReservaTrabalho } from '../hooks/useReservaTrabalho';
+import { useParametrosPrecificacao } from '../hooks/useParametrosPrecificacao';
 import { EMPTY_EXTRAS, parseNum, fmtBRL, SEM_COMPRA } from '../components/produtos/produtoFormComum';
 import { MarkupBadge } from '../components/produtos/MarkupBadge';
 import { EtiquetaPreviewModal } from '../components/produtos/EtiquetaPreviewModal';
@@ -830,21 +831,24 @@ const ProdutosViewInner = ({ showToast, filial, profile, onNavigate }: { showToa
     [categoriasProduto, filial, extras.categoria_id],
   );
 
-  // Markup da categoria (migr. 360). A coluna se chama `margem_alvo` por
-  // legado, mas o COMMENT dela no banco já diz "Markup-alvo" — e é markup que
-  // ela guarda. O rótulo da tela agora concorda com o banco.
-  const markupCategoria = useMemo(() => {
+  // Preço sugerido pelo markup DIVISOR (migr. 656): custo ÷ (1 − imposto −
+  // taxas − despesas − lucro). O lucro vem da categoria; o resto, da filial.
+  // O markup multiplicador digitado livre (`margem_alvo`, migr. 360) não
+  // alimenta mais a sugestão — somava ao custo o que é percentual do preço.
+  const lucroCategoria = useMemo(() => {
     const cat = categoriasProduto.find((c: any) => c.id === extras.categoria_id);
-    const m = cat?.margem_alvo;
-    return m == null || Number(m) <= 0 ? null : Number(m);
+    const l = cat?.lucro_alvo;
+    return l == null || l === '' ? null : Number(l);
   }, [categoriasProduto, extras.categoria_id]);
 
+  const { params: paramsPreco } = useParametrosPrecificacao(filial);
+
   const precoSugerido = useMemo(() => {
-    if (markupCategoria === null) return null;
+    if (lucroCategoria === null || !paramsPreco) return null;
     const custo = parseBRL(extras.preco_custo);
     if (!custo || custo <= 0) return null;
-    return precoPorMarkup(custo, markupCategoria);
-  }, [markupCategoria, extras.preco_custo]);
+    return precoPorMarkupDivisor(custo, deducoesDe(paramsPreco), lucroCategoria);
+  }, [lucroCategoria, paramsPreco, extras.preco_custo]);
   // `validate` fica de fora: ele cobra toda chave de `form`, e `preco` deixou de
   // ser obrigatório para item que não se vende (migr. 440). A checagem base vive
   // em handleSave.
@@ -2098,7 +2102,8 @@ const ProdutosViewInner = ({ showToast, filial, profile, onNavigate }: { showToa
           form={form}
           margemAoVivo={margemAoVivo}
           markupAoVivo={markupAoVivo}
-          markupCategoria={markupCategoria}
+          lucroCategoria={lucroCategoria}
+          paramsPreco={paramsPreco}
           precoAbaixoDoCusto={precoAbaixoDoCusto}
           precoSugerido={precoSugerido}
           setExtras={setExtras}

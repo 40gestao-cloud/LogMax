@@ -196,12 +196,15 @@
     "liberar_codigo_produto",
     "liberar_trabalho",
     "movimentar_estoque",
+    "parametros_precificacao",
     "renovar_trabalho",
     "reservar_codigo_produto",
     "reservar_trabalho",
+    "salvar_parametros_precificacao",
     "vincular_produto_requisicao"
    ],
    "grava_via_rpc": [
+    "filial_precificacao",
     "movimentacoes_estoque",
     "produtos",
     "produtos_codigo_reserva",
@@ -852,6 +855,25 @@
     "gerar_dre"
    ],
    "grava_via_rpc": [],
+   "apis": []
+  },
+  "financeiro-precificação": {
+   "nome": "Financeiro › Precificação",
+   "componente": "PrecificacaoView",
+   "arquivo": "src/views/PrecificacaoView.tsx",
+   "le": [
+    "categorias_produto"
+   ],
+   "grava": [
+    "categorias_produto"
+   ],
+   "rpcs": [
+    "parametros_precificacao",
+    "salvar_parametros_precificacao"
+   ],
+   "grava_via_rpc": [
+    "filial_precificacao"
+   ],
    "apis": []
   },
   "financeiro-juros&multa": {
@@ -3107,6 +3129,29 @@
    ],
    "chama": []
   },
+  "_dre_calculo": {
+   "gatilho": false,
+   "secdef": true,
+   "grava": [],
+   "le": [
+    "ajustes_custo_compra",
+    "centros_custo",
+    "consumos_material",
+    "contas_pagar",
+    "devolucoes",
+    "itens_devolucao",
+    "itens_venda",
+    "parcelas_emprestimo",
+    "produtos",
+    "produtos_custo",
+    "vendas"
+   ],
+   "chama": [
+    "_receita_simples",
+    "_simples_rbt12",
+    "simples_anexo_i"
+   ]
+  },
   "_folha_creditar_e_avancar": {
    "gatilho": false,
    "secdef": true,
@@ -3254,6 +3299,16 @@
     "acre_today"
    ]
   },
+  "_receita_simples": {
+   "gatilho": false,
+   "secdef": true,
+   "grava": [],
+   "le": [
+    "devolucoes",
+    "vendas"
+   ],
+   "chama": []
+  },
   "_reverter_ponto_do_afastamento": {
    "gatilho": false,
    "secdef": true,
@@ -3265,6 +3320,18 @@
    ],
    "chama": [
     "ponto_corte_turma"
+   ]
+  },
+  "_simples_rbt12": {
+   "gatilho": false,
+   "secdef": true,
+   "grava": [],
+   "le": [
+    "filial_precificacao",
+    "vendas"
+   ],
+   "chama": [
+    "_receita_simples"
    ]
   },
   "_sugestao_rejeicao_competicao": {
@@ -6838,21 +6905,10 @@
    "gatilho": false,
    "secdef": true,
    "grava": [],
-   "le": [
-    "ajustes_custo_compra",
-    "centros_custo",
-    "consumos_material",
-    "contas_pagar",
-    "devolucoes",
-    "itens_devolucao",
-    "itens_venda",
-    "parcelas_emprestimo",
-    "produtos",
-    "produtos_custo",
-    "vendas"
-   ],
+   "le": [],
    "chama": [
     "_assert_rpc",
+    "_dre_calculo",
     "auth_gerente_da",
     "auth_in_setor",
     "auth_pode_filial"
@@ -7716,6 +7772,26 @@
    "grava": [],
    "le": [],
    "chama": []
+  },
+  "parametros_precificacao": {
+   "gatilho": false,
+   "secdef": true,
+   "grava": [],
+   "le": [
+    "contas_pagar",
+    "filial_precificacao"
+   ],
+   "chama": [
+    "_assert_rpc",
+    "_dre_calculo",
+    "_receita_simples",
+    "_simples_rbt12",
+    "acre_today",
+    "auth_gerente_da",
+    "auth_in_setor",
+    "auth_pode_filial",
+    "simples_anexo_i"
+   ]
   },
   "parcela_emprestimo_arquivada_e_historico": {
    "gatilho": true,
@@ -9097,6 +9173,21 @@
    ],
    "chama": []
   },
+  "salvar_parametros_precificacao": {
+   "gatilho": false,
+   "secdef": true,
+   "grava": [
+    "filial_precificacao"
+   ],
+   "le": [],
+   "chama": [
+    "_assert_rpc",
+    "auth_gerente_da",
+    "auth_in_setor",
+    "auth_pode_filial",
+    "parametros_precificacao"
+   ]
+  },
   "separar_pedido_venda": {
    "gatilho": false,
    "secdef": true,
@@ -9211,6 +9302,13 @@
    "chama": []
   },
   "similarity_op": {
+   "gatilho": false,
+   "secdef": false,
+   "grava": [],
+   "le": [],
+   "chama": []
+  },
+  "simples_anexo_i": {
    "gatilho": false,
    "secdef": false,
    "grava": [],

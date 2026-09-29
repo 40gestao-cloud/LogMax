@@ -92,6 +92,8 @@ Para cada tela: o que ela lê e grava, as funções do banco que chama, e **quem
 - **Lê:** [categorias_produto](tabelas.md#t-categorias_produto), [subcategorias_produto](tabelas.md#t-subcategorias_produto)
 - **Grava direto:** [categorias_produto](tabelas.md#t-categorias_produto), [subcategorias_produto](tabelas.md#t-subcategorias_produto)
 - **Chama (RPC):** —
+- **⚠ Confira também — outras telas que gravam as mesmas tabelas:**
+  - por [categorias_produto](tabelas.md#t-categorias_produto): [Financeiro › Precificação](telas.md#s-financeiro-precificação)
 
 <a id="s-cadastros-produtos"></a>
 ### Cadastros › Produtos
@@ -99,16 +101,17 @@ Para cada tela: o que ela lê e grava, as funções do banco que chama, e **quem
 - **Rota:** `cadastros-produtos` · **Componente:** `ProdutosView` ([src/views/ProdutosView.tsx](../../src/views/ProdutosView.tsx))
 - **Lê:** [categorias_produto](tabelas.md#t-categorias_produto), [centros_custo](tabelas.md#t-centros_custo), [cotacoes](tabelas.md#t-cotacoes), [fornecedores](tabelas.md#t-fornecedores), [historico_operacoes](tabelas.md#t-historico_operacoes), [movimentacoes_estoque](tabelas.md#t-movimentacoes_estoque), [pedidos](tabelas.md#t-pedidos), [planilhas_trabalho](tabelas.md#t-planilhas_trabalho), [produtos](tabelas.md#t-produtos), [produtos_com_custo](tabelas.md#t-produtos_com_custo), [recebimentos](tabelas.md#t-recebimentos), [requisicoes](tabelas.md#t-requisicoes), [subcategorias_produto](tabelas.md#t-subcategorias_produto), [trabalho_reservas](tabelas.md#t-trabalho_reservas), [user_profiles](tabelas.md#t-user_profiles)
 - **Grava direto:** [movimentacoes_estoque](tabelas.md#t-movimentacoes_estoque), [planilhas_trabalho](tabelas.md#t-planilhas_trabalho), [produtos](tabelas.md#t-produtos), [produtos_custo](tabelas.md#t-produtos_custo)
-- **Chama (RPC):** [concluir_correcao_produto](funcoes.md#f-concluir_correcao_produto), [gerar_grade_variantes](funcoes.md#f-gerar_grade_variantes), [liberar_codigo_produto](funcoes.md#f-liberar_codigo_produto), [liberar_trabalho](funcoes.md#f-liberar_trabalho), [movimentar_estoque](funcoes.md#f-movimentar_estoque), [renovar_trabalho](funcoes.md#f-renovar_trabalho), [reservar_codigo_produto](funcoes.md#f-reservar_codigo_produto), [reservar_trabalho](funcoes.md#f-reservar_trabalho), [vincular_produto_requisicao](funcoes.md#f-vincular_produto_requisicao)
-- **Grava via RPC:** [produtos_codigo_reserva](tabelas.md#t-produtos_codigo_reserva), [requisicoes](tabelas.md#t-requisicoes), [trabalho_reservas](tabelas.md#t-trabalho_reservas)
+- **Chama (RPC):** [concluir_correcao_produto](funcoes.md#f-concluir_correcao_produto), [gerar_grade_variantes](funcoes.md#f-gerar_grade_variantes), [liberar_codigo_produto](funcoes.md#f-liberar_codigo_produto), [liberar_trabalho](funcoes.md#f-liberar_trabalho), [movimentar_estoque](funcoes.md#f-movimentar_estoque), [parametros_precificacao](funcoes.md#f-parametros_precificacao), [renovar_trabalho](funcoes.md#f-renovar_trabalho), [reservar_codigo_produto](funcoes.md#f-reservar_codigo_produto), [reservar_trabalho](funcoes.md#f-reservar_trabalho), [salvar_parametros_precificacao](funcoes.md#f-salvar_parametros_precificacao), [vincular_produto_requisicao](funcoes.md#f-vincular_produto_requisicao)
+- **Grava via RPC:** [filial_precificacao](tabelas.md#t-filial_precificacao), [produtos_codigo_reserva](tabelas.md#t-produtos_codigo_reserva), [requisicoes](tabelas.md#t-requisicoes), [trabalho_reservas](tabelas.md#t-trabalho_reservas)
 - **Escuta em tempo real:** [trabalho_reservas](tabelas.md#t-trabalho_reservas)
 - **Gatilhos levam a mudança até:** [aprovacoes_compras](tabelas.md#t-aprovacoes_compras), [consumos_material](tabelas.md#t-consumos_material)
 - **⚠ Confira também — outras telas que gravam as mesmas tabelas:**
+  - por [filial_precificacao](tabelas.md#t-filial_precificacao): [Financeiro › Precificação](telas.md#s-financeiro-precificação)
   - por [movimentacoes_estoque](tabelas.md#t-movimentacoes_estoque): [Estoque › Expedição](telas.md#s-estoque-expedição), [Estoque › Inventários](telas.md#s-estoque-inventários), [Estoque › Liberar Requisições](telas.md#s-estoque-liberarrequisições), [Estoque › Movimentações](telas.md#s-estoque-movimentações), [Estoque › Pedidos de Venda](telas.md#s-estoque-pedidosdevenda), [Estoque › Recebimentos](telas.md#s-estoque-recebimentos), [Estoque › Validades](telas.md#s-estoque-validades), [Financeiro › Pedidos de Venda](telas.md#s-financeiro-pedidosdevenda), [Requisições › Aprovações](telas.md#s-requisicoes-aprovações), [Vendas › Devoluções](telas.md#s-vendas-devoluções), [Vendas › PDV](telas.md#s-vendas-pdv), [Vendas › Pedidos de Venda](telas.md#s-vendas-pedidosdevenda), [Vendas › Pedidos Online](telas.md#s-vendas-pedidosonline)
   - por [produtos](tabelas.md#t-produtos): [Empresa › Filiais](telas.md#s-empresa-filiais), [Estoque › Movimentações](telas.md#s-estoque-movimentações), [Financeiro › Patrimônio](telas.md#s-financeiro-patrimônio), [Marketing › Vitrinedateladelogin *(rota marketing-vitrinedateladelogin)*](telas.md#s-marketing-vitrinedateladelogin), [Marketing › Vitrinepública *(rota marketing-vitrinepública)*](telas.md#s-marketing-vitrinepública), [Vendas › Pedidos Online](telas.md#s-vendas-pedidosonline)
   - por [produtos_custo](tabelas.md#t-produtos_custo): [Empresa › Filiais](telas.md#s-empresa-filiais), [Financeiro › Contas a pagar](telas.md#s-financeiro-contasapagar), [Financeiro › Patrimônio](telas.md#s-financeiro-patrimônio)
   - por [requisicoes](tabelas.md#t-requisicoes): [Compras › Cotações](telas.md#s-compras-cotações), [Compras › Pedidos](telas.md#s-compras-pedidos), [Compras › Requisições de Compra](telas.md#s-compras-requisiçõesdecompra), [Compras › Sugestões de compras](telas.md#s-compras-sugestõesdecompras), [Financeiro › Aprovações de Cotação](telas.md#s-financeiro-aprovaçõesdecotação), [Requisições › Aprovações](telas.md#s-requisicoes-aprovações), [Requisições › Do Setor](telas.md#s-requisicoes-dosetor)
-- **Arquivos que acessam dados:** `src/components/HistoricoOperacoes.tsx`, `src/hooks/useReservaTrabalho.ts`, `src/hooks/useUserProfile.ts`, `src/lib/importarProdutos.ts`, `src/lib/modelosPlanilha.ts`, `src/lib/planilhasTrabalho.ts`, `src/lib/reservasTrabalho.ts`, `src/views/ProdutosView.tsx`
+- **Arquivos que acessam dados:** `src/components/HistoricoOperacoes.tsx`, `src/hooks/useParametrosPrecificacao.ts`, `src/hooks/useReservaTrabalho.ts`, `src/hooks/useUserProfile.ts`, `src/lib/importarProdutos.ts`, `src/lib/modelosPlanilha.ts`, `src/lib/planilhasTrabalho.ts`, `src/lib/reservasTrabalho.ts`, `src/views/ProdutosView.tsx`
 
 <a id="s-cadastros-fornecedores"></a>
 ### Cadastros › Fornecedores
@@ -467,6 +470,19 @@ Para cada tela: o que ela lê e grava, as funções do banco que chama, e **quem
 - **Lê:** —
 - **Grava direto:** —
 - **Chama (RPC):** [gerar_dre](funcoes.md#f-gerar_dre)
+
+<a id="s-financeiro-precificação"></a>
+### Financeiro › Precificação
+
+- **Rota:** `financeiro-precificação` · **Componente:** `PrecificacaoView` ([src/views/PrecificacaoView.tsx](../../src/views/PrecificacaoView.tsx))
+- **Lê:** [categorias_produto](tabelas.md#t-categorias_produto)
+- **Grava direto:** [categorias_produto](tabelas.md#t-categorias_produto)
+- **Chama (RPC):** [parametros_precificacao](funcoes.md#f-parametros_precificacao), [salvar_parametros_precificacao](funcoes.md#f-salvar_parametros_precificacao)
+- **Grava via RPC:** [filial_precificacao](tabelas.md#t-filial_precificacao)
+- **⚠ Confira também — outras telas que gravam as mesmas tabelas:**
+  - por [categorias_produto](tabelas.md#t-categorias_produto): [Cadastros › Categorias](telas.md#s-cadastros-categorias)
+  - por [filial_precificacao](tabelas.md#t-filial_precificacao): [Cadastros › Produtos](telas.md#s-cadastros-produtos)
+- **Arquivos que acessam dados:** `src/hooks/useParametrosPrecificacao.ts`, `src/views/PrecificacaoView.tsx`
 
 <a id="s-financeiro-juros&multa"></a>
 ### Financeiro › Juros & Multa

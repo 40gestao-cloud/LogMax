@@ -1,8 +1,9 @@
 import type React from 'react';
 import { DollarSign, Percent, TrendingUp } from 'lucide-react';
 import { FormField, SecaoFormulario } from '../ui';
-import { formatBRL, handleMoneyKeyDown } from '../../lib/viewUtils';
-import { corDoMarkup, fmtPct } from '../../lib/precificacao';
+import { formatBRL, handleMoneyKeyDown, parseBRL } from '../../lib/viewUtils';
+import { corDoMarkup, fmtPct, type ParametrosPrecificacao } from '../../lib/precificacao';
+import { ComposicaoPreco } from './ComposicaoPreco';
 import { ehVendavel } from '../../lib/tipoProduto';
 import { type FormProduto, type ExtrasProduto } from './produtoFormComum';
 
@@ -10,7 +11,7 @@ import { type FormProduto, type ExtrasProduto } from './produtoFormComum';
 // Seção do formulário de ProdutosView: o estado é da view e desce com o
 // mesmo nome que tem lá.
 export function SecaoPrecos({
-  custoDaCotacao, errors, clearError, custoObrigatorio, editItem, extras, extrasErrors, form, margemAoVivo, markupAoVivo, markupCategoria, precoAbaixoDoCusto, precoSugerido, setExtras, setExtrasErrors, setForm,
+  custoDaCotacao, errors, clearError, custoObrigatorio, editItem, extras, extrasErrors, form, lucroCategoria, margemAoVivo, markupAoVivo, paramsPreco, precoAbaixoDoCusto, precoSugerido, setExtras, setExtrasErrors, setForm,
 }: {
   custoDaCotacao: boolean;
   errors: Partial<Record<keyof FormProduto, string>>;
@@ -22,7 +23,8 @@ export function SecaoPrecos({
   form: FormProduto;
   margemAoVivo: number | null;
   markupAoVivo: number | null;
-  markupCategoria: any;
+  lucroCategoria: number | null;
+  paramsPreco: ParametrosPrecificacao | null;
   precoAbaixoDoCusto: boolean;
   precoSugerido: any;
   setExtras: React.Dispatch<React.SetStateAction<ExtrasProduto>>;
@@ -55,14 +57,15 @@ export function SecaoPrecos({
             <input type="text" inputMode="numeric" className={`neu-input py-2 px-3 rounded-xl text-sm tabular-nums ${errors.preco ? 'border border-red-500/40' : ''}`}
               value={form.preco} onChange={e => { setForm(f => ({ ...f, preco: formatBRL(e.target.value) })); clearError('preco'); }}
               onKeyDown={handleMoneyKeyDown} placeholder="0,00" />
-            {/* Markup da categoria (migr. 360). Sugere, não impõe: o
-                preço continua editável, e é a diferença entre o
-                sugerido e o praticado que rende a conversa em aula. */}
+            {/* Markup divisor (migr. 656): lucro da categoria + imposto,
+                taxas e despesas da filial. Sugere, não impõe: o preço
+                continua editável, e é a diferença entre o sugerido e o
+                praticado que rende a conversa em aula. */}
             {precoSugerido !== null && (
               <button type="button"
                 onClick={() => { setForm(f => ({ ...f, preco: formatBRL(precoSugerido) })); clearError('preco'); }}
                 className="text-[10px] text-accent hover:underline mt-1 text-left block">
-                Sugerido pelo markup de {markupCategoria}%: <strong>R$ {formatBRL(precoSugerido)}</strong> — clique para usar
+                Sugerido para {fmtPct(lucroCategoria)} de lucro líquido: <strong>R$ {formatBRL(precoSugerido)}</strong> — clique para usar
               </button>
             )}
             {precoAbaixoDoCusto && (
@@ -116,6 +119,13 @@ export function SecaoPrecos({
           </div>
           )}
         </div>
+        {ehVendavel(extras.tipo) && paramsPreco && parseBRL(extras.preco_custo) > 0 && (
+          <ComposicaoPreco
+            custo={parseBRL(extras.preco_custo)}
+            venda={parseBRL(form.preco)}
+            params={paramsPreco}
+            lucroAlvo={lucroCategoria} />
+        )}
       </SecaoFormulario>
     </>
   );

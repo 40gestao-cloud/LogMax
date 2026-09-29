@@ -2,7 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   Plus, Save, Edit2, Trash2, ChevronRight, X, Search,
-  Eye, EyeOff, Percent, ChevronsDownUp, ChevronsUpDown,
+  Eye, EyeOff, ChevronsDownUp, ChevronsUpDown,
 } from 'lucide-react';
 import { useFetchData, dbInsert, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
 import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent, FilialBadge, ModalFormulario, CardContador } from '../components/ui';
@@ -37,7 +37,7 @@ const ICONE_PRESETS = [
   '🎧','🔌','🖥️','🎮','🔋','🏠','🔧','📚','🎁','🐾',
 ];
 
-const EMPTY = { nome: '', cor: '#D4AF37', icone: '📦', imagem_url: '', margem_alvo: '' };
+const EMPTY = { nome: '', cor: '#D4AF37', icone: '📦', imagem_url: '' };
 type FormData = typeof EMPTY;
 
 const normalizar = (s: string) => s.trim().toLowerCase();
@@ -169,14 +169,12 @@ async function anexarImagem(
 }
 
 // ── Form inline ───────────────────────────────────────────────────────────────
-function InlineForm({ initial, onSave, onCancel, saving, comMargem, comSubcategorias, nomeTravado, nomesEmUso, titulo }: {
+function InlineForm({ initial, onSave, onCancel, saving, comSubcategorias, nomeTravado, nomesEmUso, titulo }: {
   initial: FormData;
   /** Grava o cadastro e, só depois, anexa `novaImagem` — ver handleSubmit.
    *  `subcategorias`: os nomes digitados no campo de etiquetas (categoria nova). */
   onSave: (v: FormData, novaImagem: File | null, subcategorias: string[]) => Promise<void>;
   onCancel: () => void; saving: boolean;
-  /** Só categoria tem markup — subcategoria herda o da mãe. */
-  comMargem?: boolean;
   /** Categoria nova já nasce com as filhas: o campo de etiquetas aparece. */
   comSubcategorias?: boolean;
   /** Linha da lista padrão (migr. 629): o nome não muda — o banco recusa. */
@@ -283,18 +281,6 @@ function InlineForm({ initial, onSave, onCancel, saving, comMargem, comSubcatego
               <span className="text-[10px] text-gray-500">Nome da lista padrão — não muda.</span>
             )}
           </FormField>
-
-          {comMargem && (
-            /* Com o custo preenchido, o cadastro de produto sugere o preço a partir daqui. */
-            <FormField label="Markup-alvo">
-              <div className="relative">
-                <input className="neu-input py-2 pl-3 pr-9 rounded-xl w-full text-sm" inputMode="decimal" value={f.margem_alvo}
-                  onChange={e => setF(p => ({ ...p, margem_alvo: e.target.value.replace(/[^0-9,.]/g, '') }))}
-                  placeholder="Vazio = preço livre" />
-                <Percent size={13} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-600 pointer-events-none" />
-              </div>
-            </FormField>
-          )}
 
           {comSubcategorias && (
             <FormField label="Subcategorias">
@@ -455,10 +441,7 @@ function ArvoreCategorias({
     const imagemAntiga = editItem?.imagem_url ?? '';
     const editando = !!editItem;
     try {
-      // String vazia vira NULL: "sem markup" é ausência de regra, não zero por
-      // cento — zero faria o produto sugerir preço igual ao custo.
-      const margem = f.margem_alvo.trim() === '' ? null : Number(f.margem_alvo.replace(',', '.'));
-      const base = { nome: f.nome.trim(), cor: f.cor, icone: f.icone, imagem_url: f.imagem_url || null, margem_alvo: margem };
+      const base = { nome: f.nome.trim(), cor: f.cor, icone: f.icone, imagem_url: f.imagem_url || null };
       const salvo = editando
         ? await dbUpdate<any>('categorias_produto', editItem.id, base)
         : await dbInsert<any>('categorias_produto', { ...base, filial });
@@ -546,7 +529,7 @@ function ArvoreCategorias({
 
       <AnimatePresence>
         {showForm && !editItem && (
-          <InlineForm titulo="Nova categoria própria — fora da lista padrão" comMargem comSubcategorias nomesEmUso={nomesEmUso()} initial={{ ...EMPTY }}
+          <InlineForm titulo="Nova categoria própria — fora da lista padrão" comSubcategorias nomesEmUso={nomesEmUso()} initial={{ ...EMPTY }}
             onSave={handleSave} onCancel={() => setShowForm(false)} saving={saving} />
         )}
       </AnimatePresence>
@@ -580,13 +563,11 @@ function ArvoreCategorias({
               return (
                 <InlineForm key={cat.id}
                   titulo={`Editando "${cat.nome}"`}
-                  comMargem
                   nomeTravado={!!cat.padrao}
                   nomesEmUso={nomesEmUso(cat.id)}
                   initial={{
                     nome: cat.nome, cor: cat.cor ?? '#6b7280', icone: cat.icone ?? '📦',
                     imagem_url: cat.imagem_url ?? '',
-                    margem_alvo: cat.margem_alvo == null ? '' : String(cat.margem_alvo),
                   }}
                   onSave={handleSave} onCancel={() => setEditItem(null)} saving={saving} />
               );
@@ -615,11 +596,11 @@ function ArvoreCategorias({
                         <span className="text-[10px] font-semibold text-gray-400 px-1.5 py-0.5 rounded bg-white/5 tabular-nums">
                           {subs.length === 0 ? 'Sem subcategorias' : `${subs.length} subcategoria${subs.length > 1 ? 's' : ''}`}
                         </span>
-                        {cat.margem_alvo != null && (
-                          <span title="Markup-alvo: percentual acrescentado ao custo para sugerir o preço de venda."
+                        {cat.lucro_alvo != null && (
+                          <span title="Lucro líquido desejado, em % do preço de venda. Definido em Financeiro › Precificação."
                             className="text-[10px] font-semibold px-1.5 py-0.5 rounded tabular-nums"
                             style={{ color: cat.cor ?? '#9ca3af', background: `${cat.cor ?? '#6b7280'}1a` }}>
-                            Markup {String(cat.margem_alvo).replace('.', ',')}%
+                            Lucro {String(cat.lucro_alvo).replace('.', ',')}%
                           </span>
                         )}
                         {subsInativas > 0 && (
@@ -747,7 +728,7 @@ function SubcategoriasDaCategoria({ categoria, canEdit, data, error, reload, sho
           nomesEmUso={nomesEmUso(editItem.id)}
           initial={{
             nome: editItem.nome, cor: editItem.cor ?? '#6b7280', icone: editItem.icone ?? '📦',
-            imagem_url: editItem.imagem_url ?? '', margem_alvo: '',
+            imagem_url: editItem.imagem_url ?? '',
           }}
           onSave={handleSave} onCancel={() => setEditItem(null)} saving={saving} />
       )}

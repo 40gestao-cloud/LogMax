@@ -18,6 +18,12 @@ import {
   corDoMarkup,
   fmtPct,
   vendaAbaixoDoCusto,
+  markupDivisor,
+  precoPorMarkupDivisor,
+  markupEquivalente,
+  composicaoDoPreco,
+  deducoesDe,
+  type ParametrosPrecificacao,
 } from '../src/lib/precificacao';
 
 // 2026-09-15: a turma da contabilidade preencheu custo e venda trocados. O
@@ -152,5 +158,47 @@ describe('a fórmula não volta a se duplicar', () => {
   it.each(TELAS)('%s importa a régua única', (arquivo) => {
     const fonte = readFileSync(arquivo, 'utf-8');
     expect(fonte).toMatch(/from ['"]\.\.\/lib\/precificacao['"]/);
+  });
+});
+
+// Migr. 656 — o preço sai do markup DIVISOR. Imposto, taxa e despesa são
+// percentuais do preço; somá-los ao markup (multiplicador) subprecifica
+// sempre. O exemplo é o da análise que abriu a mudança.
+describe('markup divisor', () => {
+  const d = { impostos: 6, taxas: 2, despesas: 15 };
+
+  it('forma o preço que entrega o lucro pedido', () => {
+    expect(markupDivisor(d, 10)).toBe(0.67);
+    expect(precoPorMarkupDivisor(10, d, 10)).toBe(14.93);
+    const c = composicaoDoPreco(14.93, 10, d)!;
+    expect(c.lucroPct).toBeCloseTo(10, 0);
+  });
+
+  it('o multiplicador com as mesmas fatias quase zera o lucro', () => {
+    const pv = precoPorMarkup(10, 33);
+    expect(pv).toBe(13.3);
+    const c = composicaoDoPreco(pv, 10, d)!;
+    expect(c.lucro).toBeCloseTo(0.24, 1);
+    expect(c.lucroPct).toBeLessThan(2);
+  });
+
+  it('markup equivalente é o que daria o mesmo preço no multiplicador', () => {
+    const mk = markupEquivalente(d, 10)!;
+    expect(precoPorMarkup(10, mk)).toBe(14.93);
+  });
+
+  it('fatias que somam 100% ou mais não têm preço', () => {
+    expect(markupDivisor(d, 77)).toBeNull();
+    expect(precoPorMarkupDivisor(10, d, 80)).toBeNull();
+    expect(markupEquivalente(d, 90)).toBeNull();
+  });
+
+  it('sem custo não sugere preço', () => {
+    expect(precoPorMarkupDivisor(0, d, 10)).toBeNull();
+  });
+
+  it('parâmetros sem histórico entram como zero', () => {
+    const p = { aliquota_efetiva: 4, taxas_pct: null, despesas_pct: null } as unknown as ParametrosPrecificacao;
+    expect(deducoesDe(p)).toEqual({ impostos: 4, taxas: 0, despesas: 0 });
   });
 });

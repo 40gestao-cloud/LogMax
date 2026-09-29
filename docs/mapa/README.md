@@ -11,7 +11,7 @@
 
 **Tabelas transversais** (aparecem nas listas, mas não entram no "Confira também", porque quase toda tela as toca por uma ferramenta comum): `documento_sequencias`, `historico_operacoes`, `max_shows`, `notificacoes`, `notificacoes_lidas`, `planilhas_trabalho`, `trabalho_reservas`.
 
-**Tamanho:** 115 telas · 192 tabelas · 10 views · 393 RPCs · 151 funções de gatilho · 259 gatilhos
+**Tamanho:** 116 telas · 193 tabelas · 10 views · 399 RPCs · 151 funções de gatilho · 259 gatilhos
 
 ## Menus
 
@@ -69,6 +69,7 @@
 - [Financeiro › Patrimônio](telas.md#s-financeiro-patrimônio)
 - [Financeiro › Centros de Custo](telas.md#s-financeiro-centrosdecusto)
 - [Financeiro › DRE](telas.md#s-financeiro-dre)
+- [Financeiro › Precificação](telas.md#s-financeiro-precificação)
 - [Financeiro › Juros & Multa](telas.md#s-financeiro-juros&multa)
 - [Financeiro › Aprovações de Cotação](telas.md#s-financeiro-aprovaçõesdecotação)
 - [Financeiro › Aprovações de Orçamento](telas.md#s-financeiro-aprovaçõesdeorçamento)

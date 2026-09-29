@@ -21,6 +21,9 @@ import { LoadingSpinner, EmptyState, ExportButton, SelecioneUnidade } from '../c
 
 type Dre = {
   receita_bruta: number; descontos: number; devolucoes: number; receita_liquida: number;
+  // Migr. 656. Simples Nacional mês a mês; já está FORA de `receita_liquida`.
+  impostos?: number;
+  impostos_meses?: { mes: string; base: number; faixa: number; aliquota_efetiva: number; imposto: number }[];
   cmv: number; lucro_bruto: number; margem_bruta_pct: number | null;
   despesas: number; despesas_grupos: { grupo: string; valor: number }[];
   // Migr. 442. `consumo_material` já está DENTRO de `despesas` e dos grupos —
@@ -88,6 +91,8 @@ const DREViewInner = ({ showToast, filial }: { showToast: any; filial: FilialOp 
         consumo_material:   Number(d?.consumo_material ?? 0),
         consumos_sem_custo: Number(d?.consumos_sem_custo ?? 0),
         cmv_ajuste_compras: Number(d?.cmv_ajuste_compras ?? 0),
+        impostos:           Number(d?.impostos ?? 0),
+        impostos_meses:     d?.impostos_meses ?? [],
       });
     }
     setCarregando(false);
@@ -107,6 +112,14 @@ const DREViewInner = ({ showToast, filial }: { showToast: any; filial: FilialOp 
     { rotulo: 'Receita bruta de vendas',     valor: dre.receita_bruta,   nivel: 'item' as const },
     { rotulo: '(−) Descontos e cupons',      valor: -dre.descontos,      nivel: 'item' as const },
     { rotulo: '(−) Devoluções de venda',     valor: -dre.devolucoes,     nivel: 'item' as const },
+    { rotulo: '(−) Impostos sobre vendas',   valor: -Number(dre.impostos ?? 0), nivel: 'item' as const,
+      extra: (() => {
+        const meses = dre.impostos_meses ?? [];
+        const aliquotas = [...new Set(meses.map(m => Number(m.aliquota_efetiva)))];
+        return aliquotas.length === 1
+          ? `Simples Nacional, alíquota efetiva ${aliquotas[0].toLocaleString('pt-BR', { maximumFractionDigits: 2 })}%`
+          : aliquotas.length > 1 ? 'Simples Nacional, alíquota de cada mês' : undefined;
+      })() },
     { rotulo: '= Receita líquida',           valor: dre.receita_liquida, nivel: 'subtotal' as const },
     { rotulo: '(−) CMV — custo da mercadoria vendida', valor: -dre.cmv,  nivel: 'item' as const,
       extra: Math.abs(Number(dre.cmv_ajuste_compras ?? 0)) >= 0.01
