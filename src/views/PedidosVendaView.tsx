@@ -468,7 +468,14 @@ const PedidosVendaViewInner = ({ showToast, profile, filial, mode }: { showToast
                                     <td className="py-2 text-xs text-gray-200">
                                       {it.nome ?? prod?.nome ?? 'Item'}
                                       {prod?.codigo && <span className="text-[10px] text-gray-600 ml-2 font-mono">{prod.codigo}</span>}
-                                      {!prod && (
+                                      {/* Migr. 660: serviço não vem do catálogo de produtos nem vai à separação. */}
+                                      {it.servico_id && (
+                                        <span className="text-[9px] font-black uppercase tracking-wider text-teal-400 ml-2"
+                                          title="Serviço prestado: não sai do estoque, a separação pula esta linha.">
+                                          Serviço
+                                        </span>
+                                      )}
+                                      {!prod && !it.servico_id && (
                                         <span className="text-[10px] text-amber-500/80 ml-2"
                                           title="O item foi gravado no pedido, mas o produto não está no catálogo desta unidade — confira antes de separar.">
                                           fora do catálogo

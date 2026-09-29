@@ -56,7 +56,7 @@ import { mascararDocumento } from '../lib/pdv/documento';
 import {
   totaisComDesconto, restanteAPagar, valorDevido as calcValorDevido, mistoAtivo, trocoDoRecebido,
   valorEditado, formaDoMisto, trocoTotal, dinheiroNaGaveta as calcDinheiroNaGaveta,
-  parcelasDaVenda, creditoDoMisto, ehLinhaEletronica, valorEletronicoPago, type LinhaPagamento,
+  parcelasDaVenda, creditoDoMisto, ehLinhaEletronica, valorEletronicoPago, partesDoMisto, type LinhaPagamento,
 } from '../lib/pdv/pagamento';
 import { DescartarPagoModal } from '../components/pdv/DescartarPagoModal';
 
@@ -1134,7 +1134,8 @@ export const PDVViewSupermax = ({
   // PIX R$ 6,00", que não casava com o prefixo. Resultado: o misto furava a
   // trava do caixa aberto e a parte em espécie ficava fora da conferência do
   // fim do dia. Troco NÃO entra: o que volta para o cliente não fica na gaveta.
-  const finalizarVenda = async (forma: string, cidOverride?: string, parcelas: number = 1, dinheiroEmEspecie: number = 0): Promise<string> => {
+  const finalizarVenda = async (forma: string, cidOverride?: string, parcelas: number = 1, dinheiroEmEspecie: number = 0,
+    partes?: { forma: string; valor: number; parcelas: number }[]): Promise<string> => {
     if (!supabase) throw new Error('Supabase indisponível.');
     // Sem override (Fiado escolhe o pagador), vale o cliente vinculado na tela
     // de fechamento — é o que carimba a venda, a conta a receber e a nota.
@@ -1150,6 +1151,7 @@ export const PDVViewSupermax = ({
       filial,
       dinheiroEmEspecie,
       cpfNota:    cpfNota || null,
+      pagamentos: partes,
     }));
     if (rpcErr || !vendaId) throw new Error(rpcErr?.message ?? 'Falha ao registrar venda.');
     // Desconto autorizado deixa rastro na própria venda. A RPC não recebe
@@ -1336,7 +1338,8 @@ export const PDVViewSupermax = ({
       // handlePayChoice. O tempo entre cash modal e FECHAR VENDA é de
       // segundos; revalidar gera falso-negativo silencioso (toast some
       // atrás do overlay fullscreen z-100) e mata a venda.
-      const vendaId = await finalizarVenda(forma, undefined, parcelas, calcDinheiroNaGaveta(pagamentos));
+      const vendaId = await finalizarVenda(forma, undefined, parcelas, calcDinheiroNaGaveta(pagamentos),
+        partesDoMisto(pagamentos, totalFinal));
       // Só em misto com crédito. Falha aqui não desfaz a venda — ela já
       // persistiu, e o aviso diz exatamente o que ficou pendente de ajuste
       // pro Financeiro não descobrir isso no fechamento do mês.

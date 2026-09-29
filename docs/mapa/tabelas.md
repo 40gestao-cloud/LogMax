@@ -1249,8 +1249,8 @@ Para cada tabela: quem grava (tela, RPC, gatilho, servidor), quem lê, os gatilh
 ## itens_venda
 
 - **Telas que gravam:** —
-- **Telas que gravam via RPC:** [Usuários](telas.md#s-usuarios), [Vendas › PDV](telas.md#s-vendas-pdv), [Vendas › Pedidos Online](telas.md#s-vendas-pedidosonline)
-- **RPCs que gravam:** [criar_venda_pdv](funcoes.md#f-criar_venda_pdv), [resetar_dados_operacionais](funcoes.md#f-resetar_dados_operacionais)
+- **Telas que gravam via RPC:** [Financeiro › Aprovações de Orçamento](telas.md#s-financeiro-aprovaçõesdeorçamento), [Usuários](telas.md#s-usuarios), [Vendas › Orçamentos](telas.md#s-vendas-orçamentos), [Vendas › PDV](telas.md#s-vendas-pdv), [Vendas › Pedidos Online](telas.md#s-vendas-pedidosonline)
+- **RPCs que gravam:** [converter_orcamento_em_pedido](funcoes.md#f-converter_orcamento_em_pedido), [criar_venda_pdv](funcoes.md#f-criar_venda_pdv), [resetar_dados_operacionais](funcoes.md#f-resetar_dados_operacionais)
 - **Telas que leem:** [Financeiro › Recibos de Vendas](telas.md#s-financeiro-recibosdevendas), [Vendas › Histórico de Vendas](telas.md#s-vendas-históricodevendas), [Vendas › PDV](telas.md#s-vendas-pdv)
 - **RPCs que leem:** [_dre_calculo](funcoes.md#f-_dre_calculo), [_receita_servico](funcoes.md#f-_receita_servico), [criar_devolucao_venda](funcoes.md#f-criar_devolucao_venda), [gerar_painel_bi](funcoes.md#f-gerar_painel_bi)
 - **Views que dependem desta:** [v_venda_saldo_devolucao](tabelas.md#t-v_venda_saldo_devolucao)
@@ -1644,7 +1644,7 @@ Para cada tabela: quem grava (tela, RPC, gatilho, servidor), quem lê, os gatilh
 ## notas_emitidas
 
 - **Telas que gravam:** —
-- **Telas que gravam via RPC:** [Financeiro › Notas Emitidas](telas.md#s-financeiro-notasemitidas), [Vendas › PDV](telas.md#s-vendas-pdv), [Vendas › Pedidos Online](telas.md#s-vendas-pedidosonline)
+- **Telas que gravam via RPC:** [Financeiro › Aprovações de Orçamento](telas.md#s-financeiro-aprovaçõesdeorçamento), [Financeiro › Notas Emitidas](telas.md#s-financeiro-notasemitidas), [Vendas › Orçamentos](telas.md#s-vendas-orçamentos), [Vendas › PDV](telas.md#s-vendas-pdv), [Vendas › Pedidos Online](telas.md#s-vendas-pedidosonline)
 - **RPCs que gravam:** [emitir_nota](funcoes.md#f-emitir_nota)
 - **Telas que leem:** [Financeiro › Notas Emitidas](telas.md#s-financeiro-notasemitidas), [Capital](telas.md#s-matriz-capital)
 - **RPCs que leem:** [emitir_nota](funcoes.md#f-emitir_nota)
@@ -1826,7 +1826,7 @@ Para cada tabela: quem grava (tela, RPC, gatilho, servidor), quem lê, os gatilh
   - `trg_numero_documento` — BEFORE INSERT → [set_numero_documento](funcoes.md#f-set_numero_documento) · grava em [documento_sequencias](tabelas.md#t-documento_sequencias)
   - `trg_pedido_venda_status_marcos` — BEFORE INSERT/UPDATE → [fn_pedido_venda_status_pelos_marcos](funcoes.md#f-fn_pedido_venda_status_pelos_marcos)
   - `trg_sem_exclusao` — BEFORE UPDATE → [documento_sem_exclusao](funcoes.md#f-documento_sem_exclusao)
-- **Ao apagar uma linha daqui:** [contas_receber](tabelas.md#t-contas_receber).pedido_venda_id zera o vínculo (SET NULL); [movimentacoes_estoque](tabelas.md#t-movimentacoes_estoque).pedido_venda_id bloqueia (NO ACTION)
+- **Ao apagar uma linha daqui:** [contas_receber](tabelas.md#t-contas_receber).pedido_venda_id zera o vínculo (SET NULL); [movimentacoes_estoque](tabelas.md#t-movimentacoes_estoque).pedido_venda_id bloqueia (NO ACTION); [vendas](tabelas.md#t-vendas).pedido_venda_id zera o vínculo (SET NULL)
 - **Aponta para:** cliente_id → [clientes](tabelas.md#t-clientes); conta_receber_id → [contas_receber](tabelas.md#t-contas_receber); orcamento_id → [orcamentos](tabelas.md#t-orcamentos)
 - **RLS:** DELETE `pv_delete` (setores: vendas · gerente da filial · Matriz/professor); INSERT `pv_insert` (setores: vendas · gerente da filial · Matriz/professor); SELECT `pv_select` (setores: financeiro, logistica, vendas · gerente da filial · Matriz/professor); UPDATE `pv_update` (setores: financeiro, logistica, vendas · gerente da filial · Matriz/professor)
 
@@ -2293,7 +2293,7 @@ Para cada tabela: quem grava (tela, RPC, gatilho, servidor), quem lê, os gatilh
 
 - **Telas que gravam:** [Cadastros › Serviços](telas.md#s-cadastros-serviços)
 - **RPCs que gravam:** —
-- **Telas que leem:** [Cadastros › Serviços](telas.md#s-cadastros-serviços), [Compras › Cotações](telas.md#s-compras-cotações), [Estoque › Recebimentos](telas.md#s-estoque-recebimentos), [Financeiro › Aprovações de Cotação](telas.md#s-financeiro-aprovaçõesdecotação), [Início](telas.md#s-inicio), [Marketing › Promoções](telas.md#s-marketing-promoções), [Requisições › Do Setor](telas.md#s-requisicoes-dosetor), [Vendas › PDV](telas.md#s-vendas-pdv)
+- **Telas que leem:** [Cadastros › Serviços](telas.md#s-cadastros-serviços), [Compras › Cotações](telas.md#s-compras-cotações), [Estoque › Recebimentos](telas.md#s-estoque-recebimentos), [Financeiro › Aprovações de Cotação](telas.md#s-financeiro-aprovaçõesdecotação), [Financeiro › Aprovações de Orçamento](telas.md#s-financeiro-aprovaçõesdeorçamento), [Início](telas.md#s-inicio), [Marketing › Promoções](telas.md#s-marketing-promoções), [Requisições › Do Setor](telas.md#s-requisicoes-dosetor), [Vendas › Orçamentos](telas.md#s-vendas-orçamentos), [Vendas › PDV](telas.md#s-vendas-pdv)
 - **RPCs que leem:** [criar_venda_pdv](funcoes.md#f-criar_venda_pdv), [gerar_pedido_de_cotacao](funcoes.md#f-gerar_pedido_de_cotacao), [parametros_precificacao](funcoes.md#f-parametros_precificacao)
 - **Gatilhos nesta tabela:**
   - `trg_auditoria` — BEFORE INSERT/UPDATE → [set_auditoria_campos](funcoes.md#f-set_auditoria_campos)
@@ -2496,8 +2496,8 @@ Para cada tabela: quem grava (tela, RPC, gatilho, servidor), quem lê, os gatilh
 ## vendas
 
 - **Telas que gravam:** [Vendas › Histórico de Vendas](telas.md#s-vendas-históricodevendas), [Vendas › PDV](telas.md#s-vendas-pdv)
-- **Telas que gravam via RPC:** [Vendas › Pedidos Online](telas.md#s-vendas-pedidosonline)
-- **RPCs que gravam:** [criar_venda_pdv](funcoes.md#f-criar_venda_pdv)
+- **Telas que gravam via RPC:** [Estoque › Pedidos de Venda](telas.md#s-estoque-pedidosdevenda), [Financeiro › Aprovações de Orçamento](telas.md#s-financeiro-aprovaçõesdeorçamento), [Financeiro › Pedidos de Venda](telas.md#s-financeiro-pedidosdevenda), [Vendas › Orçamentos](telas.md#s-vendas-orçamentos), [Vendas › Pedidos de Venda](telas.md#s-vendas-pedidosdevenda), [Vendas › Pedidos Online](telas.md#s-vendas-pedidosonline)
+- **RPCs que gravam:** [cancelar_pedido_venda](funcoes.md#f-cancelar_pedido_venda), [converter_orcamento_em_pedido](funcoes.md#f-converter_orcamento_em_pedido), [criar_venda_pdv](funcoes.md#f-criar_venda_pdv)
 - **Telas que leem:** [Cadastros › Lixeira](telas.md#s-cadastros-lixeira), [Dashboard](telas.md#s-dashboard), [Estoque › Saldos](telas.md#s-estoque-saldos), [Financeiro › Recibos de Vendas](telas.md#s-financeiro-recibosdevendas), [Matriz › Vendas](telas.md#s-relatorio-vendas), [Vendas › Devoluções](telas.md#s-vendas-devoluções), [Vendas › Histórico de Vendas](telas.md#s-vendas-históricodevendas), [Vendas › PDV](telas.md#s-vendas-pdv)
 - **RPCs que leem:** [_dre_calculo](funcoes.md#f-_dre_calculo), [_receita_servico](funcoes.md#f-_receita_servico), [_receita_simples](funcoes.md#f-_receita_simples), [_simples_rbt12](funcoes.md#f-_simples_rbt12), [_taxa_pelo_mix](funcoes.md#f-_taxa_pelo_mix), [criar_devolucao_venda](funcoes.md#f-criar_devolucao_venda), [dinheiro_do_caixa](funcoes.md#f-dinheiro_do_caixa), [gerar_painel_bi](funcoes.md#f-gerar_painel_bi), [pdv_registrar_credito_misto](funcoes.md#f-pdv_registrar_credito_misto), [resetar_dados_da_filial](funcoes.md#f-resetar_dados_da_filial)
 - **Views que dependem desta:** [v_campanha_roi](tabelas.md#t-v_campanha_roi)
@@ -2519,9 +2519,20 @@ Para cada tabela: quem grava (tela, RPC, gatilho, servidor), quem lê, os gatilh
   -   2. [movimentacoes_estoque](tabelas.md#t-movimentacoes_estoque) → [fn_custo_medio_da_entrada](funcoes.md#f-fn_custo_medio_da_entrada) → [produtos_custo](tabelas.md#t-produtos_custo)
   -   2. [contas_receber](tabelas.md#t-contas_receber) → [sync_saldo_caixa_receber](funcoes.md#f-sync_saldo_caixa_receber) → [caixa_bancos](tabelas.md#t-caixa_bancos)
   -   2. [contas_receber](tabelas.md#t-contas_receber) → [_conta_receber_fecha_pedido_venda](funcoes.md#f-_conta_receber_fecha_pedido_venda) → [pedidos_venda](tabelas.md#t-pedidos_venda)
-- **Ao apagar uma linha daqui:** [contas_receber](tabelas.md#t-contas_receber).venda_id zera o vínculo (SET NULL); [devolucoes](tabelas.md#t-devolucoes).venda_id bloqueia (NO ACTION); [itens_venda](tabelas.md#t-itens_venda).venda_id APAGA JUNTO (CASCADE); [notas_emitidas](tabelas.md#t-notas_emitidas).venda_id zera o vínculo (SET NULL); [pedidos_online](tabelas.md#t-pedidos_online).venda_id zera o vínculo (SET NULL); [produto_unidades](tabelas.md#t-produto_unidades).venda_id zera o vínculo (SET NULL)
-- **Aponta para:** cliente_id → [clientes](tabelas.md#t-clientes); cupom_id → [marketing_cupons](tabelas.md#t-marketing_cupons)
+- **Ao apagar uma linha daqui:** [contas_receber](tabelas.md#t-contas_receber).venda_id zera o vínculo (SET NULL); [devolucoes](tabelas.md#t-devolucoes).venda_id bloqueia (NO ACTION); [itens_venda](tabelas.md#t-itens_venda).venda_id APAGA JUNTO (CASCADE); [notas_emitidas](tabelas.md#t-notas_emitidas).venda_id zera o vínculo (SET NULL); [pedidos_online](tabelas.md#t-pedidos_online).venda_id zera o vínculo (SET NULL); [produto_unidades](tabelas.md#t-produto_unidades).venda_id zera o vínculo (SET NULL); [vendas_pagamentos](tabelas.md#t-vendas_pagamentos).venda_id APAGA JUNTO (CASCADE)
+- **Aponta para:** cliente_id → [clientes](tabelas.md#t-clientes); cupom_id → [marketing_cupons](tabelas.md#t-marketing_cupons); pedido_venda_id → [pedidos_venda](tabelas.md#t-pedidos_venda)
 - **RLS:** ALL `vendas_write` (setores: vendas · gerente da filial · Matriz/professor); SELECT `vendas_select` (setores: financeiro, vendas · gerente da filial · Matriz/professor)
+
+<a id="t-vendas_pagamentos"></a>
+## vendas_pagamentos
+
+- **Telas que gravam:** —
+- **Telas que gravam via RPC:** [Financeiro › Aprovações de Orçamento](telas.md#s-financeiro-aprovaçõesdeorçamento), [Vendas › Orçamentos](telas.md#s-vendas-orçamentos), [Vendas › PDV](telas.md#s-vendas-pdv), [Vendas › Pedidos Online](telas.md#s-vendas-pedidosonline)
+- **RPCs que gravam:** [converter_orcamento_em_pedido](funcoes.md#f-converter_orcamento_em_pedido), [criar_venda_pdv](funcoes.md#f-criar_venda_pdv)
+- **Telas que leem:** —
+- **RPCs que leem:** [_taxa_pelo_mix](funcoes.md#f-_taxa_pelo_mix)
+- **Aponta para:** venda_id → [vendas](tabelas.md#t-vendas)
+- **RLS:** SELECT `vendas_pagamentos_select` (qualquer um da própria filial · Matriz/professor)
 
 <a id="t-vitrine_institucional"></a>
 ## vitrine_institucional

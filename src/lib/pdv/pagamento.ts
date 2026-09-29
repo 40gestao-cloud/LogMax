@@ -84,6 +84,19 @@ export const dinheiroNaGaveta = (linhas: LinhaPagamento[]): number =>
 export const parcelasDaVenda = (linhas: LinhaPagamento[]): number =>
   linhas.length === 1 && linhas[0].forma === 'Cartão Crédito' ? (linhas[0].parcelas ?? 1) : 1;
 
+// Migr. 660: as partes do misto, estruturadas, para `criar_venda_pdv`
+// (`p_pagamentos`). Só no misto — forma única a RPC grava sozinha. Se as
+// partes não fecham com o total (não deveria acontecer: `valorEditado` e
+// `restanteAPagar` já cortam), não manda nada: a venda passa como antes, só
+// que fora do mix da taxa. Recusar a venda por isso seria pior.
+export const partesDoMisto = (linhas: LinhaPagamento[], totalFinal: number):
+  { forma: string; valor: number; parcelas: number }[] | undefined => {
+  if (linhas.length <= 1) return undefined;
+  const soma = r2(linhas.reduce((s, p) => s + p.valor, 0));
+  if (Math.abs(soma - totalFinal) > 0.01) return undefined;
+  return linhas.filter(p => p.valor > 0).map(p => ({ forma: p.forma, valor: r2(p.valor), parcelas: p.parcelas ?? 1 }));
+};
+
 // Parte do misto paga em crédito, para `pdv_registrar_credito_misto`
 // (migr. 415). Linhas de crédito com parcelamentos diferentes são raras no
 // balcão — soma os valores e usa o maior parcelamento lançado.

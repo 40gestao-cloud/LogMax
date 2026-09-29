@@ -637,7 +637,8 @@
     "contas_receber",
     "movimentacoes_estoque",
     "orcamentos",
-    "pedidos_venda"
+    "pedidos_venda",
+    "vendas"
    ],
    "apis": []
   },
@@ -955,6 +956,7 @@
     "orcamentos",
     "pedidos_venda",
     "produtos_com_custo",
+    "servicos",
     "user_profiles",
     "v_promocao_vigente"
    ],
@@ -970,10 +972,14 @@
    ],
    "grava_via_rpc": [
     "contas_receber",
+    "itens_venda",
+    "notas_emitidas",
     "notificacoes",
     "notificacoes_lidas",
     "orcamentos",
-    "pedidos_venda"
+    "pedidos_venda",
+    "vendas",
+    "vendas_pagamentos"
    ],
    "apis": []
   },
@@ -1054,7 +1060,8 @@
     "contas_receber",
     "movimentacoes_estoque",
     "orcamentos",
-    "pedidos_venda"
+    "pedidos_venda",
+    "vendas"
    ],
    "apis": []
   },
@@ -1555,7 +1562,8 @@
     "movimentacoes_caixa",
     "movimentacoes_estoque",
     "notas_emitidas",
-    "vendas"
+    "vendas",
+    "vendas_pagamentos"
    ],
    "apis": []
   },
@@ -1593,6 +1601,7 @@
     "orcamentos",
     "pedidos_venda",
     "produtos_com_custo",
+    "servicos",
     "user_profiles",
     "v_promocao_vigente"
    ],
@@ -1608,10 +1617,14 @@
    ],
    "grava_via_rpc": [
     "contas_receber",
+    "itens_venda",
+    "notas_emitidas",
     "notificacoes",
     "notificacoes_lidas",
     "orcamentos",
-    "pedidos_venda"
+    "pedidos_venda",
+    "vendas",
+    "vendas_pagamentos"
    ],
    "apis": []
   },
@@ -1637,7 +1650,8 @@
     "contas_receber",
     "movimentacoes_estoque",
     "orcamentos",
-    "pedidos_venda"
+    "pedidos_venda",
+    "vendas"
    ],
    "apis": []
   },
@@ -1668,7 +1682,8 @@
     "movimentacoes_estoque",
     "notas_emitidas",
     "pedidos_online",
-    "vendas"
+    "vendas",
+    "vendas_pagamentos"
    ],
    "apis": []
   },
@@ -3405,8 +3420,18 @@
    "le": [
     "contas_receber",
     "formas_pagamento",
-    "vendas"
+    "vendas",
+    "vendas_pagamentos"
    ],
+   "chama": [
+    "_tipo_da_forma_pdv"
+   ]
+  },
+  "_tipo_da_forma_pdv": {
+   "gatilho": false,
+   "secdef": false,
+   "grava": [],
+   "le": [],
    "chama": []
   },
   "abrir_revisao_auditoria": {
@@ -4487,7 +4512,8 @@
     "contas_receber",
     "movimentacoes_estoque",
     "orcamentos",
-    "pedidos_venda"
+    "pedidos_venda",
+    "vendas"
    ],
    "le": [
     "contas_receber",
@@ -4904,8 +4930,11 @@
    "secdef": true,
    "grava": [
     "contas_receber",
+    "itens_venda",
     "orcamentos",
-    "pedidos_venda"
+    "pedidos_venda",
+    "vendas",
+    "vendas_pagamentos"
    ],
    "le": [
     "clientes",
@@ -4918,6 +4947,7 @@
     "acre_today",
     "cliente_saldo_devedor",
     "cliente_titulos_vencidos",
+    "emitir_nota",
     "notificar_setor"
    ]
   },
@@ -5241,7 +5271,8 @@
     "itens_venda",
     "marketing_cupons",
     "movimentacoes_estoque",
-    "vendas"
+    "vendas",
+    "vendas_pagamentos"
    ],
    "le": [
     "clientes",
@@ -5251,6 +5282,7 @@
    ],
    "chama": [
     "_assert_rpc",
+    "_tipo_da_forma_pdv",
     "acre_today",
     "auth_pode_filial",
     "emitir_nota",

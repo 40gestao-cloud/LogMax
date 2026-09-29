@@ -23,10 +23,13 @@ import { notificarSetor } from '../lib/notificar';
 import { SelectBusca } from '../components/SelectBusca';
 import { gruposDeCadastro } from '../lib/cadastrosSelect';
 import { opcaoProduto } from '../lib/opcoesSelect';
+import { ehPrestado } from '../lib/naturezaServico';
 
 
 interface ItemOrcamento {
   produto_id: string;
+  /** Migr. 660: serviço prestado (mão de obra, instalação). `produto_id` fica vazio. */
+  servico_id?: string | null;
   nome: string;
   qtd: number;
   preco_unitario: number;
@@ -114,6 +117,13 @@ const OrcamentosViewInner = ({
   const { data: formasPagamento } = useFetchData<any>('/api/formaspagamentoview', { filial });
   // View mascarada: usa custo para margem do orçamento (migr. 262).
   const { data: produtos } = useFetchData<any>('/api/produtoscomcustoview', { filial });
+  // Migr. 660: serviços PRESTADOS da unidade entram no orçamento como item. Na
+  // conversão viram venda no Anexo III e NFS-e; a separação os pula.
+  const { data: servicosCad } = useFetchData<any>('/api/servicosview', { filial });
+  const servicosAtivos = useMemo(() => (servicosCad ?? [])
+    .filter((s: any) => ehPrestado(s.natureza) && s.ativo !== false && !s.excluido_em
+      && (s.status ?? 'Ativo') === 'Ativo' && Number(s.valor ?? 0) > 0)
+    .sort((a: any, b: any) => String(a.nome).localeCompare(String(b.nome), 'pt-BR')), [servicosCad]);
 
   // Ofertas valendo hoje (MIGR 578). O orçamento é uma proposta de venda: tem
   // de sair pelo preço que o caixa vai cobrar. Com a promoção virando regra de
@@ -343,12 +353,20 @@ const OrcamentosViewInner = ({
     }));
   };
   const escolherProduto = (idx: number, produtoId: string) => {
+    if (produtoId.startsWith('srv:')) {
+      const s = servicosAtivos.find((x: any) => x.id === produtoId.slice(4));
+      updateItem(idx, s
+        ? { produto_id: '', servico_id: s.id, nome: s.nome, preco_unitario: Number(s.valor) }
+        : { produto_id: '', servico_id: null, nome: '', preco_unitario: 0 });
+      return;
+    }
     const p = produtosAtivos.find((pr: any) => pr.id === produtoId);
     if (!p) {
-      updateItem(idx, { produto_id: '', nome: '', preco_unitario: 0 });
+      updateItem(idx, { produto_id: '', servico_id: null, nome: '', preco_unitario: 0 });
       return;
     }
     updateItem(idx, {
+      servico_id: null,
       produto_id: p.id,
       nome: p.nome,
       preco_unitario: precoDeVenda(p),
@@ -362,8 +380,8 @@ const OrcamentosViewInner = ({
       showToast('Adicione pelo menos um item.', 'error', true);
       return;
     }
-    if (itens.some(it => !it.produto_id || it.qtd <= 0)) {
-      showToast('Cada item precisa de produto e quantidade > 0.', 'error', true);
+    if (itens.some(it => (!it.produto_id && !it.servico_id) || it.qtd <= 0)) {
+      showToast('Cada item precisa de produto ou serviço e quantidade > 0.', 'error', true);
       return;
     }
 
@@ -374,7 +392,8 @@ const OrcamentosViewInner = ({
         vendedor_id:   editItem ? editItem.vendedor_id : profile.id,
         vendedor_nome: editItem ? editItem.vendedor_nome : profile.nome,
         validade_dias: Math.max(1, parseInt(form.validade_dias) || 3),
-        itens,
+        // Serviço vai com produto_id nulo: é o que a conversão (migr. 660) lê.
+        itens: itens.map(it => it.servico_id ? { ...it, produto_id: null } : { ...it, servico_id: null }),
         subtotal,
         desconto:      descontoNum,
         // `valor_total` e os derivados vão junto para a tela não piscar com o
@@ -825,13 +844,19 @@ const OrcamentosViewInner = ({
                     <SelectBusca
                       compacto
                       className="col-span-5"
-                      value={it.produto_id}
+                      value={it.servico_id ? `srv:${it.servico_id}` : it.produto_id}
                       onChange={v => escolherProduto(idx, v)}
-                      placeholder="Produto"
-                      opcoes={produtosFiltrados.map((p: any) => ({
-                        ...opcaoProduto(p, { saldo: true }),
-                        tag: p.preco != null ? { texto: `R$ ${formatBRL(Number(p.preco))}`, tom: 'cinza' as const } : null,
-                      }))}
+                      placeholder="Produto ou serviço"
+                      grupos={[
+                        { label: 'Produtos', opcoes: produtosFiltrados.map((p: any) => ({
+                          ...opcaoProduto(p, { saldo: true }),
+                          tag: p.preco != null ? { texto: `R$ ${formatBRL(Number(p.preco))}`, tom: 'cinza' as const } : null,
+                        })) },
+                        ...(servicosAtivos.length ? [{ label: 'Serviços', opcoes: servicosAtivos.map((s: any) => ({
+                          value: `srv:${s.id}`, label: s.nome, sub: s.codigo ? `Serviço · ${s.codigo}` : 'Serviço',
+                          tag: { texto: `R$ ${formatBRL(Number(s.valor))}`, tom: 'verde' as const },
+                        })) }] : []),
+                      ]}
                     />
                     <div className="col-span-2">
                       <input
@@ -1223,7 +1248,10 @@ const OrcamentosViewInner = ({
                           const custo = custoRaw != null && custoRaw !== '' ? Number(custoRaw) : null;
                           return (
                             <tr key={idx} className="border-b border-white/5 last:border-b-0">
-                              <td className="py-2 px-3 text-gray-200">{it.nome ?? '—'}</td>
+                              <td className="py-2 px-3 text-gray-200">
+                                {it.nome ?? '—'}
+                                {it.servico_id && <span className="ml-2 text-[9px] font-black uppercase tracking-wider text-teal-400">Serviço</span>}
+                              </td>
                               <td className="py-2 px-3 font-mono text-gray-300 text-right">{it.qtd ?? '—'}</td>
                               {(isFinanceiro || isAdminOuCeo) && (
                                 <td className="py-2 px-3 font-mono text-gray-400 text-right">

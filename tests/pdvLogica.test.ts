@@ -217,3 +217,18 @@ describe('documento na nota', () => {
     expect(mascararDocumento('abc')).toBe('');
   });
 });
+
+// Migr. 660: as partes do misto vão estruturadas para a RPC.
+import { partesDoMisto } from '../src/lib/pdv/pagamento';
+describe('partesDoMisto', () => {
+  it('forma única não manda partes (a RPC grava sozinha)', () => {
+    expect(partesDoMisto([{ forma: 'PIX', valor: 30 }], 30)).toBeUndefined();
+  });
+  it('misto manda cada linha com parcelas', () => {
+    expect(partesDoMisto([{ forma: 'PIX', valor: 10 }, { forma: 'Cartão Crédito', valor: 20, parcelas: 3 }], 30))
+      .toEqual([{ forma: 'PIX', valor: 10, parcelas: 1 }, { forma: 'Cartão Crédito', valor: 20, parcelas: 3 }]);
+  });
+  it('partes que não fecham com o total não vão (a venda passa como antes)', () => {
+    expect(partesDoMisto([{ forma: 'PIX', valor: 10 }, { forma: 'Dinheiro', valor: 15 }], 30)).toBeUndefined();
+  });
+});

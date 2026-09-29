@@ -35,6 +35,8 @@ export interface VendaPdv {
    * fora da chamada — o PDV dos nichos não tem o campo e não o manda.
    */
   cpfNota?: string | null;
+  /** Migr. 660: as linhas do misto. `undefined` deixa o parâmetro fora da chamada. */
+  pagamentos?: { forma: string; valor: number; parcelas: number }[];
 }
 
 export function montarVendaPdv(v: VendaPdv): Record<string, unknown> {
@@ -59,5 +61,6 @@ export function montarVendaPdv(v: VendaPdv): Record<string, unknown> {
     p_valor_dinheiro:  parseFloat(v.dinheiroEmEspecie.toFixed(2)),
   };
   if (v.cpfNota !== undefined) params.p_cpf_nota = v.cpfNota;
+  if (v.pagamentos !== undefined) params.p_pagamentos = v.pagamentos;
   return params;
 }
