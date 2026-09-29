@@ -1813,7 +1813,7 @@ function LogMaxAppInner() {
         {/* Gruda na borda do <main> e cobre o respiro dele: com top-0 o sticky
             parava 32px abaixo e o conteúdo rolado aparecia por cima do topbar. */}
         <header className="shrink-0 flex justify-between items-center sticky -top-4 sm:-top-8 -mt-4 sm:-mt-8 pt-4 sm:pt-8 z-30 bg-base mb-4 sm:mb-8 border-b border-white/5 pb-4">
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-1.5 sm:gap-3">
             <button onClick={() => setMobileMenuOpen(true)}
               className="lg:hidden neu-button w-9 h-9 rounded-xl flex items-center justify-center text-gray-400 hover:text-accent transition-colors">
               <Menu size={18} />
@@ -1842,7 +1842,11 @@ function LogMaxAppInner() {
             <img src={assinaturaSrc} alt="Assinatura" className="h-11 w-auto opacity-85 mt-1" />
           </div>
 
-          <div className="flex items-center gap-2 sm:gap-3">
+          {/* No celular (375 px) os nove botões somavam ~430 px e o avatar
+              saía da tela. Abaixo de `sm` o vão encolhe, o cartão do avatar
+              perde a moldura e o Sair some daqui — ele continua no fim do menu
+              lateral, que é por onde o celular navega. */}
+          <div className="flex items-center gap-1.5 sm:gap-3 min-w-0">
             {/* Modo Aula: sino de notificações e MaxAI ficam ocultos pra quem
                 está sob a whitelist — evita vazamento de contexto de módulos
                 fora da aula (notificação de outro setor, IA respondendo sobre
@@ -1867,7 +1871,7 @@ function LogMaxAppInner() {
             <ThemeToggle />
             <AccentPicker />
 
-            <div className="neu-flat rounded-2xl py-2 px-3 flex items-center gap-3 border border-white/5">
+            <div className="neu-flat rounded-2xl py-2 px-3 flex items-center gap-3 border border-white/5 shrink-0 max-sm:!p-0 max-sm:!border-0 max-sm:!bg-transparent max-sm:!shadow-none">
               <button
                 type="button"
                 onClick={() => setPerfilFotoOpen(true)}
@@ -1887,7 +1891,7 @@ function LogMaxAppInner() {
               </div>
             </div>
             <button onClick={handleSignOut} title="Sair" aria-label="Sair"
-              className="neu-button h-9 px-3 rounded-xl flex items-center gap-1.5 text-xs font-bold text-accent border border-accent/20 hover:bg-accent hover:text-black transition-colors shrink-0">
+              className="hidden sm:flex neu-button h-9 px-3 rounded-xl items-center gap-1.5 text-xs font-bold text-accent border border-accent/20 hover:bg-accent hover:text-black transition-colors shrink-0">
               <LogOut size={15} />
               <span className="hidden md:inline">Sair</span>
             </button>
