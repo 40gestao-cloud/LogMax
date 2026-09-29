@@ -627,6 +627,12 @@ const ContasPagarViewInner = ({ showToast, filial }: { showToast: any; filial: F
                               Montagem
                             </span>
                           )}
+                          {item.origem === 'das' && (
+                            <span className="ml-2 px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider bg-emerald-500/15 text-emerald-400 align-middle"
+                              title="Imposto do Simples Nacional apurado em Financeiro › Precificação › Tributação. O valor não se edita: reapure a competência.">
+                              DAS
+                            </span>
+                          )}
                           {item.origem === 'frete_compra' && (
                             <span className="ml-2 px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider bg-sky-500/15 text-sky-400 align-middle"
                               title="Frete de transportadora (CT-e), rateado no custo dos pedidos da carga. O valor não se edita: cancele e lance de novo.">

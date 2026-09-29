@@ -15,13 +15,14 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { motion } from 'motion/react';
-import { Save, Calculator, Tags, Landmark, SlidersHorizontal, TriangleAlert } from 'lucide-react';
+import { Save, Calculator, Tags, Landmark, SlidersHorizontal, TriangleAlert, Receipt } from 'lucide-react';
+import { supabase } from '../lib/supabase';
 import { useFilial } from '../contexts/FilialContext';
 import type { FilialOp } from '../components/FilialSelector';
 import { useFetchData, dbUpdate } from '../hooks/useSupabaseData';
 import { useParametrosPrecificacao } from '../hooks/useParametrosPrecificacao';
 import { ComposicaoPreco } from '../components/produtos/ComposicaoPreco';
-import { SelecioneUnidade, LoadingSpinner, EmptyState, CardContador, AbaComContador, SecaoFormulario } from '../components/ui';
+import { SelecioneUnidade, LoadingSpinner, EmptyState, CardContador, AbaComContador, SecaoFormulario, StatusBadge } from '../components/ui';
 import { formatBRL, handleMoneyKeyDown, parseBRL } from '../lib/viewUtils';
 import {
   composicaoDoPreco, deducoesDe, fmtPct, markupDivisor, markupEquivalente,
@@ -33,6 +34,10 @@ const brl = (v: number) => `R$ ${Number(v ?? 0).toLocaleString('pt-BR', { minimu
 const pctTexto = (v: any) => v == null || v === '' ? '' : String(v).replace('.', ',');
 const textoPct = (t: string): number | null => t.trim() === '' ? null : Number(t.replace(',', '.'));
 const dataBR = (iso: string) => iso.split('-').reverse().join('/');
+const mesAno = (iso: string) => {
+  const [y, m] = iso.split('-').map(Number);
+  return new Date(Date.UTC(y, m - 1, 1)).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric', timeZone: 'UTC' });
+};
 const mesCurto = (iso: string) => {
   const [y, m] = iso.split('-').map(Number);
   return new Date(Date.UTC(y, m - 1, 1)).toLocaleDateString('pt-BR', { month: 'short', timeZone: 'UTC' }).replace('.', '');
@@ -395,7 +400,102 @@ function AbaTributacao({ p, salvar, showToast }: {
           </div>
         )}
       </SecaoFormulario>
+
+      {p.pode_editar && <div className="lg:col-span-2"><ApuracaoDas filial={p.filial} showToast={showToast} /></div>}
     </div>
+  );
+}
+
+// ── DAS (migr. 658) ──────────────────────────────────────────────────────────
+// O imposto que o DRE deduz da receita vira obrigação aqui: o Financeiro apura
+// o mês fechado e nasce a conta a pagar, vencendo no dia 20 do mês seguinte.
+type CompetenciaDas = {
+  competencia: string; receita: number; faixa: number; aliquota_efetiva: number;
+  imposto: number; vencimento: string; apurado: boolean; valor_apurado: number | null;
+  conta_status: string | null;
+};
+
+function ApuracaoDas({ filial, showToast }: { filial: string; showToast: any }) {
+  const [linhas, setLinhas] = useState<CompetenciaDas[] | null>(null);
+  const [apurando, setApurando] = useState<string | null>(null);
+
+  const carregar = async () => {
+    if (!supabase) return;
+    const { data, error } = await supabase.rpc('das_competencias', { p_filial: filial });
+    if (error) { setLinhas([]); showToast(error.message, 'error'); return; }
+    setLinhas((data ?? []) as CompetenciaDas[]);
+  };
+  useEffect(() => { void carregar(); }, [filial]);
+
+  const apurar = async (c: CompetenciaDas) => {
+    if (!supabase) return;
+    setApurando(c.competencia);
+    const { data, error } = await supabase.rpc('apurar_das', { p_filial: filial, p_competencia: c.competencia });
+    setApurando(null);
+    if (error) { showToast(error.message, 'error', true); return; }
+    const d = data as any;
+    showToast(Number(d?.valor) > 0
+      ? `DAS de ${mesAno(c.competencia)} apurado: ${brl(d.valor)}, vence em ${dataBR(d.vencimento)}. A conta está em Contas a pagar.`
+      : d?.mensagem ?? 'Sem DAS nesta competência.', 'success', true);
+    void carregar();
+  };
+
+  return (
+    <SecaoFormulario titulo="DAS — apuração mensal" icon={Receipt} cor="verdeEscuro"
+      extra="vence no dia 20 do mês seguinte">
+      <p className="text-[11px] text-gray-400 leading-snug mb-3">
+        O imposto do Simples que o DRE desconta da receita se paga num documento só, o DAS. Apure cada mês fechado:
+        a conta a pagar nasce com o valor e o vencimento. Apurar de novo um mês ainda não pago refaz o valor.
+      </p>
+      {linhas === null ? <LoadingSpinner /> : linhas.length === 0 ? (
+        <p className="text-xs text-gray-500">Nenhum mês fechado com receita nos últimos 12 meses.</p>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="tabela w-full text-left border-collapse text-xs">
+            <thead>
+              <tr>
+                <th>Competência</th>
+                <th>Receita</th>
+                <th className="hidden sm:table-cell">Alíquota</th>
+                <th>DAS</th>
+                <th className="hidden sm:table-cell">Vencimento</th>
+                <th>Situação</th>
+              </tr>
+            </thead>
+            <tbody>
+              {linhas.map(c => {
+                const pago = c.conta_status === 'Pago' || c.conta_status === 'Parcial';
+                const desatualizado = c.apurado && !pago && Math.abs(Number(c.valor_apurado ?? 0) - Number(c.imposto)) >= 0.01;
+                return (
+                  <tr key={c.competencia}>
+                    <td className="py-2 text-gray-200 capitalize">{mesAno(c.competencia)}</td>
+                    <td className="tabular-nums whitespace-nowrap">{brl(c.receita)}</td>
+                    <td className="hidden sm:table-cell tabular-nums text-gray-400">
+                      {fmtPct(Number(c.aliquota_efetiva), 2)} <span className="text-[10px] text-gray-500">faixa {c.faixa}</span>
+                    </td>
+                    <td className="tabular-nums whitespace-nowrap font-semibold text-gray-100">
+                      {brl(c.apurado ? Number(c.valor_apurado) : Number(c.imposto))}
+                      {desatualizado && <span className="block text-[10px] text-amber-400 font-normal">hoje daria {brl(c.imposto)}</span>}
+                    </td>
+                    <td className="hidden sm:table-cell tabular-nums text-gray-400">{dataBR(c.vencimento)}</td>
+                    <td>
+                      {!c.apurado || desatualizado ? (
+                        <button onClick={() => apurar(c)} disabled={apurando !== null}
+                          className="btn-solido btn-solido--verde !py-1 !px-3 !text-[11px] disabled:opacity-50">
+                          {apurando === c.competencia ? 'Apurando…' : c.apurado ? 'Reapurar' : 'Apurar'}
+                        </button>
+                      ) : (
+                        <StatusBadge status={c.conta_status ?? 'Pendente'} />
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </SecaoFormulario>
   );
 }
 

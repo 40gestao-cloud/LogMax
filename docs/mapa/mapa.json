@@ -873,10 +873,14 @@
     "categorias_produto"
    ],
    "rpcs": [
+    "apurar_das",
+    "das_competencias",
     "parametros_precificacao",
     "salvar_parametros_precificacao"
    ],
    "grava_via_rpc": [
+    "contas_pagar",
+    "das_apuracoes",
     "filial_precificacao"
    ],
    "apis": []
@@ -3342,6 +3346,17 @@
     "ponto_corte_turma"
    ]
   },
+  "_simples_do_mes": {
+   "gatilho": false,
+   "secdef": true,
+   "grava": [],
+   "le": [],
+   "chama": [
+    "_receita_simples",
+    "_simples_rbt12",
+    "simples_anexo_i"
+   ]
+  },
   "_simples_rbt12": {
    "gatilho": false,
    "secdef": true,
@@ -3756,6 +3771,25 @@
    ],
    "chama": [
     "gerar_folgas_acumulado"
+   ]
+  },
+  "apurar_das": {
+   "gatilho": false,
+   "secdef": true,
+   "grava": [
+    "contas_pagar",
+    "das_apuracoes"
+   ],
+   "le": [
+    "contas_pagar",
+    "das_apuracoes"
+   ],
+   "chama": [
+    "_assert_rpc",
+    "_simples_do_mes",
+    "acre_today",
+    "auth_pode_filial",
+    "vencimento_das"
    ]
   },
   "apurar_rateio_administrativo": {
@@ -5288,6 +5322,24 @@
     "auth_user_setor"
    ]
   },
+  "das_competencias": {
+   "gatilho": false,
+   "secdef": true,
+   "grava": [],
+   "le": [
+    "contas_pagar",
+    "das_apuracoes"
+   ],
+   "chama": [
+    "_assert_rpc",
+    "_simples_do_mes",
+    "acre_today",
+    "auth_gerente_da",
+    "auth_in_setor",
+    "auth_pode_filial",
+    "vencimento_das"
+   ]
+  },
   "debitar_maxbank_beneficios": {
    "gatilho": false,
    "secdef": true,
@@ -6341,6 +6393,22 @@
    "le": [
     "consumos_material"
    ],
+   "chama": []
+  },
+  "fn_conta_de_das_congela": {
+   "gatilho": true,
+   "secdef": false,
+   "grava": [],
+   "le": [],
+   "chama": []
+  },
+  "fn_conta_de_das_inativa": {
+   "gatilho": true,
+   "secdef": true,
+   "grava": [
+    "das_apuracoes"
+   ],
+   "le": [],
    "chama": []
   },
   "fn_conta_de_frete_congela": {
@@ -9731,6 +9799,13 @@
     "acre_today"
    ]
   },
+  "vencimento_das": {
+   "gatilho": false,
+   "secdef": false,
+   "grava": [],
+   "le": [],
+   "chama": []
+  },
   "venda_fiado_respeita_credito": {
    "gatilho": true,
    "secdef": true,
@@ -9952,6 +10027,8 @@
   ],
   "contas_pagar": [
    "trg_auditoria:set_auditoria_campos",
+   "trg_conta_de_das_congela:fn_conta_de_das_congela",
+   "trg_conta_de_das_inativa:fn_conta_de_das_inativa",
    "trg_conta_de_frete_congela:fn_conta_de_frete_congela",
    "trg_conta_de_frete_inativa:fn_conta_de_frete_inativa",
    "trg_conta_de_pedido_congela:fn_conta_de_pedido_congela",
