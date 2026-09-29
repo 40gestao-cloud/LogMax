@@ -3,7 +3,8 @@ import React, { useState, useEffect, useMemo } from 'react';
 import type { FilialSelectorValue } from '../components/FilialSelector';
 import { useFilial } from '../contexts/FilialContext';
 import { motion, AnimatePresence } from 'motion/react';
-import { Search, Edit2, Trash2, Plus, Save, Check, Landmark, X, FileDown, Sheet, FileCheck, Clock } from 'lucide-react';
+import { Search, Edit2, Trash2, Plus, Save, Check, Landmark, X, FileDown, Sheet, FileCheck, Clock, Truck, Ban } from 'lucide-react';
+import { FreteCompraModal } from '../components/FreteCompraModal';
 import { HistoricoOperacoes } from '../components/HistoricoOperacoes';
 import { useFetchData, dbInsert, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
 import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent, StatusBadge, FilialBadge, Pagination, ModalFormulario } from '../components/ui';
@@ -145,6 +146,8 @@ const ContasPagarViewInner = ({ showToast, filial }: { showToast: any; filial: F
   // cobrado). Sem ela o pagamento é recusado pelo banco — e pagava-se o valor
   // do PEDIDO, que era só a previsão feita na cotação.
   const [conferindo, setConferindo] = useState<any | null>(null);
+  // Migr. 657: frete de transportadora (CT-e), rateado no custo dos pedidos.
+  const [freteAberto, setFreteAberto] = useState(false);
   const [nfValor, setNfValor] = useState('');
   const [nfObs, setNfObs] = useState('');
   const [nfSalvando, setNfSalvando] = useState(false);
@@ -479,6 +482,16 @@ const ContasPagarViewInner = ({ showToast, filial }: { showToast: any; filial: F
     }
   };
 
+  // Cancelar o frete devolve o ajuste de custo dos pedidos (migr. 657).
+  const handleCancelarFrete = async (item: any) => {
+    if (!supabase) return;
+    if (!await confirm('Cancelar este frete? A parte dele sai do custo dos produtos da carga e a conta da transportadora é cancelada.')) return;
+    const { error } = await supabase.rpc('cancelar_frete_compra', { p_conta_id: item.id, p_motivo: null });
+    if (error) { showToast(error.message, 'error', true); return; }
+    showToast('Frete cancelado. O custo dos produtos voltou ao que era.', 'success', true);
+    reload();
+  };
+
   const isFormOpen = showForm || !!editItem;
 
 
@@ -514,6 +527,10 @@ const ContasPagarViewInner = ({ showToast, filial }: { showToast: any; filial: F
           </div>
           <button onClick={handleExportPDF} disabled={isExporting} title="Exportar PDF — todas as contas" className="btn-solido btn-solido--vermelho"><FileDown size={15} /> {isExporting ? '…' : 'PDF'}</button>
           <button onClick={handleExportExcel} disabled={isExporting} title="Exportar Excel — todas as contas" className="btn-solido btn-solido--verde"><Sheet size={15} /> {isExporting ? '…' : 'Excel'}</button>
+          {filial && filial !== 'Matriz' && (
+            <button onClick={() => setFreteAberto(true)} title="Lançar o CT-e da transportadora e ratear o frete no custo dos pedidos da carga"
+              className="btn-solido btn-solido--azul"><Truck size={15} /> Frete (CT-e)</button>
+          )}
           <NeuButtonAccent onClick={() => { closeForm(); setShowForm(v => !v); }}><Plus size={16} /> Nova</NeuButtonAccent>
         </div>
       </div>
@@ -610,6 +627,12 @@ const ContasPagarViewInner = ({ showToast, filial }: { showToast: any; filial: F
                               Montagem
                             </span>
                           )}
+                          {item.origem === 'frete_compra' && (
+                            <span className="ml-2 px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider bg-sky-500/15 text-sky-400 align-middle"
+                              title="Frete de transportadora (CT-e), rateado no custo dos pedidos da carga. O valor não se edita: cancele e lance de novo.">
+                              Frete
+                            </span>
+                          )}
                           {qtdDe(item) != null && (
                             <span className="ml-2 text-[10px] font-mono text-gray-500 align-middle"
                               title={`Pedido de ${qtdDe(item)!.toLocaleString('pt-BR')} un — R$ ${(Number(item.valor ?? 0) / qtdDe(item)!).toLocaleString('pt-BR', { minimumFractionDigits: 2 })} cada`}>
@@ -683,10 +706,17 @@ const ContasPagarViewInner = ({ showToast, filial }: { showToast: any; filial: F
                               {fechar => (
                                 <>
                                   <HistoricoOperacoes variante="menu" onAbrir={fechar} entidade="contas_pagar" entidadeId={item.id} titulo={item.descricao} criadoEm={item.created_at} atualizadoEm={item.updated_at} />
-                                  <ItemMenu onClick={() => { fechar(); handleDelete(item.id); }}
-                                    cor="text-red-400 hover:bg-red-500/10" icon={Trash2}>
-                                    Excluir
-                                  </ItemMenu>
+                                  {item.origem === 'frete_compra' ? (
+                                    <ItemMenu onClick={() => { fechar(); handleCancelarFrete(item); }}
+                                      cor="text-red-400 hover:bg-red-500/10" icon={Ban}>
+                                      Cancelar frete
+                                    </ItemMenu>
+                                  ) : (
+                                    <ItemMenu onClick={() => { fechar(); handleDelete(item.id); }}
+                                      cor="text-red-400 hover:bg-red-500/10" icon={Trash2}>
+                                      Excluir
+                                    </ItemMenu>
+                                  )}
                                 </>
                               )}
                             </MenuMais>
@@ -763,6 +793,11 @@ const ContasPagarViewInner = ({ showToast, filial }: { showToast: any; filial: F
             onReload={reload}
           />
         </div>
+      )}
+
+      {filial && filial !== 'Matriz' && (
+        <FreteCompraModal aberto={freteAberto} filial={filial} fornecedores={fornecedores}
+          onFechar={() => setFreteAberto(false)} onLancado={reload} showToast={showToast} />
       )}
 
       {/* Three-way match (migr. 491): o que foi combinado, o que chegou e o que

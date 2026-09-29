@@ -1573,6 +1573,8 @@ function LogMaxAppInner() {
           { key: 'descricao', label: 'Descrição', required: true, placeholder: 'Ex: Cartão de Crédito' },
           { key: 'desconto_percentual', label: 'Desconto à vista (%)', type: 'number', placeholder: '0' },
           { key: 'taxa', label: 'Taxa da maquininha (%)', type: 'number', placeholder: '0' },
+          // Migr. 657: é pelo Tipo que a venda do PDV acha esta taxa na precificação.
+          { key: 'tipo', label: 'Tipo', type: 'select', options: ['Dinheiro', 'PIX', 'Cartão de débito', 'Cartão de crédito à vista', 'Cartão de crédito parcelado', 'Vale / voucher', 'Crediário da loja', 'Boleto', 'Transferência', 'Outro'] },
           { key: 'juros_mensal', label: 'Juros ao cliente (% a.m.)', type: 'number', placeholder: '0' },
           { key: 'parcelas_max', label: 'Parcelas (máx.)', type: 'number', placeholder: '1' },
           { key: 'parcelas_sem_juros', label: 'Parcelas sem juros', type: 'number', placeholder: '1' },

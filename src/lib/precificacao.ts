@@ -64,6 +64,14 @@ export type ParametrosPrecificacao = {
   despesas_origem: OrigemPercentual;
   taxas_pct: number | null;
   taxas_origem: OrigemPercentual;
+  /** Migr. 657: participação de cada forma nas vendas e a taxa cadastrada dela. */
+  taxas_mix: { tipo: string; participacao_pct: number | null; taxa_pct: number | null }[];
+  /** Formas vendidas sem taxa no cadastro (entram como 0%). */
+  taxas_sem_cadastro: string[];
+  /** % da receita em venda mista, fora do mix. */
+  taxas_fora_mix_pct: number | null;
+  /** O que a conciliação da maquininha reteve ÷ faturamento — conferência. */
+  taxas_realizada_pct: number | null;
   janela_inicio: string;
   janela_fim: string;
   pode_editar: boolean;
@@ -71,7 +79,7 @@ export type ParametrosPrecificacao = {
   atualizado_em: string | null;
 };
 
-export type OrigemPercentual = 'manual' | 'historico' | 'sem_historico';
+export type OrigemPercentual = 'manual' | 'historico' | 'mix' | 'sem_historico';
 
 /** As fatias do preço que não são custo nem lucro, em % do preço de venda. */
 export type Deducoes = { impostos: number; taxas: number; despesas: number };

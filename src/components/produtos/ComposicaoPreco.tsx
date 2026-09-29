@@ -13,6 +13,7 @@ const brl = (v: number) => `R$ ${Number(v ?? 0).toLocaleString('pt-BR', { minimu
 const origemTexto =(o: OrigemPercentual, janela: string) =>
   o === 'manual' ? 'informado pela gestão'
   : o === 'historico' ? `média de ${janela}`
+  : o === 'mix' ? `mix de vendas de ${janela} × taxa cadastrada`
   : 'sem histórico — contando 0%';
 
 const mesAno = (iso: string) => {
@@ -32,7 +33,7 @@ export function ComposicaoPreco({ custo, venda, params, lucroAlvo }: {
   const divisor = lucroAlvo !== null ? markupDivisor(d, lucroAlvo) : null;
 
   const linhas = c ? [
-    { rotulo: 'Custo do produto', valor: c.custo, cor: 'bg-gray-500', nota: 'o que a compra custou, frete da nota incluso' },
+    { rotulo: 'Custo do produto', valor: c.custo, cor: 'bg-gray-500', nota: 'o que a compra custou, com o frete da nota e do CT-e' },
     { rotulo: 'Simples Nacional', valor: c.impostos, cor: 'bg-amber-500',
       nota: `Anexo I, faixa ${params.faixa} — alíquota efetiva ${fmtPct(d.impostos, 2)}` },
     { rotulo: 'Taxas de cartão', valor: c.taxas, cor: 'bg-sky-500', nota: origemTexto(params.taxas_origem, janela) },

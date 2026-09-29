@@ -745,7 +745,10 @@
    "rpcs": [
     "baixar_conta_pagar",
     "calcular_saldo_capital",
+    "cancelar_frete_compra",
     "conferir_nota_fiscal",
+    "lancar_frete_compra",
+    "pedidos_para_frete",
     "registrar_pagamento_conta",
     "total_pendente_contas_pagar"
    ],
@@ -754,6 +757,8 @@
     "contas_pagar",
     "contas_pagar_baixas",
     "contas_receber",
+    "fretes_compra",
+    "fretes_compra_rateio",
     "produtos_custo"
    ],
    "apis": []
@@ -2881,6 +2886,8 @@
    "le": [
     "ajustes_custo_compra",
     "contas_pagar",
+    "fretes_compra",
+    "fretes_compra_rateio",
     "pedidos",
     "produtos",
     "produtos_custo",
@@ -3077,6 +3084,19 @@
     "_frequencia_competicao",
     "_funcionario_desligado",
     "_pontualidade_competicao"
+   ]
+  },
+  "_cancelar_frete_compra": {
+   "gatilho": false,
+   "secdef": true,
+   "grava": [
+    "fretes_compra"
+   ],
+   "le": [
+    "fretes_compra_rateio"
+   ],
+   "chama": [
+    "_ajustar_custo_pela_nota"
    ]
   },
   "_competicao_empatada": {
@@ -3342,6 +3362,17 @@
    "chama": [
     "_competicao_votos_validos"
    ]
+  },
+  "_taxa_pelo_mix": {
+   "gatilho": false,
+   "secdef": true,
+   "grava": [],
+   "le": [
+    "contas_receber",
+    "formas_pagamento",
+    "vendas"
+   ],
+   "chama": []
   },
   "abrir_revisao_auditoria": {
    "gatilho": false,
@@ -4336,6 +4367,22 @@
    "chama": [
     "_assert_recrutamento",
     "_assert_rpc"
+   ]
+  },
+  "cancelar_frete_compra": {
+   "gatilho": false,
+   "secdef": true,
+   "grava": [
+    "contas_pagar"
+   ],
+   "le": [
+    "contas_pagar",
+    "fretes_compra"
+   ],
+   "chama": [
+    "_assert_rpc",
+    "_cancelar_frete_compra",
+    "auth_pode_filial"
    ]
   },
   "cancelar_meta_estrategica": {
@@ -6296,6 +6343,24 @@
    ],
    "chama": []
   },
+  "fn_conta_de_frete_congela": {
+   "gatilho": true,
+   "secdef": false,
+   "grava": [],
+   "le": [],
+   "chama": []
+  },
+  "fn_conta_de_frete_inativa": {
+   "gatilho": true,
+   "secdef": true,
+   "grava": [],
+   "le": [
+    "fretes_compra"
+   ],
+   "chama": [
+    "_cancelar_frete_compra"
+   ]
+  },
   "fn_conta_de_pedido_congela": {
    "gatilho": true,
    "secdef": true,
@@ -7138,6 +7203,28 @@
    "le": [],
    "chama": []
   },
+  "lancar_frete_compra": {
+   "gatilho": false,
+   "secdef": true,
+   "grava": [
+    "contas_pagar",
+    "fretes_compra",
+    "fretes_compra_rateio"
+   ],
+   "le": [
+    "contas_pagar",
+    "fornecedores",
+    "fretes_compra",
+    "pedidos",
+    "recebimentos"
+   ],
+   "chama": [
+    "_ajustar_custo_pela_nota",
+    "_assert_rpc",
+    "acre_today",
+    "auth_pode_filial"
+   ]
+  },
   "lancar_investimento_filial": {
    "gatilho": false,
    "secdef": true,
@@ -7786,6 +7873,7 @@
     "_dre_calculo",
     "_receita_simples",
     "_simples_rbt12",
+    "_taxa_pelo_mix",
     "acre_today",
     "auth_gerente_da",
     "auth_in_setor",
@@ -7889,6 +7977,24 @@
     "v_pedido_saldo"
    ],
    "chama": []
+  },
+  "pedidos_para_frete": {
+   "gatilho": false,
+   "secdef": true,
+   "grava": [],
+   "le": [
+    "contas_pagar",
+    "fornecedores",
+    "fretes_compra",
+    "fretes_compra_rateio",
+    "pedidos",
+    "recebimentos"
+   ],
+   "chama": [
+    "_assert_rpc",
+    "acre_today",
+    "auth_pode_filial"
+   ]
   },
   "pendente_pagamento_preenche_filial": {
    "gatilho": true,
@@ -9846,6 +9952,8 @@
   ],
   "contas_pagar": [
    "trg_auditoria:set_auditoria_campos",
+   "trg_conta_de_frete_congela:fn_conta_de_frete_congela",
+   "trg_conta_de_frete_inativa:fn_conta_de_frete_inativa",
    "trg_conta_de_pedido_congela:fn_conta_de_pedido_congela",
    "trg_conta_de_pedido_nao_exclui:fn_conta_de_pedido_nao_exclui",
    "trg_conta_pagar_exige_recebimento:conta_pagar_exige_recebimento",

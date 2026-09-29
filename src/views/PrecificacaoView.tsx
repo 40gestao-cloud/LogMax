@@ -41,11 +41,13 @@ const mesCurto = (iso: string) => {
 const origemCurta = (o: OrigemPercentual, p: ParametrosPrecificacao) =>
   o === 'manual' ? 'valor manual'
   : o === 'historico' ? `média ${mesCurto(p.janela_inicio)}–${mesCurto(p.janela_fim)}`
+  : o === 'mix' ? `mix de vendas ${mesCurto(p.janela_inicio)}–${mesCurto(p.janela_fim)}`
   : 'sem histórico: conta 0%';
 
 const origemLonga = (o: OrigemPercentual, p: ParametrosPrecificacao) =>
   o === 'manual' ? 'informado manualmente'
   : o === 'historico' ? `histórico de ${dataBR(p.janela_inicio)} a ${dataBR(p.janela_fim)}`
+  : o === 'mix' ? `vendas de ${dataBR(p.janela_inicio)} a ${dataBR(p.janela_fim)} × taxa de cada forma no cadastro`
   : `sem venda entre ${dataBR(p.janela_inicio)} e ${dataBR(p.janela_fim)} — conta como 0%`;
 
 const RBT12_ORIGEM: Record<ParametrosPrecificacao['rbt12_origem'], (meses: number | null) => string> = {
@@ -247,6 +249,53 @@ function Linha({ rotulo, valor, nota }: { rotulo: string; valor: React.ReactNode
   );
 }
 
+// Migr. 657: de onde sai a taxa — participação de cada forma nas vendas e a
+// taxa que o cadastro diz que ela cobra. O realizado da conciliação vai junto,
+// para comparar o esperado com o que a adquirente de fato reteve.
+function MixDeTaxas({ p }: { p: ParametrosPrecificacao }) {
+  const itens = p.taxas_mix ?? [];
+  if (itens.length === 0) return null;
+  return (
+    <div className="mt-3 flex flex-col gap-2">
+      <table className="w-full text-[11px]">
+        <thead>
+          <tr className="text-[10px] text-gray-500 uppercase tracking-widest">
+            <th className="text-left font-bold pb-1">Forma</th>
+            <th className="text-center font-bold pb-1">Das vendas</th>
+            <th className="text-center font-bold pb-1">Taxa</th>
+          </tr>
+        </thead>
+        <tbody>
+          {itens.map(i => (
+            <tr key={i.tipo} className="border-t border-white/5">
+              <td className="py-1 text-gray-300">{i.tipo}</td>
+              <td className="py-1 text-center tabular-nums text-gray-400">{fmtPct(i.participacao_pct)}</td>
+              <td className={`py-1 text-center tabular-nums ${i.taxa_pct == null ? 'text-amber-400' : 'text-gray-200'}`}>
+                {i.taxa_pct == null ? 'sem cadastro' : fmtPct(Number(i.taxa_pct), 2)}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      {(p.taxas_sem_cadastro ?? []).length > 0 && (
+        <p className="text-[10px] text-amber-400 leading-snug flex items-start gap-1.5">
+          <TriangleAlert size={11} className="shrink-0 mt-0.5" />
+          {p.taxas_sem_cadastro.join(', ')}: vendido sem forma com esse Tipo no cadastro — entra como 0%.
+          Classifique em Empresa › Formas de Pagamento.
+        </p>
+      )}
+      {p.taxas_fora_mix_pct != null && p.taxas_fora_mix_pct > 0 && (
+        <p className="text-[10px] text-gray-500">{fmtPct(p.taxas_fora_mix_pct)} da receita veio de venda mista e ficou fora do mix.</p>
+      )}
+      {p.taxas_realizada_pct != null && (
+        <p className="text-[10px] text-gray-500">
+          Conferência: a maquininha reteve {fmtPct(Number(p.taxas_realizada_pct), 2)} do faturamento na conciliação do mesmo período.
+        </p>
+      )}
+    </div>
+  );
+}
+
 function AbaTributacao({ p, salvar, showToast }: {
   p: ParametrosPrecificacao;
   salvar: (m: { rbt12: number | null; despesas_pct: number | null; taxas_pct: number | null }) => Promise<void>;
@@ -308,9 +357,10 @@ function AbaTributacao({ p, salvar, showToast }: {
         )}>
         <Linha rotulo="Taxas de cartão" valor={fmtPct(p.taxas_pct ?? 0)} nota={origemLonga(p.taxas_origem, p)} />
         <Linha rotulo="Despesas da loja" valor={fmtPct(p.despesas_pct ?? 0)} nota={origemLonga(p.despesas_origem, p)} />
-        <p className="text-[10px] text-gray-500 leading-snug mt-2">
-          Taxas = o que a maquininha reteve na conciliação ÷ faturamento. Despesas = despesas do DRE sem essas taxas ÷ faturamento.
-          Janela: os 3 últimos meses fechados.
+        <MixDeTaxas p={p} />
+        <p className="text-[10px] text-gray-500 leading-snug mt-3">
+          Taxas = quanto se vende em cada forma × a taxa dela em Empresa › Formas de Pagamento (pelo campo Tipo).
+          Despesas = despesas do DRE sem a taxa da maquininha ÷ faturamento. Janela: os 3 últimos meses fechados.
         </p>
 
         {p.pode_editar && ajustando && (
