@@ -6966,9 +6966,11 @@
   },
   "fn_venda_de_pedido_so_pelo_pedido": {
    "gatilho": true,
-   "secdef": false,
+   "secdef": true,
    "grava": [],
-   "le": [],
+   "le": [
+    "pedidos_venda"
+   ],
    "chama": []
   },
   "fn_venda_dinheiro_exige_caixa": {

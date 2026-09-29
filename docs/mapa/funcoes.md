@@ -2558,10 +2558,11 @@ Para cada função: quem a chama (tela, servidor, outra função, gatilho), o qu
 - **Chama:** [acre_today](funcoes.md#f-acre_today)
 
 <a id="f-fn_venda_de_pedido_so_pelo_pedido"></a>
-## fn_venda_de_pedido_so_pelo_pedido (gatilho)
+## fn_venda_de_pedido_so_pelo_pedido (gatilho, SECURITY DEFINER)
 
 - **Dispara em:** [vendas](tabelas.md#t-vendas)
 - **Grava:** —
+- **Lê:** [pedidos_venda](tabelas.md#t-pedidos_venda)
 
 <a id="f-fn_venda_dinheiro_exige_caixa"></a>
 ## fn_venda_dinheiro_exige_caixa (gatilho, SECURITY DEFINER)

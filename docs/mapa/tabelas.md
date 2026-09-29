@@ -2533,7 +2533,7 @@ Para cada tabela: quem grava (tela, RPC, gatilho, servidor), quem lê, os gatilh
 - **Telas que leem:** —
 - **RPCs que leem:** [_taxa_pelo_mix](funcoes.md#f-_taxa_pelo_mix)
 - **Aponta para:** venda_id → [vendas](tabelas.md#t-vendas)
-- **RLS:** SELECT `vendas_pagamentos_select` (qualquer um da própria filial · Matriz/professor)
+- **RLS:** SELECT `vendas_pagamentos_select` (setores: financeiro, vendas · gerente da filial · Matriz/professor)
 
 <a id="t-vitrine_institucional"></a>
 ## vitrine_institucional
