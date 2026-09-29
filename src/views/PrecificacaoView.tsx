@@ -15,7 +15,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { motion } from 'motion/react';
-import { Save, Calculator, Tags, Landmark, SlidersHorizontal, TriangleAlert, Receipt } from 'lucide-react';
+import { Save, Calculator, Tags, Landmark, SlidersHorizontal, TriangleAlert, Receipt, Package, Wrench } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useFilial } from '../contexts/FilialContext';
 import type { FilialOp } from '../components/FilialSelector';
@@ -25,10 +25,11 @@ import { ComposicaoPreco } from '../components/produtos/ComposicaoPreco';
 import { SelecioneUnidade, LoadingSpinner, EmptyState, CardContador, AbaComContador, SecaoFormulario, StatusBadge } from '../components/ui';
 import { formatBRL, handleMoneyKeyDown, parseBRL } from '../lib/viewUtils';
 import {
-  composicaoDoPreco, deducoesDe, fmtPct, markupDivisor, markupEquivalente,
-  precoPorMarkup, precoPorMarkupDivisor,
+  composicaoDoPreco, custoDiretoTotal, deducoesDe, fmtPct, markupDivisor, markupEquivalente,
+  precoPorMarkup, precoPorMarkupDivisor, somaDeducoes,
   type Deducoes, type OrigemPercentual, type ParametrosPrecificacao,
 } from '../lib/precificacao';
+import { ehVendavel } from '../lib/tipoProduto';
 
 const brl = (v: number) => `R$ ${Number(v ?? 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const pctTexto = (v: any) => v == null || v === '' ? '' : String(v).replace('.', ',');
@@ -63,38 +64,75 @@ const RBT12_ORIGEM: Record<ParametrosPrecificacao['rbt12_origem'], (meses: numbe
 };
 
 // ── Faixa do topo ────────────────────────────────────────────────────────────
-// As cores repetem as da barra de composição do preço (âmbar = imposto,
+// As cores repetem as da barra de composição do preço (âmbar = imposto, laranja = variáveis,
 // azul = taxas, roxo = despesas): o aluno liga o card à fatia sem legenda.
 function FaixaDeducoes({ p, d }: { p: ParametrosPrecificacao; d: Deducoes }) {
-  const soma = d.impostos + d.taxas + d.despesas;
+  const soma = somaDeducoes(d);
   return (
-    <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+    <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
       <CardContador label="Simples Nacional" tom="amarelo" corFixa value={fmtPct(d.impostos, 2)}
         sub={p.vende_servico
           ? `faixa ${p.faixa} · serviço ${fmtPct(Number(p.aliquota_efetiva_iii), 2)}`
           : `faixa ${p.faixa} · alíquota efetiva`} />
       <CardContador label="Taxas de cartão" tom="azul" value={fmtPct(d.taxas)} sub={origemCurta(p.taxas_origem, p)} />
-      <CardContador label="Despesas da loja" tom="roxo" value={fmtPct(d.despesas)} sub={origemCurta(p.despesas_origem, p)} />
-      <CardContador label="Antes do lucro" tom={soma >= 100 ? 'vermelho' : 'dourado'} corFixa value={fmtPct(soma, 2)}
-        sub={soma >= 100 ? 'nenhum preço paga a conta' : `lucro pode ir até ${fmtPct(100 - soma)}`} />
+      <CardContador label="Despesas fixas" tom="roxo" value={fmtPct(d.despesas)} sub={origemCurta(p.despesas_origem, p)} />
+      {/* Migr. 664: o que cresce junto com cada venda (comissão, embalagem). */}
+      <CardContador label="Despesas variáveis" tom="laranja" corFixa value={fmtPct(d.variaveis ?? 0)}
+        sub={p.variaveis_origem === 'manual' ? 'informado pela gestão' : 'não informado: conta 0%'} />
+      <div className="col-span-2 lg:col-span-1">
+        <CardContador label="Antes do lucro" tom={soma >= 100 ? 'vermelho' : 'dourado'} corFixa value={fmtPct(soma, 2)}
+          sub={soma >= 100 ? 'nenhum preço paga a conta' : `lucro pode ir até ${fmtPct(100 - soma)}`} />
+      </div>
     </div>
   );
 }
 
 // ── Aba Simulador ────────────────────────────────────────────────────────────
+// Migr. 664: o custo entra aberto — o Custo Direto Total é a soma do que a
+// mercadoria custou posta na loja, não um número único digitado de cabeça.
+function CampoMoeda({ rotulo, nota, valor, onChange }: { rotulo: string; nota?: string; valor: string; onChange: (v: string) => void }) {
+  return (
+    <label className="flex flex-col gap-1">
+      <span className="text-[11px] text-gray-400">{rotulo}</span>
+      <input type="text" inputMode="numeric" className="neu-input py-2 px-3 rounded-xl text-sm tabular-nums"
+        value={valor} placeholder="0,00"
+        onChange={e => onChange(e.target.value === '' ? '' : formatBRL(e.target.value))} onKeyDown={handleMoneyKeyDown} />
+      {nota && <span className="text-[10px] text-gray-500 leading-snug">{nota}</span>}
+    </label>
+  );
+}
+
 function AbaSimulador({ p, d: dMercadoria }: { p: ParametrosPrecificacao; d: Deducoes }) {
-  const [custo, setCusto] = useState('10,00');
+  const [valorPago, setValorPago] = useState('10,00');
+  const [frete, setFrete] = useState('');
+  const [impostosCompra, setImpostosCompra] = useState('');
+  const [outros, setOutros] = useState('');
   const [lucro, setLucro] = useState('10');
   // Migr. 659: serviço (mão de obra) sai pela tabela do Anexo III.
   const [anexo, setAnexo] = useState<'I' | 'III'>('I');
-  const d = anexo === 'III' ? deducoesDe(p, 'III') : dMercadoria;
-  const c = parseBRL(custo);
+  const servico = anexo === 'III';
+  const d = servico ? deducoesDe(p, 'III') : dMercadoria;
+  const partes = {
+    valorPago: parseBRL(valorPago), frete: servico ? 0 : parseBRL(frete),
+    impostosCompra: servico ? 0 : parseBRL(impostosCompra), outros: parseBRL(outros),
+  };
+  const c = custoDiretoTotal(partes);
   const l = textoPct(lucro) ?? 0;
-  const soma = d.impostos + d.taxas + d.despesas + l;
+  const soma = somaDeducoes(d) + l;
   const pvDivisor = precoPorMarkupDivisor(c, d, l);
   // A conta antiga: as mesmas fatias somadas como markup sobre o custo.
   const pvMult = c > 0 ? precoPorMarkup(c, soma) : null;
   const compMult = pvMult ? composicaoDoPreco(pvMult, c, d) : null;
+
+  const trocarAnexo = (k: 'I' | 'III') => {
+    setAnexo(k);
+    // O lucro do serviço é um só para a unidade (Categorias › Serviços prestados).
+    if (k === 'III' && p.lucro_servico_pct != null) setLucro(String(p.lucro_servico_pct).replace('.', ','));
+  };
+
+  const parcelas: [string, number][] = servico
+    ? [['Material', partes.valorPago], ['Outros', partes.outros]]
+    : [['Valor pago', partes.valorPago], ['Frete', partes.frete], ['IPI/ICMS-ST', partes.impostosCompra], ['Outros', partes.outros]];
 
   return (
     <div className="grid grid-cols-1 xl:grid-cols-2 gap-5 items-start">
@@ -102,25 +140,55 @@ function AbaSimulador({ p, d: dMercadoria }: { p: ParametrosPrecificacao; d: Ded
         {p.vende_servico && (
           <div className="flex gap-2">
             {([['I', 'Mercadoria · Anexo I'], ['III', 'Serviço · Anexo III']] as const).map(([k, rot]) => (
-              <button key={k} type="button" onClick={() => setAnexo(k)}
+              <button key={k} type="button" onClick={() => trocarAnexo(k)}
                 className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-colors ${anexo === k ? 'neu-pressed text-accent' : 'neu-button text-gray-400 hover:text-gray-200'}`}>
                 {rot}
               </button>
             ))}
           </div>
         )}
-        <div className="grid grid-cols-2 gap-3">
-          <label className="flex flex-col gap-1">
-            <span className="text-[11px] text-gray-400">{anexo === 'III' ? 'Custo do serviço (R$)' : 'Custo do produto (R$)'}</span>
-            <input type="text" inputMode="numeric" className="neu-input py-2 px-3 rounded-xl text-sm tabular-nums"
-              value={custo} onChange={e => setCusto(formatBRL(e.target.value))} onKeyDown={handleMoneyKeyDown} />
-          </label>
-          <label className="flex flex-col gap-1">
-            <span className="text-[11px] text-gray-400">Lucro líquido desejado (%)</span>
-            <input type="text" inputMode="decimal" className="neu-input py-2 px-3 rounded-xl text-sm tabular-nums"
-              value={lucro} onChange={e => setLucro(e.target.value.replace(/[^0-9,.]/g, ''))} />
-          </label>
+
+        <div className="rounded-2xl border border-white/10 p-4 flex flex-col gap-3">
+          <p className="text-[10px] text-gray-400 uppercase tracking-widest font-bold">
+            {servico ? 'Custo direto do serviço (por unidade)' : 'Custo Direto Total (por unidade)'}
+          </p>
+          {servico ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <CampoMoeda rotulo="Material e mão de obra direta (R$)" nota="o que se gasta para prestar uma vez"
+                valor={valorPago} onChange={setValorPago} />
+              <CampoMoeda rotulo="Outros (R$)" nota="deslocamento, peça de reposição" valor={outros} onChange={setOutros} />
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <CampoMoeda rotulo="Valor pago ao fornecedor (R$)" nota="preço da nota, já com o desconto dele"
+                valor={valorPago} onChange={setValorPago} />
+              <CampoMoeda rotulo="Frete (R$)" nota="da nota ou do CT-e, dividido pelas unidades"
+                valor={frete} onChange={setFrete} />
+              <CampoMoeda rotulo="IPI e ICMS-ST da compra (R$)" nota="no Simples não se recuperam: são custo"
+                valor={impostosCompra} onChange={setImpostosCompra} />
+              <CampoMoeda rotulo="Outros (R$)" nota="seguro, embalagem de compra, descarga"
+                valor={outros} onChange={setOutros} />
+            </div>
+          )}
+          <div className="flex flex-wrap items-baseline justify-between gap-2 border-t border-white/10 pt-3">
+            <span className="text-[11px] text-gray-400 font-mono">
+              {parcelas.filter(([, v]) => v > 0).map(([r, v]) => `${r} ${brl(v)}`).join(' + ') || '—'}
+            </span>
+            <span className="text-sm font-black text-gray-100 tabular-nums">= {brl(c)}</span>
+          </div>
+          {!servico && (
+            <p className="text-[10px] text-gray-500 leading-snug">
+              No cadastro de cada produto o sistema já faz esta soma sozinho: a nota conferida e o frete lançado em
+              Contas a pagar › Frete (CT-e) entram no custo médio.
+            </p>
+          )}
         </div>
+
+        <label className="flex flex-col gap-1 max-w-[16rem]">
+          <span className="text-[11px] text-gray-400">Lucro líquido desejado (%)</span>
+          <input type="text" inputMode="decimal" className="neu-input py-2 px-3 rounded-xl text-sm tabular-nums"
+            value={lucro} onChange={e => setLucro(e.target.value.replace(/[^0-9,.]/g, ''))} />
+        </label>
 
         {c > 0 && (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -148,13 +216,63 @@ function AbaSimulador({ p, d: dMercadoria }: { p: ParametrosPrecificacao; d: Ded
       </div>
 
       {c > 0 && pvDivisor !== null
-        ? <div className="-mt-4"><ComposicaoPreco custo={c} venda={pvDivisor} params={p} lucroAlvo={l} anexo={anexo} /></div>
-        : <p className="text-xs text-gray-500">Informe um custo para ver a composição do preço.</p>}
+        ? <div className="-mt-4"><ComposicaoPreco custo={c} venda={pvDivisor} params={p} lucroAlvo={l} anexo={anexo}
+            rotuloLucro="desejado na simulação" /></div>
+        : <p className="text-xs text-gray-500">Informe o custo para ver a composição do preço.</p>}
     </div>
   );
 }
 
 // ── Aba Lucro por categoria ──────────────────────────────────────────────────
+// Migr. 664: serviço prestado não tem categoria de produto — o lucro desejado
+// dele é um só por unidade, e o divisor dele usa o Anexo III.
+function LucroServico({ p, salvar, showToast }: {
+  p: ParametrosPrecificacao; salvar: (pct: number | null) => Promise<void>; showToast: any;
+}) {
+  const [valor, setValor] = useState(pctTexto(p.lucro_servico_pct));
+  const [salvando, setSalvando] = useState(false);
+  useEffect(() => { setValor(pctTexto(p.lucro_servico_pct)); }, [p.lucro_servico_pct]);
+  const l = textoPct(valor);
+  const dIII = deducoesDe(p, 'III');
+  const pv = l !== null && l < 100 ? precoPorMarkupDivisor(100, dIII, l) : null;
+  const alterado = valor !== pctTexto(p.lucro_servico_pct);
+
+  const gravar = async () => {
+    if (l !== null && !(l >= 0 && l < 100)) { showToast('O lucro precisa ficar entre 0 e 99,99%.', 'error'); return; }
+    setSalvando(true);
+    try { await salvar(l); showToast('Lucro desejado dos serviços salvo.', 'success'); }
+    catch (e: any) { showToast(e?.message ?? 'Não foi possível salvar.', 'error'); }
+    finally { setSalvando(false); }
+  };
+
+  return (
+    <div className="rounded-2xl border border-teal-500/25 p-4 flex flex-wrap items-center gap-3">
+      <span className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0 bg-teal-500/10 text-teal-400"><Wrench size={16} /></span>
+      <div className="flex-1 min-w-[12rem]">
+        <p className="text-xs font-bold text-gray-200">Serviços prestados</p>
+        <p className="text-[10px] text-gray-500 leading-snug">
+          Anexo III ({fmtPct(dIII.impostos, 2)}). Vale para todo serviço da unidade — o preço sugerido aparece no cadastro de cada serviço.
+        </p>
+      </div>
+      <div className="relative inline-block">
+        <input className={`neu-input py-1.5 pl-3 pr-7 rounded-lg w-20 text-xs text-center tabular-nums ${alterado ? 'ring-1 ring-emerald-500/60' : ''}`}
+          inputMode="decimal" value={valor} disabled={!p.pode_editar} aria-label="Lucro desejado dos serviços"
+          onChange={e => setValor(e.target.value.replace(/[^0-9,.]/g, ''))} />
+        <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-600">%</span>
+      </div>
+      <span className={`text-xs tabular-nums whitespace-nowrap ${l !== null && pv === null ? 'text-red-400' : 'text-gray-300'}`}>
+        {l === null ? '' : pv === null ? 'impossível' : `custo R$ 100 → ${brl(pv)}`}
+      </span>
+      {p.pode_editar && (
+        <button onClick={gravar} disabled={salvando || !alterado}
+          className="btn-solido btn-solido--verde !py-1.5 !px-3 !text-xs flex items-center gap-1.5 disabled:opacity-40 disabled:cursor-default">
+          <Save size={12} /> {salvando ? 'Salvando…' : 'Salvar'}
+        </button>
+      )}
+    </div>
+  );
+}
+
 function AbaLucroCategorias({ categorias, isLoading, reload, d, showToast }: {
   categorias: any[]; isLoading: boolean; reload: () => void; d: Deducoes; showToast: any;
 }) {
@@ -256,6 +374,140 @@ function AbaLucroCategorias({ categorias, isLoading, reload, d, showToast }: {
   );
 }
 
+// ── Aba Produtos ─────────────────────────────────────────────────────────────
+// Migr. 664: o catálogo inteiro contra a conta — preço praticado × preço que o
+// markup divisor pede, e o lucro que sobra de verdade em cada um. Só leitura:
+// o preço se muda no cadastro do produto, que é onde a composição aparece.
+type FiltroProdutos = 'todos' | 'abaixo' | 'prejuizo' | 'sem_custo';
+
+function AbaProdutos({ p, d, categorias, filial }: {
+  p: ParametrosPrecificacao; d: Deducoes; categorias: any[]; filial: string;
+}) {
+  const { data, isLoading } = useFetchData<any>('/api/produtoscomcustoview', { filial });
+  const [filtro, setFiltro] = useState<FiltroProdutos>('abaixo');
+  const [busca, setBusca] = useState('');
+
+  const lucroDaCategoria = useMemo(() => {
+    const m = new Map<string, number | null>();
+    for (const c of categorias) m.set(c.id, c.lucro_alvo == null || c.lucro_alvo === '' ? null : Number(c.lucro_alvo));
+    return m;
+  }, [categorias]);
+
+  const linhas = useMemo(() => (data ?? [])
+    .filter((x: any) => x.ativo !== false && (x.status ?? 'Ativo') === 'Ativo' && ehVendavel(x.tipo))
+    .map((x: any) => {
+      const custo = x.preco_custo == null ? null : Number(x.preco_custo);
+      const preco = Number(x.preco ?? 0);
+      const alvo = x.categoria_id ? lucroDaCategoria.get(x.categoria_id) ?? null : null;
+      const sugerido = custo && custo > 0 && alvo !== null ? precoPorMarkupDivisor(custo, d, alvo) : null;
+      const comp = custo && custo > 0 && preco > 0 ? composicaoDoPreco(preco, custo, d) : null;
+      return { id: x.id, nome: x.nome, codigo: x.codigo, categoria: x.categoria, custo, preco, alvo, sugerido,
+               lucroPct: comp ? comp.lucroPct : null, lucro: comp ? comp.lucro : null };
+    }), [data, lucroDaCategoria, d]);
+
+  const cont = useMemo(() => ({
+    todos: linhas.length,
+    abaixo: linhas.filter(l => l.lucroPct !== null && l.alvo !== null && l.lucroPct < l.alvo - 0.05).length,
+    prejuizo: linhas.filter(l => l.lucro !== null && l.lucro < 0).length,
+    sem_custo: linhas.filter(l => !(l.custo && l.custo > 0)).length,
+  }), [linhas]);
+
+  const termo = busca.trim().toLowerCase();
+  const visiveis = linhas
+    .filter(l => filtro === 'todos' ? true
+      : filtro === 'abaixo' ? l.lucroPct !== null && l.alvo !== null && l.lucroPct < l.alvo - 0.05
+      : filtro === 'prejuizo' ? l.lucro !== null && l.lucro < 0
+      : !(l.custo && l.custo > 0))
+    .filter(l => !termo || String(l.nome ?? '').toLowerCase().includes(termo) || String(l.codigo ?? '').toLowerCase().includes(termo))
+    .sort((a, b) => (a.lucroPct ?? Infinity) - (b.lucroPct ?? Infinity));
+
+  if (isLoading) return <LoadingSpinner />;
+  // Custo é visível ao Financeiro, Marketing e Logística (produtos_custo_select).
+  const semAcessoAoCusto = linhas.length > 0 && linhas.every(l => l.custo === null);
+
+  const FILTROS: [FiltroProdutos, string][] = [
+    ['abaixo', 'Abaixo do lucro desejado'], ['prejuizo', 'No prejuízo'], ['sem_custo', 'Sem custo'], ['todos', 'Todos'],
+  ];
+
+  return (
+    <div className="flex flex-col gap-4">
+      <p className="text-[11px] text-gray-400 leading-snug max-w-3xl">
+        Cada produto vendável da unidade: o preço que está no cadastro, o que o markup divisor pede para o lucro desejado da
+        categoria, e o lucro líquido que sobra de verdade depois de custo, imposto, taxas e despesas. Para mudar o preço, abra o
+        produto em Cadastros › Produtos.
+      </p>
+      {semAcessoAoCusto && (
+        <p className="text-[11px] text-amber-400 flex items-start gap-1.5">
+          <TriangleAlert size={12} className="shrink-0 mt-0.5" />
+          O custo dos produtos é visível ao Financeiro, ao Marketing e à Logística — sem ele não há lucro a calcular.
+        </p>
+      )}
+      <div className="flex flex-wrap items-center gap-2">
+        {FILTROS.map(([k, rot]) => (
+          <button key={k} type="button" onClick={() => setFiltro(k)}
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-colors ${filtro === k ? 'neu-pressed text-accent' : 'neu-button text-gray-400 hover:text-gray-200'}`}>
+            {rot} <span className="tabular-nums opacity-60">{cont[k]}</span>
+          </button>
+        ))}
+        <input className="neu-input py-1.5 px-3 rounded-xl text-xs ml-auto w-full sm:w-56" placeholder="Buscar…"
+          value={busca} onChange={e => setBusca(e.target.value)} aria-label="Buscar produto" />
+      </div>
+
+      {visiveis.length === 0 ? (
+        <EmptyState message={filtro === 'abaixo' ? 'Nenhum produto abaixo do lucro desejado.' : 'Nenhum produto neste filtro.'} />
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="tabela w-full text-left border-collapse text-xs">
+            <thead>
+              <tr>
+                <th>Produto</th>
+                <th className="hidden sm:table-cell">Custo</th>
+                <th>Preço</th>
+                <th className="hidden md:table-cell">Sugerido</th>
+                <th>Lucro real</th>
+                <th className="hidden md:table-cell">Desejado</th>
+              </tr>
+            </thead>
+            <tbody>
+              {visiveis.map(l => {
+                const cor = l.lucro === null ? 'text-gray-500'
+                  : l.lucro < 0 ? 'text-red-400'
+                  : l.alvo !== null && (l.lucroPct ?? 0) < l.alvo - 0.05 ? 'text-amber-400' : 'text-emerald-400';
+                return (
+                  <tr key={l.id}>
+                    <td className="py-2">
+                      <span className="text-gray-200">{l.nome}</span>
+                      <span className="block text-[10px] text-gray-500">{[l.codigo, l.categoria].filter(Boolean).join(' · ') || '—'}</span>
+                    </td>
+                    <td className="hidden sm:table-cell tabular-nums text-gray-400 whitespace-nowrap">{l.custo && l.custo > 0 ? brl(l.custo) : '—'}</td>
+                    <td className="tabular-nums text-gray-100 whitespace-nowrap">
+                      {l.preco > 0 ? brl(l.preco) : '—'}
+                      {l.sugerido !== null && (
+                        <span className="md:hidden block text-[10px] text-gray-500">sugerido {brl(l.sugerido)}</span>
+                      )}
+                    </td>
+                    <td className="hidden md:table-cell tabular-nums text-gray-300 whitespace-nowrap">
+                      {l.sugerido !== null ? brl(l.sugerido) : l.alvo === null ? <span className="text-gray-600">sem lucro na categoria</span> : '—'}
+                    </td>
+                    <td className={`tabular-nums font-semibold whitespace-nowrap ${cor}`}>
+                      {l.lucroPct === null ? '—' : fmtPct(l.lucroPct)}
+                      {l.lucro !== null && <span className="block text-[10px] font-normal opacity-80">{brl(l.lucro)} por unidade</span>}
+                    </td>
+                    <td className="hidden md:table-cell tabular-nums text-gray-400">{l.alvo === null ? '—' : fmtPct(l.alvo)}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+      {p.despesas_origem === 'sem_historico' && (
+        <p className="text-[10px] text-gray-500">Sem histórico de despesas na janela: o lucro real está contando 0% de despesas fixas.</p>
+      )}
+    </div>
+  );
+}
+
 // ── Aba Tributação ───────────────────────────────────────────────────────────
 function Linha({ rotulo, valor, nota }: { rotulo: string; valor: React.ReactNode; nota?: string }) {
   return (
@@ -305,7 +557,7 @@ function MixDeTaxas({ p }: { p: ParametrosPrecificacao }) {
         </p>
       )}
       {p.taxas_fora_mix_pct != null && p.taxas_fora_mix_pct > 0 && (
-        <p className="text-[10px] text-gray-500">{fmtPct(p.taxas_fora_mix_pct)} da receita veio de venda mista e ficou fora do mix.</p>
+        <p className="text-[10px] text-gray-500">{fmtPct(p.taxas_fora_mix_pct)} da receita ficou fora do mix: venda mista gravada antes de 29/09 ou forma de pagamento sem Tipo no cadastro.</p>
       )}
       {p.taxas_realizada_pct != null && (
         <p className="text-[10px] text-gray-500">
@@ -318,31 +570,33 @@ function MixDeTaxas({ p }: { p: ParametrosPrecificacao }) {
 
 function AbaTributacao({ p, salvar, showToast }: {
   p: ParametrosPrecificacao;
-  salvar: (m: { rbt12: number | null; despesas_pct: number | null; taxas_pct: number | null }) => Promise<void>;
+  salvar: (m: { rbt12: number | null; despesas_pct: number | null; taxas_pct: number | null; variaveis_pct: number | null }) => Promise<void>;
   showToast: any;
 }) {
   const m = p.manual;
-  const temManual = !!m && (m.rbt12 != null || m.despesas_pct != null || m.taxas_pct != null);
+  const temManual = !!m && (m.rbt12 != null || m.despesas_pct != null || m.taxas_pct != null || m.variaveis_pct != null);
   const [ajustando, setAjustando] = useState(temManual);
   const [rbt12, setRbt12] = useState('');
   const [despesas, setDespesas] = useState('');
   const [taxas, setTaxas] = useState('');
+  const [variaveis, setVariaveis] = useState('');
   const [salvando, setSalvando] = useState(false);
 
   useEffect(() => {
     setRbt12(m?.rbt12 == null ? '' : formatBRL(m.rbt12));
     setDespesas(pctTexto(m?.despesas_pct));
     setTaxas(pctTexto(m?.taxas_pct));
-  }, [m?.rbt12, m?.despesas_pct, m?.taxas_pct]);
+    setVariaveis(pctTexto(m?.variaveis_pct));
+  }, [m?.rbt12, m?.despesas_pct, m?.taxas_pct, m?.variaveis_pct]);
 
   const handleSalvar = async () => {
-    const dv = textoPct(despesas), tv = textoPct(taxas);
-    for (const v of [dv, tv]) {
+    const dv = textoPct(despesas), tv = textoPct(taxas), vv = textoPct(variaveis);
+    for (const v of [dv, tv, vv]) {
       if (v !== null && !(v >= 0 && v < 100)) { showToast('Percentual precisa ficar entre 0 e 99,99.', 'error'); return; }
     }
     setSalvando(true);
     try {
-      await salvar({ rbt12: rbt12.trim() === '' ? null : parseBRL(rbt12), despesas_pct: dv, taxas_pct: tv });
+      await salvar({ rbt12: rbt12.trim() === '' ? null : parseBRL(rbt12), despesas_pct: dv, taxas_pct: tv, variaveis_pct: vv });
       showToast('Parâmetros de preço salvos.', 'success');
     } catch (e: any) {
       showToast(e?.message ?? 'Não foi possível salvar.', 'error');
@@ -381,11 +635,28 @@ function AbaTributacao({ p, salvar, showToast }: {
           </button>
         )}>
         <Linha rotulo="Taxas de cartão" valor={fmtPct(p.taxas_pct ?? 0)} nota={origemLonga(p.taxas_origem, p)} />
-        <Linha rotulo="Despesas da loja" valor={fmtPct(p.despesas_pct ?? 0)} nota={origemLonga(p.despesas_origem, p)} />
+        <Linha rotulo="Despesas fixas" valor={fmtPct(p.despesas_pct ?? 0)} nota={origemLonga(p.despesas_origem, p)} />
+        {/* Migr. 664: de onde sai o % fixo — os grupos do DRE, em % da receita. */}
+        {p.despesas_origem === 'historico' && (p.despesas_grupos ?? []).length > 0 && (
+          <div className="pl-3 border-l border-white/10 my-1 flex flex-col">
+            {(p.despesas_grupos ?? []).map(g => (
+              <div key={g.grupo} className="flex items-baseline justify-between gap-3 py-0.5 text-[11px]">
+                <span className="text-gray-400">{g.grupo}</span>
+                <span className={`tabular-nums ${g.pct < 0 ? 'text-gray-500' : 'text-gray-300'}`}>{fmtPct(Number(g.pct), 2)}</span>
+              </div>
+            ))}
+          </div>
+        )}
+        <Linha rotulo="Despesas variáveis" valor={fmtPct(p.variaveis_pct ?? 0)}
+          nota={p.variaveis_origem === 'manual'
+            ? 'comissão, embalagem, entrega — informado pela gestão'
+            : 'comissão sobre a venda, embalagem, entrega: não informado, conta 0% — informe em "Ajustar manualmente"'} />
         <MixDeTaxas p={p} />
         <p className="text-[10px] text-gray-500 leading-snug mt-3">
           Taxas = quanto se vende em cada forma × a taxa dela em Empresa › Formas de Pagamento (pelo campo Tipo).
-          Despesas = despesas do DRE sem a taxa da maquininha ÷ faturamento. Janela: os 3 últimos meses fechados.
+          Despesas fixas = despesas do DRE sem a taxa da maquininha ÷ faturamento (aluguel, folha, energia — não mudam com cada venda).
+          Despesas variáveis = o que cresce junto com cada venda; só entra aqui o que não está nas contas a pagar do DRE, senão conta duas vezes.
+          Janela: os 3 últimos meses fechados.
         </p>
 
         {p.pode_editar && ajustando && (
@@ -393,7 +664,7 @@ function AbaTributacao({ p, salvar, showToast }: {
             <p className="text-[11px] text-gray-400 leading-snug">
               Para filial nova sem histórico, ou para simular outra faixa. Preenchido vence o histórico; vazio devolve a ele.
             </p>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <label className="flex flex-col gap-1">
                 <span className="text-[11px] text-gray-400">Faturamento 12 meses (R$)</span>
                 <input type="text" inputMode="numeric" className="neu-input py-2 px-3 rounded-xl text-sm tabular-nums"
@@ -406,9 +677,14 @@ function AbaTributacao({ p, salvar, showToast }: {
                   value={taxas} onChange={e => setTaxas(e.target.value.replace(/[^0-9,.]/g, ''))} placeholder="Histórico" />
               </label>
               <label className="flex flex-col gap-1">
-                <span className="text-[11px] text-gray-400">Despesas da loja (%)</span>
+                <span className="text-[11px] text-gray-400">Despesas fixas (%)</span>
                 <input type="text" inputMode="decimal" className="neu-input py-2 px-3 rounded-xl text-sm tabular-nums"
                   value={despesas} onChange={e => setDespesas(e.target.value.replace(/[^0-9,.]/g, ''))} placeholder="Histórico" />
+              </label>
+              <label className="flex flex-col gap-1">
+                <span className="text-[11px] text-gray-400">Despesas variáveis (%)</span>
+                <input type="text" inputMode="decimal" className="neu-input py-2 px-3 rounded-xl text-sm tabular-nums"
+                  value={variaveis} onChange={e => setVariaveis(e.target.value.replace(/[^0-9,.]/g, ''))} placeholder="0" />
               </label>
             </div>
             <div className="flex justify-end">
@@ -526,10 +802,10 @@ function ApuracaoDas({ filial, showToast }: { filial: string; showToast: any }) 
 }
 
 // ── Tela ─────────────────────────────────────────────────────────────────────
-type Aba = 'simulador' | 'lucro' | 'tributacao';
+type Aba = 'simulador' | 'produtos' | 'lucro' | 'tributacao';
 
 const PrecificacaoViewInner = ({ showToast, filial }: { showToast: any; filial: FilialOp }) => {
-  const { params, erro, carregando, salvar } = useParametrosPrecificacao(filial);
+  const { params, erro, carregando, salvar, salvarLucroServico } = useParametrosPrecificacao(filial);
   const { data, isLoading, reload } = useFetchData<any>('categorias_produto', { filial });
   const [aba, setAba] = useState<Aba>('simulador');
 
@@ -548,7 +824,8 @@ const PrecificacaoViewInner = ({ showToast, filial }: { showToast: any; filial: 
       <div>
         <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Precificação — {filial}</h2>
         <p className="text-[11px] text-gray-400 mt-1 font-mono">
-          preço = custo ÷ (1 − {fmtPct(d.impostos, 2)} imposto − {fmtPct(d.taxas)} taxas − {fmtPct(d.despesas)} despesas − lucro%)
+          preço = Custo Direto Total ÷ (1 − {fmtPct(d.impostos, 2)} imposto − {fmtPct(d.taxas)} taxas − {fmtPct(d.despesas)} fixas
+          {(d.variaveis ?? 0) > 0 ? ` − ${fmtPct(d.variaveis ?? 0)} variáveis` : ''} − lucro%)
         </p>
       </div>
 
@@ -556,6 +833,8 @@ const PrecificacaoViewInner = ({ showToast, filial }: { showToast: any; filial: 
 
       <div role="tablist" className="flex flex-wrap gap-3">
         <AbaComContador label="Simulador" cor="roxo" icon={Calculator} ativa={aba === 'simulador'} onClick={() => setAba('simulador')} />
+        <AbaComContador label="Produtos" cor="verde" icon={Package} ativa={aba === 'produtos'} onClick={() => setAba('produtos')}
+          title="Preço praticado × preço pelo markup divisor, produto a produto" />
         <AbaComContador label="Categorias" cor="dourado" icon={Tags} ativa={aba === 'lucro'} onClick={() => setAba('lucro')}
           n={isLoading ? undefined : semLucro} title="Lucro líquido desejado por categoria. O número ao lado: categorias sem lucro definido — produto delas fica sem preço sugerido" />
         <AbaComContador label="Tributação" cor="azul" icon={Landmark} ativa={aba === 'tributacao'} onClick={() => setAba('tributacao')} />
@@ -563,7 +842,13 @@ const PrecificacaoViewInner = ({ showToast, filial }: { showToast: any; filial: 
 
       <div className="neu-flat rounded-3xl p-4 sm:p-6 border border-white/5">
         {aba === 'simulador' && <AbaSimulador p={params} d={d} />}
-        {aba === 'lucro' && <AbaLucroCategorias categorias={categorias} isLoading={isLoading} reload={reload} d={d} showToast={showToast} />}
+        {aba === 'produtos' && <AbaProdutos p={params} d={d} categorias={categorias} filial={filial} />}
+        {aba === 'lucro' && (
+          <div className="flex flex-col gap-5">
+            {params.vende_servico && <LucroServico p={params} salvar={salvarLucroServico} showToast={showToast} />}
+            <AbaLucroCategorias categorias={categorias} isLoading={isLoading} reload={reload} d={d} showToast={showToast} />
+          </div>
+        )}
         {aba === 'tributacao' && <AbaTributacao key={filial} p={params} salvar={salvar} showToast={showToast} />}
       </div>
     </motion.div>

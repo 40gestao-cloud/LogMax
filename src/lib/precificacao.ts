@@ -68,6 +68,13 @@ export type ParametrosPrecificacao = {
   acima_do_teto: boolean;
   despesas_pct: number | null;
   despesas_origem: OrigemPercentual;
+  /** Migr. 664: de que grupos do DRE sai o % fixo, cada um em % da receita. */
+  despesas_grupos?: { grupo: string; pct: number }[];
+  /** Migr. 664: despesa variável sobre a venda (comissão, embalagem), informada pela gestão. */
+  variaveis_pct?: number | null;
+  variaveis_origem?: 'manual' | 'nao_informado';
+  /** Migr. 664: lucro líquido desejado do serviço prestado (serviço não tem categoria). */
+  lucro_servico_pct?: number | null;
   taxas_pct: number | null;
   taxas_origem: OrigemPercentual;
   /** Migr. 657: participação de cada forma nas vendas e a taxa cadastrada dela. */
@@ -81,23 +88,28 @@ export type ParametrosPrecificacao = {
   janela_inicio: string;
   janela_fim: string;
   pode_editar: boolean;
-  manual: { rbt12: number | null; despesas_pct: number | null; taxas_pct: number | null } | null;
+  manual: { rbt12: number | null; despesas_pct: number | null; taxas_pct: number | null; variaveis_pct?: number | null } | null;
   atualizado_em: string | null;
 };
 
 export type OrigemPercentual = 'manual' | 'historico' | 'mix' | 'sem_historico';
 
-/** As fatias do preço que não são custo nem lucro, em % do preço de venda. */
-export type Deducoes = { impostos: number; taxas: number; despesas: number };
+/**
+ * As fatias do preço que não são custo nem lucro, em % do preço de venda.
+ * `despesas` = fixas (histórico do DRE); `variaveis` = as que crescem com cada
+ * venda (comissão, embalagem) — migr. 664.
+ */
+export type Deducoes = { impostos: number; taxas: number; despesas: number; variaveis?: number };
 
 /** `anexo` 'III' = preço de serviço (mão de obra), pela tabela do Anexo III. */
 export const deducoesDe = (p: ParametrosPrecificacao, anexo: 'I' | 'III' = 'I'): Deducoes => ({
   impostos: Number((anexo === 'III' ? p.aliquota_efetiva_iii : p.aliquota_efetiva) ?? 0),
   taxas:    Number(p.taxas_pct ?? 0),
   despesas: Number(p.despesas_pct ?? 0),
+  variaveis: Number(p.variaveis_pct ?? 0),
 });
 
-const somaDeducoes = (d: Deducoes) => d.impostos + d.taxas + d.despesas;
+export const somaDeducoes = (d: Deducoes) => d.impostos + d.taxas + d.despesas + (d.variaveis ?? 0);
 
 /** `1 − soma/100`. Null quando as fatias somam 100% ou mais: não há preço que pague. */
 export const markupDivisor = (d: Deducoes, lucroPct: number): number | null => {
@@ -118,7 +130,7 @@ export const markupEquivalente = (d: Deducoes, lucroPct: number): number | null 
 };
 
 export type Composicao = {
-  custo: number; impostos: number; taxas: number; despesas: number;
+  custo: number; impostos: number; taxas: number; despesas: number; variaveis: number;
   /** O que sobra de verdade. Negativo = o preço não paga a operação. */
   lucro: number; lucroPct: number;
 };
@@ -130,9 +142,20 @@ export const composicaoDoPreco = (venda: number, custo: number, d: Deducoes): Co
   const impostos = r2(venda * d.impostos / 100);
   const taxas    = r2(venda * d.taxas / 100);
   const despesas = r2(venda * d.despesas / 100);
-  const lucro    = r2(venda - custo - impostos - taxas - despesas);
-  return { custo: r2(custo), impostos, taxas, despesas, lucro, lucroPct: (lucro / venda) * 100 };
+  const variaveis = r2(venda * (d.variaveis ?? 0) / 100);
+  const lucro    = r2(venda - custo - impostos - taxas - despesas - variaveis);
+  return { custo: r2(custo), impostos, taxas, despesas, variaveis, lucro, lucroPct: (lucro / venda) * 100 };
 };
+
+/**
+ * Custo Direto Total da unidade (migr. 664): o que a mercadoria custa posta na
+ * loja. No Simples o IPI e o ICMS-ST pagos na compra não se recuperam — são
+ * custo, como o frete. Desconto do fornecedor já vem abatido no valor pago.
+ */
+export type PartesCusto = { valorPago: number; frete: number; impostosCompra: number; outros: number };
+
+export const custoDiretoTotal = (p: PartesCusto): number =>
+  Math.round((p.valorPago + p.frete + p.impostosCompra + p.outros) * 100) / 100;
 
 /**
  * Régua de cor do MARKUP, preservada da versão anterior sem mudança de valor —

@@ -1,6 +1,6 @@
 import { TriangleAlert } from 'lucide-react';
 import {
-  composicaoDoPreco, deducoesDe, fmtPct, markupDivisor,
+  composicaoDoPreco, deducoesDe, fmtPct, markupDivisor, somaDeducoes,
   type OrigemPercentual, type ParametrosPrecificacao,
 } from '../../lib/precificacao';
 
@@ -21,13 +21,15 @@ const mesAno = (iso: string) => {
   return new Date(Date.UTC(y, m - 1, 1)).toLocaleDateString('pt-BR', { month: 'short', year: '2-digit', timeZone: 'UTC' }).replace('.', '');
 };
 
-export function ComposicaoPreco({ custo, venda, params, lucroAlvo, anexo = 'I' }: {
+export function ComposicaoPreco({ custo, venda, params, lucroAlvo, anexo = 'I', rotuloLucro }: {
   custo: number;
   venda: number;
   params: ParametrosPrecificacao;
   lucroAlvo: number | null;
   /** Migr. 659: 'III' quando o que se precifica é serviço. */
   anexo?: 'I' | 'III';
+  /** De onde veio o lucro desejado (padrão: a categoria). */
+  rotuloLucro?: string;
 }) {
   const d = deducoesDe(params, anexo);
   const c = composicaoDoPreco(venda, custo, d);
@@ -40,7 +42,10 @@ export function ComposicaoPreco({ custo, venda, params, lucroAlvo, anexo = 'I' }
     { rotulo: 'Simples Nacional', valor: c.impostos, cor: 'bg-amber-500',
       nota: `Anexo ${anexo}, faixa ${params.faixa} — alíquota efetiva ${fmtPct(d.impostos, 2)}` },
     { rotulo: 'Taxas de cartão', valor: c.taxas, cor: 'bg-sky-500', nota: origemTexto(params.taxas_origem, janela) },
-    { rotulo: 'Despesas da loja', valor: c.despesas, cor: 'bg-violet-500', nota: origemTexto(params.despesas_origem, janela) },
+    { rotulo: 'Despesas fixas', valor: c.despesas, cor: 'bg-violet-500', nota: origemTexto(params.despesas_origem, janela) },
+    // Migr. 664: só aparece quando a gestão informou — zero não ensina nada.
+    ...(c.variaveis > 0 ? [{ rotulo: 'Despesas variáveis', valor: c.variaveis, cor: 'bg-orange-500',
+      nota: 'comissão, embalagem — informado pela gestão' }] : []),
   ] : [];
 
   return (
@@ -70,7 +75,7 @@ export function ComposicaoPreco({ custo, venda, params, lucroAlvo, anexo = 'I' }
               <span className={`w-2 h-2 rounded-sm shrink-0 self-center ${c.lucro >= 0 ? 'bg-emerald-500' : 'bg-red-500'}`} />
               <span className="font-bold text-gray-100">= Lucro líquido</span>
               {lucroAlvo !== null && (
-                <span className="text-[10px] text-gray-500">desejado pela categoria: {fmtPct(lucroAlvo)}</span>
+                <span className="text-[10px] text-gray-500">{rotuloLucro ?? 'desejado pela categoria'}: {fmtPct(lucroAlvo)}</span>
               )}
               <span className={`ml-auto tabular-nums font-bold w-14 text-right ${c.lucro >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
                 {fmtPct(c.lucroPct)}
@@ -85,7 +90,7 @@ export function ComposicaoPreco({ custo, venda, params, lucroAlvo, anexo = 'I' }
 
       {lucroAlvo !== null && divisor !== null && (
         <p className="text-[11px] text-gray-400 leading-snug">
-          Markup divisor: <span className="font-mono text-gray-200">custo ÷ (1 − {fmtPct(d.impostos + d.taxas + d.despesas + lucroAlvo, 2)}) = custo ÷ {divisor.toFixed(4).replace('.', ',')}</span>
+          Markup divisor: <span className="font-mono text-gray-200">custo ÷ (1 − {fmtPct(somaDeducoes(d) + lucroAlvo, 2)}) = custo ÷ {divisor.toFixed(4).replace('.', ',')}</span>
         </p>
       )}
       {lucroAlvo !== null && divisor === null && (
@@ -96,7 +101,7 @@ export function ComposicaoPreco({ custo, venda, params, lucroAlvo, anexo = 'I' }
       )}
       {lucroAlvo === null && (
         <p className="text-[11px] text-gray-500">
-          Defina o <span className="text-gray-300">lucro líquido desejado</span> da categoria em Financeiro › Precificação para o sistema sugerir o preço.
+          Defina o <span className="text-gray-300">lucro líquido desejado</span> {anexo === 'III' ? 'dos serviços' : 'da categoria'} em Financeiro › Precificação › Categorias para o sistema sugerir o preço.
         </p>
       )}
       {params.acima_do_teto && (

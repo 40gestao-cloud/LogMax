@@ -4,6 +4,7 @@ import { FormField, SecaoFormulario } from '../ui';
 import { formatBRL, handleMoneyKeyDown, parseBRL } from '../../lib/viewUtils';
 import { corDoMarkup, fmtPct, type ParametrosPrecificacao } from '../../lib/precificacao';
 import { ComposicaoPreco } from './ComposicaoPreco';
+import { ComposicaoCusto } from './ComposicaoCusto';
 import { ehVendavel } from '../../lib/tipoProduto';
 import { type FormProduto, type ExtrasProduto } from './produtoFormComum';
 
@@ -126,6 +127,8 @@ export function SecaoPrecos({
             params={paramsPreco}
             lucroAlvo={lucroCategoria} />
         )}
+        {/* Migr. 664: de onde vem o custo — nota, frete, por unidade. */}
+        {ehVendavel(extras.tipo) && editItem?.id && <ComposicaoCusto produtoId={editItem.id} />}
       </SecaoFormulario>
     </>
   );

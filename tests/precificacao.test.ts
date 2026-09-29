@@ -23,6 +23,8 @@ import {
   markupEquivalente,
   composicaoDoPreco,
   deducoesDe,
+  custoDiretoTotal,
+  somaDeducoes,
   type ParametrosPrecificacao,
 } from '../src/lib/precificacao';
 
@@ -206,6 +208,35 @@ describe('markup divisor', () => {
 
   it('parâmetros sem histórico entram como zero', () => {
     const p = { aliquota_efetiva: 4, taxas_pct: null, despesas_pct: null } as unknown as ParametrosPrecificacao;
-    expect(deducoesDe(p)).toEqual({ impostos: 4, taxas: 0, despesas: 0 });
+    expect(deducoesDe(p)).toEqual({ impostos: 4, taxas: 0, despesas: 0, variaveis: 0 });
+  });
+});
+
+// Migr. 664 — o custo que entra no divisor é o Custo Direto Total, e a
+// despesa se divide em fixa (histórico do DRE) e variável (comissão, embalagem).
+describe('custo direto total e despesas variáveis', () => {
+  it('soma valor pago, frete, IPI/ICMS-ST e outros', () => {
+    expect(custoDiretoTotal({ valorPago: 8.5, frete: 0.75, impostosCompra: 0.6, outros: 0.15 })).toBe(10);
+  });
+
+  it('a despesa variável é mais uma fatia do preço', () => {
+    const d = { impostos: 6, taxas: 2, despesas: 10, variaveis: 5 };
+    expect(somaDeducoes(d)).toBe(23);
+    expect(precoPorMarkupDivisor(10, d, 10)).toBe(14.93);
+    const c = composicaoDoPreco(14.93, 10, d)!;
+    expect(c.variaveis).toBe(0.75);
+    expect(c.lucroPct).toBeCloseTo(10, 0);
+  });
+
+  it('sem variável informada, conta zero e o preço não muda', () => {
+    const semVar = { impostos: 6, taxas: 2, despesas: 15 };
+    expect(precoPorMarkupDivisor(10, semVar, 10)).toBe(14.93);
+    expect(composicaoDoPreco(14.93, 10, semVar)!.variaveis).toBe(0);
+  });
+
+  it('vem dos parâmetros da unidade', () => {
+    const p = { aliquota_efetiva: 4, taxas_pct: 1, despesas_pct: 10, variaveis_pct: 3 } as unknown as ParametrosPrecificacao;
+    expect(deducoesDe(p).variaveis).toBe(3);
+    expect(deducoesDe(p, 'III').variaveis).toBe(3);
   });
 });

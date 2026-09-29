@@ -191,6 +191,7 @@
     "produtos_custo"
    ],
    "rpcs": [
+    "composicao_custo_produto",
     "concluir_correcao_produto",
     "gerar_grade_variantes",
     "liberar_codigo_produto",
@@ -200,6 +201,7 @@
     "renovar_trabalho",
     "reservar_codigo_produto",
     "reservar_trabalho",
+    "salvar_lucro_servico",
     "salvar_parametros_precificacao",
     "vincular_produto_requisicao"
    ],
@@ -253,8 +255,14 @@
     "planilhas_trabalho",
     "servicos"
    ],
-   "rpcs": [],
-   "grava_via_rpc": [],
+   "rpcs": [
+    "parametros_precificacao",
+    "salvar_lucro_servico",
+    "salvar_parametros_precificacao"
+   ],
+   "grava_via_rpc": [
+    "filial_precificacao"
+   ],
    "apis": []
   },
   "cadastros-lixeira": {
@@ -868,7 +876,8 @@
    "componente": "PrecificacaoView",
    "arquivo": "src/views/PrecificacaoView.tsx",
    "le": [
-    "categorias_produto"
+    "categorias_produto",
+    "produtos_com_custo"
    ],
    "grava": [
     "categorias_produto"
@@ -877,6 +886,7 @@
     "apurar_das",
     "das_competencias",
     "parametros_precificacao",
+    "salvar_lucro_servico",
     "salvar_parametros_precificacao"
    ],
    "grava_via_rpc": [
@@ -4623,6 +4633,26 @@
    ],
    "le": [],
    "chama": []
+  },
+  "composicao_custo_produto": {
+   "gatilho": false,
+   "secdef": true,
+   "grava": [],
+   "le": [
+    "contas_pagar",
+    "fornecedores",
+    "fretes_compra",
+    "fretes_compra_rateio",
+    "pedidos",
+    "produtos",
+    "produtos_custo",
+    "recebimentos"
+   ],
+   "chama": [
+    "_assert_rpc",
+    "auth_in_setor",
+    "auth_pode_filial"
+   ]
   },
   "conceder_mutuo_capital": {
    "gatilho": false,
@@ -9417,6 +9447,21 @@
     "rh_parametros"
    ],
    "chama": []
+  },
+  "salvar_lucro_servico": {
+   "gatilho": false,
+   "secdef": true,
+   "grava": [
+    "filial_precificacao"
+   ],
+   "le": [],
+   "chama": [
+    "_assert_rpc",
+    "auth_gerente_da",
+    "auth_in_setor",
+    "auth_pode_filial",
+    "parametros_precificacao"
+   ]
   },
   "salvar_parametros_precificacao": {
    "gatilho": false,

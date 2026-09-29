@@ -6,6 +6,9 @@ import { useFilial } from '../contexts/FilialContext';
 import { useFetchData, dbInsert, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
 import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent, ModalFormulario, CardContador, SecaoFormulario } from '../components/ui';
 import { formatBRL, parseBRL, handleMoneyKeyDown } from '../lib/viewUtils';
+import { useParametrosPrecificacao } from '../hooks/useParametrosPrecificacao';
+import { deducoesDe, fmtPct, precoPorMarkupDivisor } from '../lib/precificacao';
+import { ComposicaoPreco } from '../components/produtos/ComposicaoPreco';
 import { useConfirm } from '../contexts/ConfirmContext';
 import { MatrizConsolidado } from '../components/MatrizConsolidado';
 import { BotaoModeloPlanilha } from '../components/BotaoModeloPlanilha';
@@ -66,6 +69,8 @@ const EMPTY_FORM = {
   natureza: 'prestado' as string,
   tipo: '',
   valor: '',
+  // Migr. 664: custo direto (material + mão de obra) — base do markup divisor.
+  custo: '',
   status: 'Ativo',
   imagem_url: '',
   atributos: {} as Record<string, any>,
@@ -108,6 +113,13 @@ export const ServicosView = ({ showToast, onNavigate }: { showToast: any; onNavi
   }, [filialAtiva]);
 
   const filial = filialAtiva ?? '';
+  // Migr. 664: preço do serviço pelo markup divisor (Anexo III).
+  const { params: paramsPreco } = useParametrosPrecificacao(filialAtiva);
+  const custoServico = parseBRL(form.custo);
+  const precoSugeridoServico = useMemo(() => {
+    if (!paramsPreco || ehContratado(form.natureza) || paramsPreco.lucro_servico_pct == null || !(custoServico > 0)) return null;
+    return precoPorMarkupDivisor(custoServico, deducoesDe(paramsPreco, 'III'), Number(paramsPreco.lucro_servico_pct));
+  }, [paramsPreco, form.natureza, custoServico]);
   // Os atributos por nicho são todos do lado da VENDA — garantia ao cliente,
   // marcas atendidas, tempo da OS. Perguntar "garantia do serviço" para uma
   // dedetização contratada é pedir número que ninguém tem. Contratado fica sem
@@ -205,6 +217,7 @@ export const ServicosView = ({ showToast, onNavigate }: { showToast: any; onNavi
       natureza: normalizarNatureza(item.natureza),
       tipo:   item.tipo   ?? '',
       valor:  item.valor != null ? formatBRL(Number(item.valor)) : '',
+      custo:  item.custo != null ? formatBRL(Number(item.custo)) : '',
       status: item.status ?? 'Ativo',
       imagem_url: item.imagem_url ?? '',
       atributos: atrs,
@@ -277,6 +290,8 @@ export const ServicosView = ({ showToast, onNavigate }: { showToast: any; onNavi
         natureza: normalizarNatureza(form.natureza),
         tipo:   form.tipo || null,
         valor:  parseBRL(form.valor),
+        // Contratado não tem custo próprio: o que se paga é o valor dele.
+        custo:  !ehContratado(form.natureza) && form.custo.trim() ? parseBRL(form.custo) : null,
         status: form.status,
         imagem_url: imagemUrl || null,
         filial,
@@ -530,7 +545,23 @@ export const ServicosView = ({ showToast, onNavigate }: { showToast: any; onNavi
                 className={`neu-input py-2 px-3 rounded-xl text-sm tabular-nums ${errors.valor ? 'border border-red-500/40' : ''}`}
                 value={form.valor} onChange={e => setForm(f => ({ ...f, valor: formatBRL(parseBRL(e.target.value)) }))}
                 placeholder="0,00" />
+              {/* Migr. 664: markup divisor no Anexo III, com o lucro dos serviços da unidade. */}
+              {precoSugeridoServico !== null && (
+                <button type="button" className="text-[10px] mt-1 text-emerald-400 text-left underline-offset-2 hover:underline"
+                  onClick={() => setForm(f => ({ ...f, valor: formatBRL(precoSugeridoServico) }))}>
+                  Sugerido para {fmtPct(Number(paramsPreco?.lucro_servico_pct))} de lucro líquido: <strong>R$ {formatBRL(precoSugeridoServico)}</strong> — clique para usar
+                </button>
+              )}
             </FormField>
+            {!ehContratado(form.natureza) && (
+              <FormField label="Custo direto (R$)">
+                <input type="text" inputMode="numeric" onKeyDown={handleMoneyKeyDown}
+                  className="neu-input py-2 px-3 rounded-xl text-sm tabular-nums"
+                  value={form.custo} onChange={e => setForm(f => ({ ...f, custo: e.target.value === '' ? '' : formatBRL(parseBRL(e.target.value)) }))}
+                  placeholder="0,00" />
+                <p className="text-[10px] mt-1 text-gray-500">material e mão de obra direta de uma prestação</p>
+              </FormField>
+            )}
             <FormField label="Status">
               <select className="neu-input py-2 px-3 rounded-xl text-sm"
                 value={form.status} onChange={e => setForm(f => ({ ...f, status: e.target.value }))}>
@@ -539,6 +570,12 @@ export const ServicosView = ({ showToast, onNavigate }: { showToast: any; onNavi
               </select>
             </FormField>
           </div>
+
+          {!ehContratado(form.natureza) && paramsPreco && custoServico > 0 && (
+            <ComposicaoPreco custo={custoServico} venda={parseBRL(form.valor)} params={paramsPreco} anexo="III"
+              lucroAlvo={paramsPreco.lucro_servico_pct == null ? null : Number(paramsPreco.lucro_servico_pct)}
+              rotuloLucro="desejado para os serviços" />
+          )}
 
           {/* Atributos nicho — MaxLook e TechMax. SuperMax fica sem seção extra. */}
           {atrDefs.length > 0 && (
