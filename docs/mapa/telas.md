@@ -1486,7 +1486,7 @@ Para cada tela: o que ela lê e grava, as funções do banco que chama, e **quem
 - **Rota:** `usuarios` · **Componente:** `UsuariosView` ([src/views/UsuariosView.tsx](../../src/views/UsuariosView.tsx))
 - **Lê:** [funcionarios](tabelas.md#t-funcionarios), [senhas_visiveis](tabelas.md#t-senhas_visiveis), [user_profiles](tabelas.md#t-user_profiles)
 - **Grava direto:** [funcionarios](tabelas.md#t-funcionarios), [user_profiles](tabelas.md#t-user_profiles)
-- **Chama (RPC):** [atualizar_foto_usuario](funcoes.md#f-atualizar_foto_usuario), [resetar_dados_da_filial](funcoes.md#f-resetar_dados_da_filial), [resetar_dados_operacionais_admin](funcoes.md#f-resetar_dados_operacionais_admin)
+- **Chama (RPC):** [atualizar_foto_usuario](funcoes.md#f-atualizar_foto_usuario), [resetar_dados_da_filial](funcoes.md#f-resetar_dados_da_filial), [resetar_dados_operacionais_admin](funcoes.md#f-resetar_dados_operacionais_admin), [resetar_geral_admin](funcoes.md#f-resetar_geral_admin)
 - **Grava via RPC:** [avaliacoes](tabelas.md#t-avaliacoes), [caixa_bancos](tabelas.md#t-caixa_bancos), [configuracoes](tabelas.md#t-configuracoes), [desenvolvimentos_ia](tabelas.md#t-desenvolvimentos_ia), [emprestimos_filial](tabelas.md#t-emprestimos_filial), [itens_venda](tabelas.md#t-itens_venda), [parcelas_emprestimo](tabelas.md#t-parcelas_emprestimo)
 - **API do servidor:** `/api/users`
 - **Gatilhos levam a mudança até:** [maxbank_contas](tabelas.md#t-maxbank_contas), [produto_unidades](tabelas.md#t-produto_unidades)

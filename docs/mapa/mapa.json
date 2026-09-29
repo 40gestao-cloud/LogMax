@@ -2829,7 +2829,8 @@
    "rpcs": [
     "atualizar_foto_usuario",
     "resetar_dados_da_filial",
-    "resetar_dados_operacionais_admin"
+    "resetar_dados_operacionais_admin",
+    "resetar_geral_admin"
    ],
    "grava_via_rpc": [
     "avaliacoes",
@@ -2837,6 +2838,7 @@
     "configuracoes",
     "desenvolvimentos_ia",
     "emprestimos_filial",
+    "funcionarios",
     "itens_venda",
     "parcelas_emprestimo",
     "user_profiles"
@@ -3096,6 +3098,15 @@
    ],
    "chama": []
   },
+  "_dia_de_folga": {
+   "gatilho": false,
+   "secdef": true,
+   "grava": [],
+   "le": [
+    "ponto_calendario_excecoes"
+   ],
+   "chama": []
+  },
   "_folha_creditar_e_avancar": {
    "gatilho": false,
    "secdef": true,
@@ -3129,6 +3140,7 @@
     "ponto_jornada"
    ],
    "chama": [
+    "_dia_de_folga",
     "_freq_credito_dia",
     "_funcionario_desligado",
     "acre_today",
@@ -5321,7 +5333,9 @@
    "grava": [
     "ponto_calendario_excecoes"
    ],
-   "le": [],
+   "le": [
+    "ponto_eletronico"
+   ],
    "chama": [
     "_assert_matriz_admin"
    ]
@@ -5505,7 +5519,9 @@
     "ponto_calendario_excecoes",
     "ponto_jornada"
    ],
-   "chama": []
+   "chama": [
+    "_dia_de_folga"
+   ]
   },
   "dinheiro_do_caixa": {
    "gatilho": false,
@@ -6466,6 +6482,15 @@
    "chama": [
     "_funcionario_desligado"
    ]
+  },
+  "fn_ponto_recusa_dia_de_folga": {
+   "gatilho": true,
+   "secdef": false,
+   "grava": [],
+   "le": [
+    "ponto_calendario_excecoes"
+   ],
+   "chama": []
   },
   "fn_produto_com_documento_aberto_nao_sai": {
    "gatilho": true,
@@ -7518,6 +7543,7 @@
    ],
    "chama": [
     "_assert_rpc",
+    "_dia_de_folga",
     "_freq_credito_dia",
     "acre_today",
     "dias_letivos_periodo"
@@ -8846,6 +8872,22 @@
     "resetar_dados_operacionais"
    ]
   },
+  "resetar_geral_admin": {
+   "gatilho": false,
+   "secdef": true,
+   "grava": [
+    "caixa_bancos",
+    "configuracoes",
+    "funcionarios",
+    "user_profiles"
+   ],
+   "le": [
+    "user_profiles"
+   ],
+   "chama": [
+    "auth_user_role"
+   ]
+  },
   "resgatar_aplicacao": {
    "gatilho": false,
    "secdef": true,
@@ -9952,6 +9994,7 @@
    "trg_pix_pendentes_paid_at:pix_pendentes_set_paid_at"
   ],
   "ponto_eletronico": [
+   "trg_ponto_dia_de_folga:fn_ponto_recusa_dia_de_folga",
    "trg_ponto_filial:fn_ponto_filial_from_funcionario"
   ],
   "ponto_qr_registros": [

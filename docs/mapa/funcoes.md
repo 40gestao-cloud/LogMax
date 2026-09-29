@@ -183,6 +183,14 @@ Para cada função: quem a chama (tela, servidor, outra função, gatilho), o qu
 - **Ao gravar, acorda os gatilhos de:** [pedidos_venda](tabelas.md#t-pedidos_venda) ([documento_sem_exclusao](funcoes.md#f-documento_sem_exclusao), [fn_pedido_venda_status_pelos_marcos](funcoes.md#f-fn_pedido_venda_status_pelos_marcos), [set_numero_documento](funcoes.md#f-set_numero_documento))
 - **Lê:** [contas_receber](tabelas.md#t-contas_receber), [pedidos_venda](tabelas.md#t-pedidos_venda), [user_profiles](tabelas.md#t-user_profiles)
 
+<a id="f-_dia_de_folga"></a>
+## _dia_de_folga (RPC, SECURITY DEFINER)
+
+- **Telas que chamam:** —
+- **Chamada por outras funções:** [_frequencia_competicao](funcoes.md#f-_frequencia_competicao), [dias_letivos_periodo](funcoes.md#f-dias_letivos_periodo), [minha_frequencia](funcoes.md#f-minha_frequencia)
+- **Grava:** —
+- **Lê:** [ponto_calendario_excecoes](tabelas.md#t-ponto_calendario_excecoes)
+
 <a id="f-_folha_creditar_e_avancar"></a>
 ## _folha_creditar_e_avancar (RPC, SECURITY DEFINER)
 
@@ -207,7 +215,7 @@ Para cada função: quem a chama (tela, servidor, outra função, gatilho), o qu
 - **Chamada por outras funções:** [_calcular_placar_competicao_raw](funcoes.md#f-_calcular_placar_competicao_raw), [frequencia_filiais_competicao](funcoes.md#f-frequencia_filiais_competicao)
 - **Grava:** —
 - **Lê:** [competicoes_matriz](tabelas.md#t-competicoes_matriz), [funcionarios](tabelas.md#t-funcionarios), [ponto_eletronico](tabelas.md#t-ponto_eletronico), [ponto_jornada](tabelas.md#t-ponto_jornada)
-- **Chama:** [_freq_credito_dia](funcoes.md#f-_freq_credito_dia), [_funcionario_desligado](funcoes.md#f-_funcionario_desligado), [acre_today](funcoes.md#f-acre_today), [dias_letivos_periodo](funcoes.md#f-dias_letivos_periodo)
+- **Chama:** [_dia_de_folga](funcoes.md#f-_dia_de_folga), [_freq_credito_dia](funcoes.md#f-_freq_credito_dia), [_funcionario_desligado](funcoes.md#f-_funcionario_desligado), [acre_today](funcoes.md#f-acre_today), [dias_letivos_periodo](funcoes.md#f-dias_letivos_periodo)
 
 <a id="f-_funcionario_da_conta"></a>
 ## _funcionario_da_conta (RPC, SECURITY DEFINER)
@@ -300,7 +308,7 @@ Para cada função: quem a chama (tela, servidor, outra função, gatilho), o qu
 - **Telas que chamam:** —
 - **Chamada por outras funções:** [afastamento_reverte_ao_excluir](funcoes.md#f-afastamento_reverte_ao_excluir), [reverter_afastamento_no_ponto](funcoes.md#f-reverter_afastamento_no_ponto)
 - **Grava:** [ponto_eletronico](tabelas.md#t-ponto_eletronico)
-- **Ao gravar, acorda os gatilhos de:** [ponto_eletronico](tabelas.md#t-ponto_eletronico) ([fn_ponto_filial_from_funcionario](funcoes.md#f-fn_ponto_filial_from_funcionario))
+- **Ao gravar, acorda os gatilhos de:** [ponto_eletronico](tabelas.md#t-ponto_eletronico) ([fn_ponto_filial_from_funcionario](funcoes.md#f-fn_ponto_filial_from_funcionario), [fn_ponto_recusa_dia_de_folga](funcoes.md#f-fn_ponto_recusa_dia_de_folga))
 - **Lê:** [ponto_eletronico](tabelas.md#t-ponto_eletronico)
 - **Chama:** [ponto_corte_turma](funcoes.md#f-ponto_corte_turma)
 
@@ -442,7 +450,7 @@ Para cada função: quem a chama (tela, servidor, outra função, gatilho), o qu
 
 - **Telas que chamam:** [Recursos Humanos › Afastamentos](telas.md#s-rh-afastamentos)
 - **Grava:** [afastamentos](tabelas.md#t-afastamentos), [ponto_eletronico](tabelas.md#t-ponto_eletronico)
-- **Ao gravar, acorda os gatilhos de:** [afastamentos](tabelas.md#t-afastamentos) ([afastamento_decisao_guard](funcoes.md#f-afastamento_decisao_guard), [afastamento_nasce_pendente](funcoes.md#f-afastamento_nasce_pendente), [afastamento_reverte_ao_excluir](funcoes.md#f-afastamento_reverte_ao_excluir), [afastamento_reverte_ao_inativar](funcoes.md#f-afastamento_reverte_ao_inativar), [afastamento_valida_periodo](funcoes.md#f-afastamento_valida_periodo), [trg_afastamentos_updated_at](funcoes.md#f-trg_afastamentos_updated_at)); [ponto_eletronico](tabelas.md#t-ponto_eletronico) ([fn_ponto_filial_from_funcionario](funcoes.md#f-fn_ponto_filial_from_funcionario))
+- **Ao gravar, acorda os gatilhos de:** [afastamentos](tabelas.md#t-afastamentos) ([afastamento_decisao_guard](funcoes.md#f-afastamento_decisao_guard), [afastamento_nasce_pendente](funcoes.md#f-afastamento_nasce_pendente), [afastamento_reverte_ao_excluir](funcoes.md#f-afastamento_reverte_ao_excluir), [afastamento_reverte_ao_inativar](funcoes.md#f-afastamento_reverte_ao_inativar), [afastamento_valida_periodo](funcoes.md#f-afastamento_valida_periodo), [trg_afastamentos_updated_at](funcoes.md#f-trg_afastamentos_updated_at)); [ponto_eletronico](tabelas.md#t-ponto_eletronico) ([fn_ponto_filial_from_funcionario](funcoes.md#f-fn_ponto_filial_from_funcionario), [fn_ponto_recusa_dia_de_folga](funcoes.md#f-fn_ponto_recusa_dia_de_folga))
 - **Lê:** [afastamentos](tabelas.md#t-afastamentos), [ponto_eletronico](tabelas.md#t-ponto_eletronico)
 - **Chama:** [_assert_rpc](funcoes.md#f-_assert_rpc), [ponto_corte_turma](funcoes.md#f-ponto_corte_turma)
 
@@ -721,7 +729,7 @@ Para cada função: quem a chama (tela, servidor, outra função, gatilho), o qu
 ## auth_user_role (RPC, SECURITY DEFINER)
 
 - **Telas que chamam:** —
-- **Chamada por outras funções:** [_aplicar_desligado_em](funcoes.md#f-_aplicar_desligado_em), [_assert_capital_holding](funcoes.md#f-_assert_capital_holding), [_assert_interfilial](funcoes.md#f-_assert_interfilial), [_assert_lixeira](funcoes.md#f-_assert_lixeira), [alternar_simulacao_perda](funcoes.md#f-alternar_simulacao_perda), [apagar_emprestimo](funcoes.md#f-apagar_emprestimo), [aplicar_em_banco](funcoes.md#f-aplicar_em_banco), [atividade_aula_alcanca](funcoes.md#f-atividade_aula_alcanca), [auth_blackout](funcoes.md#f-auth_blackout), [auth_gerente_da](funcoes.md#f-auth_gerente_da), [auth_is_admin](funcoes.md#f-auth_is_admin), [auth_is_conselho](funcoes.md#f-auth_is_conselho), [aviso_matriz_alcanca](funcoes.md#f-aviso_matriz_alcanca), [concluir_correcao_produto](funcoes.md#f-concluir_correcao_produto), [controle_caixa_guard](funcoes.md#f-controle_caixa_guard), [dar_feedback_arte](funcoes.md#f-dar_feedback_arte), [decidir_desligamento](funcoes.md#f-decidir_desligamento), [decidir_justificativa_falta](funcoes.md#f-decidir_justificativa_falta), [decidir_vaga](funcoes.md#f-decidir_vaga), [declarar_vencedora](funcoes.md#f-declarar_vencedora), [demitir_funcionario](funcoes.md#f-demitir_funcionario), [devolver_movimentacao_para_correcao](funcoes.md#f-devolver_movimentacao_para_correcao), [editar_emprestimo](funcoes.md#f-editar_emprestimo), [encerrar_competicao_agora](funcoes.md#f-encerrar_competicao_agora), [excluir_competicao_matriz](funcoes.md#f-excluir_competicao_matriz), [fechar_mes_aplicacoes](funcoes.md#f-fechar_mes_aplicacoes), [funcionarios_vinculo_admin_guard](funcoes.md#f-funcionarios_vinculo_admin_guard), [gerar_painel_bi](funcoes.md#f-gerar_painel_bi), [marcar_tarefa_aula](funcoes.md#f-marcar_tarefa_aula), [movimentacao_caixa_guard](funcoes.md#f-movimentacao_caixa_guard), [nomear_mandato](funcoes.md#f-nomear_mandato), [nomear_sessao_aula](funcoes.md#f-nomear_sessao_aula), [parecer_justificativa_falta](funcoes.md#f-parecer_justificativa_falta), [publicar_atividade_aula](funcoes.md#f-publicar_atividade_aula), [reabrir_competicao](funcoes.md#f-reabrir_competicao), [reabrir_cotacao](funcoes.md#f-reabrir_cotacao), [reabrir_requisicao](funcoes.md#f-reabrir_requisicao), [reabrir_requisicao_estoque](funcoes.md#f-reabrir_requisicao_estoque), [readmitir_funcionario](funcoes.md#f-readmitir_funcionario), [registrar_aporte_capital](funcoes.md#f-registrar_aporte_capital), [registrar_ponto_manual](funcoes.md#f-registrar_ponto_manual), [remover_atividade_aula](funcoes.md#f-remover_atividade_aula), [remover_ponto](funcoes.md#f-remover_ponto), [resetar_dados_da_filial](funcoes.md#f-resetar_dados_da_filial), [resetar_dados_operacionais](funcoes.md#f-resetar_dados_operacionais), [resetar_dados_operacionais_admin](funcoes.md#f-resetar_dados_operacionais_admin), [resgatar_aplicacao](funcoes.md#f-resgatar_aplicacao), [user_profiles_bloquear_privesc](funcoes.md#f-user_profiles_bloquear_privesc), [vincular_sessao_aula](funcoes.md#f-vincular_sessao_aula)
+- **Chamada por outras funções:** [_aplicar_desligado_em](funcoes.md#f-_aplicar_desligado_em), [_assert_capital_holding](funcoes.md#f-_assert_capital_holding), [_assert_interfilial](funcoes.md#f-_assert_interfilial), [_assert_lixeira](funcoes.md#f-_assert_lixeira), [alternar_simulacao_perda](funcoes.md#f-alternar_simulacao_perda), [apagar_emprestimo](funcoes.md#f-apagar_emprestimo), [aplicar_em_banco](funcoes.md#f-aplicar_em_banco), [atividade_aula_alcanca](funcoes.md#f-atividade_aula_alcanca), [auth_blackout](funcoes.md#f-auth_blackout), [auth_gerente_da](funcoes.md#f-auth_gerente_da), [auth_is_admin](funcoes.md#f-auth_is_admin), [auth_is_conselho](funcoes.md#f-auth_is_conselho), [aviso_matriz_alcanca](funcoes.md#f-aviso_matriz_alcanca), [concluir_correcao_produto](funcoes.md#f-concluir_correcao_produto), [controle_caixa_guard](funcoes.md#f-controle_caixa_guard), [dar_feedback_arte](funcoes.md#f-dar_feedback_arte), [decidir_desligamento](funcoes.md#f-decidir_desligamento), [decidir_justificativa_falta](funcoes.md#f-decidir_justificativa_falta), [decidir_vaga](funcoes.md#f-decidir_vaga), [declarar_vencedora](funcoes.md#f-declarar_vencedora), [demitir_funcionario](funcoes.md#f-demitir_funcionario), [devolver_movimentacao_para_correcao](funcoes.md#f-devolver_movimentacao_para_correcao), [editar_emprestimo](funcoes.md#f-editar_emprestimo), [encerrar_competicao_agora](funcoes.md#f-encerrar_competicao_agora), [excluir_competicao_matriz](funcoes.md#f-excluir_competicao_matriz), [fechar_mes_aplicacoes](funcoes.md#f-fechar_mes_aplicacoes), [funcionarios_vinculo_admin_guard](funcoes.md#f-funcionarios_vinculo_admin_guard), [gerar_painel_bi](funcoes.md#f-gerar_painel_bi), [marcar_tarefa_aula](funcoes.md#f-marcar_tarefa_aula), [movimentacao_caixa_guard](funcoes.md#f-movimentacao_caixa_guard), [nomear_mandato](funcoes.md#f-nomear_mandato), [nomear_sessao_aula](funcoes.md#f-nomear_sessao_aula), [parecer_justificativa_falta](funcoes.md#f-parecer_justificativa_falta), [publicar_atividade_aula](funcoes.md#f-publicar_atividade_aula), [reabrir_competicao](funcoes.md#f-reabrir_competicao), [reabrir_cotacao](funcoes.md#f-reabrir_cotacao), [reabrir_requisicao](funcoes.md#f-reabrir_requisicao), [reabrir_requisicao_estoque](funcoes.md#f-reabrir_requisicao_estoque), [readmitir_funcionario](funcoes.md#f-readmitir_funcionario), [registrar_aporte_capital](funcoes.md#f-registrar_aporte_capital), [registrar_ponto_manual](funcoes.md#f-registrar_ponto_manual), [remover_atividade_aula](funcoes.md#f-remover_atividade_aula), [remover_ponto](funcoes.md#f-remover_ponto), [resetar_dados_da_filial](funcoes.md#f-resetar_dados_da_filial), [resetar_dados_operacionais](funcoes.md#f-resetar_dados_operacionais), [resetar_dados_operacionais_admin](funcoes.md#f-resetar_dados_operacionais_admin), [resetar_geral_admin](funcoes.md#f-resetar_geral_admin), [resgatar_aplicacao](funcoes.md#f-resgatar_aplicacao), [user_profiles_bloquear_privesc](funcoes.md#f-user_profiles_bloquear_privesc), [vincular_sessao_aula](funcoes.md#f-vincular_sessao_aula)
 - **Grava:** —
 - **Lê:** [user_profiles](tabelas.md#t-user_profiles)
 
@@ -1506,7 +1514,7 @@ Para cada função: quem a chama (tela, servidor, outra função, gatilho), o qu
 
 - **Telas que chamam:** [Recursos Humanos › Registro de Ponto](telas.md#s-rh-registrodeponto)
 - **Grava:** [justificativas_falta](tabelas.md#t-justificativas_falta), [ponto_eletronico](tabelas.md#t-ponto_eletronico)
-- **Ao gravar, acorda os gatilhos de:** [ponto_eletronico](tabelas.md#t-ponto_eletronico) ([fn_ponto_filial_from_funcionario](funcoes.md#f-fn_ponto_filial_from_funcionario))
+- **Ao gravar, acorda os gatilhos de:** [ponto_eletronico](tabelas.md#t-ponto_eletronico) ([fn_ponto_filial_from_funcionario](funcoes.md#f-fn_ponto_filial_from_funcionario), [fn_ponto_recusa_dia_de_folga](funcoes.md#f-fn_ponto_recusa_dia_de_folga))
 - **Lê:** [justificativas_falta](tabelas.md#t-justificativas_falta), [ponto_eletronico](tabelas.md#t-ponto_eletronico), [ponto_jornada](tabelas.md#t-ponto_jornada), [user_profiles](tabelas.md#t-user_profiles)
 - **Chama:** [_assert_rpc](funcoes.md#f-_assert_rpc), [_freq_credito_dia](funcoes.md#f-_freq_credito_dia), [_funcionario_da_conta](funcoes.md#f-_funcionario_da_conta), [auth_user_role](funcoes.md#f-auth_user_role), [ponto_corte_turma](funcoes.md#f-ponto_corte_turma)
 
@@ -1549,6 +1557,7 @@ Para cada função: quem a chama (tela, servidor, outra função, gatilho), o qu
 
 - **Telas que chamam:** [Central de Avaliação](telas.md#s-avaliacoes), [Matriz avaliacoes *(rota matriz-avaliacoes)*](telas.md#s-matriz-avaliacoes), [Recursos Humanos › Registro de Ponto](telas.md#s-rh-registrodeponto)
 - **Grava:** [ponto_calendario_excecoes](tabelas.md#t-ponto_calendario_excecoes)
+- **Lê:** [ponto_eletronico](tabelas.md#t-ponto_eletronico)
 - **Chama:** [_assert_matriz_admin](funcoes.md#f-_assert_matriz_admin)
 
 <a id="f-definir_ponto_jornada"></a>
@@ -1646,6 +1655,7 @@ Para cada função: quem a chama (tela, servidor, outra função, gatilho), o qu
 - **Chamada por outras funções:** [_frequencia_competicao](funcoes.md#f-_frequencia_competicao), [enviar_justificativa_falta](funcoes.md#f-enviar_justificativa_falta), [minha_frequencia](funcoes.md#f-minha_frequencia)
 - **Grava:** —
 - **Lê:** [ponto_calendario_excecoes](tabelas.md#t-ponto_calendario_excecoes), [ponto_jornada](tabelas.md#t-ponto_jornada)
+- **Chama:** [_dia_de_folga](funcoes.md#f-_dia_de_folga)
 
 <a id="f-dinheiro_do_caixa"></a>
 ## dinheiro_do_caixa (RPC, SECURITY DEFINER)
@@ -2261,6 +2271,13 @@ Para cada função: quem a chama (tela, servidor, outra função, gatilho), o qu
 - **Lê:** [funcionarios](tabelas.md#t-funcionarios)
 - **Chama:** [_funcionario_desligado](funcoes.md#f-_funcionario_desligado)
 
+<a id="f-fn_ponto_recusa_dia_de_folga"></a>
+## fn_ponto_recusa_dia_de_folga (gatilho)
+
+- **Dispara em:** [ponto_eletronico](tabelas.md#t-ponto_eletronico)
+- **Grava:** —
+- **Lê:** [ponto_calendario_excecoes](tabelas.md#t-ponto_calendario_excecoes)
+
 <a id="f-fn_produto_com_documento_aberto_nao_sai"></a>
 ## fn_produto_com_documento_aberto_nao_sai (gatilho, SECURITY DEFINER)
 
@@ -2371,7 +2388,7 @@ Para cada função: quem a chama (tela, servidor, outra função, gatilho), o qu
 
 - **Dispara em:** [ponto_qr_registros](tabelas.md#t-ponto_qr_registros)
 - **Grava:** [ponto_eletronico](tabelas.md#t-ponto_eletronico)
-- **Ao gravar, acorda os gatilhos de:** [ponto_eletronico](tabelas.md#t-ponto_eletronico) ([fn_ponto_filial_from_funcionario](funcoes.md#f-fn_ponto_filial_from_funcionario))
+- **Ao gravar, acorda os gatilhos de:** [ponto_eletronico](tabelas.md#t-ponto_eletronico) ([fn_ponto_filial_from_funcionario](funcoes.md#f-fn_ponto_filial_from_funcionario), [fn_ponto_recusa_dia_de_folga](funcoes.md#f-fn_ponto_recusa_dia_de_folga))
 - **Lê:** [ponto_qr_registros](tabelas.md#t-ponto_qr_registros), [user_profiles](tabelas.md#t-user_profiles)
 
 <a id="f-fn_sync_ponto_eletronico"></a>
@@ -2379,7 +2396,7 @@ Para cada função: quem a chama (tela, servidor, outra função, gatilho), o qu
 
 - **Dispara em:** [ponto_qr_registros](tabelas.md#t-ponto_qr_registros)
 - **Grava:** [ponto_eletronico](tabelas.md#t-ponto_eletronico)
-- **Ao gravar, acorda os gatilhos de:** [ponto_eletronico](tabelas.md#t-ponto_eletronico) ([fn_ponto_filial_from_funcionario](funcoes.md#f-fn_ponto_filial_from_funcionario))
+- **Ao gravar, acorda os gatilhos de:** [ponto_eletronico](tabelas.md#t-ponto_eletronico) ([fn_ponto_filial_from_funcionario](funcoes.md#f-fn_ponto_filial_from_funcionario), [fn_ponto_recusa_dia_de_folga](funcoes.md#f-fn_ponto_recusa_dia_de_folga))
 - **Lê:** [ponto_eletronico](tabelas.md#t-ponto_eletronico), [user_profiles](tabelas.md#t-user_profiles)
 
 <a id="f-fn_taxonomia_padrao_protege"></a>
@@ -2938,7 +2955,7 @@ Para cada função: quem a chama (tela, servidor, outra função, gatilho), o qu
 - **Telas que chamam:** [Meu Crachá](telas.md#s-meu-cracha)
 - **Grava:** —
 - **Lê:** [funcionarios](tabelas.md#t-funcionarios), [justificativas_falta](tabelas.md#t-justificativas_falta), [ponto_eletronico](tabelas.md#t-ponto_eletronico), [ponto_jornada](tabelas.md#t-ponto_jornada), [user_profiles](tabelas.md#t-user_profiles)
-- **Chama:** [_assert_rpc](funcoes.md#f-_assert_rpc), [_freq_credito_dia](funcoes.md#f-_freq_credito_dia), [acre_today](funcoes.md#f-acre_today), [dias_letivos_periodo](funcoes.md#f-dias_letivos_periodo)
+- **Chama:** [_assert_rpc](funcoes.md#f-_assert_rpc), [_dia_de_folga](funcoes.md#f-_dia_de_folga), [_freq_credito_dia](funcoes.md#f-_freq_credito_dia), [acre_today](funcoes.md#f-acre_today), [dias_letivos_periodo](funcoes.md#f-dias_letivos_periodo)
 
 <a id="f-mov_estoque_delta"></a>
 ## mov_estoque_delta (RPC)
@@ -3494,7 +3511,7 @@ Para cada função: quem a chama (tela, servidor, outra função, gatilho), o qu
 
 - **Telas que chamam:** [Crachá Virtual](telas.md#s-cracha-virtual), [Recursos Humanos › Registro de Ponto](telas.md#s-rh-registrodeponto)
 - **Grava:** [ponto_eletronico](tabelas.md#t-ponto_eletronico)
-- **Ao gravar, acorda os gatilhos de:** [ponto_eletronico](tabelas.md#t-ponto_eletronico) ([fn_ponto_filial_from_funcionario](funcoes.md#f-fn_ponto_filial_from_funcionario))
+- **Ao gravar, acorda os gatilhos de:** [ponto_eletronico](tabelas.md#t-ponto_eletronico) ([fn_ponto_filial_from_funcionario](funcoes.md#f-fn_ponto_filial_from_funcionario), [fn_ponto_recusa_dia_de_folga](funcoes.md#f-fn_ponto_recusa_dia_de_folga))
 - **Lê:** [funcionarios](tabelas.md#t-funcionarios), [ponto_eletronico](tabelas.md#t-ponto_eletronico), [user_profiles](tabelas.md#t-user_profiles)
 - **Chama:** [_assert_rpc](funcoes.md#f-_assert_rpc), [_funcionario_desligado](funcoes.md#f-_funcionario_desligado), [auth_gerente_da](funcoes.md#f-auth_gerente_da), [auth_in_setor](funcoes.md#f-auth_in_setor), [auth_pode_filial](funcoes.md#f-auth_pode_filial), [auth_user_role](funcoes.md#f-auth_user_role), [ponto_corte_turma](funcoes.md#f-ponto_corte_turma)
 
@@ -3597,7 +3614,7 @@ Para cada função: quem a chama (tela, servidor, outra função, gatilho), o qu
 
 - **Telas que chamam:** [Recursos Humanos › Registro de Ponto](telas.md#s-rh-registrodeponto)
 - **Grava:** [ponto_eletronico](tabelas.md#t-ponto_eletronico)
-- **Ao gravar, acorda os gatilhos de:** [ponto_eletronico](tabelas.md#t-ponto_eletronico) ([fn_ponto_filial_from_funcionario](funcoes.md#f-fn_ponto_filial_from_funcionario))
+- **Ao gravar, acorda os gatilhos de:** [ponto_eletronico](tabelas.md#t-ponto_eletronico) ([fn_ponto_filial_from_funcionario](funcoes.md#f-fn_ponto_filial_from_funcionario), [fn_ponto_recusa_dia_de_folga](funcoes.md#f-fn_ponto_recusa_dia_de_folga))
 - **Lê:** [funcionarios](tabelas.md#t-funcionarios), [ponto_eletronico](tabelas.md#t-ponto_eletronico)
 - **Chama:** [_assert_rpc](funcoes.md#f-_assert_rpc), [auth_user_role](funcoes.md#f-auth_user_role), [ponto_corte_turma](funcoes.md#f-ponto_corte_turma)
 
@@ -3715,6 +3732,16 @@ Para cada função: quem a chama (tela, servidor, outra função, gatilho), o qu
 - **Grava:** [configuracoes](tabelas.md#t-configuracoes)
 - **Lê:** [configuracoes](tabelas.md#t-configuracoes)
 - **Chama:** [auth_user_role](funcoes.md#f-auth_user_role), [resetar_dados_operacionais](funcoes.md#f-resetar_dados_operacionais)
+
+<a id="f-resetar_geral_admin"></a>
+## resetar_geral_admin (RPC, SECURITY DEFINER)
+
+- **Telas que chamam:** [Usuários](telas.md#s-usuarios)
+- **Grava:** [caixa_bancos](tabelas.md#t-caixa_bancos), [configuracoes](tabelas.md#t-configuracoes), [funcionarios](tabelas.md#t-funcionarios), [user_profiles](tabelas.md#t-user_profiles)
+- **Ao gravar, acorda os gatilhos de:** [funcionarios](tabelas.md#t-funcionarios) ([funcionarios_autovincular_user_profile](funcoes.md#f-funcionarios_autovincular_user_profile), [funcionarios_vinculo_admin_guard](funcoes.md#f-funcionarios_vinculo_admin_guard)); [user_profiles](tabelas.md#t-user_profiles) ([criar_maxbank_conta_para_colaborador](funcoes.md#f-criar_maxbank_conta_para_colaborador), [fn_conselho_e_da_matriz](funcoes.md#f-fn_conselho_e_da_matriz), [user_profiles_bloquear_privesc](funcoes.md#f-user_profiles_bloquear_privesc), [user_profiles_propagar_filial](funcoes.md#f-user_profiles_propagar_filial))
+- **Lê:** [user_profiles](tabelas.md#t-user_profiles)
+- **Chama:** [auth_user_role](funcoes.md#f-auth_user_role)
+- **Tem SQL dinâmico** (EXECUTE): o que ele toca não aparece acima.
 
 <a id="f-resgatar_aplicacao"></a>
 ## resgatar_aplicacao (RPC, SECURITY DEFINER)
