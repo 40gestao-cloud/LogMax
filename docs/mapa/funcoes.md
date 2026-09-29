@@ -207,7 +207,7 @@ Para cada função: quem a chama (tela, servidor, outra função, gatilho), o qu
 - **Chamada por outras funções:** [gerar_dre](funcoes.md#f-gerar_dre), [parametros_precificacao](funcoes.md#f-parametros_precificacao)
 - **Grava:** —
 - **Lê:** [ajustes_custo_compra](tabelas.md#t-ajustes_custo_compra), [centros_custo](tabelas.md#t-centros_custo), [consumos_material](tabelas.md#t-consumos_material), [contas_pagar](tabelas.md#t-contas_pagar), [devolucoes](tabelas.md#t-devolucoes), [itens_devolucao](tabelas.md#t-itens_devolucao), [itens_venda](tabelas.md#t-itens_venda), [parcelas_emprestimo](tabelas.md#t-parcelas_emprestimo), [produtos](tabelas.md#t-produtos), [produtos_custo](tabelas.md#t-produtos_custo), [vendas](tabelas.md#t-vendas)
-- **Chama:** [_receita_simples](funcoes.md#f-_receita_simples), [_simples_rbt12](funcoes.md#f-_simples_rbt12), [simples_anexo_i](funcoes.md#f-simples_anexo_i)
+- **Chama:** [_simples_periodo](funcoes.md#f-_simples_periodo)
 
 <a id="f-_folha_creditar_e_avancar"></a>
 ## _folha_creditar_e_avancar (RPC, SECURITY DEFINER)
@@ -320,11 +320,19 @@ Para cada função: quem a chama (tela, servidor, outra função, gatilho), o qu
 - **Lê:** [competicoes_matriz](tabelas.md#t-competicoes_matriz), [contas_pagar](tabelas.md#t-contas_pagar), [emprestimos_filial](tabelas.md#t-emprestimos_filial), [parcelas_emprestimo](tabelas.md#t-parcelas_emprestimo)
 - **Chama:** [acre_today](funcoes.md#f-acre_today)
 
+<a id="f-_receita_servico"></a>
+## _receita_servico (RPC, SECURITY DEFINER)
+
+- **Telas que chamam:** —
+- **Chamada por outras funções:** [_simples_periodo](funcoes.md#f-_simples_periodo)
+- **Grava:** —
+- **Lê:** [itens_venda](tabelas.md#t-itens_venda), [vendas](tabelas.md#t-vendas)
+
 <a id="f-_receita_simples"></a>
 ## _receita_simples (RPC, SECURITY DEFINER)
 
 - **Telas que chamam:** —
-- **Chamada por outras funções:** [_dre_calculo](funcoes.md#f-_dre_calculo), [_simples_do_mes](funcoes.md#f-_simples_do_mes), [_simples_rbt12](funcoes.md#f-_simples_rbt12), [parametros_precificacao](funcoes.md#f-parametros_precificacao)
+- **Chamada por outras funções:** [_simples_periodo](funcoes.md#f-_simples_periodo), [_simples_rbt12](funcoes.md#f-_simples_rbt12), [parametros_precificacao](funcoes.md#f-parametros_precificacao)
 - **Grava:** —
 - **Lê:** [devolucoes](tabelas.md#t-devolucoes), [vendas](tabelas.md#t-vendas)
 
@@ -344,13 +352,21 @@ Para cada função: quem a chama (tela, servidor, outra função, gatilho), o qu
 - **Telas que chamam:** —
 - **Chamada por outras funções:** [apurar_das](funcoes.md#f-apurar_das), [das_competencias](funcoes.md#f-das_competencias)
 - **Grava:** —
-- **Chama:** [_receita_simples](funcoes.md#f-_receita_simples), [_simples_rbt12](funcoes.md#f-_simples_rbt12), [simples_anexo_i](funcoes.md#f-simples_anexo_i)
+- **Chama:** [_simples_periodo](funcoes.md#f-_simples_periodo)
+
+<a id="f-_simples_periodo"></a>
+## _simples_periodo (RPC, SECURITY DEFINER)
+
+- **Telas que chamam:** —
+- **Chamada por outras funções:** [_dre_calculo](funcoes.md#f-_dre_calculo), [_simples_do_mes](funcoes.md#f-_simples_do_mes)
+- **Grava:** —
+- **Chama:** [_receita_servico](funcoes.md#f-_receita_servico), [_receita_simples](funcoes.md#f-_receita_simples), [_simples_rbt12](funcoes.md#f-_simples_rbt12), [simples_anexo_i](funcoes.md#f-simples_anexo_i), [simples_anexo_iii](funcoes.md#f-simples_anexo_iii)
 
 <a id="f-_simples_rbt12"></a>
 ## _simples_rbt12 (RPC, SECURITY DEFINER)
 
 - **Telas que chamam:** —
-- **Chamada por outras funções:** [_dre_calculo](funcoes.md#f-_dre_calculo), [_simples_do_mes](funcoes.md#f-_simples_do_mes), [parametros_precificacao](funcoes.md#f-parametros_precificacao)
+- **Chamada por outras funções:** [_simples_periodo](funcoes.md#f-_simples_periodo), [parametros_precificacao](funcoes.md#f-parametros_precificacao)
 - **Grava:** —
 - **Lê:** [filial_precificacao](tabelas.md#t-filial_precificacao), [vendas](tabelas.md#t-vendas)
 - **Chama:** [_receita_simples](funcoes.md#f-_receita_simples)
@@ -1487,7 +1503,7 @@ Para cada função: quem a chama (tela, servidor, outra função, gatilho), o qu
 - **Chamada por outras funções:** [confirmar_pedido_online](funcoes.md#f-confirmar_pedido_online)
 - **Grava:** [contas_receber](tabelas.md#t-contas_receber), [itens_venda](tabelas.md#t-itens_venda), [marketing_cupons](tabelas.md#t-marketing_cupons), [movimentacoes_estoque](tabelas.md#t-movimentacoes_estoque), [vendas](tabelas.md#t-vendas)
 - **Ao gravar, acorda os gatilhos de:** [contas_receber](tabelas.md#t-contas_receber) ([_conta_receber_fecha_pedido_venda](funcoes.md#f-_conta_receber_fecha_pedido_venda), [conta_com_dinheiro_nao_exclui](funcoes.md#f-conta_com_dinheiro_nao_exclui), [fn_conta_receber_exige_conciliacao](funcoes.md#f-fn_conta_receber_exige_conciliacao), [sync_saldo_caixa_receber](funcoes.md#f-sync_saldo_caixa_receber)); [itens_venda](tabelas.md#t-itens_venda) ([fn_item_venda_aloca_unidade](funcoes.md#f-fn_item_venda_aloca_unidade), [fn_item_venda_so_mercadoria](funcoes.md#f-fn_item_venda_so_mercadoria), [fn_itens_venda_carimba_custo](funcoes.md#f-fn_itens_venda_carimba_custo), [fn_valida_filial_item_venda](funcoes.md#f-fn_valida_filial_item_venda)); [marketing_cupons](tabelas.md#t-marketing_cupons) ([trg_marketing_cupons_updated_at](funcoes.md#f-trg_marketing_cupons_updated_at)); [movimentacoes_estoque](tabelas.md#t-movimentacoes_estoque) ([_mov_estoque_casa_com_pedido](funcoes.md#f-_mov_estoque_casa_com_pedido), [fn_atualiza_estoque_produto](funcoes.md#f-fn_atualiza_estoque_produto), [fn_consumo_material_do_estoque](funcoes.md#f-fn_consumo_material_do_estoque), [fn_consumo_material_segue_movimentacao](funcoes.md#f-fn_consumo_material_segue_movimentacao), [fn_custo_medio_da_entrada](funcoes.md#f-fn_custo_medio_da_entrada), [fn_mov_saldo_abertura_so_na_implantacao](funcoes.md#f-fn_mov_saldo_abertura_so_na_implantacao), [fn_movimentacao_servico_nao_tem_saldo](funcoes.md#f-fn_movimentacao_servico_nao_tem_saldo)); [vendas](tabelas.md#t-vendas) ([fn_venda_cancelada_desfaz](funcoes.md#f-fn_venda_cancelada_desfaz), [fn_venda_dinheiro_exige_caixa](funcoes.md#f-fn_venda_dinheiro_exige_caixa), [venda_fiado_respeita_credito](funcoes.md#f-venda_fiado_respeita_credito))
-- **Lê:** [clientes](tabelas.md#t-clientes), [marketing_cupons](tabelas.md#t-marketing_cupons), [produtos](tabelas.md#t-produtos)
+- **Lê:** [clientes](tabelas.md#t-clientes), [marketing_cupons](tabelas.md#t-marketing_cupons), [produtos](tabelas.md#t-produtos), [servicos](tabelas.md#t-servicos)
 - **Chama:** [_assert_rpc](funcoes.md#f-_assert_rpc), [acre_today](funcoes.md#f-acre_today), [auth_pode_filial](funcoes.md#f-auth_pode_filial), [emitir_nota](funcoes.md#f-emitir_nota), [preco_efetivo](funcoes.md#f-preco_efetivo)
 
 <a id="f-custo_manual_nao_passa_do_preco_de_venda"></a>
@@ -2521,7 +2537,7 @@ Para cada função: quem a chama (tela, servidor, outra função, gatilho), o qu
 
 - **Dispara em:** [itens_venda](tabelas.md#t-itens_venda)
 - **Grava:** —
-- **Lê:** [produtos](tabelas.md#t-produtos), [vendas](tabelas.md#t-vendas)
+- **Lê:** [produtos](tabelas.md#t-produtos), [servicos](tabelas.md#t-servicos), [vendas](tabelas.md#t-vendas)
 
 <a id="f-fn_venda_cancelada_desfaz"></a>
 ## fn_venda_cancelada_desfaz (gatilho, SECURITY DEFINER)
@@ -3187,8 +3203,8 @@ Para cada função: quem a chama (tela, servidor, outra função, gatilho), o qu
 - **Telas que chamam:** [Cadastros › Produtos](telas.md#s-cadastros-produtos), [Financeiro › Precificação](telas.md#s-financeiro-precificação)
 - **Chamada por outras funções:** [salvar_parametros_precificacao](funcoes.md#f-salvar_parametros_precificacao)
 - **Grava:** —
-- **Lê:** [contas_pagar](tabelas.md#t-contas_pagar), [filial_precificacao](tabelas.md#t-filial_precificacao)
-- **Chama:** [_assert_rpc](funcoes.md#f-_assert_rpc), [_dre_calculo](funcoes.md#f-_dre_calculo), [_receita_simples](funcoes.md#f-_receita_simples), [_simples_rbt12](funcoes.md#f-_simples_rbt12), [_taxa_pelo_mix](funcoes.md#f-_taxa_pelo_mix), [acre_today](funcoes.md#f-acre_today), [auth_gerente_da](funcoes.md#f-auth_gerente_da), [auth_in_setor](funcoes.md#f-auth_in_setor), [auth_pode_filial](funcoes.md#f-auth_pode_filial), [simples_anexo_i](funcoes.md#f-simples_anexo_i)
+- **Lê:** [contas_pagar](tabelas.md#t-contas_pagar), [filial_precificacao](tabelas.md#t-filial_precificacao), [servicos](tabelas.md#t-servicos)
+- **Chama:** [_assert_rpc](funcoes.md#f-_assert_rpc), [_dre_calculo](funcoes.md#f-_dre_calculo), [_receita_simples](funcoes.md#f-_receita_simples), [_simples_rbt12](funcoes.md#f-_simples_rbt12), [_taxa_pelo_mix](funcoes.md#f-_taxa_pelo_mix), [acre_today](funcoes.md#f-acre_today), [auth_gerente_da](funcoes.md#f-auth_gerente_da), [auth_in_setor](funcoes.md#f-auth_in_setor), [auth_pode_filial](funcoes.md#f-auth_pode_filial), [simples_anexo_i](funcoes.md#f-simples_anexo_i), [simples_anexo_iii](funcoes.md#f-simples_anexo_iii)
 
 <a id="f-parcela_emprestimo_arquivada_e_historico"></a>
 ## parcela_emprestimo_arquivada_e_historico (gatilho, SECURITY DEFINER)
@@ -4098,7 +4114,14 @@ Para cada função: quem a chama (tela, servidor, outra função, gatilho), o qu
 ## simples_anexo_i (RPC)
 
 - **Telas que chamam:** —
-- **Chamada por outras funções:** [_dre_calculo](funcoes.md#f-_dre_calculo), [_simples_do_mes](funcoes.md#f-_simples_do_mes), [parametros_precificacao](funcoes.md#f-parametros_precificacao)
+- **Chamada por outras funções:** [_simples_periodo](funcoes.md#f-_simples_periodo), [parametros_precificacao](funcoes.md#f-parametros_precificacao)
+- **Grava:** —
+
+<a id="f-simples_anexo_iii"></a>
+## simples_anexo_iii (RPC)
+
+- **Telas que chamam:** —
+- **Chamada por outras funções:** [_simples_periodo](funcoes.md#f-_simples_periodo), [parametros_precificacao](funcoes.md#f-parametros_precificacao)
 - **Grava:** —
 
 <a id="f-solicitar_desligamento"></a>

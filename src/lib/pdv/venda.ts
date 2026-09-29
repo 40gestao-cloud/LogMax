@@ -7,6 +7,8 @@
 
 export interface ItemVendaPdv {
   produto_id: string;
+  /** Migr. 659: item de serviço prestado. Aí `produto_id` é só a chave do carrinho. */
+  servico_id?: string | null;
   nome_produto: string;
   qtd: number;
   preco_unitario: number;
@@ -44,7 +46,8 @@ export function montarVendaPdv(v: VendaPdv): Record<string, unknown> {
     p_forma_pagamento: v.forma,
     p_parcelas:        v.parcelas,
     p_itens:           v.itens.map(item => ({
-      produto_id:     item.produto_id,
+      produto_id:     item.servico_id ? null : item.produto_id,
+      servico_id:     item.servico_id ?? null,
       nome_produto:   item.nome_produto,
       qtd:            item.qtd,
       preco_unitario: item.preco_unitario,

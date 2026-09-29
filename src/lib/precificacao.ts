@@ -59,6 +59,12 @@ export type ParametrosPrecificacao = {
   aliquota_nominal: number;
   parcela_deduzir: number;
   aliquota_efetiva: number;
+  /** Migr. 659: a mesma faixa na tabela do serviço (Anexo III). */
+  aliquota_nominal_iii: number;
+  parcela_deduzir_iii: number;
+  aliquota_efetiva_iii: number;
+  /** A unidade tem serviço prestado ativo no catálogo. */
+  vende_servico: boolean;
   acima_do_teto: boolean;
   despesas_pct: number | null;
   despesas_origem: OrigemPercentual;
@@ -84,8 +90,9 @@ export type OrigemPercentual = 'manual' | 'historico' | 'mix' | 'sem_historico';
 /** As fatias do preço que não são custo nem lucro, em % do preço de venda. */
 export type Deducoes = { impostos: number; taxas: number; despesas: number };
 
-export const deducoesDe = (p: ParametrosPrecificacao): Deducoes => ({
-  impostos: Number(p.aliquota_efetiva ?? 0),
+/** `anexo` 'III' = preço de serviço (mão de obra), pela tabela do Anexo III. */
+export const deducoesDe = (p: ParametrosPrecificacao, anexo: 'I' | 'III' = 'I'): Deducoes => ({
+  impostos: Number((anexo === 'III' ? p.aliquota_efetiva_iii : p.aliquota_efetiva) ?? 0),
   taxas:    Number(p.taxas_pct ?? 0),
   despesas: Number(p.despesas_pct ?? 0),
 });

@@ -32,6 +32,7 @@ import { trapTab, devolverTabAoPdv } from '../lib/focoPdv';
 import { isProdutoFracionario, fmtQtdArmada, formatQtd } from '../lib/pdv/quantidade';
 import { podeAlternarFilial, podeDevolver, formasDaUnidade, rotuloFiado } from '../lib/pdv/regrasUnidade';
 import { montarVendaPdv } from '../lib/pdv/venda';
+import { ehPrestado } from '../lib/naturezaServico';
 import { cancelarAguardandoAntigas, inserirPixPendente, inserirCartaoPendente, cancelarCobranca } from '../lib/pdv/cobranca';
 import { usePagamentoPendente } from '../hooks/usePagamentoPendente';
 import { SelectBusca } from '../components/SelectBusca';
@@ -44,8 +45,15 @@ import { gruposDeCadastro } from '../lib/cadastrosSelect';
 const FILIAIS_PDV = ['SuperMax', 'MaxLook', 'TechMax'] as const;
 type FilialPDV = typeof FILIAIS_PDV[number];
 
+// Chave do chip de serviços no filtro de categorias (migr. 659). Não colide com
+// categoria real: `chaveCategoria` só produz minúsculas sem sublinhado duplo.
+const CHIP_SERVICOS = '__servicos__';
+
 interface CartItem {
+  /** Chave do carrinho. No serviço é `srv:<id>` — o id de verdade vai em `servico_id`. */
   produto_id: string;
+  /** Migr. 659: serviço prestado (mão de obra da OS, ajuste). Sem estoque; Anexo III. */
+  servico_id?: string;
   nome_produto: string;
   preco_unitario: number;
   qtd: number;
@@ -213,6 +221,9 @@ const PDVViewInner = ({ showToast, profile, filialInicial, onVoltar }: {
   // produtos de outras unidades pro browser do operador.
   const { data: produtos, isLoading: loadingProd } = useFetchData<Produto>('/api/produtosview', { filial: filialFiltro }, true);
   const { data: clientes } = useFetchData<Cliente>('/api/crmview', { filial: filialFiltro });
+  // Migr. 659: serviços PRESTADOS da unidade — entram no carrinho ao lado das
+  // peças. O banco confere de novo (preço do cadastro, prestado, da unidade).
+  const { data: servicosCad } = useFetchData<any>('/api/servicosview', { filial: filialFiltro });
 
   // Ofertas valendo hoje nesta unidade (view `v_promocao_vigente`).
   //
@@ -508,6 +519,10 @@ const PDVViewInner = ({ showToast, profile, filialInicial, onVoltar }: {
   // O filtro guarda a CHAVE normalizada, não o rótulo — senão "Acessorios" e
   // "Acessórios" voltariam a ser gavetas diferentes.
   const categoriaLabel = categoriasChips.find(c => c.chave === categoriaFiltro)?.label ?? categoriaFiltro;
+  const servicosAtivos = React.useMemo(() => (servicosCad ?? []).filter((s: any) =>
+    s.filial === filialFiltro && ehPrestado(s.natureza) && s.ativo !== false && !s.excluido_em
+    && (s.status ?? 'Ativo') === 'Ativo' && Number(s.valor ?? 0) > 0), [servicosCad, filialFiltro]);
+  const vendoServicos = categoriaFiltro === CHIP_SERVICOS;
   const produtosPorCategoria = produtosPorFilial.filter((p: any) => {
     if (!categoriaFiltro) return true;
     return chaveCategoria(p.categoria) === categoriaFiltro;
@@ -539,6 +554,25 @@ const PDVViewInner = ({ showToast, profile, filialInicial, onVoltar }: {
   const dinheiroRecebidoNum = parseBRL(dinheiroRecebido);
   const troco = Math.max(0, dinheiroRecebidoNum - totalFinal);
   const faltaDinheiro = Math.max(0, totalFinal - dinheiroRecebidoNum);
+
+  // Migr. 659: serviço não tem estoque nem balança — entra e soma 1 a cada clique.
+  const addServico = useCallback((s: any) => {
+    const chave = `srv:${s.id}`;
+    const preco = Number(s.valor ?? 0);
+    setCart(prev => {
+      const existing = prev.find(i => i.produto_id === chave);
+      if (existing) {
+        const q = existing.qtd + 1;
+        return prev.map(i => i.produto_id === chave ? { ...i, qtd: q, subtotal: q * i.preco_unitario } : i);
+      }
+      return [...prev, {
+        produto_id: chave, servico_id: s.id, nome_produto: s.nome,
+        preco_unitario: preco, qtd: 1, subtotal: preco,
+        estoque: Number.MAX_SAFE_INTEGER, unidade: 'SV',
+      }];
+    });
+    playBeep();
+  }, []);
 
   const addToCart = useCallback((produto: any, qtdExplicita?: number) => {
     // Quantidade: a explícita (veio de "3*código"), senão a armada, senão 1.
@@ -1049,7 +1083,8 @@ const PDVViewInner = ({ showToast, profile, filialInicial, onVoltar }: {
 
       // Fresh stock check against DB — cannot rely on local state with multiple cashiers
       if (supabase) {
-        const prodIds = cart.map(i => i.produto_id);
+        // Serviço não tem saldo (migr. 659) — e `srv:…` nem é uuid.
+        const prodIds = cart.filter(i => !i.servico_id).map(i => i.produto_id);
         const { data: freshProd } = await supabase
           .from('produtos')
           .select('id, nome, estoque')
@@ -1165,7 +1200,7 @@ const PDVViewInner = ({ showToast, profile, filialInicial, onVoltar }: {
       if (/estoque insuficiente/i.test(msg)) {
         showToast?.(msg, 'error', true);
         if (supabase) {
-          const prodIds = cart.map(i => i.produto_id);
+          const prodIds = cart.filter(i => !i.servico_id).map(i => i.produto_id);
           const { data: freshProd } = await supabase
             .from('produtos')
             .select('id, estoque')
@@ -1810,7 +1845,7 @@ const PDVViewInner = ({ showToast, profile, filialInicial, onVoltar }: {
           {/* Chips de categoria — montados a partir das categorias que existem no
               cadastro desta filial (com contagem). Com uma categoria só o filtro
               não separa nada, então nem aparece. */}
-          {categoriasChips.length > 1 && (
+          {(categoriasChips.length > 1 || servicosAtivos.length > 0) && (
             <div className="flex gap-1.5 overflow-x-auto pb-1 shrink-0 -mx-1 px-1 main-scrollbar-h"
               style={{ scrollbarWidth: 'thin' }}>
               <button
@@ -1855,6 +1890,18 @@ const PDVViewInner = ({ showToast, profile, filialInicial, onVoltar }: {
                   </button>
                 );
               })}
+              {/* Migr. 659: a gaveta dos serviços prestados (mão de obra, ajuste). */}
+              {servicosAtivos.length > 0 && (
+                <button
+                  onClick={() => setCategoriaFiltro(vendoServicos ? null : CHIP_SERVICOS)}
+                  className="shrink-0 px-3.5 py-1.5 rounded-full text-[10px] sm:text-[11px] font-black uppercase tracking-wider transition-all border-2 flex items-center gap-1.5"
+                  style={vendoServicos
+                    ? { background: '#0f766e', color: '#ffffff', borderColor: '#0f766e' }
+                    : { background: '#ffffff', color: '#0f766e', borderColor: '#0f766e80' }}>
+                  <Wrench size={11} /> Serviços
+                  <span className="tabular-nums font-black opacity-60">{servicosAtivos.length}</span>
+                </button>
+              )}
             </div>
           )}
 
@@ -1881,7 +1928,35 @@ const PDVViewInner = ({ showToast, profile, filialInicial, onVoltar }: {
                 : 'grid-cols-2 sm:grid-cols-2 xl:grid-cols-3'
             }`}
             style={{ overscrollBehavior: 'contain' }}>
-            {filtered.length === 0 ? (
+            {vendoServicos ? (
+              buscarProdutos(servicosAtivos, buscaTermo, servicosAtivos.length).map((s: any) => {
+                const inCart = cart.find(i => i.servico_id === s.id);
+                return (
+                  <motion.button key={s.id} onClick={() => {
+                      addServico(s);
+                      if (window.innerWidth < 1024 && cart.length === 0) setMobileTab('carrinho');
+                    }}
+                    whileTap={{ scale: 0.98 }}
+                    className="neu-button rounded-xl p-3 flex items-center gap-3 text-left transition-all border relative"
+                    style={inCart
+                      ? { borderColor: 'var(--color-accent)', background: 'color-mix(in srgb, var(--color-accent) 12%, transparent)' }
+                      : { borderColor: '#0f766e40' }}>
+                    {inCart && (
+                      <span className="absolute top-1.5 right-1.5 px-1.5 h-5 min-w-5 rounded-full flex items-center justify-center text-[10px] font-black"
+                        style={{ background: 'var(--color-accent)', color: 'var(--color-accent-text)' }}>{inCart.qtd}</span>
+                    )}
+                    <span className="w-10 h-10 rounded-lg flex items-center justify-center shrink-0" style={{ background: '#0f766e1f', color: '#0f766e' }}>
+                      <Wrench size={18} />
+                    </span>
+                    <span className="flex-1 min-w-0 flex flex-col gap-0.5">
+                      <span className="text-[9px] font-black uppercase tracking-widest" style={{ color: '#0f766e' }}>Serviço · {s.codigo || 'SV'}</span>
+                      <span className="text-sm font-bold text-gray-200 leading-tight line-clamp-2">{s.nome}</span>
+                      <span className="text-sm font-black text-accent">{Number(s.valor).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
+                    </span>
+                  </motion.button>
+                );
+              })
+            ) : filtered.length === 0 ? (
               <div className={`col-span-full flex flex-col items-center justify-center py-16 gap-3 text-center`}>
                 <div className="w-14 h-14 rounded-2xl flex items-center justify-center"
                   style={{ background: 'rgba(0,0,0,0.04)', border: '1px dashed rgba(0,0,0,0.18)' }}>
@@ -2175,6 +2250,12 @@ const PDVViewInner = ({ showToast, profile, filialInicial, onVoltar }: {
                         <div className="flex-1 min-w-0">
                           <p className="text-xs font-bold text-gray-200 truncate flex items-center gap-1.5">
                             <span className="truncate">{item.nome_produto}</span>
+                            {item.servico_id && (
+                              <span className="shrink-0 px-1.5 py-0.5 rounded text-[9px] font-black uppercase tracking-wider bg-teal-500/15 text-teal-400 border border-teal-500/25"
+                                title="Serviço prestado: não sai do estoque, vai na NFS-e e é tributado pelo Anexo III do Simples">
+                                Serviço
+                              </span>
+                            )}
                             {ofertaDoItem(item.produto_id, item.preco_unitario) && (
                               <span className="shrink-0 px-1.5 py-0.5 rounded text-[9px] font-black uppercase tracking-wider bg-green-500/15 text-green-400 border border-green-500/25"
                                 title="Preço promocional liberado — veio da oferta, não do caixa">

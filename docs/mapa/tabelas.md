@@ -1252,7 +1252,7 @@ Para cada tabela: quem grava (tela, RPC, gatilho, servidor), quem lê, os gatilh
 - **Telas que gravam via RPC:** [Usuários](telas.md#s-usuarios), [Vendas › PDV](telas.md#s-vendas-pdv), [Vendas › Pedidos Online](telas.md#s-vendas-pedidosonline)
 - **RPCs que gravam:** [criar_venda_pdv](funcoes.md#f-criar_venda_pdv), [resetar_dados_operacionais](funcoes.md#f-resetar_dados_operacionais)
 - **Telas que leem:** [Financeiro › Recibos de Vendas](telas.md#s-financeiro-recibosdevendas), [Vendas › Histórico de Vendas](telas.md#s-vendas-históricodevendas), [Vendas › PDV](telas.md#s-vendas-pdv)
-- **RPCs que leem:** [_dre_calculo](funcoes.md#f-_dre_calculo), [criar_devolucao_venda](funcoes.md#f-criar_devolucao_venda), [gerar_painel_bi](funcoes.md#f-gerar_painel_bi)
+- **RPCs que leem:** [_dre_calculo](funcoes.md#f-_dre_calculo), [_receita_servico](funcoes.md#f-_receita_servico), [criar_devolucao_venda](funcoes.md#f-criar_devolucao_venda), [gerar_painel_bi](funcoes.md#f-gerar_painel_bi)
 - **Views que dependem desta:** [v_venda_saldo_devolucao](tabelas.md#t-v_venda_saldo_devolucao)
 - **Gatilhos nesta tabela:**
   - `trg_item_venda_aloca_unidade` — AFTER INSERT → [fn_item_venda_aloca_unidade](funcoes.md#f-fn_item_venda_aloca_unidade) · grava em [produto_unidades](tabelas.md#t-produto_unidades)
@@ -1262,7 +1262,7 @@ Para cada tabela: quem grava (tela, RPC, gatilho, servidor), quem lê, os gatilh
 - **Cadeia de gatilhos ao gravar aqui:**
   - 1. [itens_venda](tabelas.md#t-itens_venda) → [fn_item_venda_aloca_unidade](funcoes.md#f-fn_item_venda_aloca_unidade) → [produto_unidades](tabelas.md#t-produto_unidades)
 - **Ao apagar uma linha daqui:** [produto_unidades](tabelas.md#t-produto_unidades).item_venda_id zera o vínculo (SET NULL)
-- **Aponta para:** produto_id → [produtos](tabelas.md#t-produtos); venda_id → [vendas](tabelas.md#t-vendas)
+- **Aponta para:** produto_id → [produtos](tabelas.md#t-produtos); servico_id → [servicos](tabelas.md#t-servicos); venda_id → [vendas](tabelas.md#t-vendas)
 - **RLS:** ALL `itens_write` (setores: vendas · gerente da filial · Matriz/professor); SELECT `itens_select` (setores: financeiro, vendas · gerente da filial · Matriz/professor)
 
 <a id="t-justificativas_falta"></a>
@@ -2293,12 +2293,12 @@ Para cada tabela: quem grava (tela, RPC, gatilho, servidor), quem lê, os gatilh
 
 - **Telas que gravam:** [Cadastros › Serviços](telas.md#s-cadastros-serviços)
 - **RPCs que gravam:** —
-- **Telas que leem:** [Cadastros › Serviços](telas.md#s-cadastros-serviços), [Compras › Cotações](telas.md#s-compras-cotações), [Estoque › Recebimentos](telas.md#s-estoque-recebimentos), [Financeiro › Aprovações de Cotação](telas.md#s-financeiro-aprovaçõesdecotação), [Início](telas.md#s-inicio), [Marketing › Promoções](telas.md#s-marketing-promoções), [Requisições › Do Setor](telas.md#s-requisicoes-dosetor)
-- **RPCs que leem:** [gerar_pedido_de_cotacao](funcoes.md#f-gerar_pedido_de_cotacao)
+- **Telas que leem:** [Cadastros › Serviços](telas.md#s-cadastros-serviços), [Compras › Cotações](telas.md#s-compras-cotações), [Estoque › Recebimentos](telas.md#s-estoque-recebimentos), [Financeiro › Aprovações de Cotação](telas.md#s-financeiro-aprovaçõesdecotação), [Início](telas.md#s-inicio), [Marketing › Promoções](telas.md#s-marketing-promoções), [Requisições › Do Setor](telas.md#s-requisicoes-dosetor), [Vendas › PDV](telas.md#s-vendas-pdv)
+- **RPCs que leem:** [criar_venda_pdv](funcoes.md#f-criar_venda_pdv), [gerar_pedido_de_cotacao](funcoes.md#f-gerar_pedido_de_cotacao), [parametros_precificacao](funcoes.md#f-parametros_precificacao)
 - **Gatilhos nesta tabela:**
   - `trg_auditoria` — BEFORE INSERT/UPDATE → [set_auditoria_campos](funcoes.md#f-set_auditoria_campos)
   - `trg_carimba_exclusao` — BEFORE UPDATE → [fn_carimba_exclusao](funcoes.md#f-fn_carimba_exclusao)
-- **Ao apagar uma linha daqui:** [pedidos](tabelas.md#t-pedidos).servico_id bloqueia (NO ACTION); [requisicoes](tabelas.md#t-requisicoes).servico_id bloqueia (NO ACTION)
+- **Ao apagar uma linha daqui:** [itens_venda](tabelas.md#t-itens_venda).servico_id zera o vínculo (SET NULL); [pedidos](tabelas.md#t-pedidos).servico_id bloqueia (NO ACTION); [requisicoes](tabelas.md#t-requisicoes).servico_id bloqueia (NO ACTION)
 - **RLS:** ALL `write_servicos` (setores: logistica · gerente da filial · Matriz/professor); SELECT `read_servicos` (qualquer um da própria filial · Matriz/professor)
 
 <a id="t-subcategorias_produto"></a>
@@ -2499,7 +2499,7 @@ Para cada tabela: quem grava (tela, RPC, gatilho, servidor), quem lê, os gatilh
 - **Telas que gravam via RPC:** [Vendas › Pedidos Online](telas.md#s-vendas-pedidosonline)
 - **RPCs que gravam:** [criar_venda_pdv](funcoes.md#f-criar_venda_pdv)
 - **Telas que leem:** [Cadastros › Lixeira](telas.md#s-cadastros-lixeira), [Dashboard](telas.md#s-dashboard), [Estoque › Saldos](telas.md#s-estoque-saldos), [Financeiro › Recibos de Vendas](telas.md#s-financeiro-recibosdevendas), [Matriz › Vendas](telas.md#s-relatorio-vendas), [Vendas › Devoluções](telas.md#s-vendas-devoluções), [Vendas › Histórico de Vendas](telas.md#s-vendas-históricodevendas), [Vendas › PDV](telas.md#s-vendas-pdv)
-- **RPCs que leem:** [_dre_calculo](funcoes.md#f-_dre_calculo), [_receita_simples](funcoes.md#f-_receita_simples), [_simples_rbt12](funcoes.md#f-_simples_rbt12), [_taxa_pelo_mix](funcoes.md#f-_taxa_pelo_mix), [criar_devolucao_venda](funcoes.md#f-criar_devolucao_venda), [dinheiro_do_caixa](funcoes.md#f-dinheiro_do_caixa), [gerar_painel_bi](funcoes.md#f-gerar_painel_bi), [pdv_registrar_credito_misto](funcoes.md#f-pdv_registrar_credito_misto), [resetar_dados_da_filial](funcoes.md#f-resetar_dados_da_filial)
+- **RPCs que leem:** [_dre_calculo](funcoes.md#f-_dre_calculo), [_receita_servico](funcoes.md#f-_receita_servico), [_receita_simples](funcoes.md#f-_receita_simples), [_simples_rbt12](funcoes.md#f-_simples_rbt12), [_taxa_pelo_mix](funcoes.md#f-_taxa_pelo_mix), [criar_devolucao_venda](funcoes.md#f-criar_devolucao_venda), [dinheiro_do_caixa](funcoes.md#f-dinheiro_do_caixa), [gerar_painel_bi](funcoes.md#f-gerar_painel_bi), [pdv_registrar_credito_misto](funcoes.md#f-pdv_registrar_credito_misto), [resetar_dados_da_filial](funcoes.md#f-resetar_dados_da_filial)
 - **Views que dependem desta:** [v_campanha_roi](tabelas.md#t-v_campanha_roi)
 - **Gatilhos nesta tabela:**
   - `trg_auditoria` — BEFORE INSERT/UPDATE → [set_auditoria_campos](funcoes.md#f-set_auditoria_campos)

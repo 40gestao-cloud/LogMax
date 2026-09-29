@@ -1519,6 +1519,7 @@
     "controle_caixa",
     "itens_venda",
     "produtos",
+    "servicos",
     "user_profiles",
     "v_promocao_vigente",
     "v_venda_saldo_devolucao",
@@ -3171,9 +3172,7 @@
     "vendas"
    ],
    "chama": [
-    "_receita_simples",
-    "_simples_rbt12",
-    "simples_anexo_i"
+    "_simples_periodo"
    ]
   },
   "_folha_creditar_e_avancar": {
@@ -3323,6 +3322,16 @@
     "acre_today"
    ]
   },
+  "_receita_servico": {
+   "gatilho": false,
+   "secdef": true,
+   "grava": [],
+   "le": [
+    "itens_venda",
+    "vendas"
+   ],
+   "chama": []
+  },
   "_receita_simples": {
    "gatilho": false,
    "secdef": true,
@@ -3352,9 +3361,20 @@
    "grava": [],
    "le": [],
    "chama": [
+    "_simples_periodo"
+   ]
+  },
+  "_simples_periodo": {
+   "gatilho": false,
+   "secdef": true,
+   "grava": [],
+   "le": [],
+   "chama": [
+    "_receita_servico",
     "_receita_simples",
     "_simples_rbt12",
-    "simples_anexo_i"
+    "simples_anexo_i",
+    "simples_anexo_iii"
    ]
   },
   "_simples_rbt12": {
@@ -5226,7 +5246,8 @@
    "le": [
     "clientes",
     "marketing_cupons",
-    "produtos"
+    "produtos",
+    "servicos"
    ],
    "chama": [
     "_assert_rpc",
@@ -6883,6 +6904,7 @@
    "grava": [],
    "le": [
     "produtos",
+    "servicos",
     "vendas"
    ],
    "chama": []
@@ -7934,7 +7956,8 @@
    "grava": [],
    "le": [
     "contas_pagar",
-    "filial_precificacao"
+    "filial_precificacao",
+    "servicos"
    ],
    "chama": [
     "_assert_rpc",
@@ -7946,7 +7969,8 @@
     "auth_gerente_da",
     "auth_in_setor",
     "auth_pode_filial",
-    "simples_anexo_i"
+    "simples_anexo_i",
+    "simples_anexo_iii"
    ]
   },
   "parcela_emprestimo_arquivada_e_historico": {
@@ -9483,6 +9507,13 @@
    "chama": []
   },
   "simples_anexo_i": {
+   "gatilho": false,
+   "secdef": false,
+   "grava": [],
+   "le": [],
+   "chama": []
+  },
+  "simples_anexo_iii": {
    "gatilho": false,
    "secdef": false,
    "grava": [],

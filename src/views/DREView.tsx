@@ -23,7 +23,7 @@ type Dre = {
   receita_bruta: number; descontos: number; devolucoes: number; receita_liquida: number;
   // Migr. 656. Simples Nacional mês a mês; já está FORA de `receita_liquida`.
   impostos?: number;
-  impostos_meses?: { mes: string; base: number; faixa: number; aliquota_efetiva: number; imposto: number }[];
+  impostos_meses?: { mes: string; base: number; base_servico?: number; faixa: number; aliquota_efetiva: number; aliquota_efetiva_iii?: number; imposto: number }[];
   cmv: number; lucro_bruto: number; margem_bruta_pct: number | null;
   despesas: number; despesas_grupos: { grupo: string; valor: number }[];
   // Migr. 442. `consumo_material` já está DENTRO de `despesas` e dos grupos —
@@ -116,6 +116,11 @@ const DREViewInner = ({ showToast, filial }: { showToast: any; filial: FilialOp 
       extra: (() => {
         const meses = dre.impostos_meses ?? [];
         const aliquotas = [...new Set(meses.map(m => Number(m.aliquota_efetiva)))];
+        // Migr. 659: com serviço no período, o imposto tem duas tabelas.
+        const servico = meses.reduce((s, m) => s + Number(m.base_servico ?? 0), 0);
+        if (servico > 0) {
+          return `Simples Nacional — mercadoria no Anexo I, ${brl(servico)} de serviço no Anexo III`;
+        }
         return aliquotas.length === 1
           ? `Simples Nacional, alíquota efetiva ${aliquotas[0].toLocaleString('pt-BR', { maximumFractionDigits: 2 })}%`
           : aliquotas.length > 1 ? 'Simples Nacional, alíquota de cada mês' : undefined;

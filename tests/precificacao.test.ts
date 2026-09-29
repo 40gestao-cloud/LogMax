@@ -197,6 +197,13 @@ describe('markup divisor', () => {
     expect(precoPorMarkupDivisor(0, d, 10)).toBeNull();
   });
 
+  it('serviço usa a alíquota do Anexo III (migr. 659)', () => {
+    const p = { aliquota_efetiva: 4, aliquota_efetiva_iii: 6, taxas_pct: 1, despesas_pct: 10 } as unknown as ParametrosPrecificacao;
+    expect(deducoesDe(p).impostos).toBe(4);
+    expect(deducoesDe(p, 'III').impostos).toBe(6);
+    expect(precoPorMarkupDivisor(100, deducoesDe(p, 'III'), 10)).toBe(136.99);
+  });
+
   it('parâmetros sem histórico entram como zero', () => {
     const p = { aliquota_efetiva: 4, taxas_pct: null, despesas_pct: null } as unknown as ParametrosPrecificacao;
     expect(deducoesDe(p)).toEqual({ impostos: 4, taxas: 0, despesas: 0 });

@@ -21,21 +21,24 @@ const mesAno = (iso: string) => {
   return new Date(Date.UTC(y, m - 1, 1)).toLocaleDateString('pt-BR', { month: 'short', year: '2-digit', timeZone: 'UTC' }).replace('.', '');
 };
 
-export function ComposicaoPreco({ custo, venda, params, lucroAlvo }: {
+export function ComposicaoPreco({ custo, venda, params, lucroAlvo, anexo = 'I' }: {
   custo: number;
   venda: number;
   params: ParametrosPrecificacao;
   lucroAlvo: number | null;
+  /** Migr. 659: 'III' quando o que se precifica é serviço. */
+  anexo?: 'I' | 'III';
 }) {
-  const d = deducoesDe(params);
+  const d = deducoesDe(params, anexo);
   const c = composicaoDoPreco(venda, custo, d);
   const janela = `${mesAno(params.janela_inicio)} a ${mesAno(params.janela_fim)}`;
   const divisor = lucroAlvo !== null ? markupDivisor(d, lucroAlvo) : null;
 
   const linhas = c ? [
-    { rotulo: 'Custo do produto', valor: c.custo, cor: 'bg-gray-500', nota: 'o que a compra custou, com o frete da nota e do CT-e' },
+    { rotulo: anexo === 'III' ? 'Custo do serviço' : 'Custo do produto', valor: c.custo, cor: 'bg-gray-500',
+      nota: anexo === 'III' ? 'material e mão de obra direta' : 'o que a compra custou, com o frete da nota e do CT-e' },
     { rotulo: 'Simples Nacional', valor: c.impostos, cor: 'bg-amber-500',
-      nota: `Anexo I, faixa ${params.faixa} — alíquota efetiva ${fmtPct(d.impostos, 2)}` },
+      nota: `Anexo ${anexo}, faixa ${params.faixa} — alíquota efetiva ${fmtPct(d.impostos, 2)}` },
     { rotulo: 'Taxas de cartão', valor: c.taxas, cor: 'bg-sky-500', nota: origemTexto(params.taxas_origem, janela) },
     { rotulo: 'Despesas da loja', valor: c.despesas, cor: 'bg-violet-500', nota: origemTexto(params.despesas_origem, janela) },
   ] : [];

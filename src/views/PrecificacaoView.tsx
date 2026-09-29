@@ -70,7 +70,9 @@ function FaixaDeducoes({ p, d }: { p: ParametrosPrecificacao; d: Deducoes }) {
   return (
     <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
       <CardContador label="Simples Nacional" tom="amarelo" corFixa value={fmtPct(d.impostos, 2)}
-        sub={`faixa ${p.faixa} · alíquota efetiva`} />
+        sub={p.vende_servico
+          ? `faixa ${p.faixa} · serviço ${fmtPct(Number(p.aliquota_efetiva_iii), 2)}`
+          : `faixa ${p.faixa} · alíquota efetiva`} />
       <CardContador label="Taxas de cartão" tom="azul" value={fmtPct(d.taxas)} sub={origemCurta(p.taxas_origem, p)} />
       <CardContador label="Despesas da loja" tom="roxo" value={fmtPct(d.despesas)} sub={origemCurta(p.despesas_origem, p)} />
       <CardContador label="Antes do lucro" tom={soma >= 100 ? 'vermelho' : 'dourado'} corFixa value={fmtPct(soma, 2)}
@@ -80,9 +82,12 @@ function FaixaDeducoes({ p, d }: { p: ParametrosPrecificacao; d: Deducoes }) {
 }
 
 // ── Aba Simulador ────────────────────────────────────────────────────────────
-function AbaSimulador({ p, d }: { p: ParametrosPrecificacao; d: Deducoes }) {
+function AbaSimulador({ p, d: dMercadoria }: { p: ParametrosPrecificacao; d: Deducoes }) {
   const [custo, setCusto] = useState('10,00');
   const [lucro, setLucro] = useState('10');
+  // Migr. 659: serviço (mão de obra) sai pela tabela do Anexo III.
+  const [anexo, setAnexo] = useState<'I' | 'III'>('I');
+  const d = anexo === 'III' ? deducoesDe(p, 'III') : dMercadoria;
   const c = parseBRL(custo);
   const l = textoPct(lucro) ?? 0;
   const soma = d.impostos + d.taxas + d.despesas + l;
@@ -94,9 +99,19 @@ function AbaSimulador({ p, d }: { p: ParametrosPrecificacao; d: Deducoes }) {
   return (
     <div className="grid grid-cols-1 xl:grid-cols-2 gap-5 items-start">
       <div className="flex flex-col gap-4">
+        {p.vende_servico && (
+          <div className="flex gap-2">
+            {([['I', 'Mercadoria · Anexo I'], ['III', 'Serviço · Anexo III']] as const).map(([k, rot]) => (
+              <button key={k} type="button" onClick={() => setAnexo(k)}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-colors ${anexo === k ? 'neu-pressed text-accent' : 'neu-button text-gray-400 hover:text-gray-200'}`}>
+                {rot}
+              </button>
+            ))}
+          </div>
+        )}
         <div className="grid grid-cols-2 gap-3">
           <label className="flex flex-col gap-1">
-            <span className="text-[11px] text-gray-400">Custo do produto (R$)</span>
+            <span className="text-[11px] text-gray-400">{anexo === 'III' ? 'Custo do serviço (R$)' : 'Custo do produto (R$)'}</span>
             <input type="text" inputMode="numeric" className="neu-input py-2 px-3 rounded-xl text-sm tabular-nums"
               value={custo} onChange={e => setCusto(formatBRL(e.target.value))} onKeyDown={handleMoneyKeyDown} />
           </label>
@@ -133,7 +148,7 @@ function AbaSimulador({ p, d }: { p: ParametrosPrecificacao; d: Deducoes }) {
       </div>
 
       {c > 0 && pvDivisor !== null
-        ? <div className="-mt-4"><ComposicaoPreco custo={c} venda={pvDivisor} params={p} lucroAlvo={l} /></div>
+        ? <div className="-mt-4"><ComposicaoPreco custo={c} venda={pvDivisor} params={p} lucroAlvo={l} anexo={anexo} /></div>
         : <p className="text-xs text-gray-500">Informe um custo para ver a composição do preço.</p>}
     </div>
   );
@@ -340,12 +355,17 @@ function AbaTributacao({ p, salvar, showToast }: {
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 items-start">
-      <SecaoFormulario titulo="Simples Nacional — Anexo I (comércio)" icon={Landmark} cor="amareloEscuro">
+      <SecaoFormulario titulo={p.vende_servico ? 'Simples Nacional — Anexos I e III' : 'Simples Nacional — Anexo I (comércio)'} icon={Landmark} cor="amareloEscuro">
         <Linha rotulo="Faturamento 12 meses (RBT12)" valor={p.rbt12 == null ? '—' : brl(p.rbt12)}
           nota={RBT12_ORIGEM[p.rbt12_origem](p.rbt12_meses)} />
         <Linha rotulo={`Faixa ${p.faixa}`} valor={`${fmtPct(p.aliquota_nominal, 2)} nominal`}
           nota={`parcela a deduzir ${brl(p.parcela_deduzir)}`} />
         <Linha rotulo="Alíquota efetiva" valor={fmtPct(p.aliquota_efetiva, 2)} nota={formulaAliquota} />
+        {/* Migr. 659: serviço prestado na mesma faixa, pela tabela do Anexo III. */}
+        {p.vende_servico && (
+          <Linha rotulo="Serviço — Anexo III" valor={`${fmtPct(Number(p.aliquota_efetiva_iii), 2)} efetiva`}
+            nota={`nominal ${fmtPct(Number(p.aliquota_nominal_iii), 2)}, parcela a deduzir ${brl(Number(p.parcela_deduzir_iii))} — mão de obra vendida no PDV`} />
+        )}
         {p.acima_do_teto && (
           <p className="text-[11px] text-amber-400 flex items-start gap-1.5 mt-2">
             <TriangleAlert size={12} className="shrink-0 mt-0.5" />
@@ -411,6 +431,7 @@ function AbaTributacao({ p, salvar, showToast }: {
 // o mês fechado e nasce a conta a pagar, vencendo no dia 20 do mês seguinte.
 type CompetenciaDas = {
   competencia: string; receita: number; faixa: number; aliquota_efetiva: number;
+  receita_servico?: number; aliquota_efetiva_iii?: number;
   imposto: number; vencimento: string; apurado: boolean; valor_apurado: number | null;
   conta_status: string | null;
 };
@@ -469,7 +490,12 @@ function ApuracaoDas({ filial, showToast }: { filial: string; showToast: any }) 
                 return (
                   <tr key={c.competencia}>
                     <td className="py-2 text-gray-200 capitalize">{mesAno(c.competencia)}</td>
-                    <td className="tabular-nums whitespace-nowrap">{brl(c.receita)}</td>
+                    <td className="tabular-nums whitespace-nowrap">
+                      {brl(c.receita)}
+                      {Number(c.receita_servico ?? 0) > 0 && (
+                        <span className="block text-[10px] text-gray-500">serviço {brl(Number(c.receita_servico))}</span>
+                      )}
+                    </td>
                     <td className="hidden sm:table-cell tabular-nums text-gray-400">
                       {fmtPct(Number(c.aliquota_efetiva), 2)} <span className="text-[10px] text-gray-500">faixa {c.faixa}</span>
                     </td>

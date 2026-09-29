@@ -18,9 +18,20 @@ const itemCarrinho = {
   // Campos do carrinho que NÃO vão à RPC.
   estoque: 50, unidade: 'UN', ean: '789', codigo: '001',
 };
-const itemRpc = { produto_id: 'p1', nome_produto: 'Arroz', qtd: 2, preco_unitario: 10, subtotal: 20 };
+const itemRpc = { produto_id: 'p1', servico_id: null, nome_produto: 'Arroz', qtd: 2, preco_unitario: 10, subtotal: 20 };
 
 describe('montarVendaPdv', () => {
+  // Migr. 659: serviço vai com servico_id e produto_id nulo — a chave `srv:…`
+  // do carrinho não é uuid e não pode chegar à RPC.
+  it('serviço: produto_id nulo, servico_id o de verdade', () => {
+    const p = montarVendaPdv({
+      clienteId: null, subtotal: 150, desconto: 0, totalFinal: 150, parcelas: 1, filial: 'TechMax',
+      forma: 'PIX', dinheiroEmEspecie: 0,
+      itens: [{ produto_id: 'srv:s1', servico_id: 's1', nome_produto: 'Mão de obra', qtd: 1, preco_unitario: 150, subtotal: 150 }],
+    });
+    expect((p.p_itens as any[])[0]).toEqual({ produto_id: null, servico_id: 's1', nome_produto: 'Mão de obra', qtd: 1, preco_unitario: 150, subtotal: 150 });
+  });
+
   const base = {
     clienteId: null, subtotal: 20, desconto: 0, totalFinal: 20, parcelas: 1,
     itens: [itemCarrinho], filial: 'SuperMax',
