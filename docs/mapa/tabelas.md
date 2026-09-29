@@ -842,7 +842,7 @@ Para cada tabela: quem grava (tela, RPC, gatilho, servidor), quem lê, os gatilh
 - **Telas que gravam via RPC:** [Vendas › Devoluções](telas.md#s-vendas-devoluções), [Vendas › PDV](telas.md#s-vendas-pdv)
 - **RPCs que gravam:** [criar_devolucao_venda](funcoes.md#f-criar_devolucao_venda)
 - **Telas que leem:** [Vendas › Devoluções](telas.md#s-vendas-devoluções)
-- **RPCs que leem:** [_dre_calculo](funcoes.md#f-_dre_calculo), [_receita_simples](funcoes.md#f-_receita_simples), [criar_devolucao_venda](funcoes.md#f-criar_devolucao_venda), [resetar_dados_da_filial](funcoes.md#f-resetar_dados_da_filial)
+- **RPCs que leem:** [_dre_calculo](funcoes.md#f-_dre_calculo), [_receita_simples](funcoes.md#f-_receita_simples), [cancelar_pedido_venda](funcoes.md#f-cancelar_pedido_venda), [criar_devolucao_venda](funcoes.md#f-criar_devolucao_venda), [resetar_dados_da_filial](funcoes.md#f-resetar_dados_da_filial)
 - **Views que dependem desta:** [v_venda_saldo_devolucao](tabelas.md#t-v_venda_saldo_devolucao)
 - **Gatilhos nesta tabela:**
   - `trg_devolucao_valida_filial` — BEFORE INSERT/UPDATE → [devolucao_valida_filial_da_venda](funcoes.md#f-devolucao_valida_filial_da_venda)
@@ -1819,7 +1819,7 @@ Para cada tabela: quem grava (tela, RPC, gatilho, servidor), quem lê, os gatilh
 - **RPCs que gravam:** [cancelar_pedido_venda](funcoes.md#f-cancelar_pedido_venda), [converter_orcamento_em_pedido](funcoes.md#f-converter_orcamento_em_pedido), [separar_pedido_venda](funcoes.md#f-separar_pedido_venda)
 - **Gatilhos (de outras tabelas) que gravam aqui:** [_conta_receber_fecha_pedido_venda](funcoes.md#f-_conta_receber_fecha_pedido_venda) (em [contas_receber](tabelas.md#t-contas_receber))
 - **Telas que leem:** [Estoque › Pedidos de Venda](telas.md#s-estoque-pedidosdevenda), [Financeiro › Aprovações de Orçamento](telas.md#s-financeiro-aprovaçõesdeorçamento), [Financeiro › Pedidos de Venda](telas.md#s-financeiro-pedidosdevenda), [Matriz › Vendas](telas.md#s-relatorio-vendas), [Vendas › Orçamentos](telas.md#s-vendas-orçamentos), [Vendas › Pedidos de Venda](telas.md#s-vendas-pedidosdevenda)
-- **RPCs que leem:** [cancelar_pedido_venda](funcoes.md#f-cancelar_pedido_venda), [contar_pendencias](funcoes.md#f-contar_pendencias), [converter_orcamento_em_pedido](funcoes.md#f-converter_orcamento_em_pedido), [separar_pedido_venda](funcoes.md#f-separar_pedido_venda)
+- **RPCs que leem:** [cancelar_pedido_venda](funcoes.md#f-cancelar_pedido_venda), [contar_pendencias](funcoes.md#f-contar_pendencias), [converter_orcamento_em_pedido](funcoes.md#f-converter_orcamento_em_pedido), [criar_devolucao_venda](funcoes.md#f-criar_devolucao_venda), [separar_pedido_venda](funcoes.md#f-separar_pedido_venda)
 - **Gatilhos nesta tabela:**
   - `trg_auditoria` — BEFORE INSERT/UPDATE → [set_auditoria_campos](funcoes.md#f-set_auditoria_campos)
   - `trg_historico` — AFTER INSERT/UPDATE → [registrar_historico](funcoes.md#f-registrar_historico) · grava em [historico_operacoes](tabelas.md#t-historico_operacoes)
@@ -2294,7 +2294,7 @@ Para cada tabela: quem grava (tela, RPC, gatilho, servidor), quem lê, os gatilh
 - **Telas que gravam:** [Cadastros › Serviços](telas.md#s-cadastros-serviços)
 - **RPCs que gravam:** —
 - **Telas que leem:** [Cadastros › Serviços](telas.md#s-cadastros-serviços), [Compras › Cotações](telas.md#s-compras-cotações), [Estoque › Recebimentos](telas.md#s-estoque-recebimentos), [Financeiro › Aprovações de Cotação](telas.md#s-financeiro-aprovaçõesdecotação), [Financeiro › Aprovações de Orçamento](telas.md#s-financeiro-aprovaçõesdeorçamento), [Início](telas.md#s-inicio), [Marketing › Promoções](telas.md#s-marketing-promoções), [Requisições › Do Setor](telas.md#s-requisicoes-dosetor), [Vendas › Orçamentos](telas.md#s-vendas-orçamentos), [Vendas › PDV](telas.md#s-vendas-pdv)
-- **RPCs que leem:** [criar_venda_pdv](funcoes.md#f-criar_venda_pdv), [gerar_pedido_de_cotacao](funcoes.md#f-gerar_pedido_de_cotacao), [parametros_precificacao](funcoes.md#f-parametros_precificacao)
+- **RPCs que leem:** [converter_orcamento_em_pedido](funcoes.md#f-converter_orcamento_em_pedido), [criar_venda_pdv](funcoes.md#f-criar_venda_pdv), [gerar_pedido_de_cotacao](funcoes.md#f-gerar_pedido_de_cotacao), [parametros_precificacao](funcoes.md#f-parametros_precificacao)
 - **Gatilhos nesta tabela:**
   - `trg_auditoria` — BEFORE INSERT/UPDATE → [set_auditoria_campos](funcoes.md#f-set_auditoria_campos)
   - `trg_carimba_exclusao` — BEFORE UPDATE → [fn_carimba_exclusao](funcoes.md#f-fn_carimba_exclusao)
@@ -2499,12 +2499,13 @@ Para cada tabela: quem grava (tela, RPC, gatilho, servidor), quem lê, os gatilh
 - **Telas que gravam via RPC:** [Estoque › Pedidos de Venda](telas.md#s-estoque-pedidosdevenda), [Financeiro › Aprovações de Orçamento](telas.md#s-financeiro-aprovaçõesdeorçamento), [Financeiro › Pedidos de Venda](telas.md#s-financeiro-pedidosdevenda), [Vendas › Orçamentos](telas.md#s-vendas-orçamentos), [Vendas › Pedidos de Venda](telas.md#s-vendas-pedidosdevenda), [Vendas › Pedidos Online](telas.md#s-vendas-pedidosonline)
 - **RPCs que gravam:** [cancelar_pedido_venda](funcoes.md#f-cancelar_pedido_venda), [converter_orcamento_em_pedido](funcoes.md#f-converter_orcamento_em_pedido), [criar_venda_pdv](funcoes.md#f-criar_venda_pdv)
 - **Telas que leem:** [Cadastros › Lixeira](telas.md#s-cadastros-lixeira), [Dashboard](telas.md#s-dashboard), [Estoque › Saldos](telas.md#s-estoque-saldos), [Financeiro › Recibos de Vendas](telas.md#s-financeiro-recibosdevendas), [Matriz › Vendas](telas.md#s-relatorio-vendas), [Vendas › Devoluções](telas.md#s-vendas-devoluções), [Vendas › Histórico de Vendas](telas.md#s-vendas-históricodevendas), [Vendas › PDV](telas.md#s-vendas-pdv)
-- **RPCs que leem:** [_dre_calculo](funcoes.md#f-_dre_calculo), [_receita_servico](funcoes.md#f-_receita_servico), [_receita_simples](funcoes.md#f-_receita_simples), [_simples_rbt12](funcoes.md#f-_simples_rbt12), [_taxa_pelo_mix](funcoes.md#f-_taxa_pelo_mix), [criar_devolucao_venda](funcoes.md#f-criar_devolucao_venda), [dinheiro_do_caixa](funcoes.md#f-dinheiro_do_caixa), [gerar_painel_bi](funcoes.md#f-gerar_painel_bi), [pdv_registrar_credito_misto](funcoes.md#f-pdv_registrar_credito_misto), [resetar_dados_da_filial](funcoes.md#f-resetar_dados_da_filial)
+- **RPCs que leem:** [_dre_calculo](funcoes.md#f-_dre_calculo), [_receita_servico](funcoes.md#f-_receita_servico), [_receita_simples](funcoes.md#f-_receita_simples), [_simples_rbt12](funcoes.md#f-_simples_rbt12), [_taxa_pelo_mix](funcoes.md#f-_taxa_pelo_mix), [cancelar_pedido_venda](funcoes.md#f-cancelar_pedido_venda), [criar_devolucao_venda](funcoes.md#f-criar_devolucao_venda), [dinheiro_do_caixa](funcoes.md#f-dinheiro_do_caixa), [gerar_painel_bi](funcoes.md#f-gerar_painel_bi), [pdv_registrar_credito_misto](funcoes.md#f-pdv_registrar_credito_misto), [resetar_dados_da_filial](funcoes.md#f-resetar_dados_da_filial)
 - **Views que dependem desta:** [v_campanha_roi](tabelas.md#t-v_campanha_roi)
 - **Gatilhos nesta tabela:**
   - `trg_auditoria` — BEFORE INSERT/UPDATE → [set_auditoria_campos](funcoes.md#f-set_auditoria_campos)
   - `trg_historico` — AFTER INSERT/UPDATE → [registrar_historico](funcoes.md#f-registrar_historico) · grava em [historico_operacoes](tabelas.md#t-historico_operacoes)
   - `trg_venda_cancelada_desfaz` — AFTER UPDATE → [fn_venda_cancelada_desfaz](funcoes.md#f-fn_venda_cancelada_desfaz) · grava em [contas_receber](tabelas.md#t-contas_receber), [marketing_cupons](tabelas.md#t-marketing_cupons), [movimentacoes_estoque](tabelas.md#t-movimentacoes_estoque), [produto_unidades](tabelas.md#t-produto_unidades)
+  - `trg_venda_de_pedido_so_pelo_pedido` — BEFORE UPDATE → [fn_venda_de_pedido_so_pelo_pedido](funcoes.md#f-fn_venda_de_pedido_so_pelo_pedido)
   - `trg_venda_dinheiro_exige_caixa` — BEFORE INSERT → [fn_venda_dinheiro_exige_caixa](funcoes.md#f-fn_venda_dinheiro_exige_caixa)
   - `trg_venda_fiado_respeita_credito` — BEFORE INSERT → [venda_fiado_respeita_credito](funcoes.md#f-venda_fiado_respeita_credito)
 - **Cadeia de gatilhos ao gravar aqui:**

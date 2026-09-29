@@ -4517,8 +4517,10 @@
    ],
    "le": [
     "contas_receber",
+    "devolucoes",
     "movimentacoes_estoque",
-    "pedidos_venda"
+    "pedidos_venda",
+    "vendas"
    ],
    "chama": [
     "_assert_rpc",
@@ -4940,7 +4942,8 @@
     "clientes",
     "formas_pagamento",
     "orcamentos",
-    "pedidos_venda"
+    "pedidos_venda",
+    "servicos"
    ],
    "chama": [
     "_assert_rpc",
@@ -5145,6 +5148,7 @@
     "devolucoes",
     "itens_devolucao",
     "itens_venda",
+    "pedidos_venda",
     "user_profiles",
     "v_venda_saldo_devolucao",
     "vendas"
@@ -6957,6 +6961,13 @@
    "chama": [
     "acre_today"
    ]
+  },
+  "fn_venda_de_pedido_so_pelo_pedido": {
+   "gatilho": true,
+   "secdef": false,
+   "grava": [],
+   "le": [],
+   "chama": []
   },
   "fn_venda_dinheiro_exige_caixa": {
    "gatilho": true,
@@ -10445,6 +10456,7 @@
    "trg_auditoria:set_auditoria_campos",
    "trg_historico:registrar_historico",
    "trg_venda_cancelada_desfaz:fn_venda_cancelada_desfaz",
+   "trg_venda_de_pedido_so_pelo_pedido:fn_venda_de_pedido_so_pelo_pedido",
    "trg_venda_dinheiro_exige_caixa:fn_venda_dinheiro_exige_caixa",
    "trg_venda_fiado_respeita_credito:venda_fiado_respeita_credito"
   ]

@@ -291,7 +291,14 @@ const HistoricoVendasViewInner = ({ showToast, filial }: { showToast: any; filia
                               {Number(v.desconto) > 0 && <span>Desconto: <span className="text-red-500 font-mono">-{Number(v.desconto).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span></span>}
                             </div>
                             <div className="flex items-center gap-2">
-                              {v.status !== 'Cancelada' && (
+                              {/* Migr. 661: venda nascida de pedido de venda só se desfaz pelo pedido —
+                                  a cobrança e o estoque são dele. O banco recusa por aqui. */}
+                              {v.pedido_venda_id && v.status !== 'Cancelada' && (
+                                <span className="text-[10px] text-gray-500" title="Cancele pelo pedido: é ele que desfaz a cobrança e o estoque.">
+                                  Venda de pedido · cancele em Pedidos de Venda
+                                </span>
+                              )}
+                              {!v.pedido_venda_id && v.status !== 'Cancelada' && (
                                 <button onClick={() => handleCancelar(v)} disabled={!!isCanceling}
                                   className="neu-button py-1.5 px-4 rounded-xl text-xs font-bold text-red-500 hover:border-red-500/20 border border-transparent transition-all flex items-center gap-1.5 disabled:opacity-50">
                                   <X size={11} /> Cancelar venda
@@ -301,10 +308,12 @@ const HistoricoVendasViewInner = ({ showToast, filial }: { showToast: any; filia
                                 {fechar => (
                                   <>
                                     <HistoricoOperacoes variante="menu" onAbrir={fechar} entidade="vendas" entidadeId={v.id} titulo={`Venda ${String(v.id).slice(-6).toUpperCase()}`} criadoEm={v.created_at} atualizadoEm={v.updated_at} />
-                                    <ItemMenu onClick={() => { fechar(); handleExcluir(v); }} disabled={!!isCanceling}
-                                      cor="text-red-400 hover:bg-red-500/10" icon={Trash2}>
-                                      Excluir (inativar venda)
-                                    </ItemMenu>
+                                    {!v.pedido_venda_id && (
+                                      <ItemMenu onClick={() => { fechar(); handleExcluir(v); }} disabled={!!isCanceling}
+                                        cor="text-red-400 hover:bg-red-500/10" icon={Trash2}>
+                                        Excluir (inativar venda)
+                                      </ItemMenu>
+                                    )}
                                   </>
                                 )}
                               </MenuMais>
