@@ -842,7 +842,7 @@ Para cada tabela: quem grava (tela, RPC, gatilho, servidor), quem lê, os gatilh
 - **Telas que gravam via RPC:** [Vendas › Devoluções](telas.md#s-vendas-devoluções), [Vendas › PDV](telas.md#s-vendas-pdv)
 - **RPCs que gravam:** [criar_devolucao_venda](funcoes.md#f-criar_devolucao_venda)
 - **Telas que leem:** [Vendas › Devoluções](telas.md#s-vendas-devoluções)
-- **RPCs que leem:** [_dre_calculo](funcoes.md#f-_dre_calculo), [_receita_simples](funcoes.md#f-_receita_simples), [cancelar_pedido_venda](funcoes.md#f-cancelar_pedido_venda), [criar_devolucao_venda](funcoes.md#f-criar_devolucao_venda), [resetar_dados_da_filial](funcoes.md#f-resetar_dados_da_filial)
+- **RPCs que leem:** [_dre_calculo](funcoes.md#f-_dre_calculo), [_receita_servico](funcoes.md#f-_receita_servico), [_receita_simples](funcoes.md#f-_receita_simples), [cancelar_pedido_venda](funcoes.md#f-cancelar_pedido_venda), [criar_devolucao_venda](funcoes.md#f-criar_devolucao_venda), [resetar_dados_da_filial](funcoes.md#f-resetar_dados_da_filial)
 - **Views que dependem desta:** [v_venda_saldo_devolucao](tabelas.md#t-v_venda_saldo_devolucao)
 - **Gatilhos nesta tabela:**
   - `trg_devolucao_valida_filial` — BEFORE INSERT/UPDATE → [devolucao_valida_filial_da_venda](funcoes.md#f-devolucao_valida_filial_da_venda)
@@ -1236,13 +1236,13 @@ Para cada tabela: quem grava (tela, RPC, gatilho, servidor), quem lê, os gatilh
 - **Telas que gravam via RPC:** [Vendas › Devoluções](telas.md#s-vendas-devoluções), [Vendas › PDV](telas.md#s-vendas-pdv)
 - **RPCs que gravam:** [criar_devolucao_venda](funcoes.md#f-criar_devolucao_venda)
 - **Telas que leem:** —
-- **RPCs que leem:** [_dre_calculo](funcoes.md#f-_dre_calculo), [criar_devolucao_venda](funcoes.md#f-criar_devolucao_venda)
+- **RPCs que leem:** [_dre_calculo](funcoes.md#f-_dre_calculo), [_receita_servico](funcoes.md#f-_receita_servico), [criar_devolucao_venda](funcoes.md#f-criar_devolucao_venda)
 - **Views que dependem desta:** [v_venda_saldo_devolucao](tabelas.md#t-v_venda_saldo_devolucao)
 - **Gatilhos nesta tabela:**
   - `trg_item_devolucao_devolve_unidade` — AFTER INSERT → [fn_item_devolucao_devolve_unidade](funcoes.md#f-fn_item_devolucao_devolve_unidade) · grava em [produto_unidades](tabelas.md#t-produto_unidades)
 - **Cadeia de gatilhos ao gravar aqui:**
   - 1. [itens_devolucao](tabelas.md#t-itens_devolucao) → [fn_item_devolucao_devolve_unidade](funcoes.md#f-fn_item_devolucao_devolve_unidade) → [produto_unidades](tabelas.md#t-produto_unidades)
-- **Aponta para:** devolucao_id → [devolucoes](tabelas.md#t-devolucoes); produto_id → [produtos](tabelas.md#t-produtos)
+- **Aponta para:** devolucao_id → [devolucoes](tabelas.md#t-devolucoes); produto_id → [produtos](tabelas.md#t-produtos); servico_id → [servicos](tabelas.md#t-servicos)
 - **RLS:** ALL `itens_devolucao_write` (gerente da filial · Matriz/professor); SELECT `itens_devolucao_select` (Matriz/professor)
 
 <a id="t-itens_venda"></a>
@@ -2298,7 +2298,7 @@ Para cada tabela: quem grava (tela, RPC, gatilho, servidor), quem lê, os gatilh
 - **Gatilhos nesta tabela:**
   - `trg_auditoria` — BEFORE INSERT/UPDATE → [set_auditoria_campos](funcoes.md#f-set_auditoria_campos)
   - `trg_carimba_exclusao` — BEFORE UPDATE → [fn_carimba_exclusao](funcoes.md#f-fn_carimba_exclusao)
-- **Ao apagar uma linha daqui:** [itens_venda](tabelas.md#t-itens_venda).servico_id zera o vínculo (SET NULL); [pedidos](tabelas.md#t-pedidos).servico_id bloqueia (NO ACTION); [requisicoes](tabelas.md#t-requisicoes).servico_id bloqueia (NO ACTION)
+- **Ao apagar uma linha daqui:** [itens_devolucao](tabelas.md#t-itens_devolucao).servico_id zera o vínculo (SET NULL); [itens_venda](tabelas.md#t-itens_venda).servico_id zera o vínculo (SET NULL); [pedidos](tabelas.md#t-pedidos).servico_id bloqueia (NO ACTION); [requisicoes](tabelas.md#t-requisicoes).servico_id bloqueia (NO ACTION)
 - **RLS:** ALL `write_servicos` (setores: logistica · gerente da filial · Matriz/professor); SELECT `read_servicos` (qualquer um da própria filial · Matriz/professor)
 
 <a id="t-subcategorias_produto"></a>

@@ -326,7 +326,7 @@ Para cada função: quem a chama (tela, servidor, outra função, gatilho), o qu
 - **Telas que chamam:** —
 - **Chamada por outras funções:** [_simples_periodo](funcoes.md#f-_simples_periodo)
 - **Grava:** —
-- **Lê:** [itens_venda](tabelas.md#t-itens_venda), [vendas](tabelas.md#t-vendas)
+- **Lê:** [devolucoes](tabelas.md#t-devolucoes), [itens_devolucao](tabelas.md#t-itens_devolucao), [itens_venda](tabelas.md#t-itens_venda), [vendas](tabelas.md#t-vendas)
 
 <a id="f-_receita_simples"></a>
 ## _receita_simples (RPC, SECURITY DEFINER)

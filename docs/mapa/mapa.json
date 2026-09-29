@@ -3342,6 +3342,8 @@
    "secdef": true,
    "grava": [],
    "le": [
+    "devolucoes",
+    "itens_devolucao",
     "itens_venda",
     "vendas"
    ],
