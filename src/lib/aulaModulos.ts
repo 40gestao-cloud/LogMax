@@ -69,7 +69,7 @@ export const AULA_ROLES_ALVO: { id: string; label: string; hint?: string }[] = [
 // Se um dia adicionar/remover submenu lá, atualizar aqui também — testes
 // visuais na tela de Modo Aula deixam isso óbvio.
 export const AULA_SUBMENUS: Record<string, string[]> = {
-  empresa:     ['Filiais', 'Formas de pagamento', 'Condições de pagamento', 'Projetos'],
+  empresa:     ['Filiais', 'Formas de pagamento', 'Projetos'],
   requisicoes: ['Do Setor', 'Aprovações'],
   // 'Lixeira' entra no espelho como qualquer outro submenu. Continua invisível
   // para o aluno: `requireRole: ['admin']` vale na aula também — a whitelist

@@ -27,18 +27,11 @@ Para cada tela: o que ela lê e grava, as funções do banco que chama, e **quem
 <a id="s-empresa-formasdepagamento"></a>
 ### Empresa › Formas de pagamento
 
-- **Rota:** `empresa-formasdepagamento` · **Componente:** `GenericCRUDView` ([src/views/GenericCRUDView.tsx](../../src/views/GenericCRUDView.tsx))
+- **Rota:** `empresa-formasdepagamento` · **Componente:** `FormasPagamentoView` ([src/views/FormasPagamentoView.tsx](../../src/views/FormasPagamentoView.tsx))
 - **Lê:** [formas_pagamento](tabelas.md#t-formas_pagamento), [historico_operacoes](tabelas.md#t-historico_operacoes)
 - **Grava direto:** [formas_pagamento](tabelas.md#t-formas_pagamento)
 - **Chama (RPC):** —
-
-<a id="s-empresa-condiçõesdepagamento"></a>
-### Empresa › Condições de pagamento
-
-- **Rota:** `empresa-condiçõesdepagamento` · **Componente:** `GenericCRUDView` ([src/views/GenericCRUDView.tsx](../../src/views/GenericCRUDView.tsx))
-- **Lê:** [condicoes_pagamento](tabelas.md#t-condicoes_pagamento), [historico_operacoes](tabelas.md#t-historico_operacoes)
-- **Grava direto:** [condicoes_pagamento](tabelas.md#t-condicoes_pagamento)
-- **Chama (RPC):** —
+- **Arquivos que acessam dados:** `src/components/HistoricoOperacoes.tsx`, `src/views/FormasPagamentoView.tsx`
 
 <a id="s-empresa-projetos"></a>
 ### Empresa › Projetos

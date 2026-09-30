@@ -18,11 +18,11 @@
 
 
 
-**2. Módulo Empresa - Submódulos Formas de Pagamento e Condições de Pagamento:**
+**2. Módulo Empresa - Submódulo Formas de Pagamento:**
 
 **a)** Definir as Formas de Pagamento aceitas pela empresa, isso é importante para Marketing e Vendas.
 
-**b)** Definir as Condições de Pagamento que a empresa apresentará aos clientes.
+**b)** Em cada forma, definir as condições que a empresa apresentará aos clientes (parcelas, juros, prazo de recebimento).
 
 
 

@@ -36,29 +36,14 @@
   },
   "empresa-formasdepagamento": {
    "nome": "Empresa › Formas de pagamento",
-   "componente": "GenericCRUDView",
-   "arquivo": "src/views/GenericCRUDView.tsx",
+   "componente": "FormasPagamentoView",
+   "arquivo": "src/views/FormasPagamentoView.tsx",
    "le": [
     "formas_pagamento",
     "historico_operacoes"
    ],
    "grava": [
     "formas_pagamento"
-   ],
-   "rpcs": [],
-   "grava_via_rpc": [],
-   "apis": []
-  },
-  "empresa-condiçõesdepagamento": {
-   "nome": "Empresa › Condições de pagamento",
-   "componente": "GenericCRUDView",
-   "arquivo": "src/views/GenericCRUDView.tsx",
-   "le": [
-    "condicoes_pagamento",
-    "historico_operacoes"
-   ],
-   "grava": [
-    "condicoes_pagamento"
    ],
    "rpcs": [],
    "grava_via_rpc": [],

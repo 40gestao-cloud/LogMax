@@ -72,6 +72,7 @@ const ContasPagarView         = lazyView(() => import('./views/ContasPagarView')
 const ContasReceberView       = lazyView(() => import('./views/ContasReceberView').then(m => ({ default: m.ContasReceberView })));
 const CaixaBancosView         = lazyView(() => import('./views/CaixaBancosView').then(m => ({ default: m.CaixaBancosView })));
 const ConciliacaoMaquininhaView = lazyView(() => import('./views/ConciliacaoMaquininhaView').then(m => ({ default: m.ConciliacaoMaquininhaView })));
+const FormasPagamentoView     = lazyView(() => import('./views/FormasPagamentoView').then(m => ({ default: m.FormasPagamentoView })));
 const GenericCRUDView         = lazyView(() => import('./views/GenericCRUDView').then(m => ({ default: m.GenericCRUDView })));
 const ServicosView            = lazyView(() => import('./views/ServicosView').then(m => ({ default: m.ServicosView })));
 const MovimentacoesEstoqueView = lazyView(() => import('./views/MovimentacoesEstoqueView').then(m => ({ default: m.MovimentacoesEstoqueView })));
@@ -200,8 +201,7 @@ const PREFETCH_VIEW: Record<string, { preload: () => Promise<unknown> }> = {
   'financeiro-dre': DREView,
   'financeiro-precificação': PrecificacaoView,
   'financeiro-centrosdecusto': GenericCRUDView,
-  'empresa-condiçõesdepagamento': GenericCRUDView,
-  'empresa-formasdepagamento': GenericCRUDView,
+  'empresa-formasdepagamento': FormasPagamentoView,
   'compras-requisiçõesdecompra': RequisicoesView,
   'compras-cotações': CotacoesView,
   'compras-pedidos': PedidosView,
@@ -352,7 +352,7 @@ const menuModules: { id: string; label: string; icon: any; submenus: SubmenuItem
     // Empresa é parametrização: filiais, formas e condições de pagamento,
     // projetos. Dado de referência que se configura uma vez.
     id: 'empresa', label: 'Empresa', icon: Building2,
-    submenus: ['Filiais', 'Formas de pagamento', 'Condições de pagamento', 'Projetos']
+    submenus: ['Filiais', 'Formas de pagamento', 'Projetos']
   },
   {
     // Módulo próprio desde 2026-07-28. Requisições morava dentro de Empresa
@@ -1514,7 +1514,7 @@ function LogMaxAppInner() {
 
   const renderContent = () => {
     const st = showToast;
-    // Formas/Condições de pagamento e Projetos: todo setor abre, só Financeiro
+    // Formas de pagamento e Projetos: todo setor abre, só Financeiro
     // e gerente gravam (migr. 649). hasSetor já deixa admin/CEO passar.
     const podeEditarEmpresa = hasSetor(profile, 'financeiro') || profile?.role === 'gerente';
     // Terceira camada de defesa do Modo Aula: se por qualquer motivo a view
@@ -1560,29 +1560,10 @@ function LogMaxAppInner() {
       // "Não classificado" no relatório, e classificar é a aula.
       case 'financeiro-centrosdecusto':       return <GenericCRUDView showToast={st} title="Centros de Custo" endpoint="/api/centroscustoview"
         fields={[{ key: 'codigo', label: 'Código', required: true, placeholder: 'Ex: CC-001' }, { key: 'nome', label: 'Nome', required: true, placeholder: 'Ex: TI & Infraestrutura' }, { key: 'responsavel', label: 'Responsável', placeholder: 'Ex: Ana Lima' }, { key: 'orcamento', label: 'Orçamento (R$)', type: 'currency', placeholder: '0,00' }, { key: 'grupo_dre', label: 'Grupo no DRE', type: 'select', options: ['Pessoal', 'Comerciais', 'Administrativas', 'Ocupação', 'Outras'] }, { key: 'status', label: 'Status', type: 'select', options: ['Ativo', 'Inativo'] }]} />;
-      case 'empresa-condiçõesdepagamento':    return <GenericCRUDView showToast={st} filialScoped podeEditar={podeEditarEmpresa} title="Condições de Pagamento" endpoint="/api/condicoespagamentoview"
-        fields={[{ key: 'descricao', label: 'Descrição', required: true, placeholder: 'Ex: 30/60/90 dias' }, { key: 'parcelas', label: 'Parcelas', type: 'number', placeholder: '3' }, { key: 'dias', label: 'Dias', placeholder: 'Ex: 30, 60, 90' }, { key: 'status', label: 'Status', type: 'select', options: ['Ativo', 'Inativo'] }]} />;
-      // Migr. 568: este cadastro deixou de ser decorativo. Cada campo aqui
-      // MUDA o preço da proposta em Vendas → Orçamentos:
-      //   · Desconto à vista abate o total (Pix, dinheiro);
-      //   · Juros a.m. + Parcelas sem juros acrescem pela Tabela Price;
-      //   · Taxa é CUSTO DA LOJA — sai do líquido, não entra no preço;
-      //   · Prazo é o D+n do 1º vencimento e Intervalo o espaço entre parcelas.
-      case 'empresa-formasdepagamento':       return <GenericCRUDView showToast={st} filialScoped podeEditar={podeEditarEmpresa} title="Formas de Pagamento" endpoint="/api/formaspagamentoview"
-        fields={[
-          { key: 'descricao', label: 'Descrição', required: true, placeholder: 'Ex: Cartão de Crédito' },
-          { key: 'desconto_percentual', label: 'Desconto à vista (%)', type: 'number', placeholder: '0' },
-          { key: 'taxa', label: 'Taxa da maquininha (%)', type: 'number', placeholder: '0' },
-          // Migr. 657: é pelo Tipo que a venda do PDV acha esta taxa na precificação.
-          { key: 'tipo', label: 'Tipo', type: 'select', options: ['Dinheiro', 'PIX', 'Cartão de débito', 'Cartão de crédito à vista', 'Cartão de crédito parcelado', 'Vale / voucher', 'Crediário da loja', 'Boleto', 'Transferência', 'Outro'] },
-          { key: 'juros_mensal', label: 'Juros ao cliente (% a.m.)', type: 'number', placeholder: '0' },
-          { key: 'parcelas_max', label: 'Parcelas (máx.)', type: 'number', placeholder: '1' },
-          { key: 'parcelas_sem_juros', label: 'Parcelas sem juros', type: 'number', placeholder: '1' },
-          { key: 'prazo', label: 'Prazo do 1º recebimento (dias)', type: 'number', placeholder: '0' },
-          { key: 'intervalo_dias', label: 'Intervalo entre parcelas (dias)', type: 'number', placeholder: '30' },
-          { key: 'exige_limite_credito', label: 'Crediário da loja?', type: 'boolean' },
-          { key: 'status', label: 'Status', type: 'select', options: ['Ativo', 'Inativo'] },
-        ]} />;
+      // Migr. 568: este cadastro muda o preço da proposta em Vendas → Orçamentos
+      // (desconto, juros, prazo) e a taxa entra na Precificação (657). A tela
+      // própria mostra só os campos do Tipo escolhido e a conta de exemplo.
+      case 'empresa-formasdepagamento':       return <FormasPagamentoView showToast={st} podeEditar={podeEditarEmpresa} />;
       case 'compras-requisiçõesdecompra':     return <RequisicoesView showToast={st} profile={profile} />;
       case 'compras-cotações':                return <CotacoesView showToast={st} profile={profile} mode="compras" onNavigate={navigate} />;
       case 'compras-pedidos':                 return <PedidosView showToast={st} profile={profile} />;

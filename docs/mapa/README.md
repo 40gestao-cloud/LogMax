@@ -11,7 +11,7 @@
 
 **Tabelas transversais** (aparecem nas listas, mas não entram no "Confira também", porque quase toda tela as toca por uma ferramenta comum): `documento_sequencias`, `historico_operacoes`, `max_shows`, `notificacoes`, `notificacoes_lidas`, `planilhas_trabalho`, `trabalho_reservas`.
 
-**Tamanho:** 116 telas · 197 tabelas · 10 views · 414 RPCs · 156 funções de gatilho · 264 gatilhos
+**Tamanho:** 115 telas · 197 tabelas · 10 views · 414 RPCs · 156 funções de gatilho · 264 gatilhos
 
 ## Menus
 
@@ -19,7 +19,6 @@
 
 - [Empresa › Filiais](telas.md#s-empresa-filiais)
 - [Empresa › Formas de pagamento](telas.md#s-empresa-formasdepagamento)
-- [Empresa › Condições de pagamento](telas.md#s-empresa-condiçõesdepagamento)
 - [Empresa › Projetos](telas.md#s-empresa-projetos)
 
 ### Requisições
