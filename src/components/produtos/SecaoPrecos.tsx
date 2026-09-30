@@ -125,7 +125,8 @@ export function SecaoPrecos({
             custo={parseBRL(extras.preco_custo)}
             venda={parseBRL(form.preco)}
             params={paramsPreco}
-            lucroAlvo={lucroCategoria} />
+            lucroAlvo={lucroCategoria}
+            recolhivel />
         )}
         {/* Migr. 664: de onde vem o custo — nota, frete, por unidade. */}
         {ehVendavel(extras.tipo) && editItem?.id && <ComposicaoCusto produtoId={editItem.id} />}

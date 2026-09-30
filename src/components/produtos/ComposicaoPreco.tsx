@@ -1,4 +1,5 @@
-import { TriangleAlert } from 'lucide-react';
+import { useState } from 'react';
+import { ChevronDown, TriangleAlert } from 'lucide-react';
 import {
   composicaoDoPreco, deducoesDe, fmtPct, markupDivisor, somaDeducoes,
   type OrigemPercentual, type ParametrosPrecificacao,
@@ -21,7 +22,7 @@ const mesAno = (iso: string) => {
   return new Date(Date.UTC(y, m - 1, 1)).toLocaleDateString('pt-BR', { month: 'short', year: '2-digit', timeZone: 'UTC' }).replace('.', '');
 };
 
-export function ComposicaoPreco({ custo, venda, params, lucroAlvo, anexo = 'I', rotuloLucro }: {
+export function ComposicaoPreco({ custo, venda, params, lucroAlvo, anexo = 'I', rotuloLucro, recolhivel = false }: {
   custo: number;
   venda: number;
   params: ParametrosPrecificacao;
@@ -30,7 +31,10 @@ export function ComposicaoPreco({ custo, venda, params, lucroAlvo, anexo = 'I', 
   anexo?: 'I' | 'III';
   /** De onde veio o lucro desejado (padrão: a categoria). */
   rotuloLucro?: string;
+  /** No formulário de cadastro fica fechada numa linha só: o detalhe abre no clique. */
+  recolhivel?: boolean;
 }) {
+  const [aberto, setAberto] = useState(!recolhivel);
   const d = deducoesDe(params, anexo);
   const c = composicaoDoPreco(venda, custo, d);
   const janela = `${mesAno(params.janela_inicio)} a ${mesAno(params.janela_fim)}`;
@@ -48,11 +52,31 @@ export function ComposicaoPreco({ custo, venda, params, lucroAlvo, anexo = 'I', 
       nota: 'comissão, embalagem — informado pela gestão' }] : []),
   ] : [];
 
+  const corLucro = c && c.lucro >= 0 ? 'text-emerald-400' : 'text-red-400';
+
   return (
     <div className="mt-4 rounded-xl border border-white/5 p-4 flex flex-col gap-3">
-      <p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Composição do preço</p>
+      {recolhivel ? (
+        <button type="button" onClick={() => setAberto(a => !a)} aria-expanded={aberto}
+          className="flex items-center gap-2 text-left -m-1 p-1 rounded-lg hover:bg-white/5 transition-colors">
+          <span className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Composição do preço</span>
+          {c ? (
+            <span className="text-[11px] text-gray-400">
+              lucro líquido <span className={`font-bold tabular-nums ${corLucro}`}>{fmtPct(c.lucroPct)} · {brl(c.lucro)}</span>
+            </span>
+          ) : (
+            <span className="text-[11px] text-gray-500">informe o preço de venda</span>
+          )}
+          <span className="ml-auto flex items-center gap-1 text-[10px] text-gray-500 shrink-0">
+            {aberto ? 'ocultar' : 'ver a formação'}
+            <ChevronDown size={14} className={`transition-transform ${aberto ? 'rotate-180' : ''}`} />
+          </span>
+        </button>
+      ) : (
+        <p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Composição do preço</p>
+      )}
 
-      {c && (
+      {aberto && c && (
         <>
           <div className="flex h-2.5 rounded-full overflow-hidden bg-white/5">
             {linhas.map(l => (
@@ -88,7 +112,7 @@ export function ComposicaoPreco({ custo, venda, params, lucroAlvo, anexo = 'I', 
         </>
       )}
 
-      {lucroAlvo !== null && divisor !== null && (
+      {aberto && lucroAlvo !== null && divisor !== null && (
         <p className="text-[11px] text-gray-400 leading-snug">
           Markup divisor: <span className="font-mono text-gray-200">custo ÷ (1 − {fmtPct(somaDeducoes(d) + lucroAlvo, 2)}) = custo ÷ {divisor.toFixed(4).replace('.', ',')}</span>
         </p>
@@ -99,7 +123,7 @@ export function ComposicaoPreco({ custo, venda, params, lucroAlvo, anexo = 'I', 
           Imposto, taxas, despesas e lucro desejado somam 100% ou mais: nenhum preço paga esta conta.
         </p>
       )}
-      {lucroAlvo === null && (
+      {aberto && lucroAlvo === null && (
         <p className="text-[11px] text-gray-500">
           Defina o <span className="text-gray-300">lucro líquido desejado</span> {anexo === 'III' ? 'dos serviços' : 'da categoria'} em Financeiro › Precificação › Categorias para o sistema sugerir o preço.
         </p>
