@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
-import { ArrowLeft, Play, Minimize2, Presentation, ChevronLeft, ChevronRight, ExternalLink, ZoomIn, ZoomOut, RotateCcw } from 'lucide-react';
+import { ArrowLeft, Play, Minimize2, Presentation, ChevronLeft, ChevronRight, ExternalLink, ZoomIn, ZoomOut, RotateCcw, FileText, GalleryHorizontal } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 
 // =================================================================
@@ -13,6 +13,11 @@ import { supabase } from '../lib/supabase';
 // controle total de teclado (setas/PageDown/Space/passador) — o
 // viewer nativo do Chrome dentro de iframe cross-origin nao entrega
 // esse controle.
+//
+// Dois modos. SLIDES: uma página por vez, setas/passador avançam para o
+// lado. DOCUMENTO: as páginas empilhadas e a roda desce o conteúdo — é o
+// que serve para apostila e guia (A4 em pé). O modo nasce da orientação da
+// 1ª página (em pé = documento) e o botão do topo troca.
 // =================================================================
 
 type Props = {
@@ -24,6 +29,97 @@ type Props = {
 };
 
 type PdfDoc = { numPages: number; getPage: (n: number) => Promise<any>; destroy?: () => Promise<void> | void };
+type Modo = 'slides' | 'documento';
+
+// Largura máxima da página no modo documento, em 100% de zoom: além disso a
+// linha de texto fica longa demais para ler num monitor largo.
+const LARGURA_LEITURA = 960;
+
+/** Modo documento: todas as páginas, uma embaixo da outra, desenhadas quando
+ *  chegam perto da tela (um PDF de 40 páginas não pinta 40 canvas de uma vez). */
+function PaginasContinuas({ doc, numPages, zoom, largura, scrollRef, onPaginaAtual }: {
+  doc: PdfDoc; numPages: number; zoom: number; largura: number;
+  scrollRef: React.RefObject<HTMLDivElement | null>;
+  onPaginaAtual: (n: number) => void;
+}) {
+  const [tamanhos, setTamanhos] = useState<{ w: number; h: number }[] | null>(null);
+  const caixas = useRef<(HTMLDivElement | null)[]>([]);
+  const desenhadas = useRef<Map<number, number>>(new Map()); // página → largura com que foi desenhada
+
+  useEffect(() => {
+    let vivo = true;
+    (async () => {
+      const t: { w: number; h: number }[] = [];
+      for (let i = 1; i <= numPages; i++) {
+        const v = (await doc.getPage(i)).getViewport({ scale: 1 });
+        t.push({ w: v.width, h: v.height });
+      }
+      if (vivo) setTamanhos(t);
+    })();
+    return () => { vivo = false; };
+  }, [doc, numPages]);
+
+  const larguraPagina = Math.max(200, Math.min(largura - 48, LARGURA_LEITURA)) * zoom;
+
+  const desenhar = useCallback(async (n: number) => {
+    const caixa = caixas.current[n - 1];
+    const canvas = caixa?.querySelector('canvas');
+    if (!canvas || desenhadas.current.get(n) === larguraPagina) return;
+    desenhadas.current.set(n, larguraPagina);
+    const page = await doc.getPage(n);
+    const v1 = page.getViewport({ scale: 1 });
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const viewport = page.getViewport({ scale: (larguraPagina / v1.width) * dpr });
+    canvas.width = viewport.width;
+    canvas.height = viewport.height;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    try { await page.render({ canvasContext: ctx, viewport, canvas }).promise; }
+    catch { desenhadas.current.delete(n); }
+  }, [doc, larguraPagina]);
+
+  // Desenha o que está na tela ou a até ~1,5 tela de distância.
+  useEffect(() => {
+    const root = scrollRef.current;
+    if (!tamanhos || !root) return;
+    const obs = new IntersectionObserver(entradas => {
+      entradas.forEach(e => { if (e.isIntersecting) desenhar(Number((e.target as HTMLElement).dataset.pagina)); });
+    }, { root, rootMargin: '150% 0px' });
+    caixas.current.forEach(c => c && obs.observe(c));
+    return () => obs.disconnect();
+  }, [tamanhos, desenhar, scrollRef]);
+
+  // Página "atual" = a que cruza o meio da tela.
+  useEffect(() => {
+    const root = scrollRef.current;
+    if (!root || !tamanhos) return;
+    const onScroll = () => {
+      const meio = root.scrollTop + root.clientHeight / 2;
+      let atual = 1;
+      caixas.current.forEach((c, i) => { if (c && c.offsetTop <= meio) atual = i + 1; });
+      onPaginaAtual(atual);
+    };
+    onScroll();
+    root.addEventListener('scroll', onScroll, { passive: true });
+    return () => root.removeEventListener('scroll', onScroll);
+  }, [tamanhos, scrollRef, onPaginaAtual]);
+
+  if (!tamanhos) return <div className="text-gray-400 text-sm text-center py-10">Carregando páginas…</div>;
+
+  // Só ampliado a coluna passa da tela (e aí rola para o lado); em 100% ela
+  // cabe — sem isto a barra vertical que aparece depois gerava rolagem lateral.
+  return (
+    <div className="flex flex-col items-center gap-4 py-6 px-6" style={{ minWidth: zoom > 1 ? larguraPagina + 48 : undefined }}>
+      {tamanhos.map((t, i) => (
+        <div key={i} ref={el => { caixas.current[i] = el; }} data-pagina={i + 1}
+          className="bg-white shadow-2xl shrink-0"
+          style={{ width: larguraPagina, height: larguraPagina * (t.h / t.w) }}>
+          <canvas className="block" style={{ width: '100%', height: '100%', cursor: 'default' }} />
+        </div>
+      ))}
+    </div>
+  );
+}
 
 export const MaxShowEditor = ({ showId, onClose, showToast }: Props) => {
   const [titulo, setTitulo] = useState('');
@@ -34,6 +130,9 @@ export const MaxShowEditor = ({ showId, onClose, showToast }: Props) => {
   const [numPages, setNumPages] = useState(0);
   const [loading, setLoading] = useState(true);
   const [zoom, setZoom] = useState(1); // 1 = fit-to-stage; > 1 amplia e o stage vira scrollavel
+  const [modo, setModo] = useState<Modo>('slides');
+  const [larguraDoc, setLarguraDoc] = useState(0);
+  const docScrollRef = useRef<HTMLDivElement | null>(null);
 
   const rootRef = useRef<HTMLDivElement | null>(null);
   const stageRef = useRef<HTMLDivElement | null>(null);
@@ -85,6 +184,10 @@ export const MaxShowEditor = ({ showId, onClose, showToast }: Props) => {
         if (disposed) { try { await doc.destroy(); } catch {} return; }
         try { await pdfRef.current?.destroy?.(); } catch {}
         pdfRef.current = doc;
+        // Em pé (A4, apostila) lê-se descendo; deitado (16:9) é slide.
+        const v = (await doc.getPage(1)).getViewport({ scale: 1 });
+        if (disposed) return;
+        setModo(v.height > v.width ? 'documento' : 'slides');
         setNumPages(doc.numPages);
         setPageNum(1);
       } catch (e) {
@@ -144,7 +247,8 @@ export const MaxShowEditor = ({ showId, onClose, showToast }: Props) => {
     try { await task.promise; } catch { /* cancelado */ }
   }, [pageNum, zoom]);
 
-  useEffect(() => { renderPage(); }, [renderPage, numPages, isFullscreen]);
+  // `modo`: voltando do Documento o canvas dos slides é outro elemento.
+  useEffect(() => { renderPage(); }, [renderPage, numPages, isFullscreen, modo]);
 
   // Re-renderiza em resize da janela (window), não do stage — resize do
   // stage também dispara com scrollbar aparecendo/sumindo, causando loop.
@@ -154,6 +258,20 @@ export const MaxShowEditor = ({ showId, onClose, showToast }: Props) => {
     window.addEventListener('resize', onResize);
     return () => window.removeEventListener('resize', onResize);
   }, [renderPage]);
+
+  // Largura do palco no modo documento — pela janela, como o dos slides.
+  useEffect(() => {
+    if (modo !== 'documento') return;
+    const medir = () => { const el = docScrollRef.current; if (el) setLarguraDoc(el.clientWidth); };
+    medir();
+    window.addEventListener('resize', medir);
+    return () => window.removeEventListener('resize', medir);
+  }, [modo, loading, isFullscreen]);
+
+  const irParaPagina = useCallback((n: number) => {
+    const el = docScrollRef.current?.querySelector<HTMLElement>(`[data-pagina="${n}"]`);
+    el?.scrollIntoView({ block: 'start' });
+  }, []);
 
   // Ao trocar de página ou entrar/sair de fullscreen, invalida o base.
   useEffect(() => { baseFitRef.current = null; }, [isFullscreen]);
@@ -186,6 +304,16 @@ export const MaxShowEditor = ({ showId, onClose, showToast }: Props) => {
       // disparar navegacao alem da acao do botao/input focado.
       const t = e.target as HTMLElement | null;
       if (t && (t.tagName === 'BUTTON' || t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'A' || t.isContentEditable)) return;
+      if (modo === 'documento') {
+        // Setas ↑↓, PageDown, espaço e Home/End rolam (padrão do navegador);
+        // ← → pulam de página, para o passador de slides seguir funcionando.
+        if (e.key === '+' || e.key === '=') { e.preventDefault(); zoomIn(); }
+        else if (e.key === '-' || e.key === '_') { e.preventDefault(); zoomOut(); }
+        else if (e.key === '0') { e.preventDefault(); zoomReset(); }
+        else if (e.key === 'ArrowRight') { e.preventDefault(); irParaPagina(Math.min(pageNum + 1, numPages)); }
+        else if (e.key === 'ArrowLeft') { e.preventDefault(); irParaPagina(Math.max(pageNum - 1, 1)); }
+        return;
+      }
       if (e.key === 'ArrowRight' || e.key === 'ArrowDown' || e.key === 'PageDown' || e.key === ' ') {
         e.preventDefault(); next();
       } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp' || e.key === 'PageUp') {
@@ -204,12 +332,12 @@ export const MaxShowEditor = ({ showId, onClose, showToast }: Props) => {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [next, prev, numPages, zoomIn, zoomOut, zoomReset]);
+  }, [next, prev, numPages, zoomIn, zoomOut, zoomReset, modo, pageNum, irParaPagina]);
 
   // Ctrl+wheel amplia/reduz (comportamento familiar de leitor PDF).
   // Sem Ctrl e ampliado: roda faz pan vertical (browser default no overflow-auto).
   useEffect(() => {
-    const el = stageRef.current;
+    const el = modo === 'documento' ? docScrollRef.current : stageRef.current;
     if (!el) return;
     const onWheel = (e: WheelEvent) => {
       if (!e.ctrlKey && !e.metaKey) return;
@@ -218,13 +346,13 @@ export const MaxShowEditor = ({ showId, onClose, showToast }: Props) => {
     };
     el.addEventListener('wheel', onWheel, { passive: false });
     return () => el.removeEventListener('wheel', onWheel);
-  }, [zoomIn, zoomOut]);
+  }, [zoomIn, zoomOut, modo, loading]);
 
   // Drag-to-pan quando ampliado (mouse). Sem isso o usuário precisaria
   // usar a scrollbar/roda pra ver os cantos.
   useEffect(() => {
     const el = stageRef.current;
-    if (!el || zoom <= 1) return;
+    if (!el || zoom <= 1 || modo !== 'slides') return;
     let dragging = false;
     let startX = 0, startY = 0, startL = 0, startT = 0;
     const onDown = (e: MouseEvent) => {
@@ -257,7 +385,41 @@ export const MaxShowEditor = ({ showId, onClose, showToast }: Props) => {
       window.removeEventListener('mousemove', onMove);
       window.removeEventListener('mouseup', onUp);
     };
-  }, [zoom]);
+  }, [zoom, modo]);
+
+  const trocarModo = () => {
+    setZoom(1);
+    baseFitRef.current = null;
+    setModo(m => m === 'slides' ? 'documento' : 'slides');
+  };
+  // Indo para Documento, rola até a página em que estava; voltando para
+  // Slides, parte dela.
+  useEffect(() => {
+    if (modo === 'documento' && !loading) requestAnimationFrame(() => {
+      irParaPagina(pageNum);
+      // Espaço e PageDown rolam o elemento com foco — sem isto rolariam a janela.
+      docScrollRef.current?.focus({ preventScroll: true });
+    });
+  }, [modo, loading]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const zoomBar = (
+    <div className="max-show-zoombar">
+      <button type="button" onClick={zoomOut} disabled={zoom <= ZOOM_MIN} title="Diminuir zoom (−)" aria-label="Diminuir zoom">
+        <ZoomOut size={14} />
+      </button>
+      <button type="button" onClick={zoomReset} title="Resetar zoom (0)" aria-label="Resetar zoom" className="max-show-zoombar-label">
+        {Math.round(zoom * 100)}%
+      </button>
+      <button type="button" onClick={zoomIn} disabled={zoom >= ZOOM_MAX} title="Aumentar zoom (+)" aria-label="Aumentar zoom">
+        <ZoomIn size={14} />
+      </button>
+      {zoom !== 1 && (
+        <button type="button" onClick={zoomReset} title="Voltar ao encaixe" aria-label="Voltar ao encaixe" className="max-show-zoombar-reset">
+          <RotateCcw size={13} />
+        </button>
+      )}
+    </div>
+  );
 
   return (
     <div ref={rootRef} className="max-doc-scope max-doc-light max-show-scope flex flex-col h-full">
@@ -275,74 +437,76 @@ export const MaxShowEditor = ({ showId, onClose, showToast }: Props) => {
             <ExternalLink size={13} /> <span className="hidden sm:inline">Nova aba</span>
           </a>
         )}
+        {!loading && numPages > 0 && (
+          <button onClick={trocarModo} className="md-headerbtn px-2.5 py-1.5 rounded-lg text-xs flex items-center gap-1"
+            title={modo === 'slides' ? 'Ler como documento: páginas uma embaixo da outra, rolando para baixo' : 'Apresentar como slides: uma página por vez'}>
+            {modo === 'slides' ? <FileText size={13} /> : <GalleryHorizontal size={13} />}
+            <span className="hidden sm:inline">{modo === 'slides' ? 'Documento' : 'Slides'}</span>
+          </button>
+        )}
         <button onClick={toggleFullscreen} className="md-headerbtn px-2.5 py-1.5 rounded-lg text-xs flex items-center gap-1" title={isFullscreen ? 'Sair da tela cheia (Esc)' : 'Apresentar (tela cheia)'}>
           {isFullscreen ? <Minimize2 size={13} /> : <Play size={13} />} {isFullscreen ? 'Sair' : 'Apresentar'}
         </button>
       </div>
 
-      <div
-        ref={stageRef}
-        className={`max-show-stage flex-1 min-h-0 bg-black relative select-none ${zoom > 1 ? 'overflow-auto' : 'overflow-hidden flex items-center justify-center'}`}
-      >
-        {loading ? (
-          <div className="text-gray-400 text-sm">Carregando apresentação…</div>
-        ) : (
-          <>
-            <canvas
-              ref={canvasRef}
-              className="block shadow-2xl mx-auto"
-              onClick={zoom === 1 ? next : undefined}
-              style={{
-                cursor: zoom === 1 ? 'pointer' : 'inherit',
-                // Anula o max-width/max-height: 100% do CSS quando ampliado —
-                // sem isso o canvas fica travado no tamanho do stage.
-                maxWidth: zoom > 1 ? 'none' : undefined,
-                maxHeight: zoom > 1 ? 'none' : undefined,
-              }}
-            />
-            <button
-              type="button"
-              onClick={prev}
-              className="max-show-nav max-show-nav-left"
-              aria-label="Slide anterior"
-              disabled={pageNum <= 1}
-            >
-              <ChevronLeft size={28} />
-            </button>
-            <button
-              type="button"
-              onClick={next}
-              className="max-show-nav max-show-nav-right"
-              aria-label="Próximo slide"
-              disabled={pageNum >= numPages}
-            >
-              <ChevronRight size={28} />
-            </button>
-            <div className="max-show-counter">
-              {pageNum} / {numPages || '…'}
-            </div>
-            {/* Pill de zoom — fica dentro do stage (dentro do root), então
-                sobrevive no fullscreen quando o header some. Bottom-left
-                pra não colidir com o counter (bottom-right). */}
-            <div className="max-show-zoombar">
-              <button type="button" onClick={zoomOut} disabled={zoom <= ZOOM_MIN} title="Diminuir zoom (−)" aria-label="Diminuir zoom">
-                <ZoomOut size={14} />
+      {modo === 'documento' && !loading ? (
+        <div className="max-show-stage flex-1 min-h-0 relative select-none">
+          <div ref={docScrollRef} tabIndex={0} className="absolute inset-0 overflow-auto bg-neutral-800 outline-none">
+            {pdfRef.current && larguraDoc > 0 && (
+              <PaginasContinuas doc={pdfRef.current} numPages={numPages} zoom={zoom} largura={larguraDoc}
+                scrollRef={docScrollRef} onPaginaAtual={setPageNum} />
+            )}
+          </div>
+          <div className="max-show-counter">{pageNum} / {numPages || '…'}</div>
+          {zoomBar}
+        </div>
+      ) : (
+        <div
+          ref={stageRef}
+          className={`max-show-stage flex-1 min-h-0 bg-black relative select-none ${zoom > 1 ? 'overflow-auto' : 'overflow-hidden flex items-center justify-center'}`}
+        >
+          {loading ? (
+            <div className="text-gray-400 text-sm">Carregando apresentação…</div>
+          ) : (
+            <>
+              <canvas
+                ref={canvasRef}
+                className="block shadow-2xl mx-auto"
+                onClick={zoom === 1 ? next : undefined}
+                style={{
+                  cursor: zoom === 1 ? 'pointer' : 'inherit',
+                  // Anula o max-width/max-height: 100% do CSS quando ampliado —
+                  // sem isso o canvas fica travado no tamanho do stage.
+                  maxWidth: zoom > 1 ? 'none' : undefined,
+                  maxHeight: zoom > 1 ? 'none' : undefined,
+                }}
+              />
+              <button
+                type="button"
+                onClick={prev}
+                className="max-show-nav max-show-nav-left"
+                aria-label="Slide anterior"
+                disabled={pageNum <= 1}
+              >
+                <ChevronLeft size={28} />
               </button>
-              <button type="button" onClick={zoomReset} title="Resetar zoom (0)" aria-label="Resetar zoom" className="max-show-zoombar-label">
-                {Math.round(zoom * 100)}%
+              <button
+                type="button"
+                onClick={next}
+                className="max-show-nav max-show-nav-right"
+                aria-label="Próximo slide"
+                disabled={pageNum >= numPages}
+              >
+                <ChevronRight size={28} />
               </button>
-              <button type="button" onClick={zoomIn} disabled={zoom >= ZOOM_MAX} title="Aumentar zoom (+)" aria-label="Aumentar zoom">
-                <ZoomIn size={14} />
-              </button>
-              {zoom !== 1 && (
-                <button type="button" onClick={zoomReset} title="Voltar ao encaixe" aria-label="Voltar ao encaixe" className="max-show-zoombar-reset">
-                  <RotateCcw size={13} />
-                </button>
-              )}
-            </div>
-          </>
-        )}
-      </div>
+              <div className="max-show-counter">
+                {pageNum} / {numPages || '…'}
+              </div>
+              {zoomBar}
+            </>
+          )}
+        </div>
+      )}
     </div>
   );
 };
