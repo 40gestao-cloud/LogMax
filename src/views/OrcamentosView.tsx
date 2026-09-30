@@ -181,6 +181,9 @@ const OrcamentosViewInner = ({
   useTravaAtualizacao(itens.length > 0, 'orcamento-em-montagem',
     'há um orçamento em montagem, ainda sem enviar');
   const [extras, setExtras] = useState({ desconto: '', observacoes: '' });
+  // O vendedor negocia em R$ ou em %; o banco guarda sempre R$ (`desconto`).
+  // Em %, o valor acompanha a mercadoria: trocar um item refaz o desconto.
+  const [descontoEmPct, setDescontoEmPct] = useState(false);
   // Condição de pagamento: qual forma e em quantas vezes. O preço sai daqui.
   const [condicao, setCondicao] = useState({ forma_pagamento_id: '', parcelas: '1' });
   const [produtoBusca, setProdutoBusca] = useState('');
@@ -235,7 +238,13 @@ const OrcamentosViewInner = ({
     () => itens.reduce((s, it) => s + it.subtotal, 0),
     [itens]
   );
-  const descontoNum = parseBRL(extras.desconto);
+  const descontoPct = descontoEmPct ? Math.min(100, Math.max(0, Number(extras.desconto.replace(',', '.')) || 0)) : 0;
+  const descontoNum = descontoEmPct
+    ? Math.round(subtotal * descontoPct) / 100
+    : parseBRL(extras.desconto);
+  /** Quanto o desconto representa da mercadoria, para o Resumo. */
+  const pctDe = (valor: number, base: number) =>
+    base > 0 ? `${(valor / base * 100).toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%` : '';
 
   // Só as formas ativas da unidade entram no select — cadastro inativo o banco
   // recusa, e oferecer o que vai ser recusado é a armadilha da lista suspensa.
@@ -313,6 +322,7 @@ const OrcamentosViewInner = ({
     setForm({ cliente_id: '', validade_dias: '3' });
     setItens([]);
     setExtras({ desconto: '', observacoes: '' });
+    setDescontoEmPct(false);
     setCondicao({ forma_pagamento_id: '', parcelas: '1' });
     setProdutoBusca('');
     setErrors({});
@@ -329,6 +339,7 @@ const OrcamentosViewInner = ({
       desconto: orc.desconto ? formatBRL(Number(orc.desconto)) : '',
       observacoes: orc.observacoes ?? '',
     });
+    setDescontoEmPct(false);
     setCondicao({
       forma_pagamento_id: orc.forma_pagamento_id ?? '',
       parcelas: String(orc.parcelas ?? 1),
@@ -731,16 +742,44 @@ const OrcamentosViewInner = ({
 
           <SecaoFormulario titulo="Pagamento" icon={CreditCard} cor="azul">
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 items-start">
-            <FormField label="Desconto (R$)">
-              <input
-                type="text"
-                inputMode="numeric"
-                className="neu-input py-2 px-3 rounded-xl text-sm"
-                value={extras.desconto}
-                onChange={e => setExtras(x => ({ ...x, desconto: formatBRL(e.target.value) }))}
-                onKeyDown={handleMoneyKeyDown}
-                placeholder="0,00"
-              />
+            <FormField label={`Desconto comercial (${descontoEmPct ? '%' : 'R$'})`}>
+              <div className="flex gap-1.5">
+                <input
+                  type="text"
+                  inputMode={descontoEmPct ? 'decimal' : 'numeric'}
+                  className="neu-input py-2 px-3 rounded-xl text-sm flex-1 min-w-0 tabular-nums"
+                  value={extras.desconto}
+                  onChange={e => setExtras(x => ({ ...x, desconto: descontoEmPct
+                    ? e.target.value.replace(/[^0-9,]/g, '')
+                    : formatBRL(e.target.value) }))}
+                  onKeyDown={descontoEmPct ? undefined : handleMoneyKeyDown}
+                  placeholder={descontoEmPct ? '0' : '0,00'}
+                />
+                {/* Trocar de unidade leva o valor junto: 10% vira o R$ que ele
+                    dá hoje, e vice-versa — ninguém perde o que já negociou. */}
+                <div className="flex rounded-xl overflow-hidden border border-white/10 shrink-0" role="group" aria-label="Desconto em reais ou em percentual">
+                  {([false, true] as const).map(pct => (
+                    <button key={String(pct)} type="button"
+                      onClick={() => {
+                        if (pct === descontoEmPct) return;
+                        setExtras(x => ({ ...x, desconto: descontoNum > 0
+                          ? (pct
+                            ? (subtotal > 0 ? String(Math.round(descontoNum / subtotal * 10000) / 100).replace('.', ',') : '')
+                            : formatBRL(descontoNum))
+                          : '' }));
+                        setDescontoEmPct(pct);
+                      }}
+                      className={`px-2.5 text-xs font-bold transition-colors ${pct === descontoEmPct ? 'bg-accent text-black' : 'text-gray-400 hover:bg-white/5'}`}>
+                      {pct ? '%' : 'R$'}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              {descontoNum > 0 && (
+                <span className="text-[10px] text-gray-500 mt-1 block tabular-nums">
+                  {descontoEmPct ? `= R$ ${formatBRL(descontoNum)}` : `= ${pctDe(descontoNum, subtotal)} da mercadoria`}
+                </span>
+              )}
             </FormField>
             <FormField label="Forma de pagamento">
               <select
@@ -904,13 +943,13 @@ const OrcamentosViewInner = ({
             </div>
             {descontoNum > 0 && (
               <div className="flex justify-between gap-3">
-                <span className="text-gray-400">(−) Desconto comercial</span>
+                <span className="text-gray-400">(−) Desconto comercial <span className="text-gray-500">({pctDe(descontoNum, subtotal)})</span></span>
                 <span className="font-mono tabular-nums text-gray-200">- R$ {formatBRL(descontoNum)}</span>
               </div>
             )}
             {resumo.descontoCondicao > 0 && (
               <div className="flex justify-between gap-3">
-                <span className="text-gray-400">(−) Desconto à vista</span>
+                <span className="text-gray-400">(−) Desconto à vista <span className="text-gray-500">({Number(formaEscolhida?.desconto_percentual ?? 0).toLocaleString('pt-BR', { maximumFractionDigits: 2 })}% no {formaEscolhida?.descricao?.trim()})</span></span>
                 <span className="font-mono tabular-nums text-emerald-400">- R$ {formatBRL(resumo.descontoCondicao)}</span>
               </div>
             )}
@@ -1282,13 +1321,13 @@ const OrcamentosViewInner = ({
                 </div>
                 {Number(detalhes.desconto ?? 0) > 0 && (
                   <div className="flex justify-between">
-                    <span className="text-gray-500">Desconto comercial</span>
+                    <span className="text-gray-500">Desconto comercial ({pctDe(Number(detalhes.desconto ?? 0), Number(detalhes.subtotal ?? 0))})</span>
                     <span className="font-mono text-yellow-400 tabular-nums">- R$ {formatBRL(Number(detalhes.desconto ?? 0))}</span>
                   </div>
                 )}
                 {Number(detalhes.desconto_condicao ?? 0) > 0 && (
                   <div className="flex justify-between">
-                    <span className="text-gray-500">Desconto à vista ({detalhes.forma_pagamento})</span>
+                    <span className="text-gray-500">Desconto à vista ({pctDe(Number(detalhes.desconto_condicao), Number(detalhes.subtotal ?? 0) - Number(detalhes.desconto ?? 0))} no {detalhes.forma_pagamento})</span>
                     <span className="font-mono text-emerald-400 tabular-nums">- R$ {formatBRL(Number(detalhes.desconto_condicao))}</span>
                   </div>
                 )}
