@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { ChevronDown } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 
 // Custo Direto Total da última compra (migr. 664). O custo médio do cadastro é
@@ -18,6 +19,8 @@ const dataBR = (iso: string) => iso.slice(0, 10).split('-').reverse().join('/');
 
 export function ComposicaoCusto({ produtoId }: { produtoId: string }) {
   const [dados, setDados] = useState<Resposta | null>(null);
+  // Fechado numa linha, como a Composição do preço: o detalhe abre no clique.
+  const [aberto, setAberto] = useState(false);
 
   useEffect(() => {
     let vivo = true;
@@ -42,7 +45,18 @@ export function ComposicaoCusto({ produtoId }: { produtoId: string }) {
 
   return (
     <div className="mt-4 rounded-xl border border-white/5 p-4 flex flex-col gap-2">
-      <p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Custo Direto Total — última compra</p>
+      <button type="button" onClick={() => setAberto(a => !a)} aria-expanded={aberto}
+        className="flex items-center gap-2 text-left -m-1 p-1 rounded-lg hover:bg-white/5 transition-colors">
+        <span className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Custo Direto Total</span>
+        <span className="text-[11px] text-gray-400">
+          última compra <span className="font-bold tabular-nums text-gray-100">{brl(u.custo_direto_unit)}</span> por unidade
+        </span>
+        <span className="ml-auto flex items-center gap-1 text-[10px] text-gray-500 shrink-0">
+          {aberto ? 'ocultar' : 'ver a formação'}
+          <ChevronDown size={14} className={`transition-transform ${aberto ? 'rotate-180' : ''}`} />
+        </span>
+      </button>
+      {aberto && (<>
       <p className="text-[10px] text-gray-500">
         {u.pedido}{u.fornecedor ? ` · ${u.fornecedor}` : ''}{u.recebido_em ? ` · recebido em ${dataBR(u.recebido_em)}` : ''}
       </p>
@@ -65,6 +79,7 @@ export function ComposicaoCusto({ produtoId }: { produtoId: string }) {
           que vai para o CMV e para o preço sugerido.
         </p>
       )}
+      </>)}
     </div>
   );
 }
