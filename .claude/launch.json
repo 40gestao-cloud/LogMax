@@ -60,6 +60,20 @@
       ],
       "port": 3002,
       "autoPort": true
+    },
+    {
+      "name": "dev-contabilidade",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": [
+        "vite",
+        "dev",
+        "--mode",
+        "contabilidade",
+        "--port",
+        "3003",
+        "--strictPort"
+      ],
+      "port": 3003
     }
   ]
 }
