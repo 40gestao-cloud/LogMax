@@ -132,11 +132,19 @@ export const MaxShowsView = ({ showToast, profile }: any) => {
   useEffect(() => {
     if (!supabase || !profile?.id) { load(); return; }
     const cutoff = new Date(Date.now() - PURGE_DAYS * 24 * 60 * 60 * 1000).toISOString();
-    supabase.from('max_shows').delete()
-      .eq('user_id', profile.id)
-      .not('deleted_at', 'is', null)
-      .lt('deleted_at', cutoff)
-      .then(() => load());
+    (async () => {
+      // A linha cai primeiro e o PDF depois, como no excluir definitivo. Sem
+      // tirar do bucket, a purga deixava o arquivo órfão lá para sempre — o
+      // storage não cascateia do banco.
+      const { data } = await supabase.from('max_shows').delete()
+        .eq('user_id', profile.id)
+        .not('deleted_at', 'is', null)
+        .lt('deleted_at', cutoff)
+        .select('arquivo_url');
+      const paths = (data ?? []).map(r => extractStoragePath(r.arquivo_url)).filter((p): p is string => !!p);
+      if (paths.length) await supabase.storage.from('max-show-anexos').remove(paths);
+      load();
+    })();
   }, [load, profile?.id]);
 
   const abrir = (id: string, mode: 'view' | 'edit') => { setOpenMode(mode); setOpenId(id); };

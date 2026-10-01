@@ -1,20 +1,25 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { MousePointer2, Pencil, Highlighter, Eraser, Undo2, Trash2 } from 'lucide-react';
+import { MousePointer2, Pencil, Highlighter, Eraser, Undo2, Trash2, Type, Sigma, Search, X } from 'lucide-react';
+import { FORMULAS_SHOW, GRUPOS_FORMULAS, filtrarFormulas, type FormulaShow } from '../lib/maxShowFormulas';
 
 // =================================================================
-// Max Show — anotações por cima do PDF (pincel, marca-texto, borracha)
+// Max Show — anotações por cima do PDF (pincel, marca-texto, texto, borracha)
 // =================================================================
 // Uma camada <canvas> transparente sobre cada página; o PDF embaixo não é
 // tocado. O traço é guardado em coordenadas da PÁGINA (0–1), não da tela:
 // acompanha zoom, tela cheia e redimensionamento sem se desalinhar.
 //
 // Vive só enquanto a apresentação está aberta (quadro branco): nada vai ao
-// banco. Borracha apaga o traço inteiro em que encosta.
+// banco. Borracha apaga o traço (ou a caixa de texto) inteiro em que encosta.
+//
+// Caixa de texto: com a ferramenta Texto, clicar no vazio abre o campo;
+// clicar numa caixa reabre para editar; arrastar uma caixa a move. As
+// fórmulas da biblioteca são caixas de texto que já nascem preenchidas.
 // =================================================================
 
-export type Ferramenta = 'seta' | 'pincel' | 'marca' | 'borracha';
+export type Ferramenta = 'seta' | 'pincel' | 'marca' | 'texto' | 'borracha';
 
-export type Traco = {
+export type TracoLinha = {
   id: number;
   tipo: 'pincel' | 'marca';
   cor: string;
@@ -23,19 +28,47 @@ export type Traco = {
   pontos: [number, number][];
 };
 
-/** Traços por número de página (1-based). */
+export type TracoTexto = {
+  id: number;
+  tipo: 'texto';
+  cor: string;
+  /** Altura da letra em fração da largura da página. */
+  tamanho: number;
+  /** Canto de cima à esquerda da caixa, em fração da página. */
+  x: number;
+  y: number;
+  texto: string;
+  /** Cartão branco atrás do texto — fórmula sobre slide colorido. */
+  fundo?: boolean;
+};
+
+export type Traco = TracoLinha | TracoTexto;
+type NovoTraco = Omit<TracoLinha, 'id'> | Omit<TracoTexto, 'id'>;
+
+/** Traços por número de página (1-based; 0 é o quadro branco). */
 export type TracosPorPagina = Record<number, Traco[]>;
+export const PAGINA_QUADRO = 0;
+export type FundoQuadro = 'branco' | 'preto';
 
 type Acao =
   | { tipo: 'add'; pagina: number; traco: Traco }
   | { tipo: 'del'; pagina: number; traco: Traco; indice: number }
+  | { tipo: 'troca'; pagina: number; antes: Traco }
   | { tipo: 'limpar'; pagina: number; tracos: Traco[] };
 
-export const CORES_PINCEL = ['#ef4444', '#2563eb', '#16a34a', '#f97316', '#9333ea', '#111827'];
+const COR_ESCURA = '#111827';
+const COR_CLARA = '#ffffff';
+export const CORES_PINCEL = ['#ef4444', '#2563eb', '#16a34a', '#f97316', '#9333ea', '#facc15', COR_ESCURA, COR_CLARA];
 export const CORES_MARCA = ['#facc15', '#4ade80', '#f472b6', '#38bdf8'];
 export const ESPESSURAS_PINCEL = [0.003, 0.006, 0.012];
+export const TAMANHOS_TEXTO = [0.018, 0.026, 0.038, 0.056];
+const TAMANHO_FORMULA = 0.03;
 const ESPESSURA_MARCA = 0.025;
 const OPACIDADE_MARCA = 0.38;
+const ALTURA_LINHA = 1.3;
+/** Respiro do cartão branco, em múltiplos da altura da letra. */
+const RESPIRO_FUNDO = 0.5;
+const fonte = (px: number) => `700 ${px}px Montserrat, system-ui, sans-serif`;
 
 let proximoId = 1;
 
@@ -45,20 +78,24 @@ export function useAnotacoes() {
   const [corPincel, setCorPincel] = useState(CORES_PINCEL[0]);
   const [corMarca, setCorMarca] = useState(CORES_MARCA[0]);
   const [espessura, setEspessura] = useState(ESPESSURAS_PINCEL[1]);
+  const [tamanhoTexto, setTamanhoTexto] = useState(TAMANHOS_TEXTO[1]);
   const [tracos, setTracosState] = useState<TracosPorPagina>({});
   // Espelho síncrono: a borracha apaga vários traços no mesmo arraste, antes
   // de o React renderizar — ler do estado apagaria o mesmo traço duas vezes
   // e empilharia o desfazer em dobro.
   const tracosRef = useRef<TracosPorPagina>({});
-  const historico = useRef<Acao[]>([]);
+  // Uma pilha de desfazer POR página (0 = quadro): Ctrl+Z no slide 5 não pode
+  // mexer no que foi riscado no slide 2, que o professor não está vendo.
+  const historico = useRef<Record<number, Acao[]>>({});
+  const anotar = (pagina: number, a: Acao) => { (historico.current[pagina] ??= []).push(a); };
   const gravar = (pagina: number, lista: Traco[]) => {
     tracosRef.current = { ...tracosRef.current, [pagina]: lista };
     setTracosState(tracosRef.current);
   };
 
-  const adicionar = useCallback((pagina: number, t: Omit<Traco, 'id'>) => {
-    const traco = { ...t, id: proximoId++ };
-    historico.current.push({ tipo: 'add', pagina, traco });
+  const adicionar = useCallback((pagina: number, t: NovoTraco) => {
+    const traco = { ...t, id: proximoId++ } as Traco;
+    anotar(pagina, { tipo: 'add', pagina, traco });
     gravar(pagina, [...(tracosRef.current[pagina] ?? []), traco]);
   }, []);
 
@@ -66,39 +103,51 @@ export function useAnotacoes() {
     const lista = tracosRef.current[pagina] ?? [];
     const indice = lista.findIndex(t => t.id === id);
     if (indice < 0) return;
-    historico.current.push({ tipo: 'del', pagina, traco: lista[indice], indice });
+    anotar(pagina, { tipo: 'del', pagina, traco: lista[indice], indice });
     gravar(pagina, lista.filter(t => t.id !== id));
+  }, []);
+
+  /** Substitui o traço de mesmo id (caixa de texto movida ou reescrita). */
+  const trocar = useCallback((pagina: number, depois: Traco) => {
+    const lista = tracosRef.current[pagina] ?? [];
+    const antes = lista.find(t => t.id === depois.id);
+    if (!antes) return;
+    anotar(pagina, { tipo: 'troca', pagina, antes });
+    gravar(pagina, lista.map(t => t.id === depois.id ? depois : t));
   }, []);
 
   const limparPagina = useCallback((pagina: number) => {
     const lista = tracosRef.current[pagina] ?? [];
     if (lista.length === 0) return;
-    historico.current.push({ tipo: 'limpar', pagina, tracos: lista });
+    anotar(pagina, { tipo: 'limpar', pagina, tracos: lista });
     gravar(pagina, []);
   }, []);
 
-  const desfazer = useCallback(() => {
-    const a = historico.current.pop();
+  /** Desfaz o último ato DESTA página (o quadro tem a sua própria pilha). */
+  const desfazer = useCallback((pagina: number) => {
+    const a = historico.current[pagina]?.pop();
     if (!a) return;
-    const lista = tracosRef.current[a.pagina] ?? [];
-    if (a.tipo === 'add') gravar(a.pagina, lista.filter(t => t.id !== a.traco.id));
+    const lista = tracosRef.current[pagina] ?? [];
+    if (a.tipo === 'add') gravar(pagina, lista.filter(t => t.id !== a.traco.id));
     else if (a.tipo === 'del') {
       const nova = [...lista];
       nova.splice(Math.min(a.indice, nova.length), 0, a.traco);
-      gravar(a.pagina, nova);
-    } else gravar(a.pagina, a.tracos);
+      gravar(pagina, nova);
+    } else if (a.tipo === 'troca') gravar(pagina, lista.map(t => t.id === a.antes.id ? a.antes : t));
+    else gravar(pagina, a.tracos);
   }, []);
 
   const cor = ferramenta === 'marca' ? corMarca : corPincel;
   return {
     ferramenta, setFerramenta, cor, corPincel, setCorPincel, corMarca, setCorMarca,
-    espessura, setEspessura, tracos, adicionar, apagar, limparPagina, desfazer,
+    espessura, setEspessura, tamanhoTexto, setTamanhoTexto,
+    tracos, adicionar, apagar, trocar, limparPagina, desfazer,
   };
 }
 
 export type Anotacoes = ReturnType<typeof useAnotacoes>;
 
-function desenharTraco(ctx: CanvasRenderingContext2D, t: Traco | Omit<Traco, 'id'>, w: number, h: number) {
+function desenharTraco(ctx: CanvasRenderingContext2D, t: TracoLinha | Omit<TracoLinha, 'id'>, w: number, h: number) {
   const pts = t.pontos;
   if (pts.length === 0) return;
   ctx.save();
@@ -128,6 +177,62 @@ function desenharTraco(ctx: CanvasRenderingContext2D, t: Traco | Omit<Traco, 'id
   ctx.restore();
 }
 
+// Medida numa página de referência: a letra é fração da largura, então a
+// caixa inteira escala junto e a conta vale para qualquer tamanho de tela.
+const LARGURA_REF = 1000;
+let ctxMedida: CanvasRenderingContext2D | null = null;
+
+/** Largura e altura da caixa de texto, as duas em fração da LARGURA da página. */
+function medirTexto(t: Pick<TracoTexto, 'texto' | 'tamanho' | 'fundo'>) {
+  ctxMedida ??= document.createElement('canvas').getContext('2d');
+  const linhas = t.texto.split('\n');
+  let larg = 0;
+  if (ctxMedida) {
+    ctxMedida.font = fonte(t.tamanho * LARGURA_REF);
+    for (const l of linhas) larg = Math.max(larg, ctxMedida.measureText(l).width);
+  }
+  const respiro = t.fundo ? t.tamanho * RESPIRO_FUNDO : 0;
+  return { wf: larg / LARGURA_REF + 2 * respiro, hf: linhas.length * ALTURA_LINHA * t.tamanho + 2 * respiro };
+}
+
+const corClara = (hex: string) => {
+  const n = parseInt(hex.slice(1), 16);
+  return (0.299 * (n >> 16) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255)) > 170;
+};
+
+function desenharTexto(ctx: CanvasRenderingContext2D, t: TracoTexto, w: number, h: number, halo: boolean) {
+  const px = t.tamanho * w;
+  const respiro = t.fundo ? px * RESPIRO_FUNDO : 0;
+  const { wf, hf } = medirTexto(t);
+  const x = t.x * w, y = t.y * h;
+  ctx.save();
+  if (t.fundo) {
+    ctx.beginPath();
+    ctx.roundRect(x, y, wf * w, hf * w, px * 0.4);
+    ctx.shadowColor = 'rgba(0,0,0,0.3)';
+    ctx.shadowBlur = px * 0.5;
+    ctx.shadowOffsetY = px * 0.1;
+    ctx.fillStyle = 'rgba(255,255,255,0.97)';
+    ctx.fill();
+    ctx.shadowColor = 'transparent';
+  }
+  ctx.font = fonte(px);
+  ctx.textBaseline = 'middle';
+  ctx.lineJoin = 'round';
+  ctx.fillStyle = t.cor;
+  t.texto.split('\n').forEach((linha, i) => {
+    const ly = y + respiro + (i + 0.5) * px * ALTURA_LINHA;
+    // Contorno: o texto solto precisa se ler em cima de qualquer slide.
+    if (halo && !t.fundo) {
+      ctx.strokeStyle = corClara(t.cor) ? 'rgba(0,0,0,0.75)' : 'rgba(255,255,255,0.9)';
+      ctx.lineWidth = px * 0.16;
+      ctx.strokeText(linha, x + respiro, ly);
+    }
+    ctx.fillText(linha, x + respiro, ly);
+  });
+  ctx.restore();
+}
+
 /** Distância do ponto ao segmento, em px. */
 function distSegmento(px: number, py: number, ax: number, ay: number, bx: number, by: number) {
   const dx = bx - ax, dy = by - ay;
@@ -137,6 +242,11 @@ function distSegmento(px: number, py: number, ax: number, ay: number, bx: number
 }
 
 function tocaTraco(t: Traco, x: number, y: number, w: number, h: number) {
+  if (t.tipo === 'texto') {
+    const { wf, hf } = medirTexto(t);
+    const folga = 4;
+    return x >= t.x * w - folga && x <= t.x * w + wf * w + folga && y >= t.y * h - folga && y <= t.y * h + hf * w + folga;
+  }
   const raio = Math.max(t.espessura * w / 2, 0) + 8;
   const p = t.pontos;
   if (p.length === 1) return Math.hypot(x - p[0][0] * w, y - p[0][1] * h) <= raio;
@@ -146,18 +256,61 @@ function tocaTraco(t: Traco, x: number, y: number, w: number, h: number) {
   return false;
 }
 
+/** `pagina`: no modo slides a prop muda sob o mesmo componente — a caixa
+ *  aberta grava onde nasceu, não na página que entrou no lugar. */
+type Edicao = { id?: number; x: number; y: number; texto: string; fundo?: boolean; pagina: number };
+
 /**
  * A camada de uma página. Ocupa o pai inteiro (absolute inset-0) — o pai é
  * quem tem o tamanho da página na tela. Com a Seta ativa ela some para o
  * mouse: clique, arraste e rolagem passam para o que está embaixo.
+ * `halo`: contorno no texto solto; o quadro branco (fundo liso) dispensa.
  */
-export function CamadaAnotacao({ pagina, anot }: { pagina: number; anot: Anotacoes }) {
+export function CamadaAnotacao({ pagina, anot, halo = true }: { pagina: number; anot: Anotacoes; halo?: boolean }) {
   const ref = useRef<HTMLCanvasElement | null>(null);
+  const campo = useRef<HTMLTextAreaElement | null>(null);
   const [tam, setTam] = useState({ w: 0, h: 0 });
-  const atual = useRef<Omit<Traco, 'id'> | null>(null);
+  const atual = useRef<Omit<TracoLinha, 'id'> | null>(null);
+  // Caixa de texto pega pelo mouse: vira arraste se andar, edição se soltar no lugar.
+  const arrasto = useRef<{ t: TracoTexto; dx: number; dy: number; x0: number; y0: number; moveu: boolean; x: number; y: number } | null>(null);
+  const novoEm = useRef<[number, number] | null>(null);
+  const [edit, setEdit] = useState<Edicao | null>(null);
+  const editRef = useRef<Edicao | null>(null);
   const lista = anot.tracos[pagina] ?? [];
   const { ferramenta } = anot;
   const ativa = ferramenta !== 'seta';
+
+  const abrirEdicao = (e: Edicao | null) => { editRef.current = e; setEdit(e); };
+
+  // Chamado pelo blur, pelo Enter e pelo clique fora — o primeiro que chegar
+  // grava e zera o ref; os outros encontram null e não gravam de novo.
+  const confirmar = () => {
+    const ed = editRef.current;
+    if (!ed) return;
+    abrirEdicao(null);
+    const texto = ed.texto.replace(/\s+$/, '');
+    const alvo = ed.pagina;
+    const orig = ed.id != null ? (anot.tracos[alvo] ?? []).find(t => t.id === ed.id) : undefined;
+    if (!texto.trim()) { if (orig) anot.apagar(alvo, orig.id); return; }
+    if (orig && orig.tipo === 'texto') {
+      if (orig.texto !== texto || orig.cor !== anot.corPincel || orig.tamanho !== anot.tamanhoTexto)
+        anot.trocar(alvo, { ...orig, texto, cor: anot.corPincel, tamanho: anot.tamanhoTexto });
+    } else {
+      anot.adicionar(alvo, { tipo: 'texto', cor: anot.corPincel, tamanho: anot.tamanhoTexto, x: ed.x, y: ed.y, texto, fundo: ed.fundo });
+    }
+  };
+
+  // A barra não tira o foco do campo (mousedown sem foco): trocar de
+  // ferramenta ou de página com o campo aberto fecha gravando.
+  useEffect(() => { if (ferramenta !== 'texto') confirmar(); }, [ferramenta, pagina]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const editando = edit !== null;
+  useEffect(() => {
+    const el = campo.current;
+    if (!editando || !el) return;
+    el.focus({ preventScroll: true });
+    el.setSelectionRange(el.value.length, el.value.length);
+  }, [editando]);
 
   useEffect(() => {
     const el = ref.current;
@@ -177,23 +330,37 @@ export function CamadaAnotacao({ pagina, anot }: { pagina: number; anot: Anotaco
     if (!ctx) return;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, tam.w, tam.h);
-    lista.forEach(t => desenharTraco(ctx, t, tam.w, tam.h));
+    const a = arrasto.current;
+    lista.forEach(t => {
+      if (t.tipo !== 'texto') { desenharTraco(ctx, t, tam.w, tam.h); return; }
+      if (t.id === edit?.id) return; // está no campo aberto
+      desenharTexto(ctx, a && a.moveu && a.t.id === t.id ? { ...t, x: a.x, y: a.y } : t, tam.w, tam.h, halo);
+    });
     if (atual.current) desenharTraco(ctx, atual.current, tam.w, tam.h);
-  }, [lista, tam]);
+  }, [lista, tam, edit?.id, halo]);
 
   useEffect(() => { redesenhar(); }, [redesenhar]);
+  // A fonte pode terminar de carregar depois do primeiro desenho.
+  useEffect(() => { document.fonts?.ready.then(() => redesenhar()).catch(() => {}); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const ponto = (e: React.PointerEvent): [number, number] => {
     const r = ref.current!.getBoundingClientRect();
     return [(e.clientX - r.left) / r.width, (e.clientY - r.top) / r.height];
   };
 
-  const apagarEm = (e: React.PointerEvent) => {
+  const tracoEm = (e: React.PointerEvent, soTexto = false) => {
     const r = ref.current!.getBoundingClientRect();
     const x = e.clientX - r.left, y = e.clientY - r.top;
     for (let i = lista.length - 1; i >= 0; i--) {
-      if (tocaTraco(lista[i], x, y, r.width, r.height)) { anot.apagar(pagina, lista[i].id); return; }
+      if (soTexto && lista[i].tipo !== 'texto') continue;
+      if (tocaTraco(lista[i], x, y, r.width, r.height)) return lista[i];
     }
+    return null;
+  };
+
+  const apagarEm = (e: React.PointerEvent) => {
+    const t = tracoEm(e);
+    if (t) anot.apagar(pagina, t.id);
   };
 
   const onDown = (e: React.PointerEvent) => {
@@ -202,6 +369,15 @@ export function CamadaAnotacao({ pagina, anot }: { pagina: number; anot: Anotaco
     e.stopPropagation();
     ref.current?.setPointerCapture(e.pointerId);
     if (ferramenta === 'borracha') { atual.current = null; apagarEm(e); return; }
+    if (ferramenta === 'texto') {
+      // Campo aberto: o clique fora só fecha (gravando), não abre outro.
+      if (editRef.current) { confirmar(); return; }
+      const [x, y] = ponto(e);
+      const t = tracoEm(e, true) as TracoTexto | null;
+      if (t) arrasto.current = { t, dx: x - t.x, dy: y - t.y, x0: e.clientX, y0: e.clientY, moveu: false, x: t.x, y: t.y };
+      else novoEm.current = [x, y];
+      return;
+    }
     atual.current = {
       tipo: ferramenta === 'marca' ? 'marca' : 'pincel',
       cor: anot.cor,
@@ -214,6 +390,16 @@ export function CamadaAnotacao({ pagina, anot }: { pagina: number; anot: Anotaco
   const onMove = (e: React.PointerEvent) => {
     if (!ativa || !ref.current?.hasPointerCapture(e.pointerId)) return;
     if (ferramenta === 'borracha') { apagarEm(e); return; }
+    const a = arrasto.current;
+    if (a) {
+      if (!a.moveu && Math.hypot(e.clientX - a.x0, e.clientY - a.y0) < 4) return;
+      const [x, y] = ponto(e);
+      a.moveu = true;
+      a.x = x - a.dx;
+      a.y = y - a.dy;
+      redesenhar();
+      return;
+    }
     if (!atual.current) return;
     atual.current.pontos.push(ponto(e));
     redesenhar();
@@ -221,6 +407,25 @@ export function CamadaAnotacao({ pagina, anot }: { pagina: number; anot: Anotaco
 
   const onUp = (e: React.PointerEvent) => {
     if (ref.current?.hasPointerCapture(e.pointerId)) ref.current.releasePointerCapture(e.pointerId);
+    const a = arrasto.current, novo = novoEm.current;
+    arrasto.current = null;
+    novoEm.current = null;
+    if (a) {
+      if (a.moveu) anot.trocar(pagina, { ...a.t, x: a.x, y: a.y });
+      else if (e.type === 'pointerup') {
+        // Reabre a caixa com a cor e o tamanho dela na barra.
+        anot.setCorPincel(a.t.cor);
+        anot.setTamanhoTexto(a.t.tamanho);
+        abrirEdicao({ id: a.t.id, x: a.t.x, y: a.t.y, texto: a.t.texto, fundo: a.t.fundo, pagina });
+      } else redesenhar();
+      return;
+    }
+    if (novo) {
+      // O campo abre na soltura: aberto no mousedown, o próprio clique tirava o foco dele.
+      if (e.type === 'pointerup' && tam.h > 0)
+        abrirEdicao({ x: novo[0], y: novo[1] - (anot.tamanhoTexto * ALTURA_LINHA * tam.w) / 2 / tam.h, texto: '', pagina });
+      return;
+    }
     const t = atual.current;
     atual.current = null;
     // O último pointermove pode não ter chegado no ponto onde o dedo soltou.
@@ -228,24 +433,59 @@ export function CamadaAnotacao({ pagina, anot }: { pagina: number; anot: Anotaco
     if (t) anot.adicionar(pagina, t);
   };
 
-  const cursor = ferramenta === 'borracha' ? 'cell' : ativa ? 'crosshair' : 'default';
+  const cursor = ferramenta === 'borracha' ? 'cell' : ferramenta === 'texto' ? 'text' : ativa ? 'crosshair' : 'default';
+  const px = anot.tamanhoTexto * tam.w;
+  const medida = edit ? medirTexto({ texto: edit.texto, tamanho: anot.tamanhoTexto, fundo: edit.fundo }) : null;
   return (
-    <canvas ref={ref} className="max-show-anotacao"
-      onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={onUp}
-      onClick={ativa ? e => e.stopPropagation() : undefined}
-      style={{
-        position: 'absolute', inset: 0, width: '100%', height: '100%',
-        maxWidth: 'none', maxHeight: 'none',
-        pointerEvents: ativa ? 'auto' : 'none',
-        touchAction: ativa ? 'none' : 'auto',
-        cursor,
-      }} />
+    <>
+      <canvas ref={ref} className="max-show-anotacao"
+        onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={onUp}
+        onClick={ativa ? e => e.stopPropagation() : undefined}
+        style={{
+          position: 'absolute', inset: 0, width: '100%', height: '100%',
+          maxWidth: 'none', maxHeight: 'none',
+          pointerEvents: ativa ? 'auto' : 'none',
+          touchAction: ativa ? 'none' : 'auto',
+          cursor,
+        }} />
+      {edit && medida && (
+        <textarea ref={campo} className="max-show-campo-texto" value={edit.texto} wrap="off" spellCheck={false}
+          placeholder="Digite…" aria-label="Texto da anotação"
+          onChange={e => abrirEdicao({ ...edit, texto: e.target.value })}
+          onBlur={confirmar}
+          onPointerDown={e => e.stopPropagation()} onClick={e => e.stopPropagation()}
+          onKeyDown={e => {
+            if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); confirmar(); }
+            else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); abrirEdicao(null); }
+          }}
+          style={{
+            left: `${edit.x * 100}%`, top: `${edit.y * 100}%`,
+            width: Math.max(medida.wf * tam.w + px, px * 6), height: medida.hf * tam.w,
+            padding: edit.fundo ? px * RESPIRO_FUNDO : 0,
+            font: fonte(px), lineHeight: ALTURA_LINHA, color: anot.corPincel,
+            background: corClara(anot.corPincel) ? 'rgba(17,24,39,0.85)' : 'rgba(255,255,255,0.92)',
+          }} />
+      )}
+    </>
   );
 }
 
-/** Barra flutuante das ferramentas (embaixo, no centro do palco). */
-export function BarraAnotacao({ anot, pagina }: { anot: Anotacoes; pagina: number }) {
+/**
+ * Barra flutuante das ferramentas. `quadro`: está no quadro branco — ganha a
+ * troca de fundo, e a fórmula cai sem cartão, na cor que contrasta.
+ */
+export function BarraAnotacao({ anot, pagina, quadro, aspecto = 9 / 16, comFormulas = true }: {
+  anot: Anotacoes; pagina: number;
+  quadro?: { fundo: FundoQuadro; setFundo: (f: FundoQuadro) => void };
+  /** altura ÷ largura da página na tela — converte a altura da caixa (que é
+   *  medida em fração da LARGURA) para a fração de ALTURA em que y vive. */
+  aspecto?: number;
+  /** Biblioteca de fórmulas; o modo documento não a usa. */
+  comFormulas?: boolean;
+}) {
   const { ferramenta, setFerramenta } = anot;
+  const [formulas, setFormulas] = useState(false);
+  const [busca, setBusca] = useState('');
   const temTraco = (anot.tracos[pagina] ?? []).length > 0;
   const btn = (f: Ferramenta, Icon: any, titulo: string) => (
     <button type="button" onClick={() => setFerramenta(f)} title={titulo} aria-label={titulo} aria-pressed={ferramenta === f}
@@ -253,47 +493,198 @@ export function BarraAnotacao({ anot, pagina }: { anot: Anotacoes; pagina: numbe
       <Icon size={15} />
     </button>
   );
-  const cores = ferramenta === 'pincel' ? CORES_PINCEL : ferramenta === 'marca' ? CORES_MARCA : null;
+  const cores = ferramenta === 'pincel' || ferramenta === 'texto' ? CORES_PINCEL : ferramenta === 'marca' ? CORES_MARCA : null;
   const corAtual = ferramenta === 'marca' ? anot.corMarca : anot.corPincel;
   const setCor = ferramenta === 'marca' ? anot.setCorMarca : anot.setCorPincel;
 
+  /**
+   * Primeiro y (fração da altura) em que uma caixa de `altura` não encosta em
+   * nenhum texto já posto na página — a fórmula nova não cai sobre a anterior.
+   * Trata cada texto como uma faixa horizontal inteira: a fórmula entra
+   * centralizada e larga, então dividir a linha com outra não serviria.
+   * Página cheia: encosta no rodapé em vez de empilhar por cima.
+   */
+  const faixaLivre = (altura: number) => {
+    const TOPO = 0.12, PE = 0.97, RESPIRO = 0.015;
+    const faixas = (anot.tracos[pagina] ?? [])
+      .filter((t): t is TracoTexto => t.tipo === 'texto')
+      .map(t => [t.y, t.y + medirTexto(t).hf / aspecto] as const)
+      .sort((a, b) => a[0] - b[0]);
+    let y = TOPO;
+    for (const [de, ate] of faixas) {
+      if (y + altura + RESPIRO <= de) break;        // cabe no vão antes dela
+      if (ate + RESPIRO > y) y = ate + RESPIRO;     // ocupada: desce para depois
+    }
+    return Math.max(0.02, Math.min(y, PE - altura));
+  };
+
+  const fecharFormulas = () => { setFormulas(false); setBusca(''); };
+  const achadas = filtrarFormulas(busca);
+
+  // Esc fecha a biblioteca. Em captura e com stopPropagation: o Max Show
+  // escuta Esc no window para voltar à Seta — sem isto, Esc trocaria de
+  // ferramenta com o painel aberto e o painel ficaria lá.
+  useEffect(() => {
+    if (!formulas) return;
+    const onEsc = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      const t = e.target as HTMLElement | null;
+      if (t?.closest('.max-show-formulas-busca')) return; // o campo trata o dele
+      e.stopPropagation();
+      fecharFormulas();
+    };
+    window.addEventListener('keydown', onEsc, true);
+    return () => window.removeEventListener('keydown', onEsc, true);
+  }, [formulas]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const inserirFormula = (f: FormulaShow) => {
+    const fundo = !quadro;
+    // Fórmula comprida desce de tamanho até caber na largura da página, mas
+    // sempre PARANDO num tamanho da régua (P/M/G/E): tamanho solto deixava o
+    // botão da barra sem marcação e, ao reabrir a caixa, grudava esse valor
+    // nas próximas. Só se nem o menor couber é que encolhe livremente.
+    const regua = [...TAMANHOS_TEXTO].filter(t => t <= TAMANHO_FORMULA).sort((a, b) => b - a);
+    let tamanho = regua.find(t => medirTexto({ texto: f.formula, tamanho: t, fundo }).wf <= 0.94) ?? regua[regua.length - 1];
+    let m = medirTexto({ texto: f.formula, tamanho, fundo });
+    if (m.wf > 0.94) { tamanho *= 0.94 / m.wf; m = medirTexto({ texto: f.formula, tamanho, fundo }); }
+    anot.adicionar(pagina, {
+      tipo: 'texto', texto: f.formula, tamanho, fundo,
+      cor: quadro?.fundo === 'preto' ? COR_CLARA : COR_ESCURA,
+      x: (1 - m.wf) / 2, y: faixaLivre(m.hf / aspecto),
+    });
+    // Fica na ferramenta Texto: é com ela que se arrasta a fórmula para o lugar.
+    setFerramenta('texto');
+    fecharFormulas();
+  };
+
+  const trocarFundo = (f: FundoQuadro) => {
+    if (!quadro || quadro.fundo === f) return;
+    quadro.setFundo(f);
+    // A cor que sumiria no fundo novo troca pela que aparece.
+    if (f === 'preto' && anot.corPincel === COR_ESCURA) anot.setCorPincel(COR_CLARA);
+    if (f === 'branco' && anot.corPincel === COR_CLARA) anot.setCorPincel(COR_ESCURA);
+  };
+
   return (
-    // mousedown sem foco: o Max Show ignora as setas com um botão focado, e o
-    // passador de slides parava de funcionar depois de escolher o pincel.
-    <div className={`max-show-anotbar ${ferramenta !== 'seta' ? 'em-uso' : ''}`}
-      onClick={e => e.stopPropagation()} onMouseDown={e => e.preventDefault()}>
-      {btn('seta', MousePointer2, 'Seta — navegar (Esc)')}
-      {btn('pincel', Pencil, 'Pincel (P)')}
-      {btn('marca', Highlighter, 'Marca-texto (M)')}
-      {btn('borracha', Eraser, 'Borracha — apaga o traço tocado (E)')}
-      {cores && (
-        <>
-          <span className="sep" />
-          {cores.map(c => (
-            <button key={c} type="button" onClick={() => setCor(c)} title="Cor" aria-label={`Cor ${c}`} aria-pressed={corAtual === c}
-              className={`cor ${corAtual === c ? 'ativo' : ''}`}>
-              <span style={{ background: c }} />
+    <>
+      {/* mousedown sem foco: o Max Show ignora as setas com um botão focado, e o
+          passador de slides parava de funcionar depois de escolher o pincel. */}
+      <div className={`max-show-anotbar ${ferramenta !== 'seta' || formulas || quadro ? 'em-uso' : ''}`}
+        onClick={e => e.stopPropagation()} onMouseDown={e => e.preventDefault()}>
+        {btn('seta', MousePointer2, 'Seta — navegar (Esc)')}
+        {btn('pincel', Pencil, 'Pincel (P)')}
+        {btn('marca', Highlighter, 'Marca-texto (M)')}
+        {btn('texto', Type, 'Caixa de texto (T) — clique para escrever, arraste para mover')}
+        {btn('borracha', Eraser, 'Borracha — apaga o traço tocado (E)')}
+        {comFormulas && (
+          <button type="button" onClick={() => setFormulas(v => !v)} title="Fórmulas" aria-label="Fórmulas" aria-pressed={formulas}
+            className={formulas ? 'ativo' : ''}>
+            <Sigma size={15} />
+          </button>
+        )}
+        {cores && (
+          <>
+            <span className="sep" />
+            {cores.map(c => (
+              <button key={c} type="button" onClick={() => setCor(c)} title="Cor" aria-label={`Cor ${c}`} aria-pressed={corAtual === c}
+                className={`cor ${corAtual === c ? 'ativo' : ''}`}>
+                <span style={{ background: c }} />
+              </button>
+            ))}
+          </>
+        )}
+        {ferramenta === 'pincel' && (
+          <>
+            <span className="sep" />
+            {ESPESSURAS_PINCEL.map((esp, i) => (
+              <button key={esp} type="button" onClick={() => anot.setEspessura(esp)} title={['Fino', 'Médio', 'Grosso'][i]}
+                aria-label={['Fino', 'Médio', 'Grosso'][i]} aria-pressed={anot.espessura === esp}
+                className={anot.espessura === esp ? 'ativo' : ''}>
+                <span className="ponto" style={{ width: 4 + i * 4, height: 4 + i * 4 }} />
+              </button>
+            ))}
+          </>
+        )}
+        {ferramenta === 'texto' && (
+          <>
+            <span className="sep" />
+            {TAMANHOS_TEXTO.map((t, i) => {
+              const nome = `Letra ${['pequena', 'média', 'grande', 'enorme'][i]}`;
+              return (
+                <button key={t} type="button" onClick={() => anot.setTamanhoTexto(t)} title={nome} aria-label={nome}
+                  aria-pressed={anot.tamanhoTexto === t} className={anot.tamanhoTexto === t ? 'ativo' : ''}>
+                  <span style={{ fontSize: 10 + i * 3, fontWeight: 800, lineHeight: 1 }}>A</span>
+                </button>
+              );
+            })}
+          </>
+        )}
+        {quadro && (
+          <>
+            <span className="sep" />
+            {(['branco', 'preto'] as const).map(f => (
+              <button key={f} type="button" onClick={() => trocarFundo(f)} title={`Fundo ${f}`} aria-label={`Fundo ${f}`}
+                aria-pressed={quadro.fundo === f} className={`cor fundo ${quadro.fundo === f ? 'ativo' : ''}`}>
+                <span style={{ background: f === 'branco' ? '#fff' : '#000' }} />
+              </button>
+            ))}
+          </>
+        )}
+        <span className="sep" />
+        <button type="button" onClick={() => anot.desfazer(pagina)} title="Desfazer nesta página (Ctrl+Z)" aria-label="Desfazer"><Undo2 size={15} /></button>
+        <button type="button" onClick={() => anot.limparPagina(pagina)} disabled={!temTraco} title="Limpar esta página" aria-label="Limpar esta página">
+          <Trash2 size={15} />
+        </button>
+      </div>
+      {formulas && comFormulas && (
+        /* Sem preventDefault no painel inteiro: ele impediria o campo de busca
+           de receber o foco. Quem evita o foco é cada botão de fórmula. */
+        <div className="max-show-formulas" onClick={e => e.stopPropagation()} onMouseDown={e => e.stopPropagation()}>
+          <div className="max-show-formulas-topo">
+            <Sigma size={15} />
+            <span>
+              <strong>Fórmulas</strong>
+              <small>Clique para colocar no slide</small>
+            </span>
+            <button type="button" onClick={fecharFormulas} title="Fechar" aria-label="Fechar"
+              onMouseDown={e => e.preventDefault()}>
+              <X size={14} />
             </button>
-          ))}
-        </>
+          </div>
+          <label className="max-show-formulas-busca">
+            <Search size={13} />
+            {/* placeholder "Buscar…": campo de filtro não trava o reload da PWA. */}
+            <input value={busca} onChange={e => setBusca(e.target.value)} placeholder="Buscar fórmula…"
+              data-trava-atualizacao="nao" spellCheck={false}
+              onKeyDown={e => { if (e.key === 'Escape') { e.stopPropagation(); busca ? setBusca('') : fecharFormulas(); } }} />
+            {busca && (
+              <button type="button" onClick={() => setBusca('')} title="Limpar busca" aria-label="Limpar busca"
+                onMouseDown={e => e.preventDefault()}>
+                <X size={12} />
+              </button>
+            )}
+          </label>
+          <div className="max-show-formulas-lista">
+            {achadas.length === 0 && <p className="vazio">Nenhuma fórmula encontrada.</p>}
+            {GRUPOS_FORMULAS.map(g => {
+              const doGrupo = achadas.filter(f => f.grupo === g);
+              if (doGrupo.length === 0) return null;
+              return (
+                <div key={g} className="grupo">
+                  <div className="grupo-titulo">{g}</div>
+                  {doGrupo.map(f => (
+                    <button key={f.nome} type="button" onClick={() => inserirFormula(f)} onMouseDown={e => e.preventDefault()}>
+                      <strong>{f.nome}</strong>
+                      <span>{f.formula}</span>
+                    </button>
+                  ))}
+                </div>
+              );
+            })}
+          </div>
+          <div className="max-show-formulas-pe">{FORMULAS_SHOW.length} fórmulas · a mesma conta da tela de Precificação</div>
+        </div>
       )}
-      {ferramenta === 'pincel' && (
-        <>
-          <span className="sep" />
-          {ESPESSURAS_PINCEL.map((esp, i) => (
-            <button key={esp} type="button" onClick={() => anot.setEspessura(esp)} title={['Fino', 'Médio', 'Grosso'][i]}
-              aria-label={['Fino', 'Médio', 'Grosso'][i]} aria-pressed={anot.espessura === esp}
-              className={anot.espessura === esp ? 'ativo' : ''}>
-              <span className="ponto" style={{ width: 4 + i * 4, height: 4 + i * 4 }} />
-            </button>
-          ))}
-        </>
-      )}
-      <span className="sep" />
-      <button type="button" onClick={anot.desfazer} title="Desfazer (Ctrl+Z)" aria-label="Desfazer"><Undo2 size={15} /></button>
-      <button type="button" onClick={() => anot.limparPagina(pagina)} disabled={!temTraco} title="Limpar esta página" aria-label="Limpar esta página">
-        <Trash2 size={15} />
-      </button>
-    </div>
+    </>
   );
 }

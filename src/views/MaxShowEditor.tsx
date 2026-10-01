@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
-import { ArrowLeft, Play, Minimize2, Presentation, ChevronLeft, ChevronRight, ExternalLink, ZoomIn, ZoomOut, RotateCcw, FileText, GalleryHorizontal } from 'lucide-react';
+import { ArrowLeft, Play, Minimize2, Presentation, ChevronLeft, ChevronRight, ExternalLink, ZoomIn, ZoomOut, RotateCcw, FileText, GalleryHorizontal, PenLine } from 'lucide-react';
 import { supabase } from '../lib/supabase';
-import { useAnotacoes, CamadaAnotacao, BarraAnotacao, type Anotacoes } from '../components/MaxShowAnotacoes';
+import { useAnotacoes, CamadaAnotacao, BarraAnotacao, PAGINA_QUADRO, type Anotacoes, type FundoQuadro } from '../components/MaxShowAnotacoes';
 
 // =================================================================
 // Max Show — viewer/apresentador de PDF importado
@@ -22,6 +22,10 @@ import { useAnotacoes, CamadaAnotacao, BarraAnotacao, type Anotacoes } from '../
 //
 // Nos dois modos dá para riscar por cima: pincel, marca-texto e borracha
 // (components/MaxShowAnotacoes). Os traços somem ao fechar — é quadro branco.
+//
+// Quadro: uma lousa em branco (ou preta) que cobre o palco, com as mesmas
+// ferramentas. O PDF fica montado embaixo — ao fechar o quadro a página, o
+// zoom e a rolagem estão onde estavam.
 // =================================================================
 
 type Props = {
@@ -140,6 +144,16 @@ export const MaxShowEditor = ({ showId, onClose, showToast }: Props) => {
   const docScrollRef = useRef<HTMLDivElement | null>(null);
   const anot = useAnotacoes();
   const desenhando = anot.ferramenta !== 'seta';
+  const [quadro, setQuadro] = useState(false);
+  const [fundoQuadro, setFundoQuadro] = useState<FundoQuadro>('branco');
+  const alternarQuadro = useCallback(() => {
+    // Quadro aberto é para escrever: sai da Seta, que nele não faz nada.
+    if (!quadro && anot.ferramenta === 'seta') anot.setFerramenta('pincel');
+    // Fechando, volta para a Seta: com o pincel ainda ativo o clique no slide
+    // não passava página e a apresentação parecia travada.
+    if (quadro) anot.setFerramenta('seta');
+    setQuadro(q => !q);
+  }, [quadro, anot]);
   // Onde o canvas do slide está dentro do palco — a camada de anotação vai
   // exatamente por cima dele (o canvas é centralizado e muda de tamanho).
   const [rectSlide, setRectSlide] = useState<{ l: number; t: number; w: number; h: number } | null>(null);
@@ -327,14 +341,20 @@ export const MaxShowEditor = ({ showId, onClose, showToast }: Props) => {
       if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
       // Anotação: P/M/E/Esc trocam a ferramenta, Ctrl+Z desfaz. Vêm antes do
       // filtro de botão: depois de clicar na barra o foco fica num botão.
-      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key.toLowerCase() === 'z') { e.preventDefault(); anot.desfazer(); return; }
+      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key.toLowerCase() === 'z') {
+        e.preventDefault(); anot.desfazer(quadro ? PAGINA_QUADRO : pageNum); return;
+      }
       if (!e.ctrlKey && !e.metaKey && !e.altKey) {
         const k = e.key.toLowerCase();
         if (k === 'p') { anot.setFerramenta('pincel'); return; }
         if (k === 'm') { anot.setFerramenta('marca'); return; }
+        if (k === 't') { anot.setFerramenta('texto'); return; }
         if (k === 'e') { anot.setFerramenta('borracha'); return; }
+        if (k === 'q') { alternarQuadro(); return; }
         if (e.key === 'Escape' && anot.ferramenta !== 'seta') { anot.setFerramenta('seta'); return; }
       }
+      // Com o quadro aberto o PDF está coberto: não passa página às cegas.
+      if (quadro) return;
       // Botão focado: só Espaço/Enter são dele (acionariam o botão E a
       // navegação). Setas e PageUp/Down seguem passando slide — senão o
       // passador morria depois de qualquer clique no topo ou na barra.
@@ -367,7 +387,7 @@ export const MaxShowEditor = ({ showId, onClose, showToast }: Props) => {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [next, prev, numPages, zoomIn, zoomOut, zoomReset, modo, pageNum, irParaPagina, anot]);
+  }, [next, prev, numPages, zoomIn, zoomOut, zoomReset, modo, pageNum, irParaPagina, anot, quadro, alternarQuadro]);
 
   // Ctrl+wheel amplia/reduz (comportamento familiar de leitor PDF).
   // Sem Ctrl e ampliado: roda faz pan vertical (browser default no overflow-auto).
@@ -392,8 +412,10 @@ export const MaxShowEditor = ({ showId, onClose, showToast }: Props) => {
     let startX = 0, startY = 0, startL = 0, startT = 0;
     const onDown = (e: MouseEvent) => {
       if (e.button !== 0) return;
-      // Se clicou num botão (setas de navegação, pill), deixa o botão agir.
-      if ((e.target as HTMLElement)?.closest('button, a')) return;
+      // Clique na UI flutuante (setas, zoom, barra de ferramentas, biblioteca
+      // de fórmulas) é dela: o preventDefault daqui chega antes do React e
+      // tirava o foco do campo de busca das fórmulas.
+      if ((e.target as HTMLElement)?.closest('button, a, input, textarea, .max-show-anotbar, .max-show-formulas, .max-show-zoombar')) return;
       dragging = true;
       startX = e.clientX; startY = e.clientY;
       startL = el.scrollLeft; startT = el.scrollTop;
@@ -479,11 +501,28 @@ export const MaxShowEditor = ({ showId, onClose, showToast }: Props) => {
             <span className="hidden sm:inline">{modo === 'slides' ? 'Documento' : 'Slides'}</span>
           </button>
         )}
+        {!loading && (
+          <button onClick={alternarQuadro} aria-pressed={quadro} className="md-headerbtn px-2.5 py-1.5 rounded-lg text-xs flex items-center gap-1"
+            title={quadro ? 'Fechar o quadro e voltar à apresentação (Q)' : 'Quadro branco: lousa em branco para escrever e desenhar (Q)'}>
+            {quadro ? <Presentation size={13} /> : <PenLine size={13} />}
+            <span className="hidden sm:inline">{quadro ? 'Voltar ao PDF' : 'Quadro'}</span>
+          </button>
+        )}
         <button onClick={toggleFullscreen} className="md-headerbtn px-2.5 py-1.5 rounded-lg text-xs flex items-center gap-1" title={isFullscreen ? 'Sair da tela cheia (Esc)' : 'Apresentar (tela cheia)'}>
           {isFullscreen ? <Minimize2 size={13} /> : <Play size={13} />} {isFullscreen ? 'Sair' : 'Apresentar'}
         </button>
       </div>
 
+      <div className="flex-1 min-h-0 relative flex flex-col">
+      {quadro && (
+        <div className="max-show-stage max-show-quadro select-none">
+          <div className="max-show-quadro-lousa" style={{ background: fundoQuadro === 'preto' ? '#000' : '#fff' }}>
+            <CamadaAnotacao pagina={PAGINA_QUADRO} anot={anot} halo={false} />
+          </div>
+          <BarraAnotacao anot={anot} pagina={PAGINA_QUADRO} aspecto={9 / 16}
+            quadro={{ fundo: fundoQuadro, setFundo: setFundoQuadro }} />
+        </div>
+      )}
       {modo === 'documento' && !loading ? (
         <div className="max-show-stage flex-1 min-h-0 relative select-none">
           <div ref={docScrollRef} tabIndex={0} className="absolute inset-0 overflow-auto bg-neutral-800 outline-none">
@@ -494,7 +533,7 @@ export const MaxShowEditor = ({ showId, onClose, showToast }: Props) => {
           </div>
           <div className="max-show-counter">{pageNum} / {numPages || '…'}</div>
           {zoomBar}
-          <BarraAnotacao anot={anot} pagina={pageNum} />
+          {!quadro && <BarraAnotacao anot={anot} pagina={pageNum} comFormulas={false} />}
         </div>
       ) : (
         <div
@@ -544,11 +583,15 @@ export const MaxShowEditor = ({ showId, onClose, showToast }: Props) => {
                 {pageNum} / {numPages || '…'}
               </div>
               {zoomBar}
-              <BarraAnotacao anot={anot} pagina={pageNum} />
+              {!quadro && (
+                <BarraAnotacao anot={anot} pagina={pageNum}
+                  aspecto={rectSlide && rectSlide.w > 0 ? rectSlide.h / rectSlide.w : undefined} />
+              )}
             </>
           )}
         </div>
       )}
+      </div>
     </div>
   );
 };
