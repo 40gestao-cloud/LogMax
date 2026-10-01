@@ -39,6 +39,20 @@
       "port": 3300
     },
     {
+      "name": "maxpay",
+      "runtimeExecutable": "node",
+      "runtimeArgs": [
+        "C:/Users/franc/Downloads/maxpay/node_modules/vite/bin/vite.js",
+        "C:/Users/franc/Downloads/maxpay",
+        "--config",
+        "C:/Users/franc/Downloads/maxpay/vite.config.ts",
+        "--port",
+        "3400",
+        "--strictPort"
+      ],
+      "port": 3400
+    },
+    {
       "name": "preview-prod",
       "runtimeExecutable": "npx",
       "runtimeArgs": [
