@@ -39,7 +39,7 @@ import {
   Sun, Moon, Megaphone, ArrowLeft, Monitor, Eye,
   Star, MessageSquare, BookOpen, Database, Target, Brain, ListTodo,
   Layers, Landmark, GraduationCap, Lock, Trophy, ClipboardList, Inbox,
-  Presentation, FileText, Hourglass, Dices, FileSignature, PanelLeftClose, PanelLeftOpen,
+  Presentation, FileText, Hourglass, SquareKanban, Dices, FileSignature, PanelLeftClose, PanelLeftOpen,
 } from 'lucide-react';
 import { NotificationBell } from './components/NotificationBell';
 import { AvisoDisjuntor } from './components/AvisoDisjuntor';
@@ -155,6 +155,7 @@ const AulaAtividadeView                    = lazyView(() => import('./views/Aula
 const MaxShowsView                         = lazyView(() => import('./views/MaxShowsView').then(m => ({ default: m.MaxShowsView })));
 const DocumentosView                       = lazyView(() => import('./views/DocumentosView').then(m => ({ default: m.DocumentosView })));
 const ContratosView                        = lazyView(() => import('./views/ContratosView').then(m => ({ default: m.ContratosView })));
+const MesaGestorView                       = lazyView(() => import('./views/MesaGestorView').then(m => ({ default: m.MesaGestorView })));
 const PendenciasView                       = lazyView(() => import('./views/PendenciasView').then(m => ({ default: m.PendenciasView })));
 
 // --- prefetch das views ---
@@ -299,6 +300,7 @@ const PREFETCH_VIEW: Record<string, { preload: () => Promise<unknown> }> = {
   'documentos': DocumentosView,
   'contratos': ContratosView,
   'pendencias': PendenciasView,
+  'mesa-gestor': MesaGestorView,
 };
 
 // Hover-intent. Sem isto, arrastar o rato do topo da sidebar ate "Sair"
@@ -769,6 +771,15 @@ const SidebarNav = ({ activeView, navigate, openModules, toggleModule, handleSig
             contradiz o contexto que ele acabou de escolher. O gerente nunca
             entra em Matriz, então para ele é o contrário. `viewPermitidaNoModo`
             repete a mesma régua — o menu não é a única porta. */}
+        {/* Mesa do Gestor (migr. 667): "o que depende de mim agora?" — junta as
+            filas que já existem em três colunas (precisa de mim / parado na
+            equipe / resolvido). Os quatro papéis de gestão, nos dois modos: a
+            RPC recorta (gerente só a unidade dele). */}
+        {['admin', 'ceo', 'conselheiro', 'gerente'].includes(profile?.role) && (
+          <button onPointerEnter={() => prefetchOnHover('mesa-gestor')} onPointerLeave={cancelPrefetchHover} onPointerDown={() => prefetchView('mesa-gestor')} onClick={() => { navigate('mesa-gestor'); onClose?.(); }} className={`flex items-center gap-3 p-2.5 rounded-xl text-sm font-semibold ${activeView === 'mesa-gestor' ? 'nav-item neu-pressed text-accent is-active' : 'nav-item neu-button text-gray-100'}`}>
+            <SquareKanban size={18} /><span>Mesa do Gestor</span>
+          </button>
+        )}
         {((profile?.role === 'admin' && matrizMode) || profile?.role === 'gerente') && (
           <button onPointerEnter={() => prefetchOnHover('pendencias')} onPointerLeave={cancelPrefetchHover} onPointerDown={() => prefetchView('pendencias')} onClick={() => { navigate('pendencias'); onClose?.(); }} className={`flex items-center gap-3 p-2.5 rounded-xl text-sm font-semibold ${activeView === 'pendencias' ? 'nav-item neu-pressed text-accent is-active' : 'nav-item neu-button text-gray-100'}`}>
             <Hourglass size={18} /><span>Pendências</span>
@@ -1692,6 +1703,7 @@ function LogMaxAppInner() {
       case 'documentos':                   return <DocumentosView showToast={st} profile={profile} />;
       case 'contratos':                    return <ContratosView showToast={st} profile={profile} />;
       case 'pendencias':                   return <PendenciasView showToast={st} profile={profile} />;
+      case 'mesa-gestor':                  return <MesaGestorView showToast={st} profile={profile} onNavigate={navigate} />;
       default:
         return (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex h-full items-center justify-center flex-col gap-4 text-center">

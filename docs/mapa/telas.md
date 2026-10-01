@@ -1407,6 +1407,15 @@ Para cada tela: o que ela lê e grava, as funções do banco que chama, e **quem
 - **Storage:** `max-show-anexos`
 - **Arquivos que acessam dados:** `src/views/MaxShowEditor.tsx`, `src/views/MaxShowsView.tsx`
 
+<a id="s-mesa-gestor"></a>
+### Mesa do Gestor
+
+- **Rota:** `mesa-gestor` · **Componente:** `MesaGestorView` ([src/views/MesaGestorView.tsx](../../src/views/MesaGestorView.tsx))
+- **Lê:** [user_profiles](tabelas.md#t-user_profiles)
+- **Grava direto:** —
+- **Chama (RPC):** [minha_mesa](funcoes.md#f-minha_mesa)
+- **Arquivos que acessam dados:** `src/hooks/useUserProfile.ts`, `src/views/MesaGestorView.tsx`
+
 <a id="s-metas"></a>
 ### Metas *(rota metas)*
 

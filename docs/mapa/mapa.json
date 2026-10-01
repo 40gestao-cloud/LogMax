@@ -2700,6 +2700,20 @@
    "grava_via_rpc": [],
    "apis": []
   },
+  "mesa-gestor": {
+   "nome": "Mesa do Gestor",
+   "componente": "MesaGestorView",
+   "arquivo": "src/views/MesaGestorView.tsx",
+   "le": [
+    "user_profiles"
+   ],
+   "grava": [],
+   "rpcs": [
+    "minha_mesa"
+   ],
+   "grava_via_rpc": [],
+   "apis": []
+  },
   "metas": {
    "nome": "Metas *(rota metas)*",
    "componente": "DemandasView",
@@ -7842,6 +7856,35 @@
     "_freq_credito_dia",
     "acre_today",
     "dias_letivos_periodo"
+   ]
+  },
+  "minha_mesa": {
+   "gatilho": false,
+   "secdef": true,
+   "grava": [],
+   "le": [
+    "aprovacoes_compras",
+    "aprovacoes_estoque",
+    "avaliacoes_matriz",
+    "ciclo_tarefa_avaliacoes",
+    "ciclo_tarefa_participantes",
+    "ciclo_tarefas",
+    "demissoes",
+    "justificativas_falta",
+    "marketing_promocoes",
+    "matriz_tarefa_participantes",
+    "matriz_tarefas",
+    "movimentacoes_carreira",
+    "produtos",
+    "requisicoes",
+    "requisicoes_estoque",
+    "user_profiles",
+    "vagas"
+   ],
+   "chama": [
+    "auth_user_filial",
+    "auth_user_role",
+    "listar_pendencias"
    ]
   },
   "mov_estoque_delta": {

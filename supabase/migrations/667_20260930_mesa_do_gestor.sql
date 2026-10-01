@@ -1,0 +1,354 @@
+-- 667_20260930_mesa_do_gestor.sql
+--
+-- Mesa do Gestor: um quadro (Kanban de leitura) que responde "o que depende
+-- de mim agora?" para admin, CEO, conselheiro e gerente.
+--
+-- NÃO é tabela nova nem tarefa nova. Cada cartão é um documento que já existe
+-- e já está parado em alguma fila; o cartão sai sozinho quando o documento
+-- anda, porque esta função só LÊ. Quem resolve é a tela de sempre (o cartão
+-- leva até ela): a mudança de estado continua passando pelas RPCs com as suas
+-- regras de alçada.
+--
+-- Três colunas:
+--   mim    — só eu decido (aprovação da minha alçada, justificativa para dar
+--            parecer/decidir, vaga e desligamento para a Matriz, nota que falta
+--            do conselho, acesso a ajustar depois de transferência);
+--   equipe — parado com outra pessoa da unidade. Vem do `listar_pendencias`
+--            (477/527), a mesma régua da tela Pendências, e por isso só para
+--            admin e gerente: CEO e conselheiro são alunos e a 527 decidiu que
+--            o mapa nominal "quem está devendo" não é deles;
+--   feito  — o que EU decidi nos últimos 7 dias.
+--
+-- Escopo: gerente vê só a própria unidade (mesma régua da 527); admin, CEO e
+-- conselheiro veem todas, ou a que vier em `p_filial`.
+--
+-- Contas a pagar/receber entram só VENCIDAS: em aberto não é tarefa, é dívida
+-- (mesma escolha do `useSidebarBadges`) — com todas, a coluna virava extrato.
+--
+-- Sem realtime de propósito: a tela relê ao abrir, ao voltar ao foco (no
+-- máximo 1×/min) e no botão. A manada de 15/09 nasceu de tela que relia a
+-- cada INSERT da sala.
+
+CREATE OR REPLACE FUNCTION public.minha_mesa(p_filial text DEFAULT NULL)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+DECLARE
+  v_uid    uuid := auth.uid();
+  v_role   text;
+  v_nome   text;
+  v_minha  text;
+  v_escopo text;
+  v_hoje   date := (now() AT TIME ZONE 'America/Rio_Branco')::date;
+  v_desde  timestamptz := now() - interval '7 days';
+  v_cards  jsonb := '[]'::jsonb;
+BEGIN
+  v_role := public.auth_user_role();
+  IF v_uid IS NULL OR COALESCE(v_role, '') NOT IN ('admin', 'ceo', 'conselheiro', 'gerente') THEN
+    RAISE EXCEPTION 'A Mesa do Gestor é de admin, CEO, conselheiro e gerente.' USING ERRCODE = '42501';
+  END IF;
+  SELECT u.nome INTO v_nome FROM public.user_profiles u WHERE u.id = v_uid;
+
+  IF v_role = 'gerente' THEN
+    v_minha := public.auth_user_filial();
+    IF COALESCE(v_minha, '') = '' THEN
+      RAISE EXCEPTION 'Sua conta não está alocada em nenhuma unidade — fale com o professor.' USING ERRCODE = '42501';
+    END IF;
+    IF p_filial IS NOT NULL AND p_filial <> v_minha THEN
+      RAISE EXCEPTION 'O gerente vê a mesa da própria unidade (%).', v_minha USING ERRCODE = '42501';
+    END IF;
+    v_escopo := v_minha;
+  ELSE
+    v_escopo := NULLIF(p_filial, '');
+  END IF;
+
+  -- ── 1. Filas do fluxo (listar_pendencias): admin e gerente ──────────────
+  IF v_role IN ('admin', 'gerente') THEN
+    SELECT v_cards || COALESCE(jsonb_agg(jsonb_build_object(
+             'coluna',       CASE WHEN v_role = 'gerente' AND lp.responsavel_papel = 'Gerente da unidade'
+                                  THEN 'mim' ELSE 'equipe' END,
+             'area',         lp.area,
+             'etapa',        lp.etapa,
+             'documento',    lp.documento,
+             'documento_id', lp.documento_id,
+             'filial',       lp.filial,
+             'onde',         lp.onde,
+             'view',         CASE lp.onde
+                               WHEN 'Requisições › Aprovações'             THEN 'requisicoes-aprovações'
+                               WHEN 'Compras › Cotações'                   THEN 'compras-cotações'
+                               WHEN 'Compras › Pedidos'                    THEN 'compras-pedidos'
+                               WHEN 'Estoque › Recebimentos'               THEN 'estoque-recebimentos'
+                               WHEN 'Financeiro › Aprovações de Cotação'   THEN 'financeiro-aprovaçõesdecotação'
+                               WHEN 'Financeiro › Contas a Pagar'          THEN 'financeiro-contasapagar'
+                               WHEN 'Financeiro › Contas a Receber'        THEN 'financeiro-contasareceber'
+                               WHEN 'Financeiro › Controle de Caixa'       THEN 'financeiro-controledecaixa'
+                               WHEN 'Financeiro › Aprovações de Orçamento' THEN 'financeiro-aprovaçõesdeorçamento'
+                               WHEN 'Financeiro › Aprovações de Promoções' THEN 'financeiro-aprovaçõesdepromoções'
+                               WHEN 'Financeiro › Aprovações de Conteúdo'  THEN 'financeiro-aprovaçõesdeconteúdo'
+                             END,
+             'acao',         lp.acao,
+             'responsavel',  COALESCE(NULLIF(lp.responsavel, ''), lp.responsavel_papel),
+             'valor',        lp.valor,
+             'vencimento',   lp.vencimento,
+             'dias_parado',  lp.dias_parado,
+             'gravidade',    lp.gravidade)), '[]'::jsonb)
+      INTO v_cards
+      FROM public.listar_pendencias(v_escopo) lp
+     WHERE lp.area NOT IN ('Financeiro')
+        OR lp.etapa NOT LIKE 'Conta a % em aberto';
+  END IF;
+
+  -- ── 2. Material do almoxarifado: decisão do gerente ─────────────────────
+  -- Não está no listar_pendencias; é a segunda metade da caixa Aprovações.
+  IF v_role IN ('admin', 'gerente') THEN
+    SELECT v_cards || COALESCE(jsonb_agg(jsonb_build_object(
+             'coluna', CASE WHEN v_role = 'gerente' THEN 'mim' ELSE 'equipe' END,
+             'area', 'Estoque', 'etapa', 'Material do estoque aguardando aprovação',
+             'documento', left(COALESCE(p.nome, 'material') || ' × ' || COALESCE(r.qtd::text, '?'), 60),
+             'documento_id', r.id, 'filial', r.filial,
+             'onde', 'Requisições › Aprovações', 'view', 'requisicoes-aprovações',
+             'acao', 'Liberar ou negar', 'responsavel', 'Gerente da unidade',
+             'dias_parado', GREATEST(0, v_hoje - (r.created_at AT TIME ZONE 'America/Rio_Branco')::date),
+             'gravidade', CASE WHEN v_hoje - (r.created_at AT TIME ZONE 'America/Rio_Branco')::date >= 5 THEN 'alta'
+                               WHEN v_hoje - (r.created_at AT TIME ZONE 'America/Rio_Branco')::date >= 2 THEN 'media'
+                               ELSE 'baixa' END)), '[]'::jsonb)
+      INTO v_cards
+      FROM public.aprovacoes_estoque a
+      JOIN public.requisicoes_estoque r ON r.id = a.requisicao_estoque_id
+      LEFT JOIN public.produtos p ON p.id = r.produto_id
+     WHERE a.status = 'Pendente' AND COALESCE(r.ativo, true) AND r.status = 'Pendente'
+       AND (v_escopo IS NULL OR r.filial = v_escopo);
+  END IF;
+
+  -- ── 3. Promoção com parecer do Financeiro: decisão do gerente (576) ─────
+  IF v_role IN ('admin', 'gerente') THEN
+    SELECT v_cards || COALESCE(jsonb_agg(jsonb_build_object(
+             'coluna', CASE WHEN v_role = 'gerente' THEN 'mim' ELSE 'equipe' END,
+             'area', 'Marketing', 'etapa', 'Promoção com parecer do Financeiro',
+             'documento', left(COALESCE(mp.nome_produto, 'promoção'), 60),
+             'documento_id', mp.id, 'filial', mp.filial,
+             'onde', 'Marketing › Promoções', 'view', 'marketing-promoções',
+             'acao', 'Aprovar ou negar a oferta', 'responsavel', 'Gerente da unidade',
+             'valor', mp.preco_promocional,
+             'dias_parado', GREATEST(0, v_hoje - (COALESCE(mp.analisado_em, mp.created_at) AT TIME ZONE 'America/Rio_Branco')::date),
+             'gravidade', CASE WHEN v_hoje - (COALESCE(mp.analisado_em, mp.created_at) AT TIME ZONE 'America/Rio_Branco')::date >= 2
+                               THEN 'media' ELSE 'baixa' END)), '[]'::jsonb)
+      INTO v_cards
+      FROM public.marketing_promocoes mp
+     WHERE COALESCE(mp.ativo, true) AND mp.status = 'Em Análise'
+       AND (v_escopo IS NULL OR mp.filial = v_escopo);
+  END IF;
+
+  -- ── 4. Justificativa de falta (650): gerente dá parecer, admin decide ───
+  IF v_role IN ('admin', 'gerente') THEN
+    SELECT v_cards || COALESCE(jsonb_agg(jsonb_build_object(
+             'coluna', CASE WHEN v_role = 'admin' THEN 'mim'
+                            WHEN j.parecer_gerente IS NULL THEN 'mim'
+                            ELSE 'equipe' END,
+             'area', 'RH',
+             'etapa', CASE WHEN v_role = 'admin' THEN 'Justificativa de falta para decidir'
+                           WHEN j.parecer_gerente IS NULL THEN 'Justificativa de falta sem parecer'
+                           ELSE 'Justificativa com parecer, aguardando o professor' END,
+             'documento', left(COALESCE(j.nome_funcionario, '') || ' — ' || to_char(j.data, 'DD/MM'), 60),
+             'documento_id', j.id, 'filial', j.filial,
+             'onde', 'RH › Registro de Ponto › Justificativas', 'view', 'rh-registrodeponto',
+             'acao', CASE WHEN v_role = 'admin' THEN 'Aceitar ou negar'
+                          WHEN j.parecer_gerente IS NULL THEN 'Dar parecer'
+                          ELSE 'Acompanhar' END,
+             'responsavel', CASE WHEN v_role = 'gerente' AND j.parecer_gerente IS NOT NULL THEN 'Professor' ELSE NULL END,
+             'dias_parado', GREATEST(0, v_hoje - (j.created_at AT TIME ZONE 'America/Rio_Branco')::date),
+             'gravidade', CASE WHEN v_hoje - (j.created_at AT TIME ZONE 'America/Rio_Branco')::date >= 2
+                               THEN 'media' ELSE 'baixa' END)), '[]'::jsonb)
+      INTO v_cards
+      FROM public.justificativas_falta j
+     WHERE COALESCE(j.ativo, true) AND j.status = 'Pendente'
+       AND (v_escopo IS NULL OR j.filial = v_escopo);
+  END IF;
+
+  -- ── 5. Desligamento solicitado (318): admin/CEO decidem ─────────────────
+  SELECT v_cards || COALESCE(jsonb_agg(jsonb_build_object(
+           'coluna', CASE WHEN v_role IN ('admin', 'ceo') THEN 'mim' ELSE 'equipe' END,
+           'area', 'RH', 'etapa', 'Desligamento aguardando a Matriz',
+           'documento', left(COALESCE(d.nome_funcionario, 'colaborador'), 60),
+           'documento_id', d.id, 'filial', d.filial,
+           'onde', 'RH › Desligamento', 'view', 'rh-desligamento',
+           'acao', CASE WHEN v_role IN ('admin', 'ceo') THEN 'Aprovar ou recusar' ELSE 'Acompanhar' END,
+           'responsavel', CASE WHEN v_role IN ('admin', 'ceo') THEN NULL ELSE 'Admin / CEO' END,
+           'dias_parado', GREATEST(0, v_hoje - (d.created_at AT TIME ZONE 'America/Rio_Branco')::date),
+           'gravidade', CASE WHEN v_hoje - (d.created_at AT TIME ZONE 'America/Rio_Branco')::date >= 2
+                             THEN 'media' ELSE 'baixa' END)), '[]'::jsonb)
+    INTO v_cards
+    FROM public.demissoes d
+   WHERE COALESCE(d.ativo, true) AND d.status = 'Solicitado'
+     AND v_role IN ('admin', 'ceo', 'gerente')
+     AND (v_escopo IS NULL OR d.filial = v_escopo);
+
+  -- ── 6. Vaga aguardando a Matriz (311): admin/CEO, nunca quem abriu ──────
+  SELECT v_cards || COALESCE(jsonb_agg(jsonb_build_object(
+           'coluna', CASE WHEN v_role IN ('admin', 'ceo') AND va.criado_por IS DISTINCT FROM v_uid
+                          THEN 'mim' ELSE 'equipe' END,
+           'area', 'RH', 'etapa', 'Vaga aguardando a Matriz',
+           'documento', left(COALESCE(va.cargo, 'vaga') || ' (' || COALESCE(va.quantidade, 1)::text || ')', 60),
+           'documento_id', va.id, 'filial', va.filial,
+           'onde', 'RH › Recrutamento e Seleção', 'view', 'rh-recrutamentoeseleção',
+           'acao', CASE WHEN v_role IN ('admin', 'ceo') AND va.criado_por IS DISTINCT FROM v_uid
+                        THEN 'Aprovar ou negar' ELSE 'Acompanhar' END,
+           'responsavel', CASE WHEN v_role IN ('admin', 'ceo') AND va.criado_por IS DISTINCT FROM v_uid
+                               THEN NULL ELSE 'Admin / CEO' END,
+           'dias_parado', GREATEST(0, v_hoje - (va.created_at AT TIME ZONE 'America/Rio_Branco')::date),
+           'gravidade', CASE WHEN v_hoje - (va.created_at AT TIME ZONE 'America/Rio_Branco')::date >= 2
+                             THEN 'media' ELSE 'baixa' END)), '[]'::jsonb)
+    INTO v_cards
+    FROM public.vagas va
+   WHERE COALESCE(va.ativo, true) AND va.status = 'Aguardando Matriz'
+     AND v_role IN ('admin', 'ceo', 'gerente')
+     AND (v_escopo IS NULL OR va.filial = v_escopo);
+
+  -- ── 7. Nota que falta do conselho (345/361): CEO e conselheiro ──────────
+  -- Um cartão por tarefa aberta, dizendo quantos participantes ainda estão
+  -- sem a MINHA nota. Admin modera e não dá nota (240).
+  IF v_role IN ('ceo', 'conselheiro') THEN
+    SELECT v_cards || COALESCE(jsonb_agg(jsonb_build_object(
+             'coluna', 'mim', 'area', 'Matriz', 'etapa', 'Tarefa da competição aguardando sua nota',
+             'documento', left(x.nome, 60), 'documento_id', x.id, 'filial', 'Matriz',
+             'onde', 'Central de Avaliação › Competição', 'view', 'matriz-avaliacoes',
+             'acao', 'Dar nota a ' || x.faltam || ' de ' || x.total || ' participante(s)',
+             'dias_parado', GREATEST(0, v_hoje - (x.desde AT TIME ZONE 'America/Rio_Branco')::date),
+             'gravidade', CASE WHEN v_hoje - (x.desde AT TIME ZONE 'America/Rio_Branco')::date >= 2
+                               THEN 'media' ELSE 'baixa' END)), '[]'::jsonb)
+      INTO v_cards
+      FROM (
+        SELECT t.id, t.nome, COALESCE(t.liberada_em, t.created_at) AS desde,
+               count(*) AS total,
+               count(*) FILTER (WHERE NOT EXISTS (
+                 SELECT 1 FROM public.avaliacoes_matriz am
+                  WHERE am.item_id = p.id AND am.avaliador_id = v_uid
+                    AND am.ativo AND am.item_tipo LIKE 'tarefa\_%')) AS faltam
+          FROM public.matriz_tarefas t
+          JOIN public.matriz_tarefa_participantes p ON p.tarefa_id = t.id AND p.ativo
+         WHERE t.ativo AND t.status = 'aberta'
+           AND (v_escopo IS NULL OR p.filial = v_escopo)
+         GROUP BY t.id, t.nome, t.liberada_em, t.created_at
+      ) x
+     WHERE x.faltam > 0;
+
+    SELECT v_cards || COALESCE(jsonb_agg(jsonb_build_object(
+             'coluna', 'mim', 'area', 'Matriz', 'etapa', 'Demanda do ciclo aguardando sua nota',
+             'documento', left(x.nome, 60), 'documento_id', x.id, 'filial', 'Matriz',
+             'onde', 'Central de Avaliação › Padrão', 'view', 'matriz-avaliacoes',
+             'acao', 'Dar nota a ' || x.faltam || ' de ' || x.total || ' participante(s)',
+             'dias_parado', GREATEST(0, v_hoje - (x.desde AT TIME ZONE 'America/Rio_Branco')::date),
+             'gravidade', CASE WHEN v_hoje - (x.desde AT TIME ZONE 'America/Rio_Branco')::date >= 2
+                               THEN 'media' ELSE 'baixa' END)), '[]'::jsonb)
+      INTO v_cards
+      FROM (
+        SELECT t.id, t.nome, COALESCE(t.liberada_em, t.created_at) AS desde,
+               count(*) AS total,
+               count(*) FILTER (WHERE NOT EXISTS (
+                 SELECT 1 FROM public.ciclo_tarefa_avaliacoes ca
+                  WHERE ca.participante_id = p.id AND ca.avaliador_id = v_uid AND ca.ativo)) AS faltam
+          FROM public.ciclo_tarefas t
+          JOIN public.ciclo_tarefa_participantes p ON p.tarefa_id = t.id AND p.ativo
+         WHERE t.ativo AND t.status = 'aberta'
+           AND (v_escopo IS NULL OR p.filial = v_escopo)
+         GROUP BY t.id, t.nome, t.liberada_em, t.created_at
+      ) x
+     WHERE x.faltam > 0;
+  END IF;
+
+  -- ── 8. Acesso a ajustar depois de transferência (312/313): admin ────────
+  IF v_role = 'admin' THEN
+    SELECT v_cards || COALESCE(jsonb_agg(jsonb_build_object(
+             'coluna', 'mim', 'area', 'RH', 'etapa', 'Acesso a ajustar depois de movimentação',
+             'documento', left(COALESCE(m.nome_funcionario, '') || ' → ' || COALESCE(m.filial_nova, m.cargo_novo, ''), 60),
+             'documento_id', m.id, 'filial', COALESCE(m.filial_nova, m.filial),
+             'onde', 'Usuários', 'view', 'usuarios',
+             'acao', 'Ajustar unidade/papel da conta',
+             'dias_parado', GREATEST(0, v_hoje - (m.created_at AT TIME ZONE 'America/Rio_Branco')::date),
+             'gravidade', CASE WHEN v_hoje - (m.created_at AT TIME ZONE 'America/Rio_Branco')::date >= 2
+                               THEN 'media' ELSE 'baixa' END)), '[]'::jsonb)
+      INTO v_cards
+      FROM public.movimentacoes_carreira m
+     WHERE COALESCE(m.ativo, true) AND m.acesso_pendente
+       AND (v_escopo IS NULL OR COALESCE(m.filial_nova, m.filial) = v_escopo);
+  END IF;
+
+  -- ── 9. Feito: o que EU decidi nos últimos 7 dias ────────────────────────
+  SELECT v_cards || COALESCE(jsonb_agg(f.card ORDER BY f.quando DESC), '[]'::jsonb)
+    INTO v_cards
+    FROM (
+      -- Requisição de compra (aprovacoes_compras grava o nome de quem decidiu).
+      SELECT r.updated_at AS quando, jsonb_build_object(
+               'coluna', 'feito', 'area', 'Compras', 'etapa', 'Requisição de compra',
+               'documento', COALESCE(NULLIF(r.numero::text, ''), left(COALESCE(r.item, ''), 40)),
+               'documento_id', r.id, 'filial', r.filial, 'view', 'requisicoes-aprovações',
+               'resultado', a.status, 'quando', r.updated_at) AS card
+        FROM public.aprovacoes_compras a
+        JOIN public.requisicoes r ON r.id = a.requisicao_id
+       WHERE a.status <> 'Pendente' AND a.aprovador = v_nome AND v_nome IS NOT NULL
+         AND r.updated_at >= v_desde AND (v_escopo IS NULL OR r.filial = v_escopo)
+      UNION ALL
+      SELECT r.updated_at, jsonb_build_object(
+               'coluna', 'feito', 'area', 'Estoque', 'etapa', 'Material do estoque',
+               'documento', left(COALESCE(p.nome, 'material'), 40),
+               'documento_id', r.id, 'filial', r.filial, 'view', 'requisicoes-aprovações',
+               'resultado', a.status, 'quando', r.updated_at)
+        FROM public.aprovacoes_estoque a
+        JOIN public.requisicoes_estoque r ON r.id = a.requisicao_estoque_id
+        LEFT JOIN public.produtos p ON p.id = r.produto_id
+       WHERE a.status <> 'Pendente' AND a.aprovador = v_nome AND v_nome IS NOT NULL
+         AND r.updated_at >= v_desde AND (v_escopo IS NULL OR r.filial = v_escopo)
+      UNION ALL
+      SELECT j.parecer_gerente_em, jsonb_build_object(
+               'coluna', 'feito', 'area', 'RH', 'etapa', 'Parecer em justificativa de falta',
+               'documento', left(COALESCE(j.nome_funcionario, '') || ' — ' || to_char(j.data, 'DD/MM'), 60),
+               'documento_id', j.id, 'filial', j.filial, 'view', 'rh-registrodeponto',
+               'resultado', j.parecer_gerente, 'quando', j.parecer_gerente_em)
+        FROM public.justificativas_falta j
+       WHERE j.parecer_gerente_por = v_uid AND j.parecer_gerente_em >= v_desde
+         AND (v_escopo IS NULL OR j.filial = v_escopo)
+      UNION ALL
+      SELECT j.decidido_em, jsonb_build_object(
+               'coluna', 'feito', 'area', 'RH', 'etapa', 'Justificativa de falta',
+               'documento', left(COALESCE(j.nome_funcionario, '') || ' — ' || to_char(j.data, 'DD/MM'), 60),
+               'documento_id', j.id, 'filial', j.filial, 'view', 'rh-registrodeponto',
+               'resultado', j.status, 'quando', j.decidido_em)
+        FROM public.justificativas_falta j
+       WHERE j.decidido_por = v_uid AND j.decidido_em >= v_desde
+         AND (v_escopo IS NULL OR j.filial = v_escopo)
+      UNION ALL
+      SELECT d.updated_at, jsonb_build_object(
+               'coluna', 'feito', 'area', 'RH', 'etapa', 'Desligamento',
+               'documento', left(COALESCE(d.nome_funcionario, ''), 60),
+               'documento_id', d.id, 'filial', d.filial, 'view', 'rh-desligamento',
+               'resultado', d.status, 'quando', d.updated_at)
+        FROM public.demissoes d
+       WHERE d.decidido_por = v_uid AND d.status <> 'Solicitado' AND d.updated_at >= v_desde
+         AND (v_escopo IS NULL OR d.filial = v_escopo)
+      UNION ALL
+      SELECT va.decidido_em, jsonb_build_object(
+               'coluna', 'feito', 'area', 'RH', 'etapa', 'Vaga',
+               'documento', left(COALESCE(va.cargo, 'vaga'), 60),
+               'documento_id', va.id, 'filial', va.filial, 'view', 'rh-recrutamentoeseleção',
+               'resultado', va.status, 'quando', va.decidido_em)
+        FROM public.vagas va
+       WHERE va.decidido_por = v_uid AND va.decidido_em >= v_desde
+         AND (v_escopo IS NULL OR va.filial = v_escopo)
+    ) f;
+
+  RETURN jsonb_build_object(
+    'papel',     v_role,
+    'escopo',    v_escopo,
+    'gerado_em', now(),
+    'cards',     v_cards
+  );
+END;
+$function$;
+
+-- Função nova nasce com EXECUTE para PUBLIC (anon incluso).
+REVOKE ALL ON FUNCTION public.minha_mesa(text) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.minha_mesa(text) TO authenticated;
+
+NOTIFY pgrst, 'reload schema';

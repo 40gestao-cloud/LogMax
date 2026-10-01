@@ -170,7 +170,7 @@ export function aulaSubmenusDoModulo(config: AulaConfig, modId: string): string[
 // - 'contratos' (migr. 623): não é módulo de setor — quem entra é o gerente e
 //   a Matriz, e a regra padrão daria 'contratos' como módulo inexistente.
 const SEMPRE_LIBERADO = new Set([
-  'inicio', 'aula-modo', 'aula-atividade', 'documentos', 'pendencias', 'contratos',
+  'inicio', 'aula-modo', 'aula-atividade', 'documentos', 'pendencias', 'mesa-gestor', 'contratos',
   'sessoes-gerais', 'analise-ia', 'comparativos-matriz',
   'painel-bi', 'briefing-diario', 'central-tempo',
 ]);

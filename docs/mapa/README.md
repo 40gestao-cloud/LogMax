@@ -11,7 +11,7 @@
 
 **Tabelas transversais** (aparecem nas listas, mas não entram no "Confira também", porque quase toda tela as toca por uma ferramenta comum): `documento_sequencias`, `historico_operacoes`, `max_shows`, `notificacoes`, `notificacoes_lidas`, `planilhas_trabalho`, `trabalho_reservas`.
 
-**Tamanho:** 115 telas · 197 tabelas · 10 views · 414 RPCs · 156 funções de gatilho · 264 gatilhos
+**Tamanho:** 116 telas · 197 tabelas · 10 views · 415 RPCs · 156 funções de gatilho · 264 gatilhos
 
 ## Menus
 
@@ -160,6 +160,7 @@
 - [Conteúdo](telas.md#s-matriz-conteudo)
 - [Max Show](telas.md#s-max-show)
 - [Max work show *(rota max-work-show)*](telas.md#s-max-work-show)
+- [Mesa do Gestor](telas.md#s-mesa-gestor)
 - [Metas *(rota metas)*](telas.md#s-metas)
 - [Meu Crachá](telas.md#s-meu-cracha)
 - [Minhas pesquisas *(rota minhas-pesquisas)*](telas.md#s-minhas-pesquisas)
