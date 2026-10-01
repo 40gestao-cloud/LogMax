@@ -44,6 +44,8 @@ export type FrequenciaRelatorio = {
   geradoEm: string;
   /** Falso quando se pediu só o resumo. */
   detalhar: boolean;
+  /** Corte aplicado: só entrou quem tem taxa de presença abaixo deste valor. */
+  taxaAbaixoDe?: number | null;
   funcionarios: FrequenciaFuncionarioPdf[];
 };
 
@@ -89,6 +91,11 @@ async function carregarLogo(): Promise<{ dataUrl: string; w: number; h: number }
     return null;
   }
 }
+
+/** Taxa com uma casa, TRUNCADA e não arredondada: 74,96% sai "74,9%", nunca
+ *  "75%" — senão quem caiu no corte "abaixo de 75%" apareceria com 75% no papel. */
+const fmtPct = (parte: number, total: number) =>
+  `${(Math.floor((parte / total) * 1000) / 10).toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%`;
 
 const contar = (f: FrequenciaFuncionarioPdf, s: FrequenciaStatusPdf) =>
   f.dias.filter(d => d.status === s).length;
@@ -164,7 +171,7 @@ export async function exportFrequenciaPDF(
     { presencas: 0, faltas: 0, justificadas: 0 },
   );
   const registros = totais.presencas + totais.faltas + totais.justificadas;
-  const pct = registros > 0 ? Math.round((totais.presencas / registros) * 100) : 0;
+  const pct = registros > 0 ? fmtPct(totais.presencas, registros) : '0%';
   // Dia apurado é data, não linha: com 7 funcionários em 2 dias o painel dizia
   // 14 porque somava os registros (funcionários × dias).
   const diasApurados = new Set(rel.funcionarios.flatMap(f => f.dias.map(d => d.data))).size;
@@ -175,7 +182,7 @@ export async function exportFrequenciaPDF(
     ['Presenças', String(totais.presencas)],
     ['Faltas', String(totais.faltas)],
     ['Justificadas', String(totais.justificadas)],
-    ['% presença', `${pct}%`],
+    ['% presença', pct],
   ];
 
   const cardW = (pageWidth - margin * 2 - 5 * 3) / 6;
@@ -201,7 +208,8 @@ export async function exportFrequenciaPDF(
   doc.setTextColor(...GRAY_MID);
   doc.text(
     'Presença inclui quem chegou com atraso. Falta justificada aparece como Justificada, com o motivo registrado. '
-    + 'Dias sem lançamento não entram na apuração.',
+    + 'Dias sem lançamento não entram na apuração.'
+    + (rel.taxaAbaixoDe ? ` Filtro: somente funcionários com presença abaixo de ${rel.taxaAbaixoDe}% no período.` : ''),
     margin, cursorY, { maxWidth: pageWidth - margin * 2 },
   );
   cursorY += 8;
@@ -223,7 +231,7 @@ export async function exportFrequenciaPDF(
       return [
         f.nome, f.unidade, f.cargo ?? '—',
         String(p), String(fa), String(j), String(t),
-        t > 0 ? `${Math.round((p / t) * 100)}%` : '—',
+        t > 0 ? fmtPct(p, t) : '—',
       ];
     }),
     theme: 'grid',

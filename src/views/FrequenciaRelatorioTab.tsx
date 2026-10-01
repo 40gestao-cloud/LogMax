@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { motion } from 'motion/react';
-import { FileDown, Loader2, Search, Users, CalendarRange, FileText, Check } from 'lucide-react';
+import { FileDown, Loader2, Search, Users, CalendarRange, FileText, Check, Percent } from 'lucide-react';
 import { SecaoFormulario, FilialBadge } from '../components/ui';
 import { supabase } from '../lib/supabase';
 import { todayBR } from '../lib/dates';
@@ -46,6 +46,10 @@ const statusDaFrequencia = (s: string | null): FrequenciaStatusPdf => {
 
 const primeiroDiaDoMes = (d: string) => `${d.slice(0, 7)}-01`;
 
+/** Corte por taxa de presença no período escolhido. 0 = sem corte. */
+const TAXAS = [0, 75, 50, 25] as const;
+type Taxa = typeof TAXAS[number];
+
 export const FrequenciaRelatorioTab = ({
   funcionarios, filial, profile, showToast,
 }: {
@@ -60,6 +64,7 @@ export const FrequenciaRelatorioTab = ({
   const [selecionados, setSelecionados] = useState<Set<string>>(new Set());
   const [busca, setBusca] = useState('');
   const [detalhar, setDetalhar] = useState(true);
+  const [taxa, setTaxa] = useState<Taxa>(0);
   const [gerando, setGerando] = useState(false);
 
   const elegiveis = useMemo(
@@ -170,6 +175,20 @@ export const FrequenciaRelatorioTab = ({
         });
       });
 
+      // Corte por taxa: mesma conta do papel (presenças ÷ dias lançados), sem
+      // arredondar — 74,6% é abaixo de 75%. Quem não tem dia lançado no
+      // período não tem taxa e fica fora: não dá para dizer que está abaixo.
+      const apurados = [...porFunc.values()].filter(f => {
+        if (taxa === 0) return true;
+        if (!f.dias.length) return false;
+        const presencas = f.dias.filter(d => d.status === 'Presença').length;
+        return (presencas / f.dias.length) * 100 < taxa;
+      });
+      if (taxa > 0 && !apurados.length) {
+        showToast(`Ninguém abaixo de ${taxa}% de presença no período.`, 'info');
+        return;
+      }
+
       const escopo = filial ?? 'Todas as unidades';
       await exportFrequenciaPDF(
         {
@@ -177,9 +196,10 @@ export const FrequenciaRelatorioTab = ({
           inicio, fim,
           geradoEm: new Date().toLocaleString('pt-BR', { timeZone: 'America/Rio_Branco' }),
           detalhar,
-          funcionarios: [...porFunc.values()],
+          taxaAbaixoDe: taxa || null,
+          funcionarios: apurados,
         },
-        `frequencia-${escopo.toLowerCase().replace(/\s+/g, '-')}-${inicio}-a-${fim}`,
+        `frequencia-${escopo.toLowerCase().replace(/\s+/g, '-')}-${inicio}-a-${fim}${taxa ? `-abaixo-${taxa}` : ''}`,
         'download',
         profile,
         showToast,
@@ -197,8 +217,11 @@ export const FrequenciaRelatorioTab = ({
     const [y, m] = hoje.split('-').map(Number);
     const iniPass = new Date(Date.UTC(y, m - 2, 1)).toISOString().slice(0, 10);
     const fimPass = new Date(Date.UTC(y, m - 1, 0)).toISOString().slice(0, 10);
+    // 14 dias corridos contando hoje.
+    const ini2Sem = new Date(Date.parse(hoje + 'T12:00:00Z') - 13 * 86_400_000).toISOString().slice(0, 10);
     return [
       { label: 'Hoje',        ini: hoje,                   fim: hoje },
+      { label: '2 semanas',   ini: ini2Sem,                fim: hoje },
       { label: 'Este mês',    ini: primeiroDiaDoMes(hoje), fim: hoje },
       { label: 'Mês passado', ini: iniPass,                fim: fimPass },
     ];
@@ -235,7 +258,7 @@ export const FrequenciaRelatorioTab = ({
                 className="neu-input rounded-xl px-3 py-2 text-sm tabular-nums w-full" />
             </div>
           </div>
-          <div className="grid grid-cols-3 gap-2 mt-3">
+          <div className="grid grid-cols-2 gap-2 mt-3">
             {atalhos.map(a => {
               const on = a.ini === inicio && a.fim === fim;
               return (
@@ -271,6 +294,26 @@ export const FrequenciaRelatorioTab = ({
           </div>
         </SecaoFormulario>
 
+        <SecaoFormulario titulo="Taxa de presença" icon={Percent} cor="vermelho">
+          <div className="grid grid-cols-2 gap-2" role="radiogroup" aria-label="Filtro por taxa de presença">
+            {TAXAS.map(t => {
+              const on = taxa === t;
+              return (
+                <button key={t} type="button" role="radio" aria-checked={on}
+                  onClick={() => setTaxa(t)}
+                  className={`px-2 py-2 rounded-xl text-[11px] font-bold border transition-colors ${
+                    on ? 'bg-red-500/15 border-red-500/40 text-red-300'
+                       : 'neu-button border-white/5 text-gray-400 hover:text-gray-200'}`}>
+                  {t === 0 ? 'Todos' : `Abaixo de ${t}%`}
+                </button>
+              );
+            })}
+          </div>
+          <p className="text-[10px] text-gray-500 leading-snug mt-2">
+            Calculada no período acima. Com um corte escolhido, o PDF traz só quem está abaixo dele.
+          </p>
+        </SecaoFormulario>
+
         {/* Conferência antes de baixar: o que o papel vai trazer. */}
         <div className="neu-flat rounded-2xl border border-white/10 p-4 flex flex-col gap-3">
           <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5 text-xs">
@@ -282,6 +325,8 @@ export const FrequenciaRelatorioTab = ({
             <dd className="text-gray-200 font-semibold text-right tabular-nums">
               {alvos.length}{selecionados.size === 0 ? ' (todos)' : ''}
             </dd>
+            <dt className="text-gray-500">Presença</dt>
+            <dd className="text-gray-200 font-semibold text-right">{taxa ? `Abaixo de ${taxa}%` : 'Todas as taxas'}</dd>
             <dt className="text-gray-500">Conteúdo</dt>
             <dd className="text-gray-200 font-semibold text-right">{detalhar ? 'Resumo + dia a dia' : 'Só resumo'}</dd>
           </dl>
