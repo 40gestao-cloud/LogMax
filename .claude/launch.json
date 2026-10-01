@@ -25,6 +25,20 @@
       "port": 3100
     },
     {
+      "name": "maxpos",
+      "runtimeExecutable": "node",
+      "runtimeArgs": [
+        "C:/Users/franc/Downloads/maxpos/node_modules/vite/bin/vite.js",
+        "C:/Users/franc/Downloads/maxpos",
+        "--config",
+        "C:/Users/franc/Downloads/maxpos/vite.config.ts",
+        "--port",
+        "3300",
+        "--strictPort"
+      ],
+      "port": 3300
+    },
+    {
       "name": "preview-prod",
       "runtimeExecutable": "npx",
       "runtimeArgs": [

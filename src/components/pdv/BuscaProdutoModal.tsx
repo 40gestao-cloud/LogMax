@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Search, X } from 'lucide-react';
 import { trapTab } from '../../lib/focoPdv';
 import { formatBRL } from '../../lib/viewUtils';
@@ -17,6 +17,7 @@ export function BuscaProdutoModal({ termo, onTermo, produtos, qtd, onEscolher, o
   onClose: () => void;
 }) {
   const [idx, setIdx] = useState(0);
+  const mouseRef = useRef({ x: -1, y: -1 });
 
   // Seleção volta ao primeiro quando abre ou quando a lista muda.
   useEffect(() => {
@@ -82,14 +83,25 @@ export function BuscaProdutoModal({ termo, onTermo, produtos, qtd, onEscolher, o
                 <button
                   key={p.id}
                   onClick={() => onEscolher(p)}
-                  onMouseEnter={() => setIdx(i)}
+                  // Só mouse que ANDOU move a seleção: com o cursor parado
+                  // sobre a lista, a rolagem das setas passava linhas por
+                  // baixo dele e a seleção pulava para a que parasse ali.
+                  onMouseMove={(e) => {
+                    const m = mouseRef.current;
+                    if (m.x === e.clientX && m.y === e.clientY) return;
+                    mouseRef.current = { x: e.clientX, y: e.clientY };
+                    if (!active) setIdx(i);
+                  }}
                   tabIndex={-1}
                   ref={(el) => { if (el && active) el.scrollIntoView({ block: 'nearest' }); }}
-                  className={`w-full grid grid-cols-[150px_1fr_120px] gap-3 text-left py-2 px-3 text-sm border-b border-gray-200 ${active ? 'bg-yellow-100' : 'bg-white hover:bg-yellow-50'}`}
+                  // Linha ativa invertida (navy cheio, texto claro): o amarelo
+                  // pálido de antes sumia sobre o branco em monitor de sala.
+                  className={`w-full grid grid-cols-[150px_1fr_120px] gap-3 text-left py-2 px-3 text-sm border-b border-gray-200 ${active ? '' : 'bg-white hover:bg-gray-100'}`}
+                  style={active ? { background: NAVY_DARK } : undefined}
                 >
-                  <span className="tabular-nums text-gray-500 truncate">{p.codigo || p.ean || '—'}</span>
-                  <span className="truncate font-semibold text-gray-900">{(p.nome || '').toUpperCase()}</span>
-                  <span className="text-right font-bold tabular-nums" style={{ color: MONEY }}>R$ {formatBRL(Number(p.preco ?? 0))}</span>
+                  <span className={`tabular-nums truncate ${active ? 'text-white/70' : 'text-gray-500'}`}>{p.codigo || p.ean || '—'}</span>
+                  <span className={`truncate ${active ? 'font-bold text-white' : 'font-semibold text-gray-900'}`}>{(p.nome || '').toUpperCase()}</span>
+                  <span className="text-right font-bold tabular-nums" style={{ color: active ? YELLOW : MONEY }}>R$ {formatBRL(Number(p.preco ?? 0))}</span>
                 </button>
               );
             })}
