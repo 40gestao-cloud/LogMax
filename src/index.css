@@ -2749,7 +2749,9 @@ main.main-scrollbar,
 .max-show-campo-texto {
   position: absolute; z-index: 5; box-sizing: content-box;
   border: none; outline: 2px dashed var(--color-accent); outline-offset: 4px;
-  border-radius: 4px; resize: none; overflow: hidden; white-space: pre;
+  border-radius: 4px; resize: none; overflow: hidden;
+  /* quebra igual à do canvas: a frase não sai mais da página */
+  white-space: pre-wrap; overflow-wrap: break-word; word-break: break-word;
   pointer-events: auto; user-select: text;
 }
 

@@ -182,17 +182,57 @@ function desenharTraco(ctx: CanvasRenderingContext2D, t: TracoLinha | Omit<Traco
 const LARGURA_REF = 1000;
 let ctxMedida: CanvasRenderingContext2D | null = null;
 
-/** Largura e altura da caixa de texto, as duas em fração da LARGURA da página. */
-function medirTexto(t: Pick<TracoTexto, 'texto' | 'tamanho' | 'fundo'>) {
+/** Até onde a caixa pode ir à direita, em fração da largura da página. */
+const LIMITE_DIR = 0.97;
+
+type MedidaTexto = Pick<TracoTexto, 'texto' | 'tamanho' | 'fundo'> & { x?: number };
+
+/** Largura disponível para a caixa que começa em `x` (fração da largura). */
+const limiteDe = (t: MedidaTexto) => Math.max(0.15, LIMITE_DIR - (t.x ?? 0));
+
+/**
+ * Mede a caixa e devolve o texto JÁ QUEBRADO nas linhas em que ele vai ser
+ * desenhado. Sem isto a frase crescia numa linha só e passava da página.
+ * Quebra por palavra; palavra que sozinha não cabe é partida por letra.
+ * `wf` e `hf` saem as duas em fração da LARGURA da página — a caixa inteira
+ * escala com ela, então a conta vale para qualquer tamanho de tela.
+ */
+function medirTexto(t: MedidaTexto, limite = limiteDe(t)) {
   ctxMedida ??= document.createElement('canvas').getContext('2d');
-  const linhas = t.texto.split('\n');
-  let larg = 0;
-  if (ctxMedida) {
-    ctxMedida.font = fonte(t.tamanho * LARGURA_REF);
-    for (const l of linhas) larg = Math.max(larg, ctxMedida.measureText(l).width);
-  }
   const respiro = t.fundo ? t.tamanho * RESPIRO_FUNDO : 0;
-  return { wf: larg / LARGURA_REF + 2 * respiro, hf: linhas.length * ALTURA_LINHA * t.tamanho + 2 * respiro };
+  const maxPx = Math.max(0, limite - 2 * respiro) * LARGURA_REF;
+  const linhas: string[] = [];
+  let larg = 0;
+  if (!ctxMedida) {
+    linhas.push(...t.texto.split('\n'));
+  } else {
+    ctxMedida.font = fonte(t.tamanho * LARGURA_REF);
+    const larguraDe = (str: string) => ctxMedida!.measureText(str).width;
+    for (const paragrafo of t.texto.split('\n')) {
+      let linha = '';
+      const empurrar = () => { linhas.push(linha); larg = Math.max(larg, larguraDe(linha)); linha = ''; };
+      for (const palavra of paragrafo.split(' ')) {
+        let p = palavra;
+        while (larguraDe(p) > maxPx && p.length > 1) {
+          let corte = 1;
+          while (corte < p.length && larguraDe(p.slice(0, corte + 1)) <= maxPx) corte++;
+          if (linha) empurrar();
+          linha = p.slice(0, corte);
+          empurrar();
+          p = p.slice(corte);
+        }
+        const juntas = linha ? `${linha} ${p}` : p;
+        if (linha && larguraDe(juntas) > maxPx) { empurrar(); linha = p; }
+        else linha = juntas;
+      }
+      empurrar();
+    }
+  }
+  return {
+    linhas,
+    wf: larg / LARGURA_REF + 2 * respiro,
+    hf: linhas.length * ALTURA_LINHA * t.tamanho + 2 * respiro,
+  };
 }
 
 const corClara = (hex: string) => {
@@ -203,7 +243,7 @@ const corClara = (hex: string) => {
 function desenharTexto(ctx: CanvasRenderingContext2D, t: TracoTexto, w: number, h: number, halo: boolean) {
   const px = t.tamanho * w;
   const respiro = t.fundo ? px * RESPIRO_FUNDO : 0;
-  const { wf, hf } = medirTexto(t);
+  const { wf, hf, linhas } = medirTexto(t);
   const x = t.x * w, y = t.y * h;
   ctx.save();
   if (t.fundo) {
@@ -220,7 +260,7 @@ function desenharTexto(ctx: CanvasRenderingContext2D, t: TracoTexto, w: number, 
   ctx.textBaseline = 'middle';
   ctx.lineJoin = 'round';
   ctx.fillStyle = t.cor;
-  t.texto.split('\n').forEach((linha, i) => {
+  linhas.forEach((linha, i) => {
     const ly = y + respiro + (i + 0.5) * px * ALTURA_LINHA;
     // Contorno: o texto solto precisa se ler em cima de qualquer slide.
     if (halo && !t.fundo) {
@@ -244,7 +284,9 @@ function distSegmento(px: number, py: number, ax: number, ay: number, bx: number
 function tocaTraco(t: Traco, x: number, y: number, w: number, h: number) {
   if (t.tipo === 'texto') {
     const { wf, hf } = medirTexto(t);
-    const folga = 4;
+    // Meia letra de folga: com 4px era preciso acertar a linha no pixel, e
+    // errar por pouco abria uma caixa nova em vez de pegar a que está lá.
+    const folga = Math.max(10, t.tamanho * w * 0.5);
     return x >= t.x * w - folga && x <= t.x * w + wf * w + folga && y >= t.y * h - folga && y <= t.y * h + hf * w + folga;
   }
   const raio = Math.max(t.espessura * w / 2, 0) + 8;
@@ -273,7 +315,13 @@ export function CamadaAnotacao({ pagina, anot, halo = true }: { pagina: number; 
   const atual = useRef<Omit<TracoLinha, 'id'> | null>(null);
   // Caixa de texto pega pelo mouse: vira arraste se andar, edição se soltar no lugar.
   const arrasto = useRef<{ t: TracoTexto; dx: number; dy: number; x0: number; y0: number; moveu: boolean; x: number; y: number } | null>(null);
-  const novoEm = useRef<[number, number] | null>(null);
+  // Clique no vazio: onde começou, para não virar caixa nova se foi arraste.
+  const novoEm = useRef<{ x: number; y: number; cx: number; cy: number } | null>(null);
+  // Caixa pega pelo clique: a barra passa a refletir a cor e o tamanho dela,
+  // e o clique seguinte abre para editar (como no PowerPoint).
+  const [sel, setSel] = useState<number | null>(null);
+  const selRef = useRef<number | null>(null);
+  const selecionar = (id: number | null) => { selRef.current = id; setSel(id); };
   const [edit, setEdit] = useState<Edicao | null>(null);
   const editRef = useRef<Edicao | null>(null);
   const lista = anot.tracos[pagina] ?? [];
@@ -302,7 +350,7 @@ export function CamadaAnotacao({ pagina, anot, halo = true }: { pagina: number; 
 
   // A barra não tira o foco do campo (mousedown sem foco): trocar de
   // ferramenta ou de página com o campo aberto fecha gravando.
-  useEffect(() => { if (ferramenta !== 'texto') confirmar(); }, [ferramenta, pagina]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (ferramenta !== 'texto') confirmar(); selecionar(null); }, [ferramenta, pagina]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const editando = edit !== null;
   useEffect(() => {
@@ -337,7 +385,20 @@ export function CamadaAnotacao({ pagina, anot, halo = true }: { pagina: number; 
       desenharTexto(ctx, a && a.moveu && a.t.id === t.id ? { ...t, x: a.x, y: a.y } : t, tam.w, tam.h, halo);
     });
     if (atual.current) desenharTraco(ctx, atual.current, tam.w, tam.h);
-  }, [lista, tam, edit?.id, halo]);
+    // Contorno da caixa pega: sem ele o clique não dá sinal de que pegou.
+    const escolhida = lista.find(t => t.id === sel && t.id !== edit?.id);
+    if (escolhida?.tipo === 'texto') {
+      const alvo = a && a.moveu && a.t.id === escolhida.id ? { ...escolhida, x: a.x, y: a.y } : escolhida;
+      const { wf, hf } = medirTexto(alvo);
+      const folga = alvo.tamanho * tam.w * 0.25;
+      ctx.save();
+      ctx.strokeStyle = '#F0B429';
+      ctx.lineWidth = Math.max(1, tam.w * 0.0015);
+      ctx.setLineDash([tam.w * 0.008, tam.w * 0.006]);
+      ctx.strokeRect(alvo.x * tam.w - folga, alvo.y * tam.h - folga, wf * tam.w + 2 * folga, hf * tam.w + 2 * folga);
+      ctx.restore();
+    }
+  }, [lista, tam, edit?.id, halo, sel]);
 
   useEffect(() => { redesenhar(); }, [redesenhar]);
   // A fonte pode terminar de carregar depois do primeiro desenho.
@@ -375,7 +436,7 @@ export function CamadaAnotacao({ pagina, anot, halo = true }: { pagina: number; 
       const [x, y] = ponto(e);
       const t = tracoEm(e, true) as TracoTexto | null;
       if (t) arrasto.current = { t, dx: x - t.x, dy: y - t.y, x0: e.clientX, y0: e.clientY, moveu: false, x: t.x, y: t.y };
-      else novoEm.current = [x, y];
+      else novoEm.current = { x, y, cx: e.clientX, cy: e.clientY };
       return;
     }
     atual.current = {
@@ -411,19 +472,40 @@ export function CamadaAnotacao({ pagina, anot, halo = true }: { pagina: number; 
     arrasto.current = null;
     novoEm.current = null;
     if (a) {
-      if (a.moveu) anot.trocar(pagina, { ...a.t, x: a.x, y: a.y });
-      else if (e.type === 'pointerup') {
-        // Reabre a caixa com a cor e o tamanho dela na barra.
+      if (a.moveu) {
+        // A posição vem da SOLTURA, não do último pointermove: o movimento
+        // chega amostrado e a caixa parava no meio do caminho.
+        if (e.type === 'pointerup' && ref.current) {
+          const [x, y] = ponto(e);
+          a.x = x - a.dx;
+          a.y = y - a.dy;
+        }
+        // Presa na página: arrastada para fora, a caixa sumia sem volta.
+        const { wf, hf } = medirTexto({ ...a.t, x: a.x });
+        const x = Math.min(Math.max(a.x, 0.01), Math.max(0.01, LIMITE_DIR - wf));
+        const y = Math.min(Math.max(a.y, 0.005), Math.max(0.005, 0.995 - (hf * tam.w) / Math.max(1, tam.h)));
+        anot.trocar(pagina, { ...a.t, x, y });
+        selecionar(a.t.id);
+      } else if (e.type === 'pointerup') {
+        // 1º clique pega (a barra passa a mostrar a cor e o tamanho dela);
+        // o clique seguinte abre para editar. Com "clique = editar" era
+        // impossível arrastar: o campo abria antes de o arraste começar.
         anot.setCorPincel(a.t.cor);
         anot.setTamanhoTexto(a.t.tamanho);
-        abrirEdicao({ id: a.t.id, x: a.t.x, y: a.t.y, texto: a.t.texto, fundo: a.t.fundo, pagina });
+        if (selRef.current === a.t.id) {
+          selecionar(null);
+          abrirEdicao({ id: a.t.id, x: a.t.x, y: a.t.y, texto: a.t.texto, fundo: a.t.fundo, pagina });
+        } else selecionar(a.t.id);
       } else redesenhar();
       return;
     }
     if (novo) {
+      selecionar(null);
+      // Arrastou no vazio (sem pegar caixa nenhuma): não vira caixa nova.
+      const arrastou = Math.hypot(e.clientX - novo.cx, e.clientY - novo.cy) >= 4;
       // O campo abre na soltura: aberto no mousedown, o próprio clique tirava o foco dele.
-      if (e.type === 'pointerup' && tam.h > 0)
-        abrirEdicao({ x: novo[0], y: novo[1] - (anot.tamanhoTexto * ALTURA_LINHA * tam.w) / 2 / tam.h, texto: '', pagina });
+      if (e.type === 'pointerup' && tam.h > 0 && !arrastou)
+        abrirEdicao({ x: Math.min(novo.x, 0.9), y: novo.y - (anot.tamanhoTexto * ALTURA_LINHA * tam.w) / 2 / tam.h, texto: '', pagina });
       return;
     }
     const t = atual.current;
@@ -435,7 +517,10 @@ export function CamadaAnotacao({ pagina, anot, halo = true }: { pagina: number; 
 
   const cursor = ferramenta === 'borracha' ? 'cell' : ferramenta === 'texto' ? 'text' : ativa ? 'crosshair' : 'default';
   const px = anot.tamanhoTexto * tam.w;
-  const medida = edit ? medirTexto({ texto: edit.texto, tamanho: anot.tamanhoTexto, fundo: edit.fundo }) : null;
+  const medida = edit ? medirTexto({ texto: edit.texto, tamanho: anot.tamanhoTexto, fundo: edit.fundo, x: edit.x }) : null;
+  // A caixa aberta tem a largura que sobra até a borda da página: o texto
+  // quebra sozinho em vez de sair da tela.
+  const larguraCampo = edit ? limiteDe({ texto: '', tamanho: anot.tamanhoTexto, fundo: edit.fundo, x: edit.x }) * tam.w : 0;
   return (
     <>
       <canvas ref={ref} className="max-show-anotacao"
@@ -449,7 +534,7 @@ export function CamadaAnotacao({ pagina, anot, halo = true }: { pagina: number; 
           cursor,
         }} />
       {edit && medida && (
-        <textarea ref={campo} className="max-show-campo-texto" value={edit.texto} wrap="off" spellCheck={false}
+        <textarea ref={campo} className="max-show-campo-texto" value={edit.texto} spellCheck={false}
           placeholder="Digite…" aria-label="Texto da anotação"
           onChange={e => abrirEdicao({ ...edit, texto: e.target.value })}
           onBlur={confirmar}
@@ -460,7 +545,7 @@ export function CamadaAnotacao({ pagina, anot, halo = true }: { pagina: number; 
           }}
           style={{
             left: `${edit.x * 100}%`, top: `${edit.y * 100}%`,
-            width: Math.max(medida.wf * tam.w + px, px * 6), height: medida.hf * tam.w,
+            width: larguraCampo, height: Math.max(medida.hf * tam.w, px * ALTURA_LINHA),
             padding: edit.fundo ? px * RESPIRO_FUNDO : 0,
             font: fonte(px), lineHeight: ALTURA_LINHA, color: anot.corPincel,
             background: corClara(anot.corPincel) ? 'rgba(17,24,39,0.85)' : 'rgba(255,255,255,0.92)',
@@ -539,18 +624,23 @@ export function BarraAnotacao({ anot, pagina, quadro, aspecto = 9 / 16, comFormu
 
   const inserirFormula = (f: FormulaShow) => {
     const fundo = !quadro;
-    // Fórmula comprida desce de tamanho até caber na largura da página, mas
-    // sempre PARANDO num tamanho da régua (P/M/G/E): tamanho solto deixava o
-    // botão da barra sem marcação e, ao reabrir a caixa, grudava esse valor
-    // nas próximas. Só se nem o menor couber é que encolhe livremente.
+    // A barra de ferramentas fica sobre o canto esquerdo da página: a fórmula
+    // nasce depois dela, senão o começo da conta entra embaixo dos botões.
+    const MARGEM_BARRA = 0.075;
+    const LARGURA_MAX = LIMITE_DIR - MARGEM_BARRA;
+    // Fórmula comprida desce de tamanho (sempre PARANDO num da régua P/M/G/E,
+    // senão o botão da barra fica sem marcação e o valor solto gruda nas
+    // caixas seguintes) até caber em duas linhas. Não cabendo, fica no menor
+    // e o texto quebra — melhor duas linhas legíveis que uma minúscula.
     const regua = [...TAMANHOS_TEXTO].filter(t => t <= TAMANHO_FORMULA).sort((a, b) => b - a);
-    let tamanho = regua.find(t => medirTexto({ texto: f.formula, tamanho: t, fundo }).wf <= 0.94) ?? regua[regua.length - 1];
-    let m = medirTexto({ texto: f.formula, tamanho, fundo });
-    if (m.wf > 0.94) { tamanho *= 0.94 / m.wf; m = medirTexto({ texto: f.formula, tamanho, fundo }); }
+    const medir = (t: number) => medirTexto({ texto: f.formula, tamanho: t, fundo }, LARGURA_MAX);
+    let tamanho = regua[regua.length - 1];
+    for (const t of regua) { if (medir(t).linhas.length <= 2) { tamanho = t; break; } }
+    const m = medir(tamanho);
     anot.adicionar(pagina, {
       tipo: 'texto', texto: f.formula, tamanho, fundo,
       cor: quadro?.fundo === 'preto' ? COR_CLARA : COR_ESCURA,
-      x: (1 - m.wf) / 2, y: faixaLivre(m.hf / aspecto),
+      x: Math.max(MARGEM_BARRA, (1 - m.wf) / 2), y: faixaLivre(m.hf / aspecto),
     });
     // Fica na ferramenta Texto: é com ela que se arrasta a fórmula para o lugar.
     setFerramenta('texto');
@@ -574,7 +664,7 @@ export function BarraAnotacao({ anot, pagina, quadro, aspecto = 9 / 16, comFormu
         {btn('seta', MousePointer2, 'Seta — navegar (Esc)')}
         {btn('pincel', Pencil, 'Pincel (P)')}
         {btn('marca', Highlighter, 'Marca-texto (M)')}
-        {btn('texto', Type, 'Caixa de texto (T) — clique para escrever, arraste para mover')}
+        {btn('texto', Type, 'Caixa de texto (T) — clique no vazio para escrever; na caixa, arraste para mover e clique de novo para editar')}
         {btn('borracha', Eraser, 'Borracha — apaga o traço tocado (E)')}
         {comFormulas && (
           <button type="button" onClick={() => setFormulas(v => !v)} title="Fórmulas" aria-label="Fórmulas" aria-pressed={formulas}
