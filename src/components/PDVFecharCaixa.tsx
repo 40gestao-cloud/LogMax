@@ -11,6 +11,8 @@ type Props = {
   showToast: (msg: string, type?: string, persist?: boolean) => void;
   onFechamentoSolicitado: () => void;
   className?: string;
+  /** Texto do botão. O PDV SuperMax usa "Fechar caixa", como o MaxPOS. */
+  rotulo?: string;
 };
 
 // Botão "Fechar meu caixa" + modal para operador do PDV.
@@ -19,7 +21,7 @@ type Props = {
 // esperado), pede o valor efetivamente contado + observação e chama a RPC
 // `solicitar_fechamento_caixa`. O caixa vai pra status 'Aguardando Confirmação'
 // e o Financeiro conclui em ControleCaixaView.
-export function PDVFecharCaixa({ caixa, showToast, onFechamentoSolicitado, className = '' }: Props) {
+export function PDVFecharCaixa({ caixa, showToast, onFechamentoSolicitado, className = '', rotulo = 'Fechar meu caixa' }: Props) {
   const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [valorContado, setValorContado] = useState('');
@@ -94,7 +96,7 @@ export function PDVFecharCaixa({ caixa, showToast, onFechamentoSolicitado, class
         title="Fechar meu caixa e enviar ao Financeiro (Ctrl+L)"
         className={`neu-button flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold text-gray-300 hover:text-accent transition-colors ${className}`}
       >
-        <Lock size={14} /> Fechar meu caixa
+        <Lock size={14} /> {rotulo}
       </button>
 
       <AnimatePresence>

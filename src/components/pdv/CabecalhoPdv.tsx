@@ -1,15 +1,15 @@
 import type React from 'react';
 import { HelpCircle, Maximize2, Minimize2 } from 'lucide-react';
-import { YELLOW, YELLOW_DARK, NAVY_DARK, MONEY } from './coresMaxPos';
+import { YELLOW, YELLOW_DARK, NAVY_DARK } from './coresMaxPos';
 
 // Faixa amarela do topo do PDV SuperMax (réplica do MaxPOS): operador, cupom,
-// hora, status do caixa, trocar PDV, tela cheia e manual.
+// hora, trocar PDV, tela cheia e manual. Sem selo "caixa aberto": o botão de
+// fechar o caixa ao lado já diz que ele está aberto.
 export const Header = ({
-  operadorNome, cupomSeq, caixaAberto, datetime, onSwitchFilial, fullscreen, onToggleFullscreen, onOpenHelp, extraActions,
+  operadorNome, cupomSeq, datetime, onSwitchFilial, fullscreen, onToggleFullscreen, onOpenHelp, extraActions,
 }: {
   operadorNome: string;
   cupomSeq: string;
-  caixaAberto: boolean;
   datetime: string;
   onSwitchFilial?: (filial: string) => void;
   fullscreen: boolean;
@@ -21,11 +21,19 @@ export const Header = ({
     className="px-4 py-3 flex items-center justify-between shrink-0 border-b-2 gap-3"
     style={{ background: YELLOW, borderColor: YELLOW_DARK }}
   >
-    <div className="flex items-center gap-3 min-w-0 flex-1 flex-wrap">
+    {/* Uma linha só, como no MaxPOS: o que não cabe é cortado. Com flex-wrap a
+        última etiqueta caía para a linha de baixo e engordava a faixa. */}
+    <div className="flex items-center gap-3 min-w-0 flex-1 overflow-hidden">
+      {/* Selo da unidade, igual ao do MaxPOS: navy com a logo e o nome. */}
       <span
-        className="text-3xl tracking-wide font-black shrink-0"
-        style={{ color: NAVY_DARK, textShadow: '0 1px 0 rgba(255,255,255,0.35)' }}
+        className="shrink-0 pl-1 pr-3 py-1 rounded-md text-base font-black tracking-wide border-2 flex items-center gap-2"
+        style={{ background: NAVY_DARK, color: YELLOW, borderColor: YELLOW_DARK }}
+        title="Você está operando o PDV SuperMax"
       >
+        {/* Recorte quadrado (-view), não o icon-supermax.png: aquele é 16:9 com
+            margem larga e o brasão encolhia a um ponto. Placa branca porque a
+            arte é azul-marinho e sumia sobre o navy do selo. */}
+        <img src="/icon-supermax-view.png" alt="" className="w-9 h-9 object-contain rounded bg-white" />
         SUPERMAX
       </span>
       <span className="shrink-0 px-3 py-1.5 rounded-md text-sm font-bold border" style={{ background: 'rgba(255,255,255,0.92)', color: NAVY_DARK, borderColor: 'rgba(23,37,84,0.15)' }}>
@@ -40,11 +48,6 @@ export const Header = ({
       <span className="hidden lg:inline-flex shrink-0 px-3 py-1.5 rounded-md text-sm font-bold tabular-nums border" style={{ background: 'rgba(255,255,255,0.92)', color: NAVY_DARK, borderColor: 'rgba(23,37,84,0.15)' }}>
         {datetime}
       </span>
-      {caixaAberto && (
-        <span className="shrink-0 px-2.5 py-1.5 rounded-md text-xs font-black uppercase tracking-wider border-2 inline-flex items-center gap-1" style={{ background: MONEY, color: 'white', borderColor: '#14532d' }}>
-          CAIXA ABERTO
-        </span>
-      )}
     </div>
     <div className="flex items-center gap-2 shrink-0">
       {extraActions}

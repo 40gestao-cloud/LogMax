@@ -5,6 +5,8 @@ import { formatBRL } from '../../lib/viewUtils';
 import { fmtQtdArmada as fmtQtd } from '../../lib/pdv/quantidade';
 import { YELLOW, NAVY_DARK, MONEY } from './coresMaxPos';
 
+const COLUNAS = 'grid-cols-[150px_1fr_90px_120px]';
+
 // Busca de produto (F8) do PDV SuperMax. O termo fica na view porque ela abre
 // o F8 já preenchido (nome que casa com vários produtos) e porque a quantidade
 // colada ao termo ("2*feijao") é dela. `qtd` é só para mostrar.
@@ -74,11 +76,23 @@ export function BuscaProdutoModal({ termo, onTermo, produtos, qtd, onEscolher, o
             className="w-full bg-white border-2 text-xl font-bold text-gray-900 outline-none px-3 py-2 focus:border-blue-700"
             style={{ borderColor: '#9ca3af' }}
           />
-          <div className="mt-3 max-h-[55vh] overflow-y-auto border border-gray-300">
+          {/* Estoque na própria busca: antes o operador só descobria que o
+              produto estava zerado DEPOIS de escolher, pelo aviso do cupom. */}
+          <div className={`mt-3 grid ${COLUNAS} gap-3 px-3 py-1.5 text-[11px] font-bold uppercase tracking-wide text-white`} style={{ background: NAVY_DARK }}>
+            <span>Código</span>
+            <span>Descrição</span>
+            <span className="text-right">Estoque</span>
+            <span className="text-right">Preço</span>
+          </div>
+          <div className="max-h-[55vh] overflow-y-auto border border-t-0 border-gray-300">
             {produtos.length === 0 ? (
               <div className="py-10 text-center text-gray-400 text-sm">Nenhum produto.</div>
             ) : produtos.map((p: any, i: number) => {
               const active = i === idx;
+              // Serviço entra na lista com estoque "infinito": não tem saldo a mostrar.
+              const estoque = Number(p.estoque ?? 0);
+              const semSaldo = estoque >= Number.MAX_SAFE_INTEGER;
+              const zerado = !semSaldo && estoque <= 0;
               return (
                 <button
                   key={p.id}
@@ -96,11 +110,17 @@ export function BuscaProdutoModal({ termo, onTermo, produtos, qtd, onEscolher, o
                   ref={(el) => { if (el && active) el.scrollIntoView({ block: 'nearest' }); }}
                   // Linha ativa invertida (navy cheio, texto claro): o amarelo
                   // pálido de antes sumia sobre o branco em monitor de sala.
-                  className={`w-full grid grid-cols-[150px_1fr_120px] gap-3 text-left py-2 px-3 text-sm border-b border-gray-200 ${active ? '' : 'bg-white hover:bg-gray-100'}`}
+                  className={`w-full grid ${COLUNAS} gap-3 text-left py-2 px-3 text-sm border-b border-gray-200 ${active ? '' : 'bg-white hover:bg-gray-100'}`}
                   style={active ? { background: NAVY_DARK } : undefined}
                 >
                   <span className={`tabular-nums truncate ${active ? 'text-white/70' : 'text-gray-500'}`}>{p.codigo || p.ean || '—'}</span>
                   <span className={`truncate ${active ? 'font-bold text-white' : 'font-semibold text-gray-900'}`}>{(p.nome || '').toUpperCase()}</span>
+                  <span
+                    className={`text-right tabular-nums font-bold ${zerado ? (active ? 'text-red-300' : 'text-red-600') : active ? 'text-white' : 'text-gray-700'}`}
+                    title={zerado ? 'Sem estoque' : undefined}
+                  >
+                    {semSaldo ? '—' : fmtQtd(estoque)}
+                  </span>
                   <span className="text-right font-bold tabular-nums" style={{ color: active ? YELLOW : MONEY }}>R$ {formatBRL(Number(p.preco ?? 0))}</span>
                 </button>
               );

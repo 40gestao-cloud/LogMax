@@ -51,7 +51,7 @@ export function LinhaCodigo({
             {fmtQtd(qtdArmada)} ×
           </span>
         )}
-        <div className="relative flex-1 min-w-0 max-w-2xl mr-auto">
+        <div className="relative mr-auto">
           <input
             ref={inputRef}
             value={code}
@@ -68,8 +68,10 @@ export function LinhaCodigo({
             autoComplete="off"
             spellCheck={false}
             placeholder="EAN / REF ou nome do produto"
-            className="w-full bg-white border-2 text-2xl font-bold text-gray-900 outline-none px-3 py-1.5 focus:border-blue-700"
-            style={{ borderColor: '#9ca3af', fontFamily: 'Consolas, "Courier New", monospace' }}
+            // Borda pela classe, não pelo `style`: inline vence classe e o
+            // campo ficava igual focado ou não.
+            className="w-96 bg-white border-2 border-[#9ca3af] text-2xl font-bold text-gray-900 outline-none px-3 py-1.5 focus:border-blue-700 focus:ring-4 focus:ring-blue-500/60"
+            style={{ fontFamily: 'Consolas, "Courier New", monospace' }}
           />
           {suggestions.length > 0 && (
             <div className="absolute left-0 bottom-full mb-1 bg-white border-2 shadow-2xl z-50 w-[640px] max-w-[90vw]" style={{ borderColor: NAVY_DARK }}>
@@ -102,8 +104,8 @@ export function LinhaCodigo({
         {temItens ? (
           <button
             onClick={() => onSuspender()}
-            className="px-4 py-2.5 text-sm font-black uppercase tracking-wider border-2 focus:outline-none focus-visible:ring-4 focus-visible:ring-offset-2 focus-visible:ring-yellow-600"
-            style={{ background: YELLOW, color: NAVY_DARK, borderColor: NAVY_DARK }}
+            className="px-4 py-2.5 text-sm font-black uppercase tracking-wider border-2 hover:bg-yellow-50 focus:outline-none focus-visible:ring-4 focus-visible:ring-offset-2 focus-visible:ring-yellow-600"
+            style={{ background: 'white', color: NAVY_DARK, borderColor: NAVY_DARK }}
             title="Suspender esta venda e liberar o caixa (Ctrl+G)"
           >
             ⌖ SUSPENDER

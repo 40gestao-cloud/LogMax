@@ -1945,7 +1945,6 @@ export const PDVViewSupermax = ({
         <Header
           operadorNome={operadorNome}
           cupomSeq={cupomSeq}
-          caixaAberto={false}
           datetime={datetime}
           onSwitchFilial={onSwitchFilial}
           fullscreen={fullscreen}
@@ -1978,7 +1977,6 @@ export const PDVViewSupermax = ({
       <Header
         operadorNome={operadorNome}
         cupomSeq={cupomSeq}
-        caixaAberto={true}
         datetime={datetime}
         onSwitchFilial={onSwitchFilial}
         fullscreen={fullscreen}
@@ -1989,7 +1987,8 @@ export const PDVViewSupermax = ({
             caixa={{ id: caixaAtivo.id, valor_abertura: caixaAtivo.valor_abertura, filial: caixaAtivo.filial, data: caixaAtivo.data }}
             showToast={showToast}
             onFechamentoSolicitado={refreshCaixa}
-            className="px-3 py-1.5 text-xs uppercase tracking-wider bg-white flex items-center gap-1.5 border-2"
+            rotulo="Fechar caixa"
+            className="px-3! py-2! rounded-md! text-xs! font-black! uppercase tracking-wider gap-1.5! border-2 bg-[#172554]! text-[#FFC107]! border-[#B8860B]! hover:brightness-110"
           />
         }
       />

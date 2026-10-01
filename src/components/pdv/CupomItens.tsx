@@ -1,4 +1,4 @@
-import { ScanBarcode, X } from 'lucide-react';
+import { X } from 'lucide-react';
 import { formatBRL } from '../../lib/viewUtils';
 import { fmtQtdArmada as fmtQtd } from '../../lib/pdv/quantidade';
 import { NAVY_DARK, MONEY, RED } from './coresMaxPos';
@@ -18,8 +18,11 @@ export interface ItemCupom {
   unidade: string;
 }
 
-// Colunas mais estreitas abaixo de xl: com o menu lateral aberto a tabela rolava de lado.
-const COLUNAS = 'grid-cols-[44px_110px_1fr_56px_64px_90px_104px_32px] xl:grid-cols-[70px_160px_1fr_80px_90px_130px_150px_40px]';
+// Mesma régua do MaxPOS, pela largura da PRÓPRIA tabela (@container): abaixo de
+// 900px CÓDIGO e ESTOQUE saem e a DESCRIÇÃO fica com o espaço. Vale com o menu
+// lateral aberto ou fechado, sem depender do breakpoint da janela.
+const COLUNAS = 'grid-cols-[48px_minmax(0,1fr)_64px_100px_110px_36px] @[900px]:grid-cols-[60px_140px_minmax(0,1fr)_70px_90px_110px_130px_40px]';
+const SO_LARGO = 'hidden @[900px]:block';
 
 // O cupom em andamento do PDV SuperMax: a tabela de itens (com Oferta e
 // Ruptura por linha) e a barra lateral com o último item lido e os totais.
@@ -39,16 +42,16 @@ export function CupomItens({
 }) {
   return (
     <div className="flex-1 flex overflow-hidden min-h-0">
-      <div className="flex-1 flex flex-col min-w-0 border-r border-gray-300">
+      <div className="@container flex-1 flex flex-col min-w-0 border-r border-gray-300">
         <div
-          className={`grid ${COLUNAS} gap-2 px-4 py-3 text-xs xl:text-sm font-bold uppercase tracking-wide shrink-0 text-white`}
+          className={`grid ${COLUNAS} gap-2 px-4 py-3 text-sm font-bold uppercase tracking-wide shrink-0 text-white`}
           style={{ background: NAVY_DARK }}
         >
           <div>ITEM</div>
-          <div>CÓDIGO</div>
+          <div className={SO_LARGO}>CÓDIGO</div>
           <div>DESCRIÇÃO</div>
           <div className="text-right">QTD</div>
-          <div className="text-right">ESTOQUE</div>
+          <div className={`text-right ${SO_LARGO}`}>ESTOQUE</div>
           <div className="text-right">UNIT R$</div>
           <div className="text-right">TOTAL R$</div>
           <div></div>
@@ -63,7 +66,7 @@ export function CupomItens({
             return (
             <div
               key={item.produto_id}
-              className={`grid ${COLUNAS} gap-2 px-4 py-2.5 text-base xl:text-lg tabular-nums border-b ${
+              className={`grid ${COLUNAS} gap-2 px-4 py-2.5 text-lg tabular-nums border-b ${
                 idx === selectedCartIdx
                   ? 'bg-yellow-200 border-yellow-500 ring-2 ring-yellow-500'
                   : idx === cart.length - 1 && selectedCartIdx < 0
@@ -72,8 +75,8 @@ export function CupomItens({
               }`}
             >
               <div className="text-gray-500">{String(idx + 1).padStart(3, '0')}</div>
-              <div className="text-gray-500 truncate">{item.ean || item.codigo || '—'}</div>
-              <div className="truncate font-semibold flex items-center gap-2">
+              <div className={`text-gray-500 truncate ${SO_LARGO}`}>{item.ean || item.codigo || '—'}</div>
+              <div className="truncate font-semibold flex items-center gap-2 min-w-0">
                 <span className="truncate">{(item.nome_produto || '').toUpperCase()}</span>
                 {item.servico_id && (
                   <span className="shrink-0 px-1.5 py-0.5 text-[10px] font-black uppercase tracking-wider rounded border"
@@ -102,7 +105,7 @@ export function CupomItens({
                 )}
               </div>
               <div className="text-right">{fmtQtd(item.qtd)}</div>
-              <div className={`text-right ${ruptura ? 'text-red-600 font-bold' : 'text-gray-500'}`}>{item.estoque}</div>
+              <div className={`text-right ${SO_LARGO} ${ruptura ? 'text-red-600 font-bold' : 'text-gray-500'}`}>{item.estoque}</div>
               <div className="text-right">
                 {(() => {
                   const o = ofertaDoItem(item.produto_id, item.preco_unitario);
@@ -131,7 +134,7 @@ export function CupomItens({
         </div>
       </div>
 
-      <div className="w-[300px] xl:w-[420px] shrink-0 flex flex-col bg-gray-50">
+      <div className="w-[420px] shrink-0 flex flex-col bg-gray-50">
         <div className="px-5 py-5 border-b border-gray-300">
           <div className="text-sm font-bold uppercase tracking-wider text-gray-500 mb-3">ÚLTIMO ITEM LIDO</div>
           {lastAdded ? (
@@ -162,36 +165,33 @@ export function CupomItens({
                   </div>
                 );
               })()}
-              <div className="text-4xl xl:text-6xl font-bold tabular-nums mt-1" style={{ color: MONEY }}>
+              <div className="text-6xl font-bold tabular-nums mt-1" style={{ color: MONEY }}>
                 R$ {formatBRL(lastAdded.subtotal)}
               </div>
             </>
           ) : (
-            <div className="h-32 flex flex-col items-center justify-center gap-2 text-gray-300">
-              <ScanBarcode size={48} strokeWidth={1.25} />
-              <span className="text-sm font-semibold uppercase tracking-widest">Aguardando leitura</span>
-            </div>
+            <div className="h-32" />
           )}
         </div>
-        <div className="px-5 py-5 flex-1 space-y-4 text-lg">
-          <div className="flex justify-between items-baseline">
+        <div className="px-5 py-5 flex-1 space-y-3 text-lg">
+          <div className="flex justify-between">
             <span className="text-gray-600">QTD. ITENS</span>
-            <span className="tabular-nums font-bold text-gray-900 text-2xl">{totalItens}</span>
+            <span className="tabular-nums font-bold text-gray-900">{totalItens}</span>
           </div>
-          <div className="flex justify-between items-baseline">
+          <div className="flex justify-between">
             <span className="text-gray-600">SUBTOTAL</span>
-            <span className="tabular-nums font-bold text-gray-900 text-2xl">R$ {formatBRL(subtotal)}</span>
+            <span className="tabular-nums font-bold text-gray-900">R$ {formatBRL(subtotal)}</span>
           </div>
           {descontoAplicado > 0 && (
-            <div className="flex justify-between items-baseline">
+            <div className="flex justify-between">
               <span className="text-gray-600">DESCONTO</span>
-              <span className="tabular-nums font-bold text-2xl" style={{ color: RED }}>− R$ {formatBRL(descontoAplicado)}</span>
+              <span className="tabular-nums font-bold" style={{ color: RED }}>− R$ {formatBRL(descontoAplicado)}</span>
             </div>
           )}
           {economiaOfertas > 0.001 && (
-            <div className="flex justify-between items-baseline border-t pt-3" style={{ borderColor: '#d1d5db' }}>
+            <div className="flex justify-between border-t pt-3" style={{ borderColor: '#d1d5db' }}>
               <span className="text-gray-600">VOCÊ ECONOMIZOU</span>
-              <span className="tabular-nums font-bold text-2xl" style={{ color: MONEY }}>R$ {formatBRL(economiaOfertas)}</span>
+              <span className="tabular-nums font-bold" style={{ color: MONEY }}>R$ {formatBRL(economiaOfertas)}</span>
             </div>
           )}
         </div>
