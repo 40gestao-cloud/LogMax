@@ -1,4 +1,4 @@
-import { YELLOW, NAVY_DARK } from './coresMaxPos';
+import { YELLOW, YELLOW_DARK, NAVY_DARK } from './coresMaxPos';
 
 const ATALHOS: [string, string][] = [
   ['F4', 'Subtotal'],
@@ -21,14 +21,14 @@ const ATALHOS: [string, string][] = [
 // consulta sem abrir o manual.
 export function RodapeAtalhos() {
   return (
-    <div className="px-6 py-2 shrink-0 border-t-2" style={{ background: NAVY_DARK, borderColor: YELLOW }}>
-      <div className="flex flex-wrap items-center gap-x-5 gap-y-1 text-sm text-white/85 tracking-wide">
-        <span className="px-2 py-0.5 rounded font-bold" style={{ background: YELLOW, color: NAVY_DARK }}>
+    <div className="px-6 py-2 shrink-0 border-t-2" style={{ background: YELLOW, borderColor: YELLOW_DARK }}>
+      <div className="flex flex-wrap items-center gap-x-5 gap-y-1 text-sm text-black tracking-wide">
+        <span className="px-2 py-0.5 rounded text-white font-bold" style={{ background: NAVY_DARK }}>
           Enter = Subtotal
         </span>
         {ATALHOS.map(([tecla, acao]) => (
           <span key={tecla} className="flex items-center gap-1.5 whitespace-nowrap">
-            <b style={{ color: YELLOW }}>{tecla}</b>
+            <b>{tecla}</b>
             {acao}
           </span>
         ))}

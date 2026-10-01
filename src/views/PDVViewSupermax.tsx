@@ -10,6 +10,7 @@ import { useAuth } from '../hooks/useAuth';
 import { useAbrirCaixa } from '../hooks/useAbrirCaixa';
 import { useVarrerPendentesOrfaos } from '../hooks/usePendentesOrfaos';
 import { useTravaAtualizacao } from '../hooks/useTravaAtualizacao';
+import { useFullscreenNativo } from '../hooks/useFullscreenNativo';
 import { supabase, criarClienteEfemero } from '../lib/supabase';
 import { todayBR } from '../lib/dates';
 import { formatBRL, parseBRL } from '../lib/viewUtils';
@@ -135,12 +136,11 @@ export const PDVViewSupermax = ({
   // seguem cancelando venda.
   const [fullscreen, setFullscreen] = useState(true);
   // Sem isto o overlay cobria só a shell, e a barra do navegador e a do
-  // sistema continuavam ocupando a tela do caixa.
-  // Tela cheia e SO overlay CSS (rootClass): o PDV cobre sidebar e topbar.
-  // Com a Fullscreen API do navegador, o Esc do operador era consumido por ele
-  // pra sair da tela cheia — quem so queria voltar da operacao perdia a tela.
-  // Quem quiser esconder tambem a barra do navegador usa o F11 do proprio
-  // navegador, que nao rouba o Esc do PDV.
+  // sistema continuavam ocupando a tela do caixa. O Esc fica travado para a
+  // página (terceiro argumento): com a Fullscreen API pura, o navegador
+  // consumia o Esc do operador pra sair da tela cheia — quem só queria voltar
+  // da operação perdia a tela. Navegador sem a trava fica só no overlay CSS.
+  useFullscreenNativo(fullscreen, useCallback(() => setFullscreen(false), []), true);
 
   // Índices de seleção por teclado nos modais (Arrow keys + Enter).
   const [payChoiceIdx, setPayChoiceIdx]       = useState(0);

@@ -32,11 +32,25 @@ const emFullscreen = (): boolean => {
   return !!(doc.fullscreenElement || doc.webkitFullscreenElement);
 };
 
-const entrar = () => {
+// Keyboard Lock (Chrome/Edge): em tela cheia, o Esc deixa de ser do navegador
+// e chega à página — só o Esc SEGURADO sai por fora. É o que permite ao PDV
+// SuperMax usar a tela cheia de verdade sem perder o Esc da operação (cancelar
+// venda, fechar modal), que foi o motivo de ela ter sido tirada de lá.
+type TecladoTravavel = { lock?: (keys?: string[]) => Promise<void>; unlock?: () => void };
+const teclado = (): TecladoTravavel | undefined =>
+  (navigator as Navigator & { keyboard?: TecladoTravavel }).keyboard;
+
+const podeTravarEsc = () => typeof teclado()?.lock === 'function';
+
+const entrar = (travarEsc: boolean) => {
   const el = document.documentElement as FullscreenEl;
   const req = el.requestFullscreen ?? el.webkitRequestFullscreen;
   if (!req) return;
+  // Sem como travar o Esc (Firefox, Safari), quem pediu a trava fica no
+  // overlay CSS: tela cheia nativa ali devolveria o bug do Esc roubado.
+  if (travarEsc && !podeTravarEsc()) return;
   try {
+    if (travarEsc) teclado()!.lock!(['Escape']).catch(() => {});
     const r = req.call(el) as Promise<void> | void;
     if (r && typeof (r as Promise<void>).catch === 'function') (r as Promise<void>).catch(() => {});
   } catch { /* navegador recusou — overlay CSS continua valendo */ }
@@ -44,6 +58,7 @@ const entrar = () => {
 
 const sair = () => {
   const doc = document as FullscreenDoc;
+  try { teclado()?.unlock?.(); } catch { /* sem trava para soltar */ }
   if (!emFullscreen()) return;
   const exit = doc.exitFullscreen ?? doc.webkitExitFullscreen;
   if (!exit) return;
@@ -59,18 +74,21 @@ const sair = () => {
  * `onSair` é chamado quando o usuário sai por fora (F11, Esc do navegador,
  * troca de aba em alguns casos) — sem isso o overlay ficaria cobrindo a tela
  * com a barra do navegador de volta por cima, que é o pior dos dois mundos.
+ *
+ * `travarEsc` deixa o Esc com a página enquanto durar a tela cheia (ver
+ * Keyboard Lock acima); onde o navegador não oferece a trava, vale só o overlay.
  */
-export function useFullscreenNativo(ativo: boolean, onSair: () => void) {
+export function useFullscreenNativo(ativo: boolean, onSair: () => void, travarEsc = false) {
   const onSairRef = useRef(onSair);
   onSairRef.current = onSair;
 
   useEffect(() => {
     if (ativo) {
-      if (!emFullscreen()) entrar();
+      if (!emFullscreen()) entrar(travarEsc);
     } else {
       sair();
     }
-  }, [ativo]);
+  }, [ativo, travarEsc]);
 
   useEffect(() => {
     const handler = () => {
