@@ -32,6 +32,7 @@ const ESTATICOS = [
   'tests/importarProdutos.test.ts',
   // Puro desde que o "maior número de NF" passou para o banco (migr. 618): só
   // sobrou aritmética de padding. Também estava no grupo errado.
+  'tests/mesaGestor.test.ts',
   'tests/notaFiscal.test.ts',
   'tests/orcamentoFases.test.ts',
   'tests/perecivel.test.ts',

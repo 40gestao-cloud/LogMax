@@ -2705,10 +2705,14 @@
    "componente": "MesaGestorView",
    "arquivo": "src/views/MesaGestorView.tsx",
    "le": [
+    "mesa_anotacoes",
     "user_profiles"
    ],
-   "grava": [],
+   "grava": [
+    "mesa_anotacoes"
+   ],
    "rpcs": [
+    "contar_minha_mesa",
     "minha_mesa"
    ],
    "grava_via_rpc": [],
@@ -4877,6 +4881,15 @@
     "auth_is_service_role"
    ]
   },
+  "contar_minha_mesa": {
+   "gatilho": false,
+   "secdef": true,
+   "grava": [],
+   "le": [],
+   "chama": [
+    "minha_mesa"
+   ]
+  },
   "contar_pendencias": {
    "gatilho": false,
    "secdef": false,
@@ -6382,6 +6395,13 @@
     "auth_is_service_role"
    ]
   },
+  "fn_aprovacao_carimba_decisao": {
+   "gatilho": true,
+   "secdef": false,
+   "grava": [],
+   "le": [],
+   "chama": []
+  },
   "fn_arte_produto_e_cota": {
    "gatilho": true,
    "secdef": true,
@@ -6670,6 +6690,13 @@
    "le": [
     "produtos_custo"
    ],
+   "chama": []
+  },
+  "fn_mesa_anotacoes_carimbo": {
+   "gatilho": true,
+   "secdef": false,
+   "grava": [],
+   "le": [],
    "chama": []
   },
   "fn_mov_saldo_abertura_so_na_implantacao": {
@@ -7866,24 +7893,33 @@
     "aprovacoes_compras",
     "aprovacoes_estoque",
     "avaliacoes_matriz",
+    "candidaturas",
     "ciclo_tarefa_avaliacoes",
     "ciclo_tarefa_participantes",
     "ciclo_tarefas",
+    "contratos",
     "demissoes",
+    "ferias",
+    "funcionarios",
     "justificativas_falta",
     "marketing_promocoes",
     "matriz_tarefa_participantes",
     "matriz_tarefas",
     "movimentacoes_carreira",
+    "orcamentos",
+    "pedidos_venda",
     "produtos",
+    "requerimentos",
     "requisicoes",
     "requisicoes_estoque",
     "user_profiles",
     "vagas"
    ],
    "chama": [
+    "_pendencia_responsaveis",
     "auth_user_filial",
     "auth_user_role",
+    "contrato_representa",
     "listar_pendencias"
    ]
   },
@@ -10091,9 +10127,11 @@
    "alarmes_turma_sem_sobreposicao:alarmes_turma_sem_sobreposicao"
   ],
   "aprovacoes_compras": [
+   "trg_aprovacao_carimba_decisao:fn_aprovacao_carimba_decisao",
    "trg_historico:registrar_historico"
   ],
   "aprovacoes_estoque": [
+   "trg_aprovacao_carimba_decisao:fn_aprovacao_carimba_decisao",
    "trg_historico:registrar_historico"
   ],
   "aula_config": [
@@ -10357,6 +10395,9 @@
   ],
   "maxbank_transacoes": [
    "trg_maxbank_tx_protege_abertura:maxbank_tx_protege_abertura"
+  ],
+  "mesa_anotacoes": [
+   "trg_mesa_anotacoes_carimbo:fn_mesa_anotacoes_carimbo"
   ],
   "metas_estrategicas": [
    "trg_metas_estrategicas_updated_at:metas_estrategicas_set_updated_at"

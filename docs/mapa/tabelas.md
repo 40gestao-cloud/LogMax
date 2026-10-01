@@ -78,6 +78,7 @@ Para cada tabela: quem grava (tela, RPC, gatilho, servidor), quem lê, os gatilh
 - **Telas que leem:** [Requisições › Aprovações](telas.md#s-requisicoes-aprovações)
 - **RPCs que leem:** [contar_pendencias](funcoes.md#f-contar_pendencias), [corrigir_requisicao_compra](funcoes.md#f-corrigir_requisicao_compra), [decidir_requisicao_compra](funcoes.md#f-decidir_requisicao_compra), [devolver_requisicao_para_correcao](funcoes.md#f-devolver_requisicao_para_correcao), [minha_mesa](funcoes.md#f-minha_mesa), [reabrir_requisicao](funcoes.md#f-reabrir_requisicao)
 - **Gatilhos nesta tabela:**
+  - `trg_aprovacao_carimba_decisao` — BEFORE INSERT/UPDATE → [fn_aprovacao_carimba_decisao](funcoes.md#f-fn_aprovacao_carimba_decisao)
   - `trg_historico` — AFTER INSERT/UPDATE → [registrar_historico](funcoes.md#f-registrar_historico) · grava em [historico_operacoes](tabelas.md#t-historico_operacoes)
 - **Aponta para:** requisicao_id → [requisicoes](tabelas.md#t-requisicoes)
 - **RLS:** DELETE `compras_delete` (setores: compras · gerente da filial · Matriz/professor); SELECT `compras_select` (setores: compras · gerente da filial · Matriz/professor); UPDATE `compras_update` (setores: compras · gerente da filial · Matriz/professor)
@@ -92,6 +93,7 @@ Para cada tabela: quem grava (tela, RPC, gatilho, servidor), quem lê, os gatilh
 - **Telas que leem:** [Estoque › Gerenciamento](telas.md#s-estoque-gerenciamento), [Estoque › Liberar Requisições](telas.md#s-estoque-liberarrequisições), [Requisições › Aprovações](telas.md#s-requisicoes-aprovações)
 - **RPCs que leem:** [contar_pendencias](funcoes.md#f-contar_pendencias), [devolver_requisicao_estoque_para_correcao](funcoes.md#f-devolver_requisicao_estoque_para_correcao), [liberar_requisicao_estoque](funcoes.md#f-liberar_requisicao_estoque), [minha_mesa](funcoes.md#f-minha_mesa), [reabrir_requisicao_estoque](funcoes.md#f-reabrir_requisicao_estoque)
 - **Gatilhos nesta tabela:**
+  - `trg_aprovacao_carimba_decisao` — BEFORE INSERT/UPDATE → [fn_aprovacao_carimba_decisao](funcoes.md#f-fn_aprovacao_carimba_decisao)
   - `trg_historico` — AFTER INSERT/UPDATE → [registrar_historico](funcoes.md#f-registrar_historico) · grava em [historico_operacoes](tabelas.md#t-historico_operacoes)
 - **Aponta para:** requisicao_estoque_id → [requisicoes_estoque](tabelas.md#t-requisicoes_estoque)
 - **RLS:** DELETE `logist_delete` (setores: logistica · gerente da filial · Matriz/professor); SELECT `logist_select` (setores: logistica · gerente da filial · Matriz/professor); UPDATE `logist_update` (setores: logistica · gerente da filial · Matriz/professor)
@@ -334,7 +336,7 @@ Para cada tabela: quem grava (tela, RPC, gatilho, servidor), quem lê, os gatilh
 - **Telas que gravam via RPC:** [Recursos Humanos › Recrutamento e Seleção](telas.md#s-rh-recrutamentoeseleção)
 - **RPCs que gravam:** [efetivar_contratacao](funcoes.md#f-efetivar_contratacao), [efetivar_promocao](funcoes.md#f-efetivar_promocao), [mover_candidatura](funcoes.md#f-mover_candidatura), [registrar_candidatura](funcoes.md#f-registrar_candidatura), [registrar_candidatura_interna](funcoes.md#f-registrar_candidatura_interna), [responder_convite_vaga](funcoes.md#f-responder_convite_vaga)
 - **Telas que leem:** [Recursos Humanos › Recrutamento e Seleção](telas.md#s-rh-recrutamentoeseleção)
-- **RPCs que leem:** [convocar_para_vaga](funcoes.md#f-convocar_para_vaga), [efetivar_contratacao](funcoes.md#f-efetivar_contratacao), [efetivar_promocao](funcoes.md#f-efetivar_promocao), [mover_candidatura](funcoes.md#f-mover_candidatura)
+- **RPCs que leem:** [convocar_para_vaga](funcoes.md#f-convocar_para_vaga), [efetivar_contratacao](funcoes.md#f-efetivar_contratacao), [efetivar_promocao](funcoes.md#f-efetivar_promocao), [minha_mesa](funcoes.md#f-minha_mesa), [mover_candidatura](funcoes.md#f-mover_candidatura)
 - **Gatilhos nesta tabela:**
   - `trg_historico` — AFTER INSERT/UPDATE → [registrar_historico](funcoes.md#f-registrar_historico) · grava em [historico_operacoes](tabelas.md#t-historico_operacoes)
 - **Ao apagar uma linha daqui:** [candidatura_etapas](tabelas.md#t-candidatura_etapas).candidatura_id APAGA JUNTO (CASCADE); [movimentacoes_carreira](tabelas.md#t-movimentacoes_carreira).candidatura_id zera o vínculo (SET NULL); [vaga_convites](tabelas.md#t-vaga_convites).candidatura_id zera o vínculo (SET NULL)
@@ -699,7 +701,7 @@ Para cada tabela: quem grava (tela, RPC, gatilho, servidor), quem lê, os gatilh
 - **Telas que gravam:** [Contratos](telas.md#s-contratos)
 - **RPCs que gravam:** [assinar_contrato](funcoes.md#f-assinar_contrato), [encerrar_contrato](funcoes.md#f-encerrar_contrato), [recusar_contrato](funcoes.md#f-recusar_contrato)
 - **Telas que leem:** [Contratos](telas.md#s-contratos)
-- **RPCs que leem:** [assinar_contrato](funcoes.md#f-assinar_contrato), [encerrar_contrato](funcoes.md#f-encerrar_contrato), [recusar_contrato](funcoes.md#f-recusar_contrato)
+- **RPCs que leem:** [assinar_contrato](funcoes.md#f-assinar_contrato), [encerrar_contrato](funcoes.md#f-encerrar_contrato), [minha_mesa](funcoes.md#f-minha_mesa), [recusar_contrato](funcoes.md#f-recusar_contrato)
 - **Gatilhos nesta tabela:**
   - `contratos_carimbo_trg` — BEFORE INSERT/UPDATE → [contratos_carimbo](funcoes.md#f-contratos_carimbo)
 - **Ao apagar uma linha daqui:** [contratos](tabelas.md#t-contratos).contrato_pai_id zera o vínculo (SET NULL); [contratos_assinaturas](tabelas.md#t-contratos_assinaturas).contrato_id APAGA JUNTO (CASCADE)
@@ -976,7 +978,7 @@ Para cada tabela: quem grava (tela, RPC, gatilho, servidor), quem lê, os gatilh
 - **Telas que gravam via RPC:** [Central de Avaliação](telas.md#s-avaliacoes), [Demandas](telas.md#s-demandas), [Demandas conselho *(rota demandas-conselho)*](telas.md#s-demandas-conselho), [Demandas metas *(rota demandas-metas)*](telas.md#s-demandas-metas), [Matriz avaliacoes *(rota matriz-avaliacoes)*](telas.md#s-matriz-avaliacoes), [Metas *(rota metas)*](telas.md#s-metas)
 - **RPCs que gravam:** [gerar_folgas_acumulado](funcoes.md#f-gerar_folgas_acumulado)
 - **Telas que leem:** [Recursos Humanos › Férias](telas.md#s-rh-férias), [Recursos Humanos › Gerenciamento](telas.md#s-rh-gerenciamento), [Recursos Humanos › Relatórios](telas.md#s-rh-relatórios)
-- **RPCs que leem:** [calcular_rescisao](funcoes.md#f-calcular_rescisao), [contar_pendencias](funcoes.md#f-contar_pendencias)
+- **RPCs que leem:** [calcular_rescisao](funcoes.md#f-calcular_rescisao), [contar_pendencias](funcoes.md#f-contar_pendencias), [minha_mesa](funcoes.md#f-minha_mesa)
 - **Gatilhos nesta tabela:**
   - `trg_ferias_decisao_guard` — BEFORE UPDATE → [ferias_decisao_guard](funcoes.md#f-ferias_decisao_guard)
   - `trg_historico` — AFTER INSERT/UPDATE → [registrar_historico](funcoes.md#f-registrar_historico) · grava em [historico_operacoes](tabelas.md#t-historico_operacoes)
@@ -1168,7 +1170,7 @@ Para cada tabela: quem grava (tela, RPC, gatilho, servidor), quem lê, os gatilh
 - **Gatilhos (de outras tabelas) que gravam aqui:** [user_profiles_propagar_filial](funcoes.md#f-user_profiles_propagar_filial) (em [user_profiles](tabelas.md#t-user_profiles))
 - **Servidor (api/) grava:** `api/users.ts`
 - **Telas que leem:** [Central de Avaliação](telas.md#s-avaliacoes), [Crachá Virtual](telas.md#s-cracha-virtual), [Matriz avaliacoes *(rota matriz-avaliacoes)*](telas.md#s-matriz-avaliacoes), [Meu Crachá](telas.md#s-meu-cracha), [Recursos Humanos › Afastamentos](telas.md#s-rh-afastamentos), [Recursos Humanos › Desligamento](telas.md#s-rh-desligamento), [Recursos Humanos › Férias](telas.md#s-rh-férias), [Recursos Humanos › Folha de Pagamento](telas.md#s-rh-folhadepagamento), [Recursos Humanos › Funcionários](telas.md#s-rh-funcionários), [Recursos Humanos › Gerenciamento](telas.md#s-rh-gerenciamento), [Recursos Humanos › Recrutamento e Seleção](telas.md#s-rh-recrutamentoeseleção), [Recursos Humanos › Registro de Ponto](telas.md#s-rh-registrodeponto), [Recursos Humanos › Relatórios](telas.md#s-rh-relatórios), [Recursos Humanos › Treinamentos](telas.md#s-rh-treinamentos), [Usuários](telas.md#s-usuarios)
-- **RPCs que leem:** [_frequencia_competicao](funcoes.md#f-_frequencia_competicao), [_funcionario_da_conta](funcoes.md#f-_funcionario_da_conta), [_funcionario_desligado](funcoes.md#f-_funcionario_desligado), [apurar_rateio_administrativo](funcoes.md#f-apurar_rateio_administrativo), [beneficios_do_funcionario](funcoes.md#f-beneficios_do_funcionario), [calcular_rescisao](funcoes.md#f-calcular_rescisao), [convocar_para_vaga](funcoes.md#f-convocar_para_vaga), [creditar_folha_maxbank](funcoes.md#f-creditar_folha_maxbank), [creditar_rescisao_maxbank](funcoes.md#f-creditar_rescisao_maxbank), [decidir_desligamento](funcoes.md#f-decidir_desligamento), [demitir_funcionario](funcoes.md#f-demitir_funcionario), [desempenho_funcionarios](funcoes.md#f-desempenho_funcionarios), [efetivar_contratacao](funcoes.md#f-efetivar_contratacao), [efetivar_promocao](funcoes.md#f-efetivar_promocao), [enviar_justificativa_falta](funcoes.md#f-enviar_justificativa_falta), [funcionario_filial](funcoes.md#f-funcionario_filial), [gerar_folgas_acumulado](funcoes.md#f-gerar_folgas_acumulado), [gerar_painel_bi](funcoes.md#f-gerar_painel_bi), [media_avaliacao_funcionario](funcoes.md#f-media_avaliacao_funcionario), [minha_frequencia](funcoes.md#f-minha_frequencia), [nomear_mandato](funcoes.md#f-nomear_mandato), [processar_folha](funcoes.md#f-processar_folha), [processar_rescisao](funcoes.md#f-processar_rescisao), [readmitir_funcionario](funcoes.md#f-readmitir_funcionario), [recalcular_folha_do_ponto](funcoes.md#f-recalcular_folha_do_ponto), [registrar_candidatura_interna](funcoes.md#f-registrar_candidatura_interna), [registrar_ponto_manual](funcoes.md#f-registrar_ponto_manual), [remover_ponto](funcoes.md#f-remover_ponto), [resetar_dados_da_filial](funcoes.md#f-resetar_dados_da_filial), [resetar_dados_operacionais](funcoes.md#f-resetar_dados_operacionais), [responder_convite_vaga](funcoes.md#f-responder_convite_vaga), [solicitar_desligamento](funcoes.md#f-solicitar_desligamento), [vincular_acesso_funcionario](funcoes.md#f-vincular_acesso_funcionario)
+- **RPCs que leem:** [_frequencia_competicao](funcoes.md#f-_frequencia_competicao), [_funcionario_da_conta](funcoes.md#f-_funcionario_da_conta), [_funcionario_desligado](funcoes.md#f-_funcionario_desligado), [apurar_rateio_administrativo](funcoes.md#f-apurar_rateio_administrativo), [beneficios_do_funcionario](funcoes.md#f-beneficios_do_funcionario), [calcular_rescisao](funcoes.md#f-calcular_rescisao), [convocar_para_vaga](funcoes.md#f-convocar_para_vaga), [creditar_folha_maxbank](funcoes.md#f-creditar_folha_maxbank), [creditar_rescisao_maxbank](funcoes.md#f-creditar_rescisao_maxbank), [decidir_desligamento](funcoes.md#f-decidir_desligamento), [demitir_funcionario](funcoes.md#f-demitir_funcionario), [desempenho_funcionarios](funcoes.md#f-desempenho_funcionarios), [efetivar_contratacao](funcoes.md#f-efetivar_contratacao), [efetivar_promocao](funcoes.md#f-efetivar_promocao), [enviar_justificativa_falta](funcoes.md#f-enviar_justificativa_falta), [funcionario_filial](funcoes.md#f-funcionario_filial), [gerar_folgas_acumulado](funcoes.md#f-gerar_folgas_acumulado), [gerar_painel_bi](funcoes.md#f-gerar_painel_bi), [media_avaliacao_funcionario](funcoes.md#f-media_avaliacao_funcionario), [minha_frequencia](funcoes.md#f-minha_frequencia), [minha_mesa](funcoes.md#f-minha_mesa), [nomear_mandato](funcoes.md#f-nomear_mandato), [processar_folha](funcoes.md#f-processar_folha), [processar_rescisao](funcoes.md#f-processar_rescisao), [readmitir_funcionario](funcoes.md#f-readmitir_funcionario), [recalcular_folha_do_ponto](funcoes.md#f-recalcular_folha_do_ponto), [registrar_candidatura_interna](funcoes.md#f-registrar_candidatura_interna), [registrar_ponto_manual](funcoes.md#f-registrar_ponto_manual), [remover_ponto](funcoes.md#f-remover_ponto), [resetar_dados_da_filial](funcoes.md#f-resetar_dados_da_filial), [resetar_dados_operacionais](funcoes.md#f-resetar_dados_operacionais), [responder_convite_vaga](funcoes.md#f-responder_convite_vaga), [solicitar_desligamento](funcoes.md#f-solicitar_desligamento), [vincular_acesso_funcionario](funcoes.md#f-vincular_acesso_funcionario)
 - **Servidor (api/) lê:** `api/users.ts`
 - **Views que dependem desta:** [frequencia_trabalho_com_filial](tabelas.md#t-frequencia_trabalho_com_filial)
 - **Gatilhos nesta tabela:**
@@ -1553,6 +1555,16 @@ Para cada tabela: quem grava (tela, RPC, gatilho, servidor), quem lê, os gatilh
 - **Aponta para:** de_colaborador_id → [user_profiles](tabelas.md#t-user_profiles); para_colaborador_id → [user_profiles](tabelas.md#t-user_profiles)
 - **RLS:** SELECT `maxbank_transferencias_read` (setores: financeiro, rh · Matriz/professor)
 
+<a id="t-mesa_anotacoes"></a>
+## mesa_anotacoes
+
+- **Telas que gravam:** [Mesa do Gestor](telas.md#s-mesa-gestor)
+- **RPCs que gravam:** —
+- **Telas que leem:** [Mesa do Gestor](telas.md#s-mesa-gestor)
+- **Gatilhos nesta tabela:**
+  - `trg_mesa_anotacoes_carimbo` — BEFORE INSERT/UPDATE → [fn_mesa_anotacoes_carimbo](funcoes.md#f-fn_mesa_anotacoes_carimbo)
+- **RLS:** ALL `mesa_anotacoes_dono` (setores: admin, ceo, conselheiro, gerente · gerente da filial)
+
 <a id="t-metas_estrategicas"></a>
 ## metas_estrategicas
 
@@ -1712,7 +1724,7 @@ Para cada tabela: quem grava (tela, RPC, gatilho, servidor), quem lê, os gatilh
 - **Telas que gravam via RPC:** [Estoque › Pedidos de Venda](telas.md#s-estoque-pedidosdevenda), [Financeiro › Pedidos de Venda](telas.md#s-financeiro-pedidosdevenda), [Vendas › Pedidos de Venda](telas.md#s-vendas-pedidosdevenda)
 - **RPCs que gravam:** [cancelar_pedido_venda](funcoes.md#f-cancelar_pedido_venda), [converter_orcamento_em_pedido](funcoes.md#f-converter_orcamento_em_pedido)
 - **Telas que leem:** [Financeiro › Aprovações de Orçamento](telas.md#s-financeiro-aprovaçõesdeorçamento), [Início](telas.md#s-inicio), [Matriz › Vendas](telas.md#s-relatorio-vendas), [Matriz › Governança › Cliente Especial](telas.md#s-vendas-clienteespecial), [Vendas › Orçamentos](telas.md#s-vendas-orçamentos)
-- **RPCs que leem:** [contar_pendencias](funcoes.md#f-contar_pendencias), [converter_orcamento_em_pedido](funcoes.md#f-converter_orcamento_em_pedido), [listar_pendencias](funcoes.md#f-listar_pendencias)
+- **RPCs que leem:** [contar_pendencias](funcoes.md#f-contar_pendencias), [converter_orcamento_em_pedido](funcoes.md#f-converter_orcamento_em_pedido), [listar_pendencias](funcoes.md#f-listar_pendencias), [minha_mesa](funcoes.md#f-minha_mesa)
 - **Gatilhos nesta tabela:**
   - `trg_auditoria` — BEFORE INSERT/UPDATE → [set_auditoria_campos](funcoes.md#f-set_auditoria_campos)
   - `trg_condicao_pagamento` — BEFORE INSERT/UPDATE → [fn_orcamento_condicao_pagamento](funcoes.md#f-fn_orcamento_condicao_pagamento)
@@ -1819,7 +1831,7 @@ Para cada tabela: quem grava (tela, RPC, gatilho, servidor), quem lê, os gatilh
 - **RPCs que gravam:** [cancelar_pedido_venda](funcoes.md#f-cancelar_pedido_venda), [converter_orcamento_em_pedido](funcoes.md#f-converter_orcamento_em_pedido), [separar_pedido_venda](funcoes.md#f-separar_pedido_venda)
 - **Gatilhos (de outras tabelas) que gravam aqui:** [_conta_receber_fecha_pedido_venda](funcoes.md#f-_conta_receber_fecha_pedido_venda) (em [contas_receber](tabelas.md#t-contas_receber))
 - **Telas que leem:** [Estoque › Pedidos de Venda](telas.md#s-estoque-pedidosdevenda), [Financeiro › Aprovações de Orçamento](telas.md#s-financeiro-aprovaçõesdeorçamento), [Financeiro › Pedidos de Venda](telas.md#s-financeiro-pedidosdevenda), [Matriz › Vendas](telas.md#s-relatorio-vendas), [Vendas › Orçamentos](telas.md#s-vendas-orçamentos), [Vendas › Pedidos de Venda](telas.md#s-vendas-pedidosdevenda)
-- **RPCs que leem:** [cancelar_pedido_venda](funcoes.md#f-cancelar_pedido_venda), [contar_pendencias](funcoes.md#f-contar_pendencias), [converter_orcamento_em_pedido](funcoes.md#f-converter_orcamento_em_pedido), [criar_devolucao_venda](funcoes.md#f-criar_devolucao_venda), [separar_pedido_venda](funcoes.md#f-separar_pedido_venda)
+- **RPCs que leem:** [cancelar_pedido_venda](funcoes.md#f-cancelar_pedido_venda), [contar_pendencias](funcoes.md#f-contar_pendencias), [converter_orcamento_em_pedido](funcoes.md#f-converter_orcamento_em_pedido), [criar_devolucao_venda](funcoes.md#f-criar_devolucao_venda), [minha_mesa](funcoes.md#f-minha_mesa), [separar_pedido_venda](funcoes.md#f-separar_pedido_venda)
 - **Gatilhos nesta tabela:**
   - `trg_auditoria` — BEFORE INSERT/UPDATE → [set_auditoria_campos](funcoes.md#f-set_auditoria_campos)
   - `trg_historico` — AFTER INSERT/UPDATE → [registrar_historico](funcoes.md#f-registrar_historico) · grava em [historico_operacoes](tabelas.md#t-historico_operacoes)
@@ -2159,6 +2171,7 @@ Para cada tabela: quem grava (tela, RPC, gatilho, servidor), quem lê, os gatilh
 - **Telas que gravam:** [Feedback & Requerimentos](telas.md#s-feedback-org)
 - **RPCs que gravam:** —
 - **Telas que leem:** [Feedback & Requerimentos](telas.md#s-feedback-org)
+- **RPCs que leem:** [minha_mesa](funcoes.md#f-minha_mesa)
 - **Aponta para:** criado_por → [user_profiles](tabelas.md#t-user_profiles)
 - **RLS:** DELETE `requerimentos_delete` (setores: admin, ceo); INSERT `requerimentos_insert` (o próprio usuário); SELECT `requerimentos_select` (setores: admin, ceo, conselheiro · gerente da filial); UPDATE `requerimentos_update` (setores: admin, ceo, conselheiro · gerente da filial)
 

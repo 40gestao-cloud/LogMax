@@ -1411,10 +1411,10 @@ Para cada tela: o que ela lê e grava, as funções do banco que chama, e **quem
 ### Mesa do Gestor
 
 - **Rota:** `mesa-gestor` · **Componente:** `MesaGestorView` ([src/views/MesaGestorView.tsx](../../src/views/MesaGestorView.tsx))
-- **Lê:** [user_profiles](tabelas.md#t-user_profiles)
-- **Grava direto:** —
-- **Chama (RPC):** [minha_mesa](funcoes.md#f-minha_mesa)
-- **Arquivos que acessam dados:** `src/hooks/useUserProfile.ts`, `src/views/MesaGestorView.tsx`
+- **Lê:** [mesa_anotacoes](tabelas.md#t-mesa_anotacoes), [user_profiles](tabelas.md#t-user_profiles)
+- **Grava direto:** [mesa_anotacoes](tabelas.md#t-mesa_anotacoes)
+- **Chama (RPC):** [contar_minha_mesa](funcoes.md#f-contar_minha_mesa), [minha_mesa](funcoes.md#f-minha_mesa)
+- **Arquivos que acessam dados:** `src/components/MesaAnotacoes.tsx`, `src/hooks/useContadorMesa.ts`, `src/hooks/useUserProfile.ts`, `src/views/MesaGestorView.tsx`
 
 <a id="s-metas"></a>
 ### Metas *(rota metas)*

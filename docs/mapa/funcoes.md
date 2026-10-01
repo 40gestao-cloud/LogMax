@@ -307,7 +307,7 @@ Para cada função: quem a chama (tela, servidor, outra função, gatilho), o qu
 ## _pendencia_responsaveis (RPC, SECURITY DEFINER)
 
 - **Telas que chamam:** —
-- **Chamada por outras funções:** [listar_pendencias](funcoes.md#f-listar_pendencias)
+- **Chamada por outras funções:** [listar_pendencias](funcoes.md#f-listar_pendencias), [minha_mesa](funcoes.md#f-minha_mesa)
 - **Grava:** —
 - **Lê:** [user_profiles](tabelas.md#t-user_profiles)
 
@@ -561,12 +561,14 @@ Para cada função: quem a chama (tela, servidor, outra função, gatilho), o qu
 
 - **Dispara em:** [requisicoes_estoque](tabelas.md#t-requisicoes_estoque)
 - **Grava:** [aprovacoes_estoque](tabelas.md#t-aprovacoes_estoque)
+- **Ao gravar, acorda os gatilhos de:** [aprovacoes_estoque](tabelas.md#t-aprovacoes_estoque) ([fn_aprovacao_carimba_decisao](funcoes.md#f-fn_aprovacao_carimba_decisao))
 
 <a id="f-aprovacao_segue_a_requisicao"></a>
 ## aprovacao_segue_a_requisicao (gatilho, SECURITY DEFINER)
 
 - **Dispara em:** [requisicoes](tabelas.md#t-requisicoes)
 - **Grava:** [aprovacoes_compras](tabelas.md#t-aprovacoes_compras)
+- **Ao gravar, acorda os gatilhos de:** [aprovacoes_compras](tabelas.md#t-aprovacoes_compras) ([fn_aprovacao_carimba_decisao](funcoes.md#f-fn_aprovacao_carimba_decisao))
 
 <a id="f-aprovar_emprestimo"></a>
 ## aprovar_emprestimo (RPC, SECURITY DEFINER)
@@ -1273,6 +1275,13 @@ Para cada função: quem a chama (tela, servidor, outra função, gatilho), o qu
 - **Lê:** [recebimentos](tabelas.md#t-recebimentos)
 - **Chama:** [auth_is_service_role](funcoes.md#f-auth_is_service_role)
 
+<a id="f-contar_minha_mesa"></a>
+## contar_minha_mesa (RPC, SECURITY DEFINER)
+
+- **Telas que chamam:** [Mesa do Gestor](telas.md#s-mesa-gestor)
+- **Grava:** —
+- **Chama:** [minha_mesa](funcoes.md#f-minha_mesa)
+
 <a id="f-contar_pendencias"></a>
 ## contar_pendencias (RPC)
 
@@ -1305,7 +1314,7 @@ Para cada função: quem a chama (tela, servidor, outra função, gatilho), o qu
 ## contrato_representa (RPC, SECURITY DEFINER)
 
 - **Telas que chamam:** —
-- **Chamada por outras funções:** [assinar_contrato](funcoes.md#f-assinar_contrato), [encerrar_contrato](funcoes.md#f-encerrar_contrato), [recusar_contrato](funcoes.md#f-recusar_contrato)
+- **Chamada por outras funções:** [assinar_contrato](funcoes.md#f-assinar_contrato), [encerrar_contrato](funcoes.md#f-encerrar_contrato), [minha_mesa](funcoes.md#f-minha_mesa), [recusar_contrato](funcoes.md#f-recusar_contrato)
 - **Grava:** —
 - **Lê:** [user_profiles](tabelas.md#t-user_profiles)
 
@@ -1345,7 +1354,7 @@ Para cada função: quem a chama (tela, servidor, outra função, gatilho), o qu
 
 - **Telas que chamam:** [Compras › Requisições de Compra](telas.md#s-compras-requisiçõesdecompra)
 - **Grava:** [aprovacoes_compras](tabelas.md#t-aprovacoes_compras), [requisicoes](tabelas.md#t-requisicoes)
-- **Ao gravar, acorda os gatilhos de:** [requisicoes](tabelas.md#t-requisicoes) ([aprovacao_segue_a_requisicao](funcoes.md#f-aprovacao_segue_a_requisicao), [documento_sem_exclusao](funcoes.md#f-documento_sem_exclusao), [requisicao_decisao_guard](funcoes.md#f-requisicao_decisao_guard), [requisicao_embalagem_coerente](funcoes.md#f-requisicao_embalagem_coerente), [requisicao_marca_reenvio](funcoes.md#f-requisicao_marca_reenvio), [set_numero_requisicao](funcoes.md#f-set_numero_requisicao))
+- **Ao gravar, acorda os gatilhos de:** [aprovacoes_compras](tabelas.md#t-aprovacoes_compras) ([fn_aprovacao_carimba_decisao](funcoes.md#f-fn_aprovacao_carimba_decisao)); [requisicoes](tabelas.md#t-requisicoes) ([aprovacao_segue_a_requisicao](funcoes.md#f-aprovacao_segue_a_requisicao), [documento_sem_exclusao](funcoes.md#f-documento_sem_exclusao), [requisicao_decisao_guard](funcoes.md#f-requisicao_decisao_guard), [requisicao_embalagem_coerente](funcoes.md#f-requisicao_embalagem_coerente), [requisicao_marca_reenvio](funcoes.md#f-requisicao_marca_reenvio), [set_numero_requisicao](funcoes.md#f-set_numero_requisicao))
 - **Lê:** [aprovacoes_compras](tabelas.md#t-aprovacoes_compras), [cotacoes](tabelas.md#t-cotacoes), [produtos](tabelas.md#t-produtos), [requisicoes](tabelas.md#t-requisicoes), [user_profiles](tabelas.md#t-user_profiles)
 - **Chama:** [_assert_rpc](funcoes.md#f-_assert_rpc), [auth_gerente_da](funcoes.md#f-auth_gerente_da), [auth_in_setor](funcoes.md#f-auth_in_setor), [auth_is_admin](funcoes.md#f-auth_is_admin)
 
@@ -1483,7 +1492,7 @@ Para cada função: quem a chama (tela, servidor, outra função, gatilho), o qu
 
 - **Telas que chamam:** —
 - **Grava:** [aprovacoes_compras](tabelas.md#t-aprovacoes_compras), [requisicoes](tabelas.md#t-requisicoes)
-- **Ao gravar, acorda os gatilhos de:** [requisicoes](tabelas.md#t-requisicoes) ([aprovacao_segue_a_requisicao](funcoes.md#f-aprovacao_segue_a_requisicao), [documento_sem_exclusao](funcoes.md#f-documento_sem_exclusao), [requisicao_decisao_guard](funcoes.md#f-requisicao_decisao_guard), [requisicao_embalagem_coerente](funcoes.md#f-requisicao_embalagem_coerente), [requisicao_marca_reenvio](funcoes.md#f-requisicao_marca_reenvio), [set_numero_requisicao](funcoes.md#f-set_numero_requisicao))
+- **Ao gravar, acorda os gatilhos de:** [aprovacoes_compras](tabelas.md#t-aprovacoes_compras) ([fn_aprovacao_carimba_decisao](funcoes.md#f-fn_aprovacao_carimba_decisao)); [requisicoes](tabelas.md#t-requisicoes) ([aprovacao_segue_a_requisicao](funcoes.md#f-aprovacao_segue_a_requisicao), [documento_sem_exclusao](funcoes.md#f-documento_sem_exclusao), [requisicao_decisao_guard](funcoes.md#f-requisicao_decisao_guard), [requisicao_embalagem_coerente](funcoes.md#f-requisicao_embalagem_coerente), [requisicao_marca_reenvio](funcoes.md#f-requisicao_marca_reenvio), [set_numero_requisicao](funcoes.md#f-set_numero_requisicao))
 - **Lê:** [user_profiles](tabelas.md#t-user_profiles)
 - **Chama:** [_assert_rpc](funcoes.md#f-_assert_rpc), [acre_today](funcoes.md#f-acre_today), [auth_pode_filial](funcoes.md#f-auth_pode_filial)
 
@@ -1492,7 +1501,7 @@ Para cada função: quem a chama (tela, servidor, outra função, gatilho), o qu
 
 - **Telas que chamam:** [Requisições › Do Setor](telas.md#s-requisicoes-dosetor)
 - **Grava:** [aprovacoes_estoque](tabelas.md#t-aprovacoes_estoque), [requisicoes_estoque](tabelas.md#t-requisicoes_estoque)
-- **Ao gravar, acorda os gatilhos de:** [requisicoes_estoque](tabelas.md#t-requisicoes_estoque) ([aprovacao_estoque_segue_a_requisicao](funcoes.md#f-aprovacao_estoque_segue_a_requisicao), [documento_sem_exclusao](funcoes.md#f-documento_sem_exclusao), [requisicao_estoque_decisao_guard](funcoes.md#f-requisicao_estoque_decisao_guard), [requisicao_estoque_marca_reenvio](funcoes.md#f-requisicao_estoque_marca_reenvio))
+- **Ao gravar, acorda os gatilhos de:** [aprovacoes_estoque](tabelas.md#t-aprovacoes_estoque) ([fn_aprovacao_carimba_decisao](funcoes.md#f-fn_aprovacao_carimba_decisao)); [requisicoes_estoque](tabelas.md#t-requisicoes_estoque) ([aprovacao_estoque_segue_a_requisicao](funcoes.md#f-aprovacao_estoque_segue_a_requisicao), [documento_sem_exclusao](funcoes.md#f-documento_sem_exclusao), [requisicao_estoque_decisao_guard](funcoes.md#f-requisicao_estoque_decisao_guard), [requisicao_estoque_marca_reenvio](funcoes.md#f-requisicao_estoque_marca_reenvio))
 - **Lê:** [centros_custo](tabelas.md#t-centros_custo), [produtos](tabelas.md#t-produtos), [user_profiles](tabelas.md#t-user_profiles)
 - **Chama:** [_assert_rpc](funcoes.md#f-_assert_rpc), [auth_pode_filial](funcoes.md#f-auth_pode_filial)
 
@@ -1501,7 +1510,7 @@ Para cada função: quem a chama (tela, servidor, outra função, gatilho), o qu
 
 - **Telas que chamam:** [Compras › Sugestões de compras](telas.md#s-compras-sugestõesdecompras), [Requisições › Do Setor](telas.md#s-requisicoes-dosetor)
 - **Grava:** [aprovacoes_compras](tabelas.md#t-aprovacoes_compras), [requisicoes](tabelas.md#t-requisicoes)
-- **Ao gravar, acorda os gatilhos de:** [requisicoes](tabelas.md#t-requisicoes) ([aprovacao_segue_a_requisicao](funcoes.md#f-aprovacao_segue_a_requisicao), [documento_sem_exclusao](funcoes.md#f-documento_sem_exclusao), [requisicao_decisao_guard](funcoes.md#f-requisicao_decisao_guard), [requisicao_embalagem_coerente](funcoes.md#f-requisicao_embalagem_coerente), [requisicao_marca_reenvio](funcoes.md#f-requisicao_marca_reenvio), [set_numero_requisicao](funcoes.md#f-set_numero_requisicao))
+- **Ao gravar, acorda os gatilhos de:** [aprovacoes_compras](tabelas.md#t-aprovacoes_compras) ([fn_aprovacao_carimba_decisao](funcoes.md#f-fn_aprovacao_carimba_decisao)); [requisicoes](tabelas.md#t-requisicoes) ([aprovacao_segue_a_requisicao](funcoes.md#f-aprovacao_segue_a_requisicao), [documento_sem_exclusao](funcoes.md#f-documento_sem_exclusao), [requisicao_decisao_guard](funcoes.md#f-requisicao_decisao_guard), [requisicao_embalagem_coerente](funcoes.md#f-requisicao_embalagem_coerente), [requisicao_marca_reenvio](funcoes.md#f-requisicao_marca_reenvio), [set_numero_requisicao](funcoes.md#f-set_numero_requisicao))
 - **Lê:** [produtos](tabelas.md#t-produtos), [user_profiles](tabelas.md#t-user_profiles)
 - **Chama:** [_assert_rpc](funcoes.md#f-_assert_rpc), [acre_today](funcoes.md#f-acre_today), [auth_pode_filial](funcoes.md#f-auth_pode_filial), [embalagem_compra_valida](funcoes.md#f-embalagem_compra_valida), [unidade_fracionaria](funcoes.md#f-unidade_fracionaria)
 
@@ -1635,7 +1644,7 @@ Para cada função: quem a chama (tela, servidor, outra função, gatilho), o qu
 
 - **Telas que chamam:** [Requisições › Aprovações](telas.md#s-requisicoes-aprovações)
 - **Grava:** [aprovacoes_compras](tabelas.md#t-aprovacoes_compras), [cotacoes](tabelas.md#t-cotacoes), [requisicoes](tabelas.md#t-requisicoes)
-- **Ao gravar, acorda os gatilhos de:** [cotacoes](tabelas.md#t-cotacoes) ([cotacao_decisao_guard](funcoes.md#f-cotacao_decisao_guard), [cotacao_proposta_unica_por_fornecedor](funcoes.md#f-cotacao_proposta_unica_por_fornecedor), [cotacoes_unica_aprovada](funcoes.md#f-cotacoes_unica_aprovada), [documento_sem_exclusao](funcoes.md#f-documento_sem_exclusao), [fn_cotacao_aprovada_congela](funcoes.md#f-fn_cotacao_aprovada_congela), [fn_cotacao_com_pedido_nao_volta](funcoes.md#f-fn_cotacao_com_pedido_nao_volta), [fn_cotacao_marca_so_na_eventual](funcoes.md#f-fn_cotacao_marca_so_na_eventual), [set_numero_documento](funcoes.md#f-set_numero_documento)); [requisicoes](tabelas.md#t-requisicoes) ([aprovacao_segue_a_requisicao](funcoes.md#f-aprovacao_segue_a_requisicao), [documento_sem_exclusao](funcoes.md#f-documento_sem_exclusao), [requisicao_decisao_guard](funcoes.md#f-requisicao_decisao_guard), [requisicao_embalagem_coerente](funcoes.md#f-requisicao_embalagem_coerente), [requisicao_marca_reenvio](funcoes.md#f-requisicao_marca_reenvio), [set_numero_requisicao](funcoes.md#f-set_numero_requisicao))
+- **Ao gravar, acorda os gatilhos de:** [aprovacoes_compras](tabelas.md#t-aprovacoes_compras) ([fn_aprovacao_carimba_decisao](funcoes.md#f-fn_aprovacao_carimba_decisao)); [cotacoes](tabelas.md#t-cotacoes) ([cotacao_decisao_guard](funcoes.md#f-cotacao_decisao_guard), [cotacao_proposta_unica_por_fornecedor](funcoes.md#f-cotacao_proposta_unica_por_fornecedor), [cotacoes_unica_aprovada](funcoes.md#f-cotacoes_unica_aprovada), [documento_sem_exclusao](funcoes.md#f-documento_sem_exclusao), [fn_cotacao_aprovada_congela](funcoes.md#f-fn_cotacao_aprovada_congela), [fn_cotacao_com_pedido_nao_volta](funcoes.md#f-fn_cotacao_com_pedido_nao_volta), [fn_cotacao_marca_so_na_eventual](funcoes.md#f-fn_cotacao_marca_so_na_eventual), [set_numero_documento](funcoes.md#f-set_numero_documento)); [requisicoes](tabelas.md#t-requisicoes) ([aprovacao_segue_a_requisicao](funcoes.md#f-aprovacao_segue_a_requisicao), [documento_sem_exclusao](funcoes.md#f-documento_sem_exclusao), [requisicao_decisao_guard](funcoes.md#f-requisicao_decisao_guard), [requisicao_embalagem_coerente](funcoes.md#f-requisicao_embalagem_coerente), [requisicao_marca_reenvio](funcoes.md#f-requisicao_marca_reenvio), [set_numero_requisicao](funcoes.md#f-set_numero_requisicao))
 - **Lê:** [aprovacoes_compras](tabelas.md#t-aprovacoes_compras), [pedidos](tabelas.md#t-pedidos), [requisicoes](tabelas.md#t-requisicoes), [user_profiles](tabelas.md#t-user_profiles)
 - **Chama:** [_assert_rpc](funcoes.md#f-_assert_rpc), [auth_gerente_da](funcoes.md#f-auth_gerente_da), [auth_is_admin](funcoes.md#f-auth_is_admin), [eh_perfil_admin](funcoes.md#f-eh_perfil_admin), [notificar_setor](funcoes.md#f-notificar_setor)
 
@@ -2127,6 +2136,12 @@ Para cada função: quem a chama (tela, servidor, outra função, gatilho), o qu
 - **Lê:** [funcionarios](tabelas.md#t-funcionarios), [user_profiles](tabelas.md#t-user_profiles)
 - **Chama:** [auth_gerente_da](funcoes.md#f-auth_gerente_da), [auth_in_setor](funcoes.md#f-auth_in_setor), [auth_is_admin](funcoes.md#f-auth_is_admin), [auth_is_service_role](funcoes.md#f-auth_is_service_role)
 
+<a id="f-fn_aprovacao_carimba_decisao"></a>
+## fn_aprovacao_carimba_decisao (gatilho)
+
+- **Dispara em:** [aprovacoes_compras](tabelas.md#t-aprovacoes_compras), [aprovacoes_estoque](tabelas.md#t-aprovacoes_estoque)
+- **Grava:** —
+
 <a id="f-fn_arte_produto_e_cota"></a>
 ## fn_arte_produto_e_cota (gatilho, SECURITY DEFINER)
 
@@ -2335,6 +2350,12 @@ Para cada função: quem a chama (tela, servidor, outra função, gatilho), o qu
 - **Dispara em:** [itens_venda](tabelas.md#t-itens_venda)
 - **Grava:** —
 - **Lê:** [produtos_custo](tabelas.md#t-produtos_custo)
+
+<a id="f-fn_mesa_anotacoes_carimbo"></a>
+## fn_mesa_anotacoes_carimbo (gatilho)
+
+- **Dispara em:** [mesa_anotacoes](tabelas.md#t-mesa_anotacoes)
+- **Grava:** —
 
 <a id="f-fn_mov_saldo_abertura_so_na_implantacao"></a>
 ## fn_mov_saldo_abertura_so_na_implantacao (gatilho, SECURITY DEFINER)
@@ -2886,7 +2907,7 @@ Para cada função: quem a chama (tela, servidor, outra função, gatilho), o qu
 
 - **Telas que chamam:** [Estoque › Liberar Requisições](telas.md#s-estoque-liberarrequisições), [Requisições › Aprovações](telas.md#s-requisicoes-aprovações)
 - **Grava:** [aprovacoes_estoque](tabelas.md#t-aprovacoes_estoque), [movimentacoes_estoque](tabelas.md#t-movimentacoes_estoque), [requisicoes_estoque](tabelas.md#t-requisicoes_estoque)
-- **Ao gravar, acorda os gatilhos de:** [movimentacoes_estoque](tabelas.md#t-movimentacoes_estoque) ([_mov_estoque_casa_com_pedido](funcoes.md#f-_mov_estoque_casa_com_pedido), [fn_atualiza_estoque_produto](funcoes.md#f-fn_atualiza_estoque_produto), [fn_consumo_material_do_estoque](funcoes.md#f-fn_consumo_material_do_estoque), [fn_consumo_material_segue_movimentacao](funcoes.md#f-fn_consumo_material_segue_movimentacao), [fn_custo_medio_da_entrada](funcoes.md#f-fn_custo_medio_da_entrada), [fn_mov_saldo_abertura_so_na_implantacao](funcoes.md#f-fn_mov_saldo_abertura_so_na_implantacao), [fn_movimentacao_servico_nao_tem_saldo](funcoes.md#f-fn_movimentacao_servico_nao_tem_saldo)); [requisicoes_estoque](tabelas.md#t-requisicoes_estoque) ([aprovacao_estoque_segue_a_requisicao](funcoes.md#f-aprovacao_estoque_segue_a_requisicao), [documento_sem_exclusao](funcoes.md#f-documento_sem_exclusao), [requisicao_estoque_decisao_guard](funcoes.md#f-requisicao_estoque_decisao_guard), [requisicao_estoque_marca_reenvio](funcoes.md#f-requisicao_estoque_marca_reenvio))
+- **Ao gravar, acorda os gatilhos de:** [aprovacoes_estoque](tabelas.md#t-aprovacoes_estoque) ([fn_aprovacao_carimba_decisao](funcoes.md#f-fn_aprovacao_carimba_decisao)); [movimentacoes_estoque](tabelas.md#t-movimentacoes_estoque) ([_mov_estoque_casa_com_pedido](funcoes.md#f-_mov_estoque_casa_com_pedido), [fn_atualiza_estoque_produto](funcoes.md#f-fn_atualiza_estoque_produto), [fn_consumo_material_do_estoque](funcoes.md#f-fn_consumo_material_do_estoque), [fn_consumo_material_segue_movimentacao](funcoes.md#f-fn_consumo_material_segue_movimentacao), [fn_custo_medio_da_entrada](funcoes.md#f-fn_custo_medio_da_entrada), [fn_mov_saldo_abertura_so_na_implantacao](funcoes.md#f-fn_mov_saldo_abertura_so_na_implantacao), [fn_movimentacao_servico_nao_tem_saldo](funcoes.md#f-fn_movimentacao_servico_nao_tem_saldo)); [requisicoes_estoque](tabelas.md#t-requisicoes_estoque) ([aprovacao_estoque_segue_a_requisicao](funcoes.md#f-aprovacao_estoque_segue_a_requisicao), [documento_sem_exclusao](funcoes.md#f-documento_sem_exclusao), [requisicao_estoque_decisao_guard](funcoes.md#f-requisicao_estoque_decisao_guard), [requisicao_estoque_marca_reenvio](funcoes.md#f-requisicao_estoque_marca_reenvio))
 - **Lê:** [aprovacoes_estoque](tabelas.md#t-aprovacoes_estoque), [requisicoes_estoque](tabelas.md#t-requisicoes_estoque), [user_profiles](tabelas.md#t-user_profiles)
 - **Chama:** [_assert_rpc](funcoes.md#f-_assert_rpc), [acre_today](funcoes.md#f-acre_today), [auth_gerente_da](funcoes.md#f-auth_gerente_da), [auth_in_setor](funcoes.md#f-auth_in_setor), [auth_is_admin](funcoes.md#f-auth_is_admin), [auth_pode_filial](funcoes.md#f-auth_pode_filial)
 
@@ -3116,9 +3137,10 @@ Para cada função: quem a chama (tela, servidor, outra função, gatilho), o qu
 ## minha_mesa (RPC, SECURITY DEFINER)
 
 - **Telas que chamam:** [Mesa do Gestor](telas.md#s-mesa-gestor)
+- **Chamada por outras funções:** [contar_minha_mesa](funcoes.md#f-contar_minha_mesa)
 - **Grava:** —
-- **Lê:** [aprovacoes_compras](tabelas.md#t-aprovacoes_compras), [aprovacoes_estoque](tabelas.md#t-aprovacoes_estoque), [avaliacoes_matriz](tabelas.md#t-avaliacoes_matriz), [ciclo_tarefa_avaliacoes](tabelas.md#t-ciclo_tarefa_avaliacoes), [ciclo_tarefa_participantes](tabelas.md#t-ciclo_tarefa_participantes), [ciclo_tarefas](tabelas.md#t-ciclo_tarefas), [demissoes](tabelas.md#t-demissoes), [justificativas_falta](tabelas.md#t-justificativas_falta), [marketing_promocoes](tabelas.md#t-marketing_promocoes), [matriz_tarefa_participantes](tabelas.md#t-matriz_tarefa_participantes), [matriz_tarefas](tabelas.md#t-matriz_tarefas), [movimentacoes_carreira](tabelas.md#t-movimentacoes_carreira), [produtos](tabelas.md#t-produtos), [requisicoes](tabelas.md#t-requisicoes), [requisicoes_estoque](tabelas.md#t-requisicoes_estoque), [user_profiles](tabelas.md#t-user_profiles), [vagas](tabelas.md#t-vagas)
-- **Chama:** [auth_user_filial](funcoes.md#f-auth_user_filial), [auth_user_role](funcoes.md#f-auth_user_role), [listar_pendencias](funcoes.md#f-listar_pendencias)
+- **Lê:** [aprovacoes_compras](tabelas.md#t-aprovacoes_compras), [aprovacoes_estoque](tabelas.md#t-aprovacoes_estoque), [avaliacoes_matriz](tabelas.md#t-avaliacoes_matriz), [candidaturas](tabelas.md#t-candidaturas), [ciclo_tarefa_avaliacoes](tabelas.md#t-ciclo_tarefa_avaliacoes), [ciclo_tarefa_participantes](tabelas.md#t-ciclo_tarefa_participantes), [ciclo_tarefas](tabelas.md#t-ciclo_tarefas), [contratos](tabelas.md#t-contratos), [demissoes](tabelas.md#t-demissoes), [ferias](tabelas.md#t-ferias), [funcionarios](tabelas.md#t-funcionarios), [justificativas_falta](tabelas.md#t-justificativas_falta), [marketing_promocoes](tabelas.md#t-marketing_promocoes), [matriz_tarefa_participantes](tabelas.md#t-matriz_tarefa_participantes), [matriz_tarefas](tabelas.md#t-matriz_tarefas), [movimentacoes_carreira](tabelas.md#t-movimentacoes_carreira), [orcamentos](tabelas.md#t-orcamentos), [pedidos_venda](tabelas.md#t-pedidos_venda), [produtos](tabelas.md#t-produtos), [requerimentos](tabelas.md#t-requerimentos), [requisicoes](tabelas.md#t-requisicoes), [requisicoes_estoque](tabelas.md#t-requisicoes_estoque), [user_profiles](tabelas.md#t-user_profiles), [vagas](tabelas.md#t-vagas)
+- **Chama:** [_pendencia_responsaveis](funcoes.md#f-_pendencia_responsaveis), [auth_user_filial](funcoes.md#f-auth_user_filial), [auth_user_role](funcoes.md#f-auth_user_role), [contrato_representa](funcoes.md#f-contrato_representa), [listar_pendencias](funcoes.md#f-listar_pendencias)
 
 <a id="f-mov_estoque_delta"></a>
 ## mov_estoque_delta (RPC)
@@ -3533,7 +3555,7 @@ Para cada função: quem a chama (tela, servidor, outra função, gatilho), o qu
 
 - **Telas que chamam:** [Compras › Requisições de Compra](telas.md#s-compras-requisiçõesdecompra), [Requisições › Aprovações](telas.md#s-requisicoes-aprovações)
 - **Grava:** [aprovacoes_compras](tabelas.md#t-aprovacoes_compras), [requisicoes](tabelas.md#t-requisicoes)
-- **Ao gravar, acorda os gatilhos de:** [requisicoes](tabelas.md#t-requisicoes) ([aprovacao_segue_a_requisicao](funcoes.md#f-aprovacao_segue_a_requisicao), [documento_sem_exclusao](funcoes.md#f-documento_sem_exclusao), [requisicao_decisao_guard](funcoes.md#f-requisicao_decisao_guard), [requisicao_embalagem_coerente](funcoes.md#f-requisicao_embalagem_coerente), [requisicao_marca_reenvio](funcoes.md#f-requisicao_marca_reenvio), [set_numero_requisicao](funcoes.md#f-set_numero_requisicao))
+- **Ao gravar, acorda os gatilhos de:** [aprovacoes_compras](tabelas.md#t-aprovacoes_compras) ([fn_aprovacao_carimba_decisao](funcoes.md#f-fn_aprovacao_carimba_decisao)); [requisicoes](tabelas.md#t-requisicoes) ([aprovacao_segue_a_requisicao](funcoes.md#f-aprovacao_segue_a_requisicao), [documento_sem_exclusao](funcoes.md#f-documento_sem_exclusao), [requisicao_decisao_guard](funcoes.md#f-requisicao_decisao_guard), [requisicao_embalagem_coerente](funcoes.md#f-requisicao_embalagem_coerente), [requisicao_marca_reenvio](funcoes.md#f-requisicao_marca_reenvio), [set_numero_requisicao](funcoes.md#f-set_numero_requisicao))
 - **Lê:** [aprovacoes_compras](tabelas.md#t-aprovacoes_compras), [cotacoes](tabelas.md#t-cotacoes), [pedidos](tabelas.md#t-pedidos), [requisicoes](tabelas.md#t-requisicoes), [user_profiles](tabelas.md#t-user_profiles)
 - **Chama:** [_assert_rpc](funcoes.md#f-_assert_rpc), [auth_is_admin](funcoes.md#f-auth_is_admin), [auth_user_role](funcoes.md#f-auth_user_role)
 
@@ -3542,7 +3564,7 @@ Para cada função: quem a chama (tela, servidor, outra função, gatilho), o qu
 
 - **Telas que chamam:** [Estoque › Liberar Requisições](telas.md#s-estoque-liberarrequisições), [Estoque › Requisições de Material](telas.md#s-estoque-requisiçõesdematerial), [Requisições › Aprovações](telas.md#s-requisicoes-aprovações)
 - **Grava:** [aprovacoes_estoque](tabelas.md#t-aprovacoes_estoque), [requisicoes_estoque](tabelas.md#t-requisicoes_estoque)
-- **Ao gravar, acorda os gatilhos de:** [requisicoes_estoque](tabelas.md#t-requisicoes_estoque) ([aprovacao_estoque_segue_a_requisicao](funcoes.md#f-aprovacao_estoque_segue_a_requisicao), [documento_sem_exclusao](funcoes.md#f-documento_sem_exclusao), [requisicao_estoque_decisao_guard](funcoes.md#f-requisicao_estoque_decisao_guard), [requisicao_estoque_marca_reenvio](funcoes.md#f-requisicao_estoque_marca_reenvio))
+- **Ao gravar, acorda os gatilhos de:** [aprovacoes_estoque](tabelas.md#t-aprovacoes_estoque) ([fn_aprovacao_carimba_decisao](funcoes.md#f-fn_aprovacao_carimba_decisao)); [requisicoes_estoque](tabelas.md#t-requisicoes_estoque) ([aprovacao_estoque_segue_a_requisicao](funcoes.md#f-aprovacao_estoque_segue_a_requisicao), [documento_sem_exclusao](funcoes.md#f-documento_sem_exclusao), [requisicao_estoque_decisao_guard](funcoes.md#f-requisicao_estoque_decisao_guard), [requisicao_estoque_marca_reenvio](funcoes.md#f-requisicao_estoque_marca_reenvio))
 - **Lê:** [aprovacoes_estoque](tabelas.md#t-aprovacoes_estoque), [requisicoes_estoque](tabelas.md#t-requisicoes_estoque), [user_profiles](tabelas.md#t-user_profiles)
 - **Chama:** [_assert_rpc](funcoes.md#f-_assert_rpc), [auth_is_admin](funcoes.md#f-auth_is_admin), [auth_user_role](funcoes.md#f-auth_user_role)
 

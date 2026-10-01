@@ -1,8 +1,9 @@
-import React, { useState, useEffect, useCallback, useRef, lazy, Suspense } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef, lazy, Suspense } from 'react';
 import { useAuth } from './hooks/useAuth';
 import { useUserProfile } from './hooks/useUserProfile';
 import { hasSetor, allSetores, isConselheiro, setAulaSetoresConcedidos } from './lib/rbac';
 import { useSidebarBadges } from './hooks/useSidebarBadges';
+import { useContadorMesa } from './hooks/useContadorMesa';
 import { useIdleLogout } from './hooks/useIdleLogout';
 import { SessaoExpirandoModal } from './components/SessaoExpirandoModal';
 import { useAlarmeGlobal } from './hooks/useAlarmesTurma';
@@ -777,7 +778,12 @@ const SidebarNav = ({ activeView, navigate, openModules, toggleModule, handleSig
             RPC recorta (gerente só a unidade dele). */}
         {['admin', 'ceo', 'conselheiro', 'gerente'].includes(profile?.role) && (
           <button onPointerEnter={() => prefetchOnHover('mesa-gestor')} onPointerLeave={cancelPrefetchHover} onPointerDown={() => prefetchView('mesa-gestor')} onClick={() => { navigate('mesa-gestor'); onClose?.(); }} className={`flex items-center gap-3 p-2.5 rounded-xl text-sm font-semibold ${activeView === 'mesa-gestor' ? 'nav-item neu-pressed text-accent is-active' : 'nav-item neu-button text-gray-100'}`}>
-            <SquareKanban size={18} /><span>Mesa do Gestor</span>
+            <SquareKanban size={18} /><span className="flex-1 text-left">Mesa do Gestor</span>
+            {(badges?.['mesa-gestor'] ?? 0) > 0 && (
+              <span className="w-5 h-5 rounded-full bg-accent flex items-center justify-center text-[10px] font-black text-black shrink-0">
+                {badges['mesa-gestor'] > 9 ? '9+' : badges['mesa-gestor']}
+              </span>
+            )}
           </button>
         )}
         {((profile?.role === 'admin' && matrizMode) || profile?.role === 'gerente') && (
@@ -1214,7 +1220,11 @@ function LogMaxAppInner() {
   // Contagens de pendências por submódulo, exibidas como bolinha no Sidebar.
   // Passa filialAtiva pra filtrar badges em modo filial (evita ver pendências
   // de outras filiais). Modo Matriz (null) vê tudo.
-  const badges = useSidebarBadges(profile, filialAtiva);
+  const badgesFilas = useSidebarBadges(profile, filialAtiva);
+  // Mesa do Gestor (migr. 668): a bolinha é a coluna "Precisa de mim". Conta
+  // à parte, sem realtime — ver useContadorMesa.
+  const contadorMesa = useContadorMesa(profile, filialAtiva);
+  const badges = useMemo(() => ({ ...badgesFilas, 'mesa-gestor': contadorMesa }), [badgesFilas, contadorMesa]);
   const { config: aulaConfig } = useAulaConfig();
   // Atividade publicada pela Matriz (migr. 403). Vive no App, e não num FAB
   // como os avisos, porque todo FAB some no Modo Aula — justamente quando esta

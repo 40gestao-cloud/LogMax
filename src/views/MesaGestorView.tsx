@@ -11,6 +11,9 @@
 //   Parado na equipe — com outra pessoa da unidade (régua do listar_pendencias);
 //   Resolvido (7 dias) — o que eu decidi.
 //
+// Embaixo, "Minhas anotações" (migr. 668): o único lugar em que se escreve —
+// cartões livres e privados do gestor (components/MesaAnotacoes).
+//
 // Sem realtime de propósito (manada de 15/09): relê ao abrir, ao trocar de
 // unidade, ao voltar ao foco (no máximo 1×/min) e no botão Atualizar.
 
@@ -22,6 +25,8 @@ import { useFilial } from '../contexts/FilialContext';
 import { LoadingSpinner, FilialBadge } from '../components/ui';
 import type { FilialOp } from '../components/FilialSelector';
 import type { UserProfile } from '../hooks/useUserProfile';
+import { EVENTO_CONTAGEM_MESA } from '../hooks/useContadorMesa';
+import { MesaAnotacoes } from '../components/MesaAnotacoes';
 
 type Coluna = 'mim' | 'equipe' | 'feito';
 
@@ -42,6 +47,8 @@ type Cartao = {
   gravidade?: 'alta' | 'media' | 'baixa';
   resultado?: string;
   quando?: string;
+  /** 'matriz' = a tela só abre no modo Matriz (Central de Avaliação, requerimentos). */
+  modo?: 'matriz' | null;
 };
 
 type Mesa = { papel: string; escopo: string | null; gerado_em: string; cards: Cartao[] };
@@ -57,9 +64,6 @@ const COR_GRAVIDADE: Record<string, string> = {
 };
 const ROTULO_GRAVIDADE: Record<string, string> = { alta: 'Urgente', media: 'Atenção', baixa: 'Na fila' };
 const ORDEM_GRAVIDADE: Record<string, number> = { alta: 0, media: 1, baixa: 2 };
-
-// Telas que só abrem no modo Matriz (MATRIZ_ONLY_VIEWS do App).
-const VIEWS_DA_MATRIZ = new Set(['matriz-avaliacoes']);
 
 const BRL = (v: number) => Number(v).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 const dataBR = (iso: string) => iso.slice(0, 10).split('-').reverse().join('/');
@@ -174,7 +178,14 @@ export const MesaGestorView = ({ profile, showToast, onNavigate }: {
     if (error) { setErro(error.message); setMesa(null); return; }
     setErro(null);
     setMesa(data as Mesa);
-  }, [escopo]);
+    // A bolinha do menu é o mesmo número: anuncia em vez de recontar no banco.
+    // Só quando o recorte é o do menu (a unidade ativa) — filtrar a MaxLook
+    // aqui dentro não pode mudar o número que o menu da Matriz mostra.
+    if (ehGerente || escopo === filialAtiva) {
+      const mim = ((data as Mesa)?.cards ?? []).filter(c => c.coluna === 'mim').length;
+      window.dispatchEvent(new CustomEvent(EVENTO_CONTAGEM_MESA, { detail: mim }));
+    }
+  }, [escopo, ehGerente, filialAtiva]);
 
   useEffect(() => { void carregar(); }, [carregar]);
 
@@ -207,7 +218,7 @@ export const MesaGestorView = ({ profile, showToast, onNavigate }: {
   // na unidade do cartão antes — as telas operacionais trabalham por unidade.
   const abrir = (c: Cartao) => {
     if (!c.view) return;
-    if (VIEWS_DA_MATRIZ.has(c.view)) {
+    if (c.modo === 'matriz') {
       if (filialAtiva !== null && !ehGerente) escolherMatriz();
     } else if (!ehGerente && c.filial && (UNIDADES as string[]).includes(c.filial) && filialAtiva !== c.filial) {
       setFilialAtiva(c.filial as FilialOp);
@@ -267,6 +278,8 @@ export const MesaGestorView = ({ profile, showToast, onNavigate }: {
             vazio="Nenhuma decisão sua nos últimos 7 dias." mostrarFilial={mostrarFilial} onAbrir={abrir} />
         </div>
       )}
+
+      <MesaAnotacoes showToast={showToast} />
     </motion.div>
   );
 };
