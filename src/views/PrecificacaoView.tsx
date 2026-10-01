@@ -736,6 +736,9 @@ const PrecificacaoViewInner = ({ showToast, filial, onNavigate }: { showToast: a
   if (erro) return <EmptyState message={erro} />;
   if (!params) return carregando ? <LoadingSpinner /> : null;
   const d = deducoesDe(params);
+  // A aba DAS é só de quem edita: trocar para uma unidade em que não edita
+  // deixava o painel em branco, com nenhuma aba marcada.
+  const abaEf: Aba = aba === 'das' && !params.pode_editar ? 'tributacao' : aba;
 
   return (
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col gap-5 pb-6">
@@ -752,28 +755,28 @@ const PrecificacaoViewInner = ({ showToast, filial, onNavigate }: { showToast: a
       {/* Na ordem em que se faz: os parâmetros (imposto, taxas, despesas), o
           lucro de cada categoria e só então o preço de cada produto. */}
       <div role="tablist" className="flex flex-wrap gap-3">
-        <AbaComContador label="Tributação" cor="azul" icon={Landmark} ativa={aba === 'tributacao'} onClick={() => setAba('tributacao')} />
-        <AbaComContador label="Categorias" cor="dourado" icon={Tags} ativa={aba === 'lucro'} onClick={() => setAba('lucro')}
+        <AbaComContador label="Tributação" cor="azul" icon={Landmark} ativa={abaEf === 'tributacao'} onClick={() => setAba('tributacao')} />
+        <AbaComContador label="Categorias" cor="dourado" icon={Tags} ativa={abaEf === 'lucro'} onClick={() => setAba('lucro')}
           n={isLoading ? undefined : semLucro} title="Lucro líquido desejado por categoria. O número ao lado: categorias sem lucro definido — produto delas fica sem preço sugerido" />
-        <AbaComContador label="Produtos" cor="verde" icon={Package} ativa={aba === 'produtos'} onClick={() => setAba('produtos')}
+        <AbaComContador label="Produtos" cor="verde" icon={Package} ativa={abaEf === 'produtos'} onClick={() => setAba('produtos')}
           title="Preço praticado × preço pelo markup divisor, produto a produto" />
         {/* O DAS não forma preço: é a rotina do mês, depois de vender. */}
         {params.pode_editar && (
-          <AbaComContador label="DAS" cor="verdeEscuro" icon={Receipt} ativa={aba === 'das'} onClick={() => setAba('das')}
+          <AbaComContador label="DAS" cor="verdeEscuro" icon={Receipt} ativa={abaEf === 'das'} onClick={() => setAba('das')}
             title="Apuração mensal do Simples Nacional — gera a conta a pagar" />
         )}
       </div>
 
       <div className="neu-flat rounded-3xl p-4 sm:p-6 border border-white/5">
-        {aba === 'produtos' && <AbaProdutos p={params} d={d} categorias={categorias} filial={filial} />}
-        {aba === 'lucro' && (
+        {abaEf === 'produtos' && <AbaProdutos p={params} d={d} categorias={categorias} filial={filial} />}
+        {abaEf === 'lucro' && (
           <div className="flex flex-col gap-5">
             {params.vende_servico && <LucroServico p={params} salvar={salvarLucroServico} showToast={showToast} />}
             <AbaLucroCategorias categorias={categorias} isLoading={isLoading} reload={reload} d={d} showToast={showToast} />
           </div>
         )}
-        {aba === 'tributacao' && <AbaTributacao key={filial} p={params} salvar={salvar} showToast={showToast} onNavigate={onNavigate} />}
-        {aba === 'das' && params.pode_editar && <ApuracaoDas filial={params.filial} showToast={showToast} />}
+        {abaEf === 'tributacao' && <AbaTributacao key={filial} p={params} salvar={salvar} showToast={showToast} onNavigate={onNavigate} />}
+        {abaEf === 'das' && params.pode_editar && <ApuracaoDas filial={params.filial} showToast={showToast} />}
       </div>
     </motion.div>
   );

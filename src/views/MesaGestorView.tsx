@@ -440,7 +440,9 @@ export const MesaGestorView = ({ profile, showToast, onNavigate, onNavegarNaUnid
     let destino: FilialOp | null | undefined;
     if (ehGerente) destino = undefined;
     else if (c.modo === 'matriz') destino = null;
-    else if (c.filial && (UNIDADES as string[]).includes(c.filial)) destino = c.filial as FilialOp;
+    // Usuários não trabalha por unidade: trocar de unidade antes de abrir só
+    // mudaria o contexto do professor sem motivo.
+    else if (c.view !== 'usuarios' && c.filial && (UNIDADES as string[]).includes(c.filial)) destino = c.filial as FilialOp;
     if (destino === undefined || destino === filialAtiva || !onNavegarNaUnidade) { onNavigate(c.view); return; }
     showToast?.(destino ? `Entrando na ${destino}.` : 'Entrando na Matriz.', 'info');
     onNavegarNaUnidade(c.view, destino);

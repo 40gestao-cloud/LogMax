@@ -70,7 +70,11 @@ export function MesaAnotacoes({ showToast }: { showToast: any }) {
     if (a.coluna === para) return;
     // Vai para o fim da coluna de destino.
     const ultimo = Math.max(0, ...itens.filter(x => x.coluna === para).map(x => x.ordem));
-    void gravar(a.id, { coluna: para, ordem: ultimo + 1 });
+    // A data de conclusão é do banco (gatilho), mas a tela precisa dela já:
+    // sem isto a recém-feita ia para o FIM de "Feito" (ordenada pela data) e
+    // sem o "feito em", até a próxima leitura.
+    const concluida_em = para === 'feito' ? new Date().toISOString() : null;
+    void gravar(a.id, { coluna: para, ordem: ultimo + 1, concluida_em });
   };
 
   const excluir = async (a: Anotacao) => {
