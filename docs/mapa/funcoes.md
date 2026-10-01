@@ -1278,7 +1278,7 @@ Para cada função: quem a chama (tela, servidor, outra função, gatilho), o qu
 <a id="f-contar_minha_mesa"></a>
 ## contar_minha_mesa (RPC, SECURITY DEFINER)
 
-- **Telas que chamam:** [Mesa do Gestor](telas.md#s-mesa-gestor)
+- **Telas que chamam:** [Mesa gestor *(rota mesa-gestor)*](telas.md#s-mesa-gestor)
 - **Grava:** —
 - **Chama:** [minha_mesa](funcoes.md#f-minha_mesa)
 
@@ -3136,7 +3136,7 @@ Para cada função: quem a chama (tela, servidor, outra função, gatilho), o qu
 <a id="f-minha_mesa"></a>
 ## minha_mesa (RPC, SECURITY DEFINER)
 
-- **Telas que chamam:** [Mesa do Gestor](telas.md#s-mesa-gestor)
+- **Telas que chamam:** [Mesa gestor *(rota mesa-gestor)*](telas.md#s-mesa-gestor)
 - **Chamada por outras funções:** [contar_minha_mesa](funcoes.md#f-contar_minha_mesa)
 - **Grava:** —
 - **Lê:** [aprovacoes_compras](tabelas.md#t-aprovacoes_compras), [aprovacoes_estoque](tabelas.md#t-aprovacoes_estoque), [avaliacoes_matriz](tabelas.md#t-avaliacoes_matriz), [candidaturas](tabelas.md#t-candidaturas), [ciclo_tarefa_avaliacoes](tabelas.md#t-ciclo_tarefa_avaliacoes), [ciclo_tarefa_participantes](tabelas.md#t-ciclo_tarefa_participantes), [ciclo_tarefas](tabelas.md#t-ciclo_tarefas), [contratos](tabelas.md#t-contratos), [demissoes](tabelas.md#t-demissoes), [ferias](tabelas.md#t-ferias), [funcionarios](tabelas.md#t-funcionarios), [justificativas_falta](tabelas.md#t-justificativas_falta), [marketing_promocoes](tabelas.md#t-marketing_promocoes), [matriz_tarefa_participantes](tabelas.md#t-matriz_tarefa_participantes), [matriz_tarefas](tabelas.md#t-matriz_tarefas), [movimentacoes_carreira](tabelas.md#t-movimentacoes_carreira), [orcamentos](tabelas.md#t-orcamentos), [pedidos_venda](tabelas.md#t-pedidos_venda), [produtos](tabelas.md#t-produtos), [requerimentos](tabelas.md#t-requerimentos), [requisicoes](tabelas.md#t-requisicoes), [requisicoes_estoque](tabelas.md#t-requisicoes_estoque), [user_profiles](tabelas.md#t-user_profiles), [vagas](tabelas.md#t-vagas)

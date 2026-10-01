@@ -2701,7 +2701,7 @@
    "apis": []
   },
   "mesa-gestor": {
-   "nome": "Mesa do Gestor",
+   "nome": "Mesa gestor *(rota mesa-gestor)*",
    "componente": "MesaGestorView",
    "arquivo": "src/views/MesaGestorView.tsx",
    "le": [

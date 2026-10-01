@@ -4,6 +4,7 @@ import { useUserProfile } from './hooks/useUserProfile';
 import { hasSetor, allSetores, isConselheiro, setAulaSetoresConcedidos } from './lib/rbac';
 import { useSidebarBadges } from './hooks/useSidebarBadges';
 import { useContadorMesa } from './hooks/useContadorMesa';
+import { nomeDaMesa } from './lib/mesaGestor';
 import { useIdleLogout } from './hooks/useIdleLogout';
 import { SessaoExpirandoModal } from './components/SessaoExpirandoModal';
 import { useAlarmeGlobal } from './hooks/useAlarmesTurma';
@@ -705,6 +706,21 @@ const SidebarNav = ({ activeView, navigate, openModules, toggleModule, handleSig
             <UserCog size={18} /><span>Usuários</span>
           </button>
         )}
+        {/* Mesa do Gestor (migr. 667/668): "o que depende de mim agora?" — junta
+            as filas que já existem (precisa de mim / parado na equipe /
+            resolvido) e as anotações do gestor. Os quatro papéis de gestão, nos
+            dois modos: a RPC recorta (gerente só a unidade dele). Logo abaixo
+            de Usuários, e o nome segue o cargo (Mesa do CEO, do Gerente…). */}
+        {['admin', 'ceo', 'conselheiro', 'gerente'].includes(profile?.role) && (
+          <button onPointerEnter={() => prefetchOnHover('mesa-gestor')} onPointerLeave={cancelPrefetchHover} onPointerDown={() => prefetchView('mesa-gestor')} onClick={() => { navigate('mesa-gestor'); onClose?.(); }} className={`flex items-center gap-3 p-2.5 rounded-xl text-sm font-semibold ${activeView === 'mesa-gestor' ? 'nav-item neu-pressed text-accent is-active' : 'nav-item neu-button text-gray-100'}`}>
+            <SquareKanban size={18} /><span className="flex-1 text-left">{nomeDaMesa(profile?.role)}</span>
+            {(badges?.['mesa-gestor'] ?? 0) > 0 && (
+              <span className="w-5 h-5 rounded-full bg-accent flex items-center justify-center text-[10px] font-black text-black shrink-0">
+                {badges['mesa-gestor'] > 9 ? '9+' : badges['mesa-gestor']}
+              </span>
+            )}
+          </button>
+        )}
         {/* Meu Crachá: o QR que o aluno mostra para ter a presença registrada.
             É crachá DELE — ligado à pessoa, não à tela. Por isso some para o
             professor: quem lê os crachás da turma faz isso por Crachá Virtual,
@@ -772,20 +788,6 @@ const SidebarNav = ({ activeView, navigate, openModules, toggleModule, handleSig
             contradiz o contexto que ele acabou de escolher. O gerente nunca
             entra em Matriz, então para ele é o contrário. `viewPermitidaNoModo`
             repete a mesma régua — o menu não é a única porta. */}
-        {/* Mesa do Gestor (migr. 667): "o que depende de mim agora?" — junta as
-            filas que já existem em três colunas (precisa de mim / parado na
-            equipe / resolvido). Os quatro papéis de gestão, nos dois modos: a
-            RPC recorta (gerente só a unidade dele). */}
-        {['admin', 'ceo', 'conselheiro', 'gerente'].includes(profile?.role) && (
-          <button onPointerEnter={() => prefetchOnHover('mesa-gestor')} onPointerLeave={cancelPrefetchHover} onPointerDown={() => prefetchView('mesa-gestor')} onClick={() => { navigate('mesa-gestor'); onClose?.(); }} className={`flex items-center gap-3 p-2.5 rounded-xl text-sm font-semibold ${activeView === 'mesa-gestor' ? 'nav-item neu-pressed text-accent is-active' : 'nav-item neu-button text-gray-100'}`}>
-            <SquareKanban size={18} /><span className="flex-1 text-left">Mesa do Gestor</span>
-            {(badges?.['mesa-gestor'] ?? 0) > 0 && (
-              <span className="w-5 h-5 rounded-full bg-accent flex items-center justify-center text-[10px] font-black text-black shrink-0">
-                {badges['mesa-gestor'] > 9 ? '9+' : badges['mesa-gestor']}
-              </span>
-            )}
-          </button>
-        )}
         {((profile?.role === 'admin' && matrizMode) || profile?.role === 'gerente') && (
           <button onPointerEnter={() => prefetchOnHover('pendencias')} onPointerLeave={cancelPrefetchHover} onPointerDown={() => prefetchView('pendencias')} onClick={() => { navigate('pendencias'); onClose?.(); }} className={`flex items-center gap-3 p-2.5 rounded-xl text-sm font-semibold ${activeView === 'pendencias' ? 'nav-item neu-pressed text-accent is-active' : 'nav-item neu-button text-gray-100'}`}>
             <Hourglass size={18} /><span>Pendências</span>
@@ -1206,16 +1208,26 @@ function LogMaxAppInner() {
   // — Matriz → Filial mantinha a view da Matriz. O sentinel distingue
   // "nunca escolhi" de "escolhi Matriz", que é justamente o que faltava.
   const filialAnteriorRef = useRef<FilialOp | null | 'UNSET'>(escolheu ? filialAtiva : 'UNSET');
+  // Troca de unidade pedida JUNTO com uma tela de destino (o cartão da Mesa
+  // do Gestor): a troca abre essa tela em vez de cair na Início.
+  const destinoAposTrocaRef = useRef<string | null>(null);
   if (escolheu && filialAnteriorRef.current !== filialAtiva) {
     const primeiraEscolha = filialAnteriorRef.current === 'UNSET';
     filialAnteriorRef.current = filialAtiva;
     if (!primeiraEscolha) {
-      setActiveView('inicio');
+      setActiveView(destinoAposTrocaRef.current ?? 'inicio');
+      destinoAposTrocaRef.current = null;
       // A pilha era da unidade anterior: voltar para ela abria a tela antiga
       // já na unidade nova.
       setViewHistory([]);
     }
   }
+  /** Abre `view` dentro de `unidade` (null = Matriz). Mesma unidade: só navega. */
+  const navegarNaUnidade = useCallback((view: string, unidade: FilialOp | null) => {
+    if (unidade === filialAtiva) { navigate(view); return; }
+    destinoAposTrocaRef.current = view;
+    if (unidade === null) escolherMatriz(); else setFilialAtiva(unidade);
+  }, [filialAtiva, navigate, escolherMatriz, setFilialAtiva]);
 
   // Contagens de pendências por submódulo, exibidas como bolinha no Sidebar.
   // Passa filialAtiva pra filtrar badges em modo filial (evita ver pendências
@@ -1713,7 +1725,7 @@ function LogMaxAppInner() {
       case 'documentos':                   return <DocumentosView showToast={st} profile={profile} />;
       case 'contratos':                    return <ContratosView showToast={st} profile={profile} />;
       case 'pendencias':                   return <PendenciasView showToast={st} profile={profile} />;
-      case 'mesa-gestor':                  return <MesaGestorView showToast={st} profile={profile} onNavigate={navigate} />;
+      case 'mesa-gestor':                  return <MesaGestorView showToast={st} profile={profile} onNavigate={navigate} onNavegarNaUnidade={navegarNaUnidade} />;
       default:
         return (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex h-full items-center justify-center flex-col gap-4 text-center">

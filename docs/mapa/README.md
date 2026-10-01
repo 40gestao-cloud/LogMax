@@ -160,7 +160,7 @@
 - [Conteúdo](telas.md#s-matriz-conteudo)
 - [Max Show](telas.md#s-max-show)
 - [Max work show *(rota max-work-show)*](telas.md#s-max-work-show)
-- [Mesa do Gestor](telas.md#s-mesa-gestor)
+- [Mesa gestor *(rota mesa-gestor)*](telas.md#s-mesa-gestor)
 - [Metas *(rota metas)*](telas.md#s-metas)
 - [Meu Crachá](telas.md#s-meu-cracha)
 - [Minhas pesquisas *(rota minhas-pesquisas)*](telas.md#s-minhas-pesquisas)

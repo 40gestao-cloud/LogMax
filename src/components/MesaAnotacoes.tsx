@@ -97,14 +97,14 @@ export function MesaAnotacoes({ showToast }: { showToast: any }) {
   const hoje = hojeAcre();
 
   return (
-    <section className="rounded-3xl border border-white/10 bg-black/20 flex flex-col">
-      <header className="flex flex-wrap items-center gap-3 px-4 py-3 border-b border-white/10">
-        <StickyNote size={16} className="text-accent" />
-        <h3 className="text-xs font-black uppercase tracking-widest text-accent flex-1">Minhas anotações</h3>
-        <span className="text-[11px] text-gray-500">só você vê</span>
-      </header>
+    // Vive dentro da aba "Minhas anotações" da Mesa: o título é a própria aba.
+    <section className="flex flex-col gap-3">
+      <p className="text-xs text-gray-500 flex items-center gap-1.5">
+        <StickyNote size={13} className="text-accent" />
+        Lembretes seus, para organizar o dia. Só você vê — não é tarefa para a equipe.
+      </p>
 
-      <form className="flex flex-wrap items-center gap-2 px-4 pt-3" onSubmit={e => { e.preventDefault(); void adicionar(); }}>
+      <form className="flex flex-wrap items-center gap-2" onSubmit={e => { e.preventDefault(); void adicionar(); }}>
         <input type="text" value={texto} onChange={e => setTexto(e.target.value)} maxLength={500}
           placeholder="Anotar algo para fazer… (ex.: cobrar o fornecedor da TechMax)"
           className="neu-input py-2 px-3 rounded-xl text-sm flex-1 min-w-[200px]" />
@@ -116,7 +116,7 @@ export function MesaAnotacoes({ showToast }: { showToast: any }) {
         </button>
       </form>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-3 p-4">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
         {COLUNAS.map((col, ci) => {
           const daColuna = itens.filter(a => a.coluna === col.id)
             .sort((a, b) => col.id === 'feito'
