@@ -20,15 +20,19 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { motion } from 'motion/react';
-import { RefreshCw, ChevronRight, ChevronDown, Inbox, Users, CheckCircle2, Info, LayoutGrid, StickyNote } from 'lucide-react';
+import { Sparkles, FileDown, RefreshCw, ChevronRight, ChevronDown, Inbox, Users, CheckCircle2, Info, LayoutGrid, StickyNote } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useFilial } from '../contexts/FilialContext';
-import { LoadingSpinner, AbaComContador } from '../components/ui';
+import { LoadingSpinner, AbaComContador, CardContador } from '../components/ui';
 import type { FilialOp } from '../components/FilialSelector';
 import type { UserProfile } from '../hooks/useUserProfile';
 import { EVENTO_CONTAGEM_MESA } from '../hooks/useContadorMesa';
 import { MesaAnotacoes } from '../components/MesaAnotacoes';
 import { nomeDaMesa } from '../lib/mesaGestor';
+import { authFetch } from '../lib/authFetch';
+import { formatDataHoraBR } from '../lib/dates';
+import { exportPendenciasPDF, type PendenciaLinha, type PendenciaLeitura } from '../lib/pendenciasPdf';
+import { LeituraPendencias } from '../components/LeituraPendencias';
 
 type Coluna = 'mim' | 'equipe' | 'feito';
 type Gravidade = 'alta' | 'media' | 'baixa';
@@ -121,44 +125,135 @@ function CartaoMim({ c, mostrarFilial, onAbrir }: { c: Cartao; mostrarFilial: bo
   );
 }
 
-/** Um tipo de pendência da equipe: cabeçalho com contagem e, aberto, as linhas. */
-function GrupoEquipe({ etapa, itens, mostrarFilial, onAbrir, abertoInicial }: {
-  etapa: string; itens: Cartao[]; mostrarFilial: boolean; onAbrir: (c: Cartao) => void; abertoInicial: boolean;
+// Fila sem dono: `_pendencia_responsaveis` devolve esta frase quando ninguém
+// na unidade responde pelo setor. É o pior caso da coluna — o documento fica
+// parado para sempre e ninguém é cobrado —, por isso sai em vermelho.
+const ehOrfa = (r?: string | null) => !!r && r.startsWith('ninguém alocado');
+
+type Agrupamento = 'tipo' | 'responsavel';
+
+/** Quem responde pelo item, com a fila órfã em destaque. */
+function Responsavel({ nome, className = '' }: { nome?: string | null; className?: string }) {
+  if (!nome) return null;
+  return ehOrfa(nome)
+    ? <span className={`text-red-400 font-semibold ${className}`}>ninguém alocado</span>
+    : <span className={`text-gray-400 ${className}`} title={nome}>com {nome}</span>;
+}
+
+// Cor da faixa lateral do grupo: a pior gravidade dele.
+const FAIXA: Record<Gravidade, string> = {
+  alta: 'before:bg-red-500',
+  media: 'before:bg-amber-400',
+  baixa: 'before:bg-zinc-600',
+};
+
+/**
+ * Um grupo de "Parado na equipe", em cartão. Cabeçalho em duas linhas: o que
+ * é (e quantos, quantos urgentes) e, embaixo, o próximo passo e com quem está.
+ * Aberto, vira tabela com colunas de verdade — documento, unidade, valor,
+ * vencimento e há quanto tempo — em vez de um código solto e um número
+ * lá do outro lado da linha.
+ *
+ * Por TIPO o cabeçalho é a pendência e o responsável aparece nele quando é o
+ * mesmo para o grupo todo; misturando unidades, desce para a linha. Por
+ * RESPONSÁVEL o cabeçalho é a pessoa e a linha diz o que está com ela.
+ */
+function GrupoEquipe({ titulo, itens, agrupamento, mostrarFilial, onAbrir, aberto, onAlternar }: {
+  titulo: string; itens: Cartao[]; agrupamento: Agrupamento; mostrarFilial: boolean;
+  onAbrir: (c: Cartao) => void; aberto: boolean; onAlternar: () => void;
 }) {
-  const [aberto, setAberto] = useState(abertoInicial);
   const pior = itens.reduce<Gravidade>((p, c) => (ORDEM_GRAVIDADE[c.gravidade ?? 'baixa'] < ORDEM_GRAVIDADE[p] ? (c.gravidade ?? 'baixa') : p), 'baixa');
   const urgentes = itens.filter(c => c.gravidade === 'alta').length;
+  const atencao = itens.filter(c => c.gravidade === 'media').length;
+  const maisVelho = itens.reduce((m, c) => Math.max(m, c.dias_parado ?? 0), 0);
+  const porResp = agrupamento === 'responsavel';
+  const responsaveis = new Set(itens.map(c => c.responsavel ?? ''));
+  const respUnico = !porResp && responsaveis.size === 1 ? itens[0].responsavel : null;
+  const acoes = new Set(itens.map(c => c.acao ?? ''));
+  const acaoUnica = !porResp && acoes.size === 1 ? itens[0].acao : null;
+  const orfa = porResp && ehOrfa(itens[0].responsavel);
+  const temValor = itens.some(c => c.valor != null && Number(c.valor) > 0);
+  const temVenc = itens.some(c => !!c.vencimento);
+  const colunaResp = !porResp && !respUnico;
+
   return (
-    <div className="rounded-xl border border-white/10 overflow-hidden">
-      <button type="button" onClick={() => setAberto(a => !a)}
-        className="w-full flex items-center gap-2.5 px-3 py-2.5 text-left hover:bg-white/[0.04] transition-colors">
-        <span className={`w-2 h-2 rounded-full shrink-0 ${PONTO[pior]}`} />
-        <span className="text-xs font-semibold text-gray-200 flex-1 min-w-0 truncate">{etapa}</span>
-        {/* Todos urgentes, o ponto vermelho já diz; o número só quando é parte. */}
-        {urgentes > 0 && urgentes < itens.length && (
-          <span className="text-[10px] font-bold text-red-400 tabular-nums">{urgentes} urgente{urgentes > 1 ? 's' : ''}</span>
-        )}
-        <span className="text-xs font-bold tabular-nums text-gray-400 w-7 text-right">{itens.length}</span>
-        {aberto ? <ChevronDown size={14} className="text-gray-500" /> : <ChevronRight size={14} className="text-gray-500" />}
+    <div className={`relative rounded-2xl border bg-white/[0.02] overflow-hidden before:absolute before:left-0 before:top-0 before:bottom-0 before:w-1 ${FAIXA[pior]} ${orfa ? 'border-red-500/40' : 'border-white/10'}`}>
+      <button type="button" onClick={onAlternar} aria-expanded={aberto}
+        className="w-full flex items-center gap-3 pl-5 pr-3 py-3 text-left hover:bg-white/[0.03] transition-colors">
+        <div className="min-w-0 flex-1">
+          <p className={`text-sm font-semibold truncate ${orfa ? 'text-red-400' : 'text-gray-100'}`} title={titulo}>
+            {orfa ? `Ninguém alocado${mostrarFilial && itens[0].filial ? ` — ${itens[0].filial}` : ''}` : titulo}
+          </p>
+          <p className="text-[11px] text-gray-500 truncate mt-0.5">
+            {acaoUnica && <span className="text-gray-400">{acaoUnica}</span>}
+            {acaoUnica && respUnico && <span> · </span>}
+            {respUnico && <Responsavel nome={respUnico} />}
+            {porResp && !orfa && <span>{itens.length === 1 ? '1 pendência' : `${itens.length} pendências`} com esta equipe</span>}
+            {colunaResp && !acaoUnica && <span>responsáveis diferentes por unidade</span>}
+            <span className="text-gray-600"> · mais antigo há {maisVelho === 0 ? 'hoje' : `${maisVelho}d`}</span>
+          </p>
+        </div>
+        <div className="flex items-center gap-1.5 shrink-0">
+          {urgentes > 0 && (
+            <span className="rounded-full bg-red-500/15 text-red-300 border border-red-500/30 px-2 py-0.5 text-[10px] font-bold tabular-nums">
+              {urgentes} urgente{urgentes > 1 ? 's' : ''}
+            </span>
+          )}
+          {atencao > 0 && (
+            <span className="hidden sm:inline rounded-full bg-amber-400/10 text-amber-300 border border-amber-400/30 px-2 py-0.5 text-[10px] font-bold tabular-nums">
+              {atencao} atenção
+            </span>
+          )}
+          <span className="rounded-lg bg-white/[0.06] text-gray-200 px-2 py-0.5 text-xs font-black tabular-nums min-w-[2rem] text-center">{itens.length}</span>
+          {aberto ? <ChevronDown size={15} className="text-gray-500" /> : <ChevronRight size={15} className="text-gray-500" />}
+        </div>
       </button>
+
       {aberto && (
-        <ul className="border-t border-white/10 divide-y divide-white/5">
-          {itens.map(c => (
-            <li key={`${c.etapa}-${c.documento_id}`}>
-              <button type="button" onClick={() => onAbrir(c)} disabled={!c.view}
-                title={c.responsavel ? `Com: ${c.responsavel}` : undefined}
-                className="w-full flex items-center gap-3 px-3 py-2 text-left hover:bg-white/[0.04] transition-colors disabled:cursor-default">
-                <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${PONTO[c.gravidade ?? 'baixa']}`} />
-                <span className="text-xs text-gray-300 truncate flex-1 min-w-0">{c.documento ?? '—'}</span>
-                {mostrarFilial && c.filial && <span className="text-[10px] text-gray-500 shrink-0 hidden sm:inline">{c.filial}</span>}
-                {c.valor != null && Number(c.valor) > 0 && (
-                  <span className="text-[11px] text-gray-400 tabular-nums shrink-0 hidden sm:inline">{BRL(Number(c.valor))}</span>
-                )}
-                <span className={`text-[11px] font-bold tabular-nums shrink-0 w-10 text-right ${TEXTO_DIAS[c.gravidade ?? 'baixa']}`}>{dias(c.dias_parado)}</span>
-              </button>
-            </li>
-          ))}
-        </ul>
+        <div className="border-t border-white/10 overflow-x-auto">
+          <table className="w-full text-xs">
+            <thead>
+              <tr className="text-[10px] uppercase tracking-widest text-gray-500">
+                <th className="text-left font-bold pl-5 pr-3 py-2">{porResp ? 'Pendência' : 'Documento'}</th>
+                {colunaResp && <th className="text-left font-bold px-3 py-2 hidden md:table-cell">Com</th>}
+                {mostrarFilial && <th className="text-left font-bold px-3 py-2 hidden sm:table-cell">Unidade</th>}
+                {temValor && <th className="text-right font-bold px-3 py-2 hidden sm:table-cell">Valor</th>}
+                {temVenc && <th className="text-center font-bold px-3 py-2 hidden md:table-cell">Vence</th>}
+                <th className="text-right font-bold px-3 py-2">Parado</th>
+                <th className="w-8" />
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-white/5">
+              {itens.map(c => {
+                const g = c.gravidade ?? 'baixa';
+                return (
+                  <tr key={`${c.etapa}-${c.documento_id}`} onClick={() => onAbrir(c)}
+                    className={`group ${c.view ? 'cursor-pointer hover:bg-white/[0.04]' : ''}`}>
+                    <td className="pl-5 pr-3 py-2 max-w-0 w-full">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${PONTO[g]}`} />
+                        <span className="min-w-0">
+                          <span className="block text-gray-200 truncate">{porResp ? c.etapa : (c.documento ?? '—')}</span>
+                          {porResp && c.documento && <span className="block text-[11px] text-gray-500 truncate">{c.documento}</span>}
+                        </span>
+                      </div>
+                    </td>
+                    {colunaResp && <td className="px-3 py-2 hidden md:table-cell max-w-[14rem] truncate"><Responsavel nome={c.responsavel} /></td>}
+                    {mostrarFilial && <td className="px-3 py-2 text-gray-400 hidden sm:table-cell whitespace-nowrap">{c.filial ?? '—'}</td>}
+                    {temValor && (
+                      <td className="px-3 py-2 text-right text-gray-300 tabular-nums hidden sm:table-cell whitespace-nowrap">
+                        {c.valor != null && Number(c.valor) > 0 ? BRL(Number(c.valor)) : '—'}
+                      </td>
+                    )}
+                    {temVenc && <td className="px-3 py-2 text-center text-gray-400 tabular-nums hidden md:table-cell">{c.vencimento ? dataBR(c.vencimento) : '—'}</td>}
+                    <td className={`px-3 py-2 text-right font-bold tabular-nums whitespace-nowrap ${TEXTO_DIAS[g]}`}>{dias(c.dias_parado)}</td>
+                    <td className="pr-3 py-2 text-gray-600 group-hover:text-accent">{c.view && <ChevronRight size={14} />}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
       )}
     </div>
   );
@@ -174,12 +269,23 @@ export const MesaGestorView = ({ profile, showToast, onNavigate, onNavegarNaUnid
   const { filialAtiva } = useFilial();
   const papel = profile?.role ?? '';
   const ehGerente = papel === 'gerente';
+  const ehAdmin = papel === 'admin';
   // Na Matriz (filialAtiva null) admin/CEO/conselheiro escolhem a unidade aqui;
   // dentro de uma filial, a mesa é dela. Gerente: a RPC já recorta.
   const [recorte, setRecorte] = useState<FilialOp | null>(null);
   const escopo = ehGerente ? null : (filialAtiva ?? recorte);
   const [aba, setAba] = useState<'mesa' | 'anotacoes'>('mesa');
   const [subAba, setSubAba] = useState<SubAba>('mim');
+  const [agrupamento, setAgrupamento] = useState<Agrupamento>('tipo');
+  const [filtroGrav, setFiltroGrav] = useState<'' | 'alta' | 'media'>('');
+  const [abertos, setAbertos] = useState<Record<string, boolean>>({});
+  // Leitura do MaxAI e PDF (só admin — a Mesa dele absorveu a tela Pendências
+  // da Matriz). Mesma rota e mesmo PDF da tela Pendências.
+  const [leitura, setLeitura] = useState<PendenciaLeitura>(null);
+  const [modeloIA, setModeloIA] = useState('');
+  const [lidasIA, setLidasIA] = useState<number | null>(null);
+  const [lendoIA, setLendoIA] = useState(false);
+  const [gerandoPdf, setGerandoPdf] = useState(false);
 
   const [mesa, setMesa] = useState<Mesa | null>(null);
   const [erro, setErro] = useState<string | null>(null);
@@ -207,6 +313,60 @@ export const MesaGestorView = ({ profile, showToast, onNavigate, onNavegarNaUnid
   }, [escopo, ehGerente, filialAtiva]);
 
   useEffect(() => { void carregar(); }, [carregar]);
+  // Opinião sobre a SuperMax embaixo da mesa da TechMax seria pior que nenhuma.
+  useEffect(() => { setLeitura(null); setLidasIA(null); }, [escopo]);
+
+  const pedirLeitura = useCallback(async () => {
+    setLendoIA(true);
+    try {
+      const resp = await authFetch('/api/ai-aula-atividade', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ modo: 'pendencias', filial: escopo }),
+      });
+      const json = await resp.json();
+      if (!resp.ok) { showToast?.(json?.error || 'O MaxAI não conseguiu ler as pendências.', 'error'); return; }
+      if (!json.leitura) { showToast?.('Nada parado para o MaxAI ler.', 'info'); return; }
+      setLeitura(json.leitura as PendenciaLeitura);
+      setModeloIA(String(json.modelo_ia ?? ''));
+      setLidasIA(Number(json.itens_analisados ?? 0));
+    } catch (e) {
+      showToast?.(e instanceof Error ? e.message : 'Falha ao falar com o MaxAI.', 'error');
+    } finally {
+      setLendoIA(false);
+    }
+  }, [escopo, showToast]);
+
+  // O PDF é o relatório de pendências de sempre (lista completa do
+  // listar_pendencias + a leitura, se houver) — busca as linhas na hora.
+  const baixarPdf = useCallback(async () => {
+    if (!supabase) return;
+    setGerandoPdf(true);
+    try {
+      const { data, error } = await supabase.rpc('listar_pendencias', { p_filial: escopo });
+      if (error) throw new Error(error.message);
+      const linhas = (data ?? []) as PendenciaLinha[];
+      if (linhas.length === 0) { showToast?.('Nada parado para o relatório.', 'info'); return; }
+      await exportPendenciasPDF(
+        {
+          filial: escopo,
+          geradoEm: formatDataHoraBR(new Date().toISOString()),
+          linhas,
+          leitura,
+          modeloIA: modeloIA || 'MaxAI',
+          lidasPelaIA: lidasIA,
+        },
+        `pendencias-${(escopo || 'todas-as-unidades').toLowerCase().replace(/\s+/g, '-')}`,
+        'download',
+        profile,
+        showToast as any,
+      );
+    } catch (e) {
+      showToast?.(e instanceof Error ? e.message : 'Falha ao gerar o PDF.', 'error');
+    } finally {
+      setGerandoPdf(false);
+    }
+  }, [escopo, leitura, modeloIA, lidasIA, profile, showToast]);
 
   useEffect(() => {
     const refazer = () => {
@@ -221,24 +381,56 @@ export const MesaGestorView = ({ profile, showToast, onNavigate, onNavegarNaUnid
     return () => { window.removeEventListener('focus', refazer); document.removeEventListener('visibilitychange', refazer); };
   }, [carregar]);
 
-  const { mim, grupos, totalEquipe, feito } = useMemo(() => {
+  const { mim, secoes, equipeTodas, totalEquipe, feito, orfas } = useMemo(() => {
     const cards = mesa?.cards ?? [];
     const ordem = (a: Cartao, b: Cartao) =>
       (ORDEM_GRAVIDADE[a.gravidade ?? 'baixa'] - ORDEM_GRAVIDADE[b.gravidade ?? 'baixa'])
       || ((b.dias_parado ?? 0) - (a.dias_parado ?? 0));
-    const equipe = cards.filter(c => c.coluna === 'equipe').sort(ordem);
-    // Agrupa por tipo de pendência; o grupo mais grave (e depois o maior) sobe.
-    const porEtapa = new Map<string, Cartao[]>();
-    equipe.forEach(c => porEtapa.set(c.etapa, [...(porEtapa.get(c.etapa) ?? []), c]));
-    const grupos = [...porEtapa.entries()].sort(([, a], [, b]) =>
-      (ORDEM_GRAVIDADE[a[0].gravidade ?? 'baixa'] - ORDEM_GRAVIDADE[b[0].gravidade ?? 'baixa']) || b.length - a.length);
+    const equipeTodas = cards.filter(c => c.coluna === 'equipe').sort(ordem);
+    const equipe = filtroGrav ? equipeTodas.filter(c => c.gravidade === filtroGrav) : equipeTodas;
+    // Por tipo: a pendência. Por responsável: a pessoa (ou o grupo de pessoas
+    // do setor). Fila órfã separa por unidade — "ninguém" da SuperMax e da
+    // MaxLook são buracos diferentes.
+    const chave = (c: Cartao) => agrupamento === 'tipo'
+      ? c.etapa
+      : ehOrfa(c.responsavel) ? `${c.responsavel} · ${c.filial ?? ''}` : (c.responsavel || 'sem responsável');
+    const mapa = new Map<string, Cartao[]>();
+    equipe.forEach(c => mapa.set(chave(c), [...(mapa.get(chave(c)) ?? []), c]));
+    const porGrav = (a: Cartao[], b: Cartao[]) =>
+      (ORDEM_GRAVIDADE[a[0].gravidade ?? 'baixa'] - ORDEM_GRAVIDADE[b[0].gravidade ?? 'baixa']) || b.length - a.length;
+    const grupos = [...mapa.entries()].sort(([, a], [, b]) =>
+      (agrupamento === 'responsavel' ? Number(ehOrfa(b[0].responsavel)) - Number(ehOrfa(a[0].responsavel)) : 0) || porGrav(a, b));
+    // Por tipo, os grupos se juntam em seções por área (Compras, Financeiro…):
+    // a seção com mais urgentes sobe. Por responsável não há seção — a pessoa
+    // já é o agrupamento.
+    let secoes: { area: string | null; grupos: [string, Cartao[]][] }[];
+    if (agrupamento === 'tipo') {
+      const porArea = new Map<string, [string, Cartao[]][]>();
+      grupos.forEach(g => porArea.set(g[1][0].area, [...(porArea.get(g[1][0].area) ?? []), g]));
+      const urg = (gs: [string, Cartao[]][]) => gs.reduce((n, [, i]) => n + i.filter(c => c.gravidade === 'alta').length, 0);
+      secoes = [...porArea.entries()]
+        .sort(([, a], [, b]) => urg(b) - urg(a) || b.reduce((n, [, i]) => n + i.length, 0) - a.reduce((n, [, i]) => n + i.length, 0))
+        .map(([area, gs]) => ({ area, grupos: gs }));
+    } else {
+      secoes = [{ area: null, grupos }];
+    }
     return {
       mim: cards.filter(c => c.coluna === 'mim').sort(ordem),
-      grupos,
-      totalEquipe: equipe.length,
+      secoes,
+      equipeTodas,
+      totalEquipe: equipeTodas.length,
       feito: cards.filter(c => c.coluna === 'feito'),
+      orfas: equipeTodas.filter(c => ehOrfa(c.responsavel)).length,
     };
-  }, [mesa]);
+  }, [mesa, agrupamento, filtroGrav]);
+
+  const resumoEquipe = useMemo(() => ({
+    urgentes: equipeTodas.filter(c => c.gravidade === 'alta').length,
+    atencao: equipeTodas.filter(c => c.gravidade === 'media').length,
+    maisAntigo: equipeTodas.reduce((m, c) => Math.max(m, c.dias_parado ?? 0), 0),
+  }), [equipeTodas]);
+  const chavesGrupos = secoes.flatMap(sec => sec.grupos.map(([k]) => `${agrupamento}-${k}`));
+  const algumAberto = chavesGrupos.some(k => abertos[k]);
 
   // O cartão leva à tela do documento. Admin/CEO/conselheiro entram antes na
   // unidade do cartão (as telas operacionais trabalham por unidade) ou na
@@ -285,6 +477,19 @@ export const MesaGestorView = ({ profile, showToast, onNavigate, onNavegarNaUnid
               ))}
             </div>
           )}
+          {ehAdmin && (
+            <>
+              <button type="button" onClick={pedirLeitura} disabled={lendoIA}
+                // Cor do Claude (terracota) — a mesma em todo botão que chama o MaxAI.
+                className="inline-flex items-center gap-1.5 rounded-xl border border-[#B5573A] bg-[#C96442] hover:bg-[#B5573A] px-3 py-1.5 text-xs font-bold text-white disabled:opacity-60 transition-colors">
+                <Sparkles size={13} className={lendoIA ? 'animate-pulse' : ''} /> {lendoIA ? 'Lendo…' : 'Leitura do MaxAI'}
+              </button>
+              <button type="button" onClick={baixarPdf} disabled={gerandoPdf}
+                className="btn-solido btn-solido--vermelho !py-1.5 !px-3 !text-xs disabled:opacity-60">
+                <FileDown size={13} /> {gerandoPdf ? 'Gerando…' : 'Baixar PDF'}
+              </button>
+            </>
+          )}
           <button type="button" onClick={() => { ultimoFoco.current = Date.now(); void carregar(); }} disabled={carregando}
             title={mesa?.gerado_em ? `Atualizado às ${horaBR(mesa.gerado_em)}` : 'Atualizar'}
             className="inline-flex items-center gap-1.5 rounded-xl border border-white/10 bg-white/[0.04] hover:bg-white/[0.08] px-3 py-1.5 text-xs font-semibold text-gray-300 disabled:opacity-60">
@@ -309,6 +514,11 @@ export const MesaGestorView = ({ profile, showToast, onNavigate, onNavegarNaUnid
           </button>
         ))}
       </div>
+
+      {leitura && aba === 'mesa' && (
+        <LeituraPendencias leitura={leitura} modeloIA={modeloIA} lidasIA={lidasIA} total={totalEquipe}
+          onFechar={() => setLeitura(null)} />
+      )}
 
       {aba === 'anotacoes' ? (
         <MesaAnotacoes showToast={showToast} />
@@ -350,13 +560,63 @@ export const MesaGestorView = ({ profile, showToast, onNavigate, onNavegarNaUnid
                 <Info size={15} className="shrink-0 mt-0.5" />
                 O mapa de quem está com cada pendência é do professor e dos gerentes de cada unidade.
               </p>
-            ) : grupos.length === 0 ? (
+            ) : totalEquipe === 0 ? (
               <p className="text-sm text-gray-500 rounded-2xl border border-dashed border-white/10 py-14 text-center">Nada parado com a equipe.</p>
             ) : (
-              <div className="flex flex-col gap-2 max-w-4xl">
-                {grupos.map(([etapa, itens], i) => (
-                  <GrupoEquipe key={etapa} etapa={etapa} itens={itens} mostrarFilial={mostrarFilial} onAbrir={abrir}
-                    abertoInicial={i === 0 && itens.length <= 8} />
+              <div className="flex flex-col gap-4">
+                {/* Resumo: os números do sistema. Urgentes e Atenção filtram. */}
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                  <CardContador label="Paradas" value={totalEquipe} onClick={() => setFiltroGrav('')} ativo={filtroGrav === ''} />
+                  <CardContador label="Urgentes" value={resumoEquipe.urgentes} tom="vermelho"
+                    onClick={() => setFiltroGrav(f => f === 'alta' ? '' : 'alta')} ativo={filtroGrav === 'alta'} />
+                  <CardContador label="Atenção" value={resumoEquipe.atencao} tom="amarelo"
+                    onClick={() => setFiltroGrav(f => f === 'media' ? '' : 'media')} ativo={filtroGrav === 'media'} />
+                  <CardContador label="Mais antiga" value={resumoEquipe.maisAntigo === 0 ? 'hoje' : `${resumoEquipe.maisAntigo} dias`} />
+                </div>
+
+                {/* Ferramentas da lista numa linha só. */}
+                <div className="flex flex-wrap items-center gap-3">
+                  <span className="text-[11px] font-bold uppercase tracking-widest text-gray-500">Agrupar por</span>
+                  <div className="flex items-center rounded-xl bg-white/[0.04] border border-white/10 p-0.5">
+                    {([['tipo', 'Tipo'], ['responsavel', 'Responsável']] as const).map(([id, label]) => (
+                      <button key={id} type="button" onClick={() => setAgrupamento(id)}
+                        className={`px-3 py-1 rounded-[10px] text-xs font-semibold transition-colors ${agrupamento === id ? 'bg-white text-gray-900' : 'text-gray-400 hover:text-gray-200'}`}>
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                  {orfas > 0 && (
+                    <span className="text-xs text-red-400 font-semibold">{orfas} {orfas === 1 ? 'item sem' : 'itens sem'} ninguém alocado</span>
+                  )}
+                  <button type="button"
+                    onClick={() => setAbertos(Object.fromEntries(chavesGrupos.map(k => [k, !algumAberto])))}
+                    className="ml-auto text-xs font-semibold text-gray-400 hover:text-gray-200 inline-flex items-center gap-1">
+                    {algumAberto ? <ChevronRight size={13} /> : <ChevronDown size={13} />}
+                    {algumAberto ? 'Recolher tudo' : 'Expandir tudo'}
+                  </button>
+                </div>
+
+                {secoes.length === 0 || secoes.every(sec => sec.grupos.length === 0) ? (
+                  <p className="text-sm text-gray-500 rounded-2xl border border-dashed border-white/10 py-10 text-center">Nada com esse filtro.</p>
+                ) : secoes.map(sec => (
+                  <section key={sec.area ?? 'todos'} className="flex flex-col gap-2">
+                    {sec.area && (
+                      <h4 className="flex items-center gap-2 text-[11px] font-black uppercase tracking-widest text-gray-400 mt-1">
+                        {sec.area}
+                        <span className="text-gray-600 font-bold tabular-nums">{sec.grupos.reduce((n, [, i]) => n + i.length, 0)}</span>
+                        <span className="flex-1 h-px bg-white/10" />
+                      </h4>
+                    )}
+                    {sec.grupos.map(([chave, itens]) => {
+                      const k = `${agrupamento}-${chave}`;
+                      return (
+                        <GrupoEquipe key={k}
+                          titulo={agrupamento === 'tipo' ? itens[0].etapa : (itens[0].responsavel || 'Sem responsável')}
+                          itens={itens} agrupamento={agrupamento} mostrarFilial={mostrarFilial} onAbrir={abrir}
+                          aberto={!!abertos[k]} onAlternar={() => setAbertos(a => ({ ...a, [k]: !a[k] }))} />
+                      );
+                    })}
+                  </section>
                 ))}
               </div>
             )

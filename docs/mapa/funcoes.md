@@ -2937,7 +2937,7 @@ Para cada função: quem a chama (tela, servidor, outra função, gatilho), o qu
 <a id="f-listar_pendencias"></a>
 ## listar_pendencias (RPC, SECURITY DEFINER)
 
-- **Telas que chamam:** [Modo Aula](telas.md#s-aula-modo), [Pendências](telas.md#s-pendencias)
+- **Telas que chamam:** [Modo Aula](telas.md#s-aula-modo), [Mesa gestor *(rota mesa-gestor)*](telas.md#s-mesa-gestor), [Pendências](telas.md#s-pendencias)
 - **Servidor (api/) chama:** `api/ai-aula-atividade.ts`
 - **Chamada por outras funções:** [minha_mesa](funcoes.md#f-minha_mesa)
 - **Grava:** —

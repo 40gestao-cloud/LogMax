@@ -2709,10 +2709,12 @@
     "user_profiles"
    ],
    "grava": [
+    "max_shows",
     "mesa_anotacoes"
    ],
    "rpcs": [
     "contar_minha_mesa",
+    "listar_pendencias",
     "minha_mesa"
    ],
    "grava_via_rpc": [],

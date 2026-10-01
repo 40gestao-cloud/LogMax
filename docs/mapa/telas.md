@@ -1412,9 +1412,10 @@ Para cada tela: o que ela lê e grava, as funções do banco que chama, e **quem
 
 - **Rota:** `mesa-gestor` · **Componente:** `MesaGestorView` ([src/views/MesaGestorView.tsx](../../src/views/MesaGestorView.tsx))
 - **Lê:** [mesa_anotacoes](tabelas.md#t-mesa_anotacoes), [user_profiles](tabelas.md#t-user_profiles)
-- **Grava direto:** [mesa_anotacoes](tabelas.md#t-mesa_anotacoes)
-- **Chama (RPC):** [contar_minha_mesa](funcoes.md#f-contar_minha_mesa), [minha_mesa](funcoes.md#f-minha_mesa)
-- **Arquivos que acessam dados:** `src/components/MesaAnotacoes.tsx`, `src/hooks/useContadorMesa.ts`, `src/hooks/useUserProfile.ts`, `src/views/MesaGestorView.tsx`
+- **Grava direto:** [max_shows](tabelas.md#t-max_shows), [mesa_anotacoes](tabelas.md#t-mesa_anotacoes)
+- **Chama (RPC):** [contar_minha_mesa](funcoes.md#f-contar_minha_mesa), [listar_pendencias](funcoes.md#f-listar_pendencias), [minha_mesa](funcoes.md#f-minha_mesa)
+- **Storage:** `max-show-anexos`
+- **Arquivos que acessam dados:** `src/components/MesaAnotacoes.tsx`, `src/hooks/useContadorMesa.ts`, `src/hooks/useUserProfile.ts`, `src/lib/maxShowUpload.ts`, `src/views/MesaGestorView.tsx`
 
 <a id="s-metas"></a>
 ### Metas *(rota metas)*

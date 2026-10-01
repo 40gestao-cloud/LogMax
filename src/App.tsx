@@ -788,7 +788,10 @@ const SidebarNav = ({ activeView, navigate, openModules, toggleModule, handleSig
             contradiz o contexto que ele acabou de escolher. O gerente nunca
             entra em Matriz, então para ele é o contrário. `viewPermitidaNoModo`
             repete a mesma régua — o menu não é a única porta. */}
-        {((profile?.role === 'admin' && matrizMode) || profile?.role === 'gerente') && (
+        {/* 2026-09-30: o professor deixou de ter este item — a Mesa do Gestor
+            dele (mesmo dado, leitura do MaxAI e PDF) tomou o lugar. Continua
+            para o gerente, na filial, e como aba do Modo Aula. */}
+        {profile?.role === 'gerente' && (
           <button onPointerEnter={() => prefetchOnHover('pendencias')} onPointerLeave={cancelPrefetchHover} onPointerDown={() => prefetchView('pendencias')} onClick={() => { navigate('pendencias'); onClose?.(); }} className={`flex items-center gap-3 p-2.5 rounded-xl text-sm font-semibold ${activeView === 'pendencias' ? 'nav-item neu-pressed text-accent is-active' : 'nav-item neu-button text-gray-100'}`}>
             <Hourglass size={18} /><span>Pendências</span>
           </button>

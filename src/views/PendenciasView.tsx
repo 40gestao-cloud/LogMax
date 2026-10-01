@@ -28,6 +28,7 @@ import { authFetch } from '../lib/authFetch';
 import { LoadingSpinner, CardContador } from '../components/ui';
 import { formatDataHoraBR } from '../lib/dates';
 import { exportPendenciasPDF, type PendenciaLinha, type PendenciaLeitura } from '../lib/pendenciasPdf';
+import { LeituraPendencias } from '../components/LeituraPendencias';
 import type { UserProfile } from '../hooks/useUserProfile';
 
 const UNIDADES = ['SuperMax', 'MaxLook', 'TechMax', 'Matriz'] as const;
@@ -301,46 +302,7 @@ export const PendenciasView: React.FC<Props> = ({ showToast, profile }) => {
 
           {/* Leitura da IA — bloco separado, cor separada, rótulo explícito */}
           {leitura && (
-            <div className="neu-flat rounded-2xl p-4 border border-purple-500/30 border-dashed flex flex-col gap-3">
-              <div className="flex items-center gap-2">
-                <Sparkles size={13} className="text-purple-300" />
-                <h4 className="text-[11px] font-black uppercase tracking-widest text-purple-300">
-                  Por onde começar — leitura da IA
-                </h4>
-              </div>
-              <p className="text-[10px] text-gray-500 -mt-2">
-                Opinião de {modeloIA || 'MaxAI'}
-                {lidasIA != null && lidasIA < resumo.total && ` sobre ${lidasIA} das ${resumo.total} pendências`}
-                . Os números acima são do sistema, não dela.
-              </p>
-
-              {leitura.resumo && (
-                <p className="text-sm text-gray-300 leading-relaxed whitespace-pre-wrap">{leitura.resumo}</p>
-              )}
-
-              {leitura.prioridades.map((p, i) => (
-                <div key={i} className="neu-pressed rounded-xl p-3">
-                  <div className="text-sm font-bold text-gray-100">{i + 1}. {p.titulo}</div>
-                  {p.porque && <p className="text-[11px] text-gray-400 mt-1">{p.porque}</p>}
-                  {p.quem && (
-                    <p className="text-[11px] text-purple-300 mt-1 flex items-center gap-1.5">
-                      <Users size={11} /> {p.quem}
-                    </p>
-                  )}
-                </div>
-              ))}
-
-              {!!leitura.padroes.length && (
-                <div className="pt-1 border-t border-white/5">
-                  <div className="text-[10px] font-black uppercase tracking-widest text-gray-500 mb-1.5">O que se repete</div>
-                  <ul className="flex flex-col gap-1">
-                    {leitura.padroes.map((t, i) => (
-                      <li key={i} className="text-[11px] text-gray-400">• {t}</li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-            </div>
+            <LeituraPendencias leitura={leitura} modeloIA={modeloIA} lidasIA={lidasIA} total={resumo.total} />
           )}
 
           {/* Grupos recolhidos: 300 linhas abertas de uma vez não se leem. */}
