@@ -2710,6 +2710,39 @@ main.main-scrollbar,
 .max-show-zoombar-label { min-width: 44px !important; }
 .max-show-zoombar-reset { color: var(--color-accent) !important; }
 
+/* Barra de anotação — vertical, no canto de cima à esquerda. Presa no topo
+   para crescer só para baixo: quando as cores aparecem, as ferramentas não
+   saem do lugar (centralizada, o clique seguinte caía numa cor).
+   Em uso (pincel/marca/borracha) ou em tela cheia fica sempre à vista. */
+.max-show-stage canvas.max-show-anotacao { max-width: none; max-height: none; }
+.max-show-anotbar {
+  position: absolute; top: 16px; left: 16px;
+  display: grid; grid-template-columns: repeat(2, 32px); gap: 2px;
+  max-height: calc(100% - 80px); overflow-y: auto;
+  background: rgba(0,0,0,0.6); backdrop-filter: blur(8px);
+  padding: 4px; border-radius: 20px;
+  border: 1px solid rgba(255,255,255,0.1);
+  opacity: 0; transition: opacity 0.2s;
+  z-index: 6;
+}
+.max-show-stage:hover .max-show-anotbar,
+.max-show-anotbar.em-uso,
+.max-show-scope:fullscreen .max-show-anotbar { opacity: 1; }
+.max-show-anotbar button {
+  background: transparent; border: none; color: #fff;
+  width: 32px; height: 32px; border-radius: 999px; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: background 0.15s;
+}
+.max-show-anotbar button:hover:not(:disabled) { background: rgba(255,255,255,0.14); }
+.max-show-anotbar button.ativo { background: #fff; color: #111; }
+.max-show-anotbar button:disabled { opacity: 0.35; cursor: default; }
+.max-show-anotbar button.cor span { width: 16px; height: 16px; border-radius: 999px; border: 2px solid rgba(255,255,255,0.85); }
+.max-show-anotbar button.cor.ativo { background: rgba(255,255,255,0.22); }
+.max-show-anotbar button .ponto { display: block; border-radius: 999px; background: currentColor; }
+.max-show-anotbar .sep { grid-column: 1 / -1; height: 1px; background: rgba(255,255,255,0.18); margin: 3px 4px; }
+.max-show-anotbar button { flex-shrink: 0; }
+
 /* Fallback pra vendors antigos */
 .max-doc-scope:-webkit-full-screen,
 .max-plan-scope:-webkit-full-screen { width: 100vw; height: 100vh; }

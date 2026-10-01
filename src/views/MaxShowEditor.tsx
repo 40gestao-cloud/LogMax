@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { ArrowLeft, Play, Minimize2, Presentation, ChevronLeft, ChevronRight, ExternalLink, ZoomIn, ZoomOut, RotateCcw, FileText, GalleryHorizontal } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { useAnotacoes, CamadaAnotacao, BarraAnotacao, type Anotacoes } from '../components/MaxShowAnotacoes';
 
 // =================================================================
 // Max Show — viewer/apresentador de PDF importado
@@ -18,6 +19,9 @@ import { supabase } from '../lib/supabase';
 // lado. DOCUMENTO: as páginas empilhadas e a roda desce o conteúdo — é o
 // que serve para apostila e guia (A4 em pé). O modo nasce da orientação da
 // 1ª página (em pé = documento) e o botão do topo troca.
+//
+// Nos dois modos dá para riscar por cima: pincel, marca-texto e borracha
+// (components/MaxShowAnotacoes). Os traços somem ao fechar — é quadro branco.
 // =================================================================
 
 type Props = {
@@ -37,8 +41,8 @@ const LARGURA_LEITURA = 960;
 
 /** Modo documento: todas as páginas, uma embaixo da outra, desenhadas quando
  *  chegam perto da tela (um PDF de 40 páginas não pinta 40 canvas de uma vez). */
-function PaginasContinuas({ doc, numPages, zoom, largura, scrollRef, onPaginaAtual }: {
-  doc: PdfDoc; numPages: number; zoom: number; largura: number;
+function PaginasContinuas({ doc, numPages, zoom, largura, scrollRef, onPaginaAtual, anot }: {
+  doc: PdfDoc; numPages: number; zoom: number; largura: number; anot: Anotacoes;
   scrollRef: React.RefObject<HTMLDivElement | null>;
   onPaginaAtual: (n: number) => void;
 }) {
@@ -112,9 +116,10 @@ function PaginasContinuas({ doc, numPages, zoom, largura, scrollRef, onPaginaAtu
     <div className="flex flex-col items-center gap-4 py-6 px-6" style={{ minWidth: zoom > 1 ? larguraPagina + 48 : undefined }}>
       {tamanhos.map((t, i) => (
         <div key={i} ref={el => { caixas.current[i] = el; }} data-pagina={i + 1}
-          className="bg-white shadow-2xl shrink-0"
+          className="bg-white shadow-2xl shrink-0 relative"
           style={{ width: larguraPagina, height: larguraPagina * (t.h / t.w) }}>
           <canvas className="block" style={{ width: '100%', height: '100%', cursor: 'default' }} />
+          <CamadaAnotacao pagina={i + 1} anot={anot} />
         </div>
       ))}
     </div>
@@ -133,6 +138,11 @@ export const MaxShowEditor = ({ showId, onClose, showToast }: Props) => {
   const [modo, setModo] = useState<Modo>('slides');
   const [larguraDoc, setLarguraDoc] = useState(0);
   const docScrollRef = useRef<HTMLDivElement | null>(null);
+  const anot = useAnotacoes();
+  const desenhando = anot.ferramenta !== 'seta';
+  // Onde o canvas do slide está dentro do palco — a camada de anotação vai
+  // exatamente por cima dele (o canvas é centralizado e muda de tamanho).
+  const [rectSlide, setRectSlide] = useState<{ l: number; t: number; w: number; h: number } | null>(null);
 
   const rootRef = useRef<HTMLDivElement | null>(null);
   const stageRef = useRef<HTMLDivElement | null>(null);
@@ -247,6 +257,17 @@ export const MaxShowEditor = ({ showId, onClose, showToast }: Props) => {
     try { await task.promise; } catch { /* cancelado */ }
   }, [pageNum, zoom]);
 
+  useEffect(() => {
+    const c = canvasRef.current;
+    if (!c || modo !== 'slides' || loading) { setRectSlide(null); return; }
+    const medir = () => setRectSlide({ l: c.offsetLeft, t: c.offsetTop, w: c.offsetWidth, h: c.offsetHeight });
+    medir();
+    const ro = new ResizeObserver(medir);
+    ro.observe(c);
+    if (stageRef.current) ro.observe(stageRef.current);
+    return () => ro.disconnect();
+  }, [modo, loading]);
+
   // `modo`: voltando do Documento o canvas dos slides é outro elemento.
   useEffect(() => { renderPage(); }, [renderPage, numPages, isFullscreen, modo]);
 
@@ -303,7 +324,21 @@ export const MaxShowEditor = ({ showId, onClose, showToast }: Props) => {
       // Ignora se o foco esta num controle interativo — evita Space/Enter
       // disparar navegacao alem da acao do botao/input focado.
       const t = e.target as HTMLElement | null;
-      if (t && (t.tagName === 'BUTTON' || t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'A' || t.isContentEditable)) return;
+      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
+      // Anotação: P/M/E/Esc trocam a ferramenta, Ctrl+Z desfaz. Vêm antes do
+      // filtro de botão: depois de clicar na barra o foco fica num botão.
+      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key.toLowerCase() === 'z') { e.preventDefault(); anot.desfazer(); return; }
+      if (!e.ctrlKey && !e.metaKey && !e.altKey) {
+        const k = e.key.toLowerCase();
+        if (k === 'p') { anot.setFerramenta('pincel'); return; }
+        if (k === 'm') { anot.setFerramenta('marca'); return; }
+        if (k === 'e') { anot.setFerramenta('borracha'); return; }
+        if (e.key === 'Escape' && anot.ferramenta !== 'seta') { anot.setFerramenta('seta'); return; }
+      }
+      // Botão focado: só Espaço/Enter são dele (acionariam o botão E a
+      // navegação). Setas e PageUp/Down seguem passando slide — senão o
+      // passador morria depois de qualquer clique no topo ou na barra.
+      if (t && (t.tagName === 'BUTTON' || t.tagName === 'A') && (e.key === ' ' || e.key === 'Enter')) return;
       if (modo === 'documento') {
         // Setas ↑↓, PageDown, espaço e Home/End rolam (padrão do navegador);
         // ← → pulam de página, para o passador de slides seguir funcionando.
@@ -332,7 +367,7 @@ export const MaxShowEditor = ({ showId, onClose, showToast }: Props) => {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [next, prev, numPages, zoomIn, zoomOut, zoomReset, modo, pageNum, irParaPagina]);
+  }, [next, prev, numPages, zoomIn, zoomOut, zoomReset, modo, pageNum, irParaPagina, anot]);
 
   // Ctrl+wheel amplia/reduz (comportamento familiar de leitor PDF).
   // Sem Ctrl e ampliado: roda faz pan vertical (browser default no overflow-auto).
@@ -352,7 +387,7 @@ export const MaxShowEditor = ({ showId, onClose, showToast }: Props) => {
   // usar a scrollbar/roda pra ver os cantos.
   useEffect(() => {
     const el = stageRef.current;
-    if (!el || zoom <= 1 || modo !== 'slides') return;
+    if (!el || zoom <= 1 || modo !== 'slides' || desenhando) return;
     let dragging = false;
     let startX = 0, startY = 0, startL = 0, startT = 0;
     const onDown = (e: MouseEvent) => {
@@ -385,7 +420,7 @@ export const MaxShowEditor = ({ showId, onClose, showToast }: Props) => {
       window.removeEventListener('mousemove', onMove);
       window.removeEventListener('mouseup', onUp);
     };
-  }, [zoom, modo]);
+  }, [zoom, modo, desenhando]);
 
   const trocarModo = () => {
     setZoom(1);
@@ -454,11 +489,12 @@ export const MaxShowEditor = ({ showId, onClose, showToast }: Props) => {
           <div ref={docScrollRef} tabIndex={0} className="absolute inset-0 overflow-auto bg-neutral-800 outline-none">
             {pdfRef.current && larguraDoc > 0 && (
               <PaginasContinuas doc={pdfRef.current} numPages={numPages} zoom={zoom} largura={larguraDoc}
-                scrollRef={docScrollRef} onPaginaAtual={setPageNum} />
+                scrollRef={docScrollRef} onPaginaAtual={setPageNum} anot={anot} />
             )}
           </div>
           <div className="max-show-counter">{pageNum} / {numPages || '…'}</div>
           {zoomBar}
+          <BarraAnotacao anot={anot} pagina={pageNum} />
         </div>
       ) : (
         <div
@@ -472,15 +508,20 @@ export const MaxShowEditor = ({ showId, onClose, showToast }: Props) => {
               <canvas
                 ref={canvasRef}
                 className="block shadow-2xl mx-auto"
-                onClick={zoom === 1 ? next : undefined}
+                onClick={zoom === 1 && !desenhando ? next : undefined}
                 style={{
-                  cursor: zoom === 1 ? 'pointer' : 'inherit',
+                  cursor: zoom === 1 && !desenhando ? 'pointer' : 'inherit',
                   // Anula o max-width/max-height: 100% do CSS quando ampliado —
                   // sem isso o canvas fica travado no tamanho do stage.
                   maxWidth: zoom > 1 ? 'none' : undefined,
                   maxHeight: zoom > 1 ? 'none' : undefined,
                 }}
               />
+              {rectSlide && rectSlide.w > 0 && (
+                <div style={{ position: 'absolute', left: rectSlide.l, top: rectSlide.t, width: rectSlide.w, height: rectSlide.h, pointerEvents: 'none' }}>
+                  <CamadaAnotacao pagina={pageNum} anot={anot} />
+                </div>
+              )}
               <button
                 type="button"
                 onClick={prev}
@@ -503,6 +544,7 @@ export const MaxShowEditor = ({ showId, onClose, showToast }: Props) => {
                 {pageNum} / {numPages || '…'}
               </div>
               {zoomBar}
+              <BarraAnotacao anot={anot} pagina={pageNum} />
             </>
           )}
         </div>

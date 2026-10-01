@@ -43,6 +43,8 @@ const FORA_DA_FAMILIA: Record<string, string> = {
     'projeção em tela cheia para exibir na aula: os controles são grandes de propósito, para serem vistos de longe.',
   'views/MaxShowEditor.tsx':
     'editor de apresentação com canvas e chrome próprios.',
+  'components/MaxShowAnotacoes.tsx':
+    'barra de pincel/marca-texto/borracha do Max Show: flutua sobre o slide em tela cheia, no chrome próprio dele (.max-show-anotbar).',
   'views/PDVView.tsx':
     'PDV roda em layout de operação, fora da grade de telas administrativas.',
   // O PDV SuperMax (réplica do MaxPOS) foi dividido em components/pdv/ (etapa 3
