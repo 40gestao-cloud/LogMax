@@ -15,6 +15,7 @@ const origemTexto =(o: OrigemPercentual, janela: string) =>
   o === 'manual' ? 'informado pela gestão'
   : o === 'historico' ? `média de ${janela}`
   : o === 'mix' ? `mix de vendas de ${janela} × taxa cadastrada`
+  : o === 'cadastro' ? 'sem venda ainda — média das formas com taxa no cadastro'
   : 'sem histórico — contando 0%';
 
 const mesAno = (iso: string) => {

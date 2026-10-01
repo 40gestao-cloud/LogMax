@@ -88,11 +88,13 @@ export type ParametrosPrecificacao = {
   janela_inicio: string;
   janela_fim: string;
   pode_editar: boolean;
-  manual: { rbt12: number | null; despesas_pct: number | null; taxas_pct: number | null; variaveis_pct?: number | null } | null;
+  /** Migr. 666: sem taxa — ela sai só de Formas de Pagamento. */
+  manual: { rbt12: number | null; despesas_pct: number | null; variaveis_pct?: number | null } | null;
   atualizado_em: string | null;
 };
 
-export type OrigemPercentual = 'manual' | 'historico' | 'mix' | 'sem_historico';
+/** `cadastro` (migr. 666): taxa de filial sem venda na janela — média das formas que cobram taxa. */
+export type OrigemPercentual = 'manual' | 'historico' | 'mix' | 'cadastro' | 'sem_historico';
 
 /**
  * As fatias do preço que não são custo nem lucro, em % do preço de venda.

@@ -8019,6 +8019,7 @@
    "le": [
     "contas_pagar",
     "filial_precificacao",
+    "formas_pagamento",
     "servicos"
    ],
    "chama": [

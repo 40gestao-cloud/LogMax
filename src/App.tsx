@@ -1554,7 +1554,7 @@ function LogMaxAppInner() {
       // Sem filialScoped: centros_custo não tem coluna `filial` — o catálogo é
       // da holding inteira e todo authenticated lê (policy read_authenticated).
       case 'financeiro-dre':                  return <DREView showToast={st} />;
-      case 'financeiro-precificação':         return <PrecificacaoView showToast={st} />;
+      case 'financeiro-precificação':         return <PrecificacaoView showToast={st} onNavigate={navigate} />;
       // `grupo_dre` (migr. 425) é o que o DRE usa para agrupar despesa. Nasce
       // vazio de propósito: o que ninguém classificou aparece como linha
       // "Não classificado" no relatório, e classificar é a aula.

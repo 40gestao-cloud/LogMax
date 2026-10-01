@@ -1084,7 +1084,7 @@ Para cada tabela: quem grava (tela, RPC, gatilho, servidor), quem lê, os gatilh
 - **Telas que gravam:** [Empresa › Formas de pagamento](telas.md#s-empresa-formasdepagamento)
 - **RPCs que gravam:** —
 - **Telas que leem:** [Empresa › Formas de pagamento](telas.md#s-empresa-formasdepagamento), [Financeiro › Aprovações de Orçamento](telas.md#s-financeiro-aprovaçõesdeorçamento), [Financeiro › Conciliação da Maquininha](telas.md#s-financeiro-conciliaçãodamaquininha), [Vendas › Orçamentos](telas.md#s-vendas-orçamentos)
-- **RPCs que leem:** [_taxa_pelo_mix](funcoes.md#f-_taxa_pelo_mix), [conciliar_maquininha](funcoes.md#f-conciliar_maquininha), [converter_orcamento_em_pedido](funcoes.md#f-converter_orcamento_em_pedido)
+- **RPCs que leem:** [_taxa_pelo_mix](funcoes.md#f-_taxa_pelo_mix), [conciliar_maquininha](funcoes.md#f-conciliar_maquininha), [converter_orcamento_em_pedido](funcoes.md#f-converter_orcamento_em_pedido), [parametros_precificacao](funcoes.md#f-parametros_precificacao)
 - **Gatilhos nesta tabela:**
   - `trg_auditoria` — BEFORE INSERT/UPDATE → [set_auditoria_campos](funcoes.md#f-set_auditoria_campos)
   - `trg_formas_pagamento_normaliza` — BEFORE INSERT/UPDATE → [fn_formas_pagamento_normaliza](funcoes.md#f-fn_formas_pagamento_normaliza)

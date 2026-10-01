@@ -3,9 +3,11 @@
 // Tudo o que forma o preço de venda, numa tela só:
 //   • faixa do topo — os quatro números de que o preço depende (Simples,
 //     taxas, despesas e a soma), visíveis em qualquer aba;
-//   • Lucro por categoria — o lucro líquido desejado, que só se edita aqui;
-//   • Tributação — regime, RBT12, faixa e a origem de taxas e despesas, com os
-//     valores manuais atrás de um botão (são exceção, não rotina).
+//   • abas na ordem em que se faz: Tributação (regime, RBT12, faixa e a origem
+//     de taxas e despesas, com os manuais atrás de um botão — exceção, não
+//     rotina), Categorias (o lucro líquido desejado, que só se edita aqui) e
+//     Produtos (o preço praticado contra o sugerido). Por último o DAS, que
+//     não forma preço: é a apuração do mês, depois de vender.
 //
 // A composição do preço de cada produto continua no cadastro de produto,
 // que é onde o preço é digitado; o imposto realizado aparece no DRE.
@@ -44,12 +46,14 @@ const origemCurta = (o: OrigemPercentual, p: ParametrosPrecificacao) =>
   o === 'manual' ? 'valor manual'
   : o === 'historico' ? `média ${mesCurto(p.janela_inicio)}–${mesCurto(p.janela_fim)}`
   : o === 'mix' ? `mix de vendas ${mesCurto(p.janela_inicio)}–${mesCurto(p.janela_fim)}`
+  : o === 'cadastro' ? 'sem venda: média do cadastro'
   : 'sem histórico: conta 0%';
 
 const origemLonga = (o: OrigemPercentual, p: ParametrosPrecificacao) =>
   o === 'manual' ? 'informado manualmente'
   : o === 'historico' ? `histórico de ${dataBR(p.janela_inicio)} a ${dataBR(p.janela_fim)}`
   : o === 'mix' ? `vendas de ${dataBR(p.janela_inicio)} a ${dataBR(p.janela_fim)} × taxa de cada forma no cadastro`
+  : o === 'cadastro' ? `sem venda entre ${dataBR(p.janela_inicio)} e ${dataBR(p.janela_fim)} — média das formas que cobram taxa em Formas de Pagamento`
   : `sem venda entre ${dataBR(p.janela_inicio)} e ${dataBR(p.janela_fim)} — conta como 0%`;
 
 const RBT12_ORIGEM: Record<ParametrosPrecificacao['rbt12_origem'], (meses: number | null) => string> = {
@@ -369,15 +373,42 @@ function AbaProdutos({ p, d, categorias, filial }: {
 }
 
 // ── Aba Tributação ───────────────────────────────────────────────────────────
-function Linha({ rotulo, valor, nota }: { rotulo: string; valor: React.ReactNode; nota?: string }) {
+// Três cartões, um por fatia da faixa do topo: Simples, Taxas de cartão e
+// Despesas. Cada um explica de onde sai o seu número e, quando dá para mexer,
+// o campo mora ali — e não num formulário único lá embaixo, longe da linha que
+// ele muda. O DAS saiu para a aba própria: é rotina do mês, não parâmetro.
+function Linha({ rotulo, valor, nota }: { rotulo: string; valor: React.ReactNode; nota?: React.ReactNode }) {
   return (
     <div className="flex items-baseline justify-between gap-4 py-2 border-b border-white/5 last:border-b-0">
       <div className="min-w-0">
         <p className="text-xs text-gray-300">{rotulo}</p>
-        {nota && <p className="text-[10px] text-gray-500 leading-snug">{nota}</p>}
+        {nota && <p className="text-[11px] text-gray-500 leading-snug">{nota}</p>}
       </div>
       <span className="text-sm font-bold text-gray-100 tabular-nums whitespace-nowrap">{valor}</span>
     </div>
+  );
+}
+
+/** Campo de percentual com a máscara 0,00 — o mesmo padrão de Formas de Pagamento. */
+function CampoPct({ rotulo, valor, onChange, placeholder }: { rotulo: string; valor: string; onChange: (v: string) => void; placeholder: string }) {
+  return (
+    <label className="flex flex-col gap-1">
+      <span className="text-xs text-gray-400">{rotulo}</span>
+      <div className="relative">
+        <input type="text" inputMode="numeric" className="neu-input py-2 pl-3 pr-8 rounded-xl text-sm tabular-nums w-full"
+          value={valor} onChange={e => onChange(formatBRL(e.target.value))} onKeyDown={handleMoneyKeyDown} placeholder={placeholder} />
+        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-500 pointer-events-none">%</span>
+      </div>
+    </label>
+  );
+}
+
+function BotaoSalvar({ onClick, salvando, rotulo = 'Salvar' }: { onClick: () => void; salvando: boolean; rotulo?: string }) {
+  return (
+    <button onClick={onClick} disabled={salvando}
+      className="btn-solido btn-solido--verde !py-2 !px-4 !text-xs flex items-center gap-2 disabled:opacity-50 self-end">
+      <Save size={13} /> {salvando ? 'Salvando…' : rotulo}
+    </button>
   );
 }
 
@@ -388,7 +419,7 @@ function MixDeTaxas({ p }: { p: ParametrosPrecificacao }) {
   const itens = p.taxas_mix ?? [];
   if (itens.length === 0) return null;
   return (
-    <div className="mt-3 flex flex-col gap-2">
+    <div className="mt-2 flex flex-col gap-2">
       <table className="w-full text-[11px]">
         <thead>
           <tr className="text-[10px] text-gray-500 uppercase tracking-widest">
@@ -410,17 +441,16 @@ function MixDeTaxas({ p }: { p: ParametrosPrecificacao }) {
         </tbody>
       </table>
       {(p.taxas_sem_cadastro ?? []).length > 0 && (
-        <p className="text-[10px] text-amber-400 leading-snug flex items-start gap-1.5">
-          <TriangleAlert size={11} className="shrink-0 mt-0.5" />
+        <p className="text-[11px] text-amber-400 leading-snug flex items-start gap-1.5">
+          <TriangleAlert size={12} className="shrink-0 mt-0.5" />
           {p.taxas_sem_cadastro.join(', ')}: vendido sem forma com esse Tipo no cadastro — entra como 0%.
-          Classifique em Empresa › Formas de Pagamento.
         </p>
       )}
       {p.taxas_fora_mix_pct != null && p.taxas_fora_mix_pct > 0 && (
-        <p className="text-[10px] text-gray-500">{fmtPct(p.taxas_fora_mix_pct)} da receita ficou fora do mix: venda mista gravada antes de 29/09 ou forma de pagamento sem Tipo no cadastro.</p>
+        <p className="text-[11px] text-gray-500">{fmtPct(p.taxas_fora_mix_pct)} da receita ficou fora do mix: venda mista gravada antes de 29/09 ou forma de pagamento sem Tipo no cadastro.</p>
       )}
       {p.taxas_realizada_pct != null && (
-        <p className="text-[10px] text-gray-500">
+        <p className="text-[11px] text-gray-500">
           Conferência: a maquininha reteve {fmtPct(Number(p.taxas_realizada_pct), 2)} do faturamento na conciliação do mesmo período.
         </p>
       )}
@@ -428,35 +458,39 @@ function MixDeTaxas({ p }: { p: ParametrosPrecificacao }) {
   );
 }
 
-function AbaTributacao({ p, salvar, showToast }: {
+const pctMascara = (v: number | null | undefined) => (v == null ? '' : formatBRL(Number(v)));
+const mascaraPct = (t: string): number | null => (t.trim() === '' ? null : parseBRL(t));
+
+function AbaTributacao({ p, salvar, showToast, onNavigate }: {
   p: ParametrosPrecificacao;
-  salvar: (m: { rbt12: number | null; despesas_pct: number | null; taxas_pct: number | null; variaveis_pct: number | null }) => Promise<void>;
+  salvar: (m: { rbt12: number | null; despesas_pct: number | null; variaveis_pct: number | null }) => Promise<void>;
   showToast: any;
+  onNavigate?: (view: string) => void;
 }) {
   const m = p.manual;
-  const temManual = !!m && (m.rbt12 != null || m.despesas_pct != null || m.taxas_pct != null || m.variaveis_pct != null);
-  const [ajustando, setAjustando] = useState(temManual);
+  // Os três manuais gravam juntos (uma RPC só); cada cartão edita o seu e
+  // manda os outros dois como estão.
   const [rbt12, setRbt12] = useState('');
   const [despesas, setDespesas] = useState('');
-  const [taxas, setTaxas] = useState('');
   const [variaveis, setVariaveis] = useState('');
+  const [ajustaRbt, setAjustaRbt] = useState(m?.rbt12 != null);
+  const [ajustaDesp, setAjustaDesp] = useState(m?.despesas_pct != null);
   const [salvando, setSalvando] = useState(false);
 
   useEffect(() => {
     setRbt12(m?.rbt12 == null ? '' : formatBRL(m.rbt12));
-    setDespesas(pctTexto(m?.despesas_pct));
-    setTaxas(pctTexto(m?.taxas_pct));
-    setVariaveis(pctTexto(m?.variaveis_pct));
-  }, [m?.rbt12, m?.despesas_pct, m?.taxas_pct, m?.variaveis_pct]);
+    setDespesas(pctMascara(m?.despesas_pct));
+    setVariaveis(pctMascara(m?.variaveis_pct));
+  }, [m?.rbt12, m?.despesas_pct, m?.variaveis_pct]);
 
   const handleSalvar = async () => {
-    const dv = textoPct(despesas), tv = textoPct(taxas), vv = textoPct(variaveis);
-    for (const v of [dv, tv, vv]) {
+    const dv = mascaraPct(despesas), vv = mascaraPct(variaveis);
+    for (const v of [dv, vv]) {
       if (v !== null && !(v >= 0 && v < 100)) { showToast('Percentual precisa ficar entre 0 e 99,99.', 'error'); return; }
     }
     setSalvando(true);
     try {
-      await salvar({ rbt12: rbt12.trim() === '' ? null : parseBRL(rbt12), despesas_pct: dv, taxas_pct: tv, variaveis_pct: vv });
+      await salvar({ rbt12: rbt12.trim() === '' ? null : parseBRL(rbt12), despesas_pct: dv, variaveis_pct: vv });
       showToast('Parâmetros de preço salvos.', 'success');
     } catch (e: any) {
       showToast(e?.message ?? 'Não foi possível salvar.', 'error');
@@ -467,11 +501,20 @@ function AbaTributacao({ p, salvar, showToast }: {
     ? `(${brl(p.rbt12)} × ${fmtPct(p.aliquota_nominal, 2)} − ${brl(p.parcela_deduzir)}) ÷ ${brl(p.rbt12)}`
     : 'sem faturamento, vale a alíquota nominal da 1ª faixa';
 
+  // Fechar devolve o campo ao que está gravado: o Salvar de outro cartão
+  // manda os três, e não pode levar junto um rascunho escondido.
+  const alternar = (atual: boolean, set: (v: boolean) => void, rotulo: [string, string], restaurar: () => void) => p.pode_editar && (
+    <button type="button" onClick={() => { if (atual) restaurar(); set(!atual); }} className="underline underline-offset-2">
+      {atual ? rotulo[1] : rotulo[0]}
+    </button>
+  );
+
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 items-start">
-      <SecaoFormulario titulo={p.vende_servico ? 'Simples Nacional — Anexos I e III' : 'Simples Nacional — Anexo I (comércio)'} icon={Landmark} cor="amareloEscuro">
+      <SecaoFormulario titulo={p.vende_servico ? 'Simples Nacional — Anexos I e III' : 'Simples Nacional — Anexo I (comércio)'} icon={Landmark} cor="amareloEscuro"
+        extra={alternar(ajustaRbt, setAjustaRbt, ['Simular faturamento', 'Fechar simulação'], () => setRbt12(m?.rbt12 == null ? '' : formatBRL(m.rbt12)))}>
         <Linha rotulo="Faturamento 12 meses (RBT12)" valor={p.rbt12 == null ? '—' : brl(p.rbt12)}
-          nota={RBT12_ORIGEM[p.rbt12_origem](p.rbt12_meses)} />
+          nota={m?.rbt12 != null ? 'informado manualmente' : RBT12_ORIGEM[p.rbt12_origem](p.rbt12_meses)} />
         <Linha rotulo={`Faixa ${p.faixa}`} valor={`${fmtPct(p.aliquota_nominal, 2)} nominal`}
           nota={`parcela a deduzir ${brl(p.parcela_deduzir)}`} />
         <Linha rotulo="Alíquota efetiva" valor={fmtPct(p.aliquota_efetiva, 2)} nota={formulaAliquota} />
@@ -486,78 +529,81 @@ function AbaTributacao({ p, salvar, showToast }: {
             Acima de R$ 4,8 milhões em 12 meses a empresa sai do Simples Nacional.
           </p>
         )}
+        {p.pode_editar && ajustaRbt && (
+          <div className="border-t border-white/10 mt-3 pt-3 flex flex-col gap-3">
+            <p className="text-[11px] text-gray-400 leading-snug">
+              Para filial nova sem histórico, ou para ver o preço em outra faixa. Preenchido vence o histórico; vazio devolve a ele.
+            </p>
+            <label className="flex flex-col gap-1">
+              <span className="text-xs text-gray-400">Faturamento 12 meses (R$)</span>
+              <input type="text" inputMode="numeric" className="neu-input py-2 px-3 rounded-xl text-sm tabular-nums"
+                value={rbt12} onChange={e => setRbt12(e.target.value === '' ? '' : formatBRL(e.target.value))}
+                onKeyDown={handleMoneyKeyDown} placeholder="Histórico" />
+            </label>
+            <BotaoSalvar onClick={handleSalvar} salvando={salvando} />
+          </div>
+        )}
       </SecaoFormulario>
 
-      <SecaoFormulario titulo="Taxas e despesas" icon={SlidersHorizontal} cor="roxo"
-        extra={p.pode_editar && (
-          <button type="button" onClick={() => setAjustando(a => !a)} className="underline underline-offset-2">
-            {ajustando ? 'Fechar ajuste' : 'Ajustar manualmente'}
+      <SecaoFormulario titulo="Taxas de cartão" icon={Receipt} cor="azul"
+        extra={onNavigate && (
+          <button type="button" onClick={() => onNavigate('empresa-formasdepagamento')} className="underline underline-offset-2">
+            Abrir Formas de Pagamento
           </button>
         )}>
-        <Linha rotulo="Taxas de cartão" valor={fmtPct(p.taxas_pct ?? 0)} nota={origemLonga(p.taxas_origem, p)} />
-        <Linha rotulo="Despesas fixas" valor={fmtPct(p.despesas_pct ?? 0)} nota={origemLonga(p.despesas_origem, p)} />
-        {/* Migr. 664: de onde sai o % fixo — os grupos do DRE, em % da receita. */}
-        {p.despesas_origem === 'historico' && (p.despesas_grupos ?? []).length > 0 && (
-          <div className="pl-3 border-l border-white/10 my-1 flex flex-col">
-            {(p.despesas_grupos ?? []).map(g => (
-              <div key={g.grupo} className="flex items-baseline justify-between gap-3 py-0.5 text-[11px]">
-                <span className="text-gray-400">{g.grupo}</span>
-                <span className={`tabular-nums ${g.pct < 0 ? 'text-gray-500' : 'text-gray-300'}`}>{fmtPct(Number(g.pct), 2)}</span>
-              </div>
-            ))}
-          </div>
-        )}
-        <Linha rotulo="Despesas variáveis" valor={fmtPct(p.variaveis_pct ?? 0)}
-          nota={p.variaveis_origem === 'manual'
-            ? 'comissão, embalagem, entrega — informado pela gestão'
-            : 'comissão sobre a venda, embalagem, entrega: não informado, conta 0% — informe em "Ajustar manualmente"'} />
+        <Linha rotulo="Taxa sobre a venda" valor={fmtPct(p.taxas_pct ?? 0)} nota={origemLonga(p.taxas_origem, p)} />
         <MixDeTaxas p={p} />
-        <p className="text-[10px] text-gray-500 leading-snug mt-3">
-          Taxas = quanto se vende em cada forma × a taxa dela em Empresa › Formas de Pagamento (pelo campo Tipo).
-          Despesas fixas = despesas do DRE sem a taxa da maquininha ÷ faturamento (aluguel, folha, energia — não mudam com cada venda).
-          Despesas variáveis = o que cresce junto com cada venda; só entra aqui o que não está nas contas a pagar do DRE, senão conta duas vezes.
-          Janela: os 3 últimos meses fechados.
+        <p className="text-[11px] text-gray-500 leading-snug mt-3">
+          Sai do cadastro de cada forma em Empresa › Formas de Pagamento, pesado pelo quanto se vende em cada uma.
+          Não se ajusta aqui: para mudar, mude a taxa da forma.
         </p>
-
-        {p.pode_editar && ajustando && (
-          <div className="border-t border-white/10 mt-4 pt-4 flex flex-col gap-3">
-            <p className="text-[11px] text-gray-400 leading-snug">
-              Para filial nova sem histórico, ou para simular outra faixa. Preenchido vence o histórico; vazio devolve a ele.
-            </p>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <label className="flex flex-col gap-1">
-                <span className="text-[11px] text-gray-400">Faturamento 12 meses (R$)</span>
-                <input type="text" inputMode="numeric" className="neu-input py-2 px-3 rounded-xl text-sm tabular-nums"
-                  value={rbt12} onChange={e => setRbt12(e.target.value === '' ? '' : formatBRL(e.target.value))}
-                  onKeyDown={handleMoneyKeyDown} placeholder="Histórico" />
-              </label>
-              <label className="flex flex-col gap-1">
-                <span className="text-[11px] text-gray-400">Taxas de cartão (%)</span>
-                <input type="text" inputMode="decimal" className="neu-input py-2 px-3 rounded-xl text-sm tabular-nums"
-                  value={taxas} onChange={e => setTaxas(e.target.value.replace(/[^0-9,.]/g, ''))} placeholder="Histórico" />
-              </label>
-              <label className="flex flex-col gap-1">
-                <span className="text-[11px] text-gray-400">Despesas fixas (%)</span>
-                <input type="text" inputMode="decimal" className="neu-input py-2 px-3 rounded-xl text-sm tabular-nums"
-                  value={despesas} onChange={e => setDespesas(e.target.value.replace(/[^0-9,.]/g, ''))} placeholder="Histórico" />
-              </label>
-              <label className="flex flex-col gap-1">
-                <span className="text-[11px] text-gray-400">Despesas variáveis (%)</span>
-                <input type="text" inputMode="decimal" className="neu-input py-2 px-3 rounded-xl text-sm tabular-nums"
-                  value={variaveis} onChange={e => setVariaveis(e.target.value.replace(/[^0-9,.]/g, ''))} placeholder="0" />
-              </label>
-            </div>
-            <div className="flex justify-end">
-              <button onClick={handleSalvar} disabled={salvando}
-                className="btn-solido btn-solido--verde !py-2 !px-4 !text-xs flex items-center gap-2 disabled:opacity-50">
-                <Save size={13} /> {salvando ? 'Salvando…' : 'Salvar parâmetros'}
-              </button>
-            </div>
-          </div>
-        )}
       </SecaoFormulario>
 
-      {p.pode_editar && <div className="lg:col-span-2"><ApuracaoDas filial={p.filial} showToast={showToast} /></div>}
+      <div className="lg:col-span-2">
+        <SecaoFormulario titulo="Despesas" icon={SlidersHorizontal} cor="roxo"
+          extra={alternar(ajustaDesp, setAjustaDesp, ['Ajustar despesas fixas', 'Fechar ajuste'], () => setDespesas(pctMascara(m?.despesas_pct)))}>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-x-8">
+            <div className="flex flex-col">
+              <Linha rotulo="Despesas fixas" valor={fmtPct(p.despesas_pct ?? 0)}
+                nota={<>{origemLonga(p.despesas_origem, p)}. Aluguel, folha, energia — não mudam com cada venda; a taxa da maquininha sai daqui porque já está em Taxas.</>} />
+              {/* Migr. 664: de onde sai o % fixo — os grupos do DRE, em % da receita. */}
+              {p.despesas_origem === 'historico' && (p.despesas_grupos ?? []).length > 0 && (
+                <div className="pl-3 border-l border-white/10 my-1 flex flex-col">
+                  {(p.despesas_grupos ?? []).map(g => (
+                    <div key={g.grupo} className="flex items-baseline justify-between gap-3 py-0.5 text-[11px]">
+                      <span className="text-gray-400">{g.grupo}</span>
+                      <span className={`tabular-nums ${g.pct < 0 ? 'text-gray-500' : 'text-gray-300'}`}>{fmtPct(Number(g.pct), 2)}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {p.pode_editar && ajustaDesp && (
+                <div className="border-t border-white/10 mt-3 pt-3 flex flex-col gap-3">
+                  <p className="text-[11px] text-gray-400 leading-snug">
+                    Para filial nova sem histórico. Preenchido vence o DRE; vazio devolve a ele.
+                  </p>
+                  <CampoPct rotulo="Despesas fixas" valor={despesas} onChange={setDespesas} placeholder="Histórico" />
+                  <BotaoSalvar onClick={handleSalvar} salvando={salvando} />
+                </div>
+              )}
+            </div>
+
+            <div className="flex flex-col">
+              {/* Variáveis não têm histórico de onde sair: é parâmetro de rotina,
+                  não ajuste de exceção — o campo fica sempre à vista. */}
+              <Linha rotulo="Despesas variáveis" valor={fmtPct(p.variaveis_pct ?? 0)}
+                nota="Comissão sobre a venda, embalagem, entrega — o que cresce junto com cada venda. Só o que não está nas contas a pagar do DRE, senão conta duas vezes." />
+              {p.pode_editar && (
+                <div className="mt-3 flex flex-col gap-3">
+                  <CampoPct rotulo="Despesas variáveis" valor={variaveis} onChange={setVariaveis} placeholder="0,00" />
+                  <BotaoSalvar onClick={handleSalvar} salvando={salvando} />
+                </div>
+              )}
+            </div>
+          </div>
+          <p className="text-[11px] text-gray-500 leading-snug mt-3">Janela: os 3 últimos meses fechados.</p>
+        </SecaoFormulario>
+      </div>
     </div>
   );
 }
@@ -662,12 +708,12 @@ function ApuracaoDas({ filial, showToast }: { filial: string; showToast: any }) 
 }
 
 // ── Tela ─────────────────────────────────────────────────────────────────────
-type Aba = 'produtos' | 'lucro' | 'tributacao';
+type Aba = 'produtos' | 'lucro' | 'tributacao' | 'das';
 
-const PrecificacaoViewInner = ({ showToast, filial }: { showToast: any; filial: FilialOp }) => {
+const PrecificacaoViewInner = ({ showToast, filial, onNavigate }: { showToast: any; filial: FilialOp; onNavigate?: (view: string) => void }) => {
   const { params, erro, carregando, salvar, salvarLucroServico } = useParametrosPrecificacao(filial);
   const { data, isLoading, reload } = useFetchData<any>('categorias_produto', { filial });
-  const [aba, setAba] = useState<Aba>('produtos');
+  const [aba, setAba] = useState<Aba>('tributacao');
 
   const categorias = useMemo(
     () => data.filter((c: any) => c.ativo !== false && !c.excluido_em)
@@ -691,12 +737,19 @@ const PrecificacaoViewInner = ({ showToast, filial }: { showToast: any; filial: 
 
       <FaixaDeducoes p={params} d={d} />
 
+      {/* Na ordem em que se faz: os parâmetros (imposto, taxas, despesas), o
+          lucro de cada categoria e só então o preço de cada produto. */}
       <div role="tablist" className="flex flex-wrap gap-3">
-        <AbaComContador label="Produtos" cor="verde" icon={Package} ativa={aba === 'produtos'} onClick={() => setAba('produtos')}
-          title="Preço praticado × preço pelo markup divisor, produto a produto" />
+        <AbaComContador label="Tributação" cor="azul" icon={Landmark} ativa={aba === 'tributacao'} onClick={() => setAba('tributacao')} />
         <AbaComContador label="Categorias" cor="dourado" icon={Tags} ativa={aba === 'lucro'} onClick={() => setAba('lucro')}
           n={isLoading ? undefined : semLucro} title="Lucro líquido desejado por categoria. O número ao lado: categorias sem lucro definido — produto delas fica sem preço sugerido" />
-        <AbaComContador label="Tributação" cor="azul" icon={Landmark} ativa={aba === 'tributacao'} onClick={() => setAba('tributacao')} />
+        <AbaComContador label="Produtos" cor="verde" icon={Package} ativa={aba === 'produtos'} onClick={() => setAba('produtos')}
+          title="Preço praticado × preço pelo markup divisor, produto a produto" />
+        {/* O DAS não forma preço: é a rotina do mês, depois de vender. */}
+        {params.pode_editar && (
+          <AbaComContador label="DAS" cor="verdeEscuro" icon={Receipt} ativa={aba === 'das'} onClick={() => setAba('das')}
+            title="Apuração mensal do Simples Nacional — gera a conta a pagar" />
+        )}
       </div>
 
       <div className="neu-flat rounded-3xl p-4 sm:p-6 border border-white/5">
@@ -707,14 +760,15 @@ const PrecificacaoViewInner = ({ showToast, filial }: { showToast: any; filial: 
             <AbaLucroCategorias categorias={categorias} isLoading={isLoading} reload={reload} d={d} showToast={showToast} />
           </div>
         )}
-        {aba === 'tributacao' && <AbaTributacao key={filial} p={params} salvar={salvar} showToast={showToast} />}
+        {aba === 'tributacao' && <AbaTributacao key={filial} p={params} salvar={salvar} showToast={showToast} onNavigate={onNavigate} />}
+        {aba === 'das' && params.pode_editar && <ApuracaoDas filial={params.filial} showToast={showToast} />}
       </div>
     </motion.div>
   );
 };
 
-export const PrecificacaoView = ({ showToast }: any) => {
+export const PrecificacaoView = ({ showToast, onNavigate }: any) => {
   const { filialAtiva } = useFilial();
   if (!filialAtiva) return <SelecioneUnidade oQue="A formação de preço" />;
-  return <PrecificacaoViewInner showToast={showToast} filial={filialAtiva} />;
+  return <PrecificacaoViewInner showToast={showToast} filial={filialAtiva} onNavigate={onNavigate} />;
 };

@@ -29,13 +29,13 @@ export function useParametrosPrecificacao(filial: string | null | undefined) {
   useEffect(() => { void carregar(); }, [carregar]);
 
   /** Null em qualquer campo devolve aquele parâmetro ao histórico. */
-  const salvar = useCallback(async (manual: { rbt12: number | null; despesas_pct: number | null; taxas_pct: number | null; variaveis_pct: number | null }) => {
+  const salvar = useCallback(async (manual: { rbt12: number | null; despesas_pct: number | null; variaveis_pct: number | null }) => {
     if (!supabase || !filial) return;
     const { data, error } = await supabase.rpc('salvar_parametros_precificacao', {
       p_filial: filial,
       p_rbt12_manual: manual.rbt12,
       p_despesas_pct_manual: manual.despesas_pct,
-      p_taxas_pct_manual: manual.taxas_pct,
+      p_taxas_pct_manual: null,  // migr. 666: ignorado — a taxa sai de Formas de Pagamento
       p_variaveis_pct_manual: manual.variaveis_pct,  // migr. 664
     });
     if (error) throw error;

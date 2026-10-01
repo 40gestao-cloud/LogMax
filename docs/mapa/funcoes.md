@@ -3227,7 +3227,7 @@ Para cada função: quem a chama (tela, servidor, outra função, gatilho), o qu
 - **Telas que chamam:** [Cadastros › Produtos](telas.md#s-cadastros-produtos), [Cadastros › Serviços](telas.md#s-cadastros-serviços), [Financeiro › Precificação](telas.md#s-financeiro-precificação)
 - **Chamada por outras funções:** [salvar_lucro_servico](funcoes.md#f-salvar_lucro_servico), [salvar_parametros_precificacao](funcoes.md#f-salvar_parametros_precificacao)
 - **Grava:** —
-- **Lê:** [contas_pagar](tabelas.md#t-contas_pagar), [filial_precificacao](tabelas.md#t-filial_precificacao), [servicos](tabelas.md#t-servicos)
+- **Lê:** [contas_pagar](tabelas.md#t-contas_pagar), [filial_precificacao](tabelas.md#t-filial_precificacao), [formas_pagamento](tabelas.md#t-formas_pagamento), [servicos](tabelas.md#t-servicos)
 - **Chama:** [_assert_rpc](funcoes.md#f-_assert_rpc), [_dre_calculo](funcoes.md#f-_dre_calculo), [_receita_simples](funcoes.md#f-_receita_simples), [_simples_rbt12](funcoes.md#f-_simples_rbt12), [_taxa_pelo_mix](funcoes.md#f-_taxa_pelo_mix), [acre_today](funcoes.md#f-acre_today), [auth_gerente_da](funcoes.md#f-auth_gerente_da), [auth_in_setor](funcoes.md#f-auth_in_setor), [auth_pode_filial](funcoes.md#f-auth_pode_filial), [simples_anexo_i](funcoes.md#f-simples_anexo_i), [simples_anexo_iii](funcoes.md#f-simples_anexo_iii)
 
 <a id="f-parcela_emprestimo_arquivada_e_historico"></a>
