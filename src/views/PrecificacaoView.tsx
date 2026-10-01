@@ -14,7 +14,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { motion } from 'motion/react';
-import { Save, Tags, Landmark, SlidersHorizontal, TriangleAlert, Receipt, Package, Wrench } from 'lucide-react';
+import { Save, Tags, Landmark, SlidersHorizontal, TriangleAlert, Receipt, Package, Wrench, Calculator, ExternalLink, Pencil, X } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useFilial } from '../contexts/FilialContext';
 import type { FilialOp } from '../components/FilialSelector';
@@ -403,6 +403,18 @@ function CampoPct({ rotulo, valor, onChange, placeholder }: { rotulo: string; va
   );
 }
 
+// Botão na faixa colorida do cartão. Era texto sublinhado, e o aluno não lia
+// como botão: aqui ganha fundo claro, ícone e borda — destaca sobre qualquer
+// cor de faixa.
+function BotaoCabecalho({ onClick, icon: Icon, children }: { onClick: () => void; icon: any; children: React.ReactNode }) {
+  return (
+    <button type="button" onClick={onClick}
+      className="inline-flex items-center gap-1.5 rounded-lg bg-white text-gray-900 hover:bg-gray-100 border border-white/60 shadow-sm px-2.5 py-1 text-[11px] font-bold normal-case tracking-normal whitespace-nowrap transition-colors">
+      <Icon size={12} className="shrink-0" /> {children}
+    </button>
+  );
+}
+
 function BotaoSalvar({ onClick, salvando, rotulo = 'Salvar' }: { onClick: () => void; salvando: boolean; rotulo?: string }) {
   return (
     <button onClick={onClick} disabled={salvando}
@@ -503,16 +515,16 @@ function AbaTributacao({ p, salvar, showToast, onNavigate }: {
 
   // Fechar devolve o campo ao que está gravado: o Salvar de outro cartão
   // manda os três, e não pode levar junto um rascunho escondido.
-  const alternar = (atual: boolean, set: (v: boolean) => void, rotulo: [string, string], restaurar: () => void) => p.pode_editar && (
-    <button type="button" onClick={() => { if (atual) restaurar(); set(!atual); }} className="underline underline-offset-2">
+  const alternar = (atual: boolean, set: (v: boolean) => void, rotulo: [string, string], icon: any, restaurar: () => void) => p.pode_editar && (
+    <BotaoCabecalho onClick={() => { if (atual) restaurar(); set(!atual); }} icon={atual ? X : icon}>
       {atual ? rotulo[1] : rotulo[0]}
-    </button>
+    </BotaoCabecalho>
   );
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 items-start">
       <SecaoFormulario titulo={p.vende_servico ? 'Simples Nacional — Anexos I e III' : 'Simples Nacional — Anexo I (comércio)'} icon={Landmark} cor="amareloEscuro"
-        extra={alternar(ajustaRbt, setAjustaRbt, ['Simular faturamento', 'Fechar simulação'], () => setRbt12(m?.rbt12 == null ? '' : formatBRL(m.rbt12)))}>
+        extra={alternar(ajustaRbt, setAjustaRbt, ['Simular faturamento', 'Fechar simulação'], Calculator, () => setRbt12(m?.rbt12 == null ? '' : formatBRL(m.rbt12)))}>
         <Linha rotulo="Faturamento 12 meses (RBT12)" valor={p.rbt12 == null ? '—' : brl(p.rbt12)}
           nota={m?.rbt12 != null ? 'informado manualmente' : RBT12_ORIGEM[p.rbt12_origem](p.rbt12_meses)} />
         <Linha rotulo={`Faixa ${p.faixa}`} valor={`${fmtPct(p.aliquota_nominal, 2)} nominal`}
@@ -547,9 +559,9 @@ function AbaTributacao({ p, salvar, showToast, onNavigate }: {
 
       <SecaoFormulario titulo="Taxas de cartão" icon={Receipt} cor="azul"
         extra={onNavigate && (
-          <button type="button" onClick={() => onNavigate('empresa-formasdepagamento')} className="underline underline-offset-2">
+          <BotaoCabecalho onClick={() => onNavigate('empresa-formasdepagamento')} icon={ExternalLink}>
             Abrir Formas de Pagamento
-          </button>
+          </BotaoCabecalho>
         )}>
         <Linha rotulo="Taxa sobre a venda" valor={fmtPct(p.taxas_pct ?? 0)} nota={origemLonga(p.taxas_origem, p)} />
         <MixDeTaxas p={p} />
@@ -561,7 +573,7 @@ function AbaTributacao({ p, salvar, showToast, onNavigate }: {
 
       <div className="lg:col-span-2">
         <SecaoFormulario titulo="Despesas" icon={SlidersHorizontal} cor="roxo"
-          extra={alternar(ajustaDesp, setAjustaDesp, ['Ajustar despesas fixas', 'Fechar ajuste'], () => setDespesas(pctMascara(m?.despesas_pct)))}>
+          extra={alternar(ajustaDesp, setAjustaDesp, ['Ajustar despesas fixas', 'Fechar ajuste'], Pencil, () => setDespesas(pctMascara(m?.despesas_pct)))}>
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-x-8">
             <div className="flex flex-col">
               <Linha rotulo="Despesas fixas" valor={fmtPct(p.despesas_pct ?? 0)}
