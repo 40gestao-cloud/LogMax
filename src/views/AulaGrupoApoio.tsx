@@ -97,6 +97,11 @@ export function AulaGrupoApoio({ profile, showToast, configTurma }: {
   const dirty = !iguais(modulos, salvo.modulos_ativos) || !iguais(submenus, salvo.submenus_ativos);
 
   const salvar = async () => {
+    // Ligado e sem tela nenhuma, o integrante ficaria só com a Início.
+    if (salvo.ativo && modulos.length === 0) {
+      showToast('Com o grupo ligado, deixe ao menos uma tela marcada — ou desligue o grupo antes.', 'error');
+      return;
+    }
     setOcupado(true);
     if (await gravarConfig({ modulos_ativos: modulos, submenus_ativos: submenus })) {
       setSalvo(s => ({ ...s, modulos_ativos: modulos, submenus_ativos: submenus }));
@@ -124,13 +129,20 @@ export function AulaGrupoApoio({ profile, showToast, configTurma }: {
     const { error } = await supabase.from('aula_grupo_apoio')
       .insert({ user_id: pessoa.id, papel: papelNovo, incluido_por: profile.id });
     if (error) showToast(`Erro: ${error.message}`, 'error');
-    else { setBusca(''); await carregar(); }
+    else {
+      // Com o grupo ligado, "toca" a config: o evento de realtime é o único
+      // aviso que chega na máquina de quem acabou de entrar, e só chega porque
+      // agora a pessoa já está no grupo (RLS).
+      if (salvo.ativo) await gravarConfig({});
+      setBusca('');
+      await carregar();
+    }
     setOcupado(false);
   };
 
   const remover = async (i: Integrante) => {
     if (!supabase) return;
-    if (!await confirmar(`Tirar ${i.nome} do grupo de apoio?${salvo.ativo ? ' Na hora, passa a seguir a turma.' : ''}`)) return;
+    if (!await confirmar(`Tirar ${i.nome} do grupo de apoio?${salvo.ativo ? ' Passa a seguir a turma em até 1 minuto (ou na hora, se recarregar a página).' : ''}`)) return;
     setOcupado(true);
     const { error } = await supabase.from('aula_grupo_apoio').delete().eq('user_id', i.user_id);
     if (error) showToast(`Erro: ${error.message}`, 'error');

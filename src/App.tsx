@@ -1245,7 +1245,7 @@ function LogMaxAppInner() {
   // Grupo de apoio (migr. 669): integrante com o grupo ligado segue a config
   // do grupo no lugar da turma. Daqui para baixo, `aulaConfig` já é a que vale
   // para este usuário — menu, guardas, setores concedidos e faixa não mudam.
-  const grupoApoio = useGrupoApoio(isAuthenticated ? profile?.id : null);
+  const grupoApoio = useGrupoApoio(isAuthenticated && profile && profile.role !== 'admin' ? profile.id : null);
   const aulaConfig = useMemo(
     () => aulaConfigEfetiva(aulaConfigTurma, grupoApoio, profile?.role),
     [aulaConfigTurma, grupoApoio.membro, grupoApoio.config, profile?.role], // eslint-disable-line react-hooks/exhaustive-deps

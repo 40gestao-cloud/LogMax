@@ -720,7 +720,7 @@ Para cada função: quem a chama (tela, servidor, outra função, gatilho), o qu
 - **Telas que chamam:** —
 - **Chamada por outras funções:** [auth_user_setores](funcoes.md#f-auth_user_setores)
 - **Grava:** —
-- **Lê:** [aula_config](tabelas.md#t-aula_config), [user_profiles](tabelas.md#t-user_profiles)
+- **Lê:** [aula_config](tabelas.md#t-aula_config), [aula_grupo_apoio](tabelas.md#t-aula_grupo_apoio), [aula_grupo_apoio_config](tabelas.md#t-aula_grupo_apoio_config), [user_profiles](tabelas.md#t-user_profiles)
 - **Chama:** [aula_setores_do_modulo](funcoes.md#f-aula_setores_do_modulo)
 
 <a id="f-auth_blackout"></a>

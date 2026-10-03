@@ -4015,6 +4015,8 @@
    "grava": [],
    "le": [
     "aula_config",
+    "aula_grupo_apoio",
+    "aula_grupo_apoio_config",
     "user_profiles"
    ],
    "chama": [
