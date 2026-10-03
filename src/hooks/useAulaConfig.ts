@@ -51,10 +51,21 @@ const gravarCache = (c: AulaConfig) => {
   try { localStorage.setItem(CACHE_KEY, JSON.stringify(c)); } catch { /* quota/privado */ }
 };
 
+// A primeira assinatura do canal chega logo depois da leitura do boot. Reler
+// ali dobrava a consulta de cada máquina da sala no minuto mais disputado (o
+// login da turma, quando as consultas fazem fila por conexão). Só se pula se a
+// leitura anterior DEU CERTO há pouco: se ela falhou, a releitura ao assinar é
+// justamente o que corrige.
+const JANELA_BOOT_MS = 5_000;
+
 export function useAulaConfig() {
   const [config, setConfig] = useState<AulaConfig>(lerCache);
   const [loaded, setLoaded] = useState(false);
   const cancelado = useRef(false);
+  const lidoComSucessoEm = useRef(0);
+  // A leitura em andamento. O canal costuma assinar ANTES de a leitura do boot
+  // voltar; sem esperá-la, a checagem de janela ainda via "nunca li" e relia.
+  const emVoo = useRef<Promise<void> | null>(null);
 
   const aplicar = useCallback((raw: any) => {
     if (cancelado.current) return;
@@ -63,7 +74,7 @@ export function useAulaConfig() {
     gravarCache(c);
   }, []);
 
-  const carregar = useCallback(async () => {
+  const lerDoServidor = useCallback(async () => {
     if (!supabase) return;
     const { data, error } = await supabase
       .from('aula_config')
@@ -72,9 +83,24 @@ export function useAulaConfig() {
       .maybeSingle();
     // Sem `data` (rede caída, RLS, linha ausente) mantém-se o que já estava:
     // sobrescrever com DEFAULT aqui destravaria o menu justamente na falha.
-    if (!error && data) aplicar(data);
+    if (!error && data) {
+      lidoComSucessoEm.current = Date.now();
+      aplicar(data);
+    }
     if (!cancelado.current) setLoaded(true);
   }, [aplicar]);
+
+  const carregar = useCallback(() => {
+    const leitura = lerDoServidor();
+    emVoo.current = leitura;
+    return leitura;
+  }, [lerDoServidor]);
+
+  const aoAssinar = useCallback(async () => {
+    await emVoo.current?.catch(() => {});
+    if (Date.now() - lidoComSucessoEm.current <= JANELA_BOOT_MS) return;
+    carregar();
+  }, [carregar]);
 
   useEffect(() => {
     cancelado.current = false;
@@ -96,8 +122,9 @@ export function useAulaConfig() {
         // Reconexão do websocket é ponto cego: tudo que mudou enquanto o socket
         // esteve fora não é reenviado. Quem fecha a tampa do notebook no
         // intervalo voltava com a config de antes da aula, sem evento nenhum
-        // para corrigi-la. Reler a cada (re)assinatura fecha essa janela.
-        if (status === 'SUBSCRIBED') carregar();
+        // para corrigi-la. Reler a cada (re)assinatura fecha essa janela —
+        // menos na primeira, colada na leitura do boot (JANELA_BOOT_MS).
+        if (status === 'SUBSCRIBED') aoAssinar();
       });
 
     // Mesma janela pelo lado do navegador: aba em segundo plano suspende o
@@ -112,7 +139,7 @@ export function useAulaConfig() {
       window.removeEventListener('online', carregar);
       supabase!.removeChannel(ch);
     };
-  }, [carregar, aplicar]);
+  }, [carregar, aplicar, aoAssinar]);
 
   return { config, loaded };
 }

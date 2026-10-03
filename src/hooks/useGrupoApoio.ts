@@ -21,7 +21,8 @@ import type { GrupoApoioConfig } from '../lib/aulaModulos';
 const RECONFERIR_INTEGRANTE_MS = 60_000;
 
 /** A primeira assinatura do canal chega logo depois da leitura do boot; reler
- *  ali só dobraria a consulta. Reassinatura (socket que caiu) relê. */
+ *  ali só dobraria a consulta. Reassinatura (socket que caiu) relê, e também
+ *  relê se a leitura do boot falhou. */
 const JANELA_BOOT_MS = 5_000;
 
 const ler = (raw: any): GrupoApoioConfig => ({
@@ -37,11 +38,11 @@ export function useGrupoApoio(userId: string | null | undefined) {
   const cancelado = useRef(false);
   const lidoEm = useRef(0);
 
-  const carregar = useCallback(async () => {
+  const lerDoServidor = useCallback(async () => {
     if (!supabase || !userId) return;
-    lidoEm.current = Date.now();
     const m = await supabase.from('aula_grupo_apoio').select('user_id').eq('user_id', userId).maybeSingle();
     if (cancelado.current) return;
+    if (!m.error) lidoEm.current = Date.now();
     // Banco sem as tabelas (turma sem a 669) devolve erro: fica de fora, que é
     // o comportamento de antes do recurso existir.
     if (m.error || !m.data) {
@@ -54,6 +55,21 @@ export function useGrupoApoio(userId: string | null | undefined) {
     setMembro(true);
     if (!c.error) setConfig(c.data ? ler(c.data) : null);
   }, [userId]);
+
+  // Mesma régua do `useAulaConfig`: a assinatura costuma chegar antes de a
+  // leitura do boot voltar, então espera a leitura em andamento e só relê se
+  // ela falhou ou já é velha.
+  const emVoo = useRef<Promise<void> | null>(null);
+  const carregar = useCallback(() => {
+    const leitura = lerDoServidor();
+    emVoo.current = leitura;
+    return leitura;
+  }, [lerDoServidor]);
+  const aoAssinar = useCallback(async () => {
+    await emVoo.current?.catch(() => {});
+    if (Date.now() - lidoEm.current <= JANELA_BOOT_MS) return;
+    carregar();
+  }, [carregar]);
 
   useEffect(() => {
     cancelado.current = false;
@@ -76,7 +92,7 @@ export function useGrupoApoio(userId: string | null | undefined) {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'aula_grupo_apoio_config' },
         () => { carregar(); })
       .subscribe(status => {
-        if (status === 'SUBSCRIBED' && Date.now() - lidoEm.current > JANELA_BOOT_MS) carregar();
+        if (status === 'SUBSCRIBED') aoAssinar();
       });
 
     const aoVoltar = () => { if (document.visibilityState === 'visible') carregar(); };
@@ -89,7 +105,7 @@ export function useGrupoApoio(userId: string | null | undefined) {
       window.removeEventListener('online', carregar);
       sb.removeChannel(ch);
     };
-  }, [userId, carregar]);
+  }, [userId, carregar, aoAssinar]);
 
   // Só quem está no grupo (meia dúzia de máquinas, no máximo) reconfere.
   useEffect(() => {
