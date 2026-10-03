@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { GraduationCap, Save, RotateCcw, Check, Users, Layers, Lock, ChevronDown, Filter, AlertTriangle, Workflow, ClipboardCheck, RefreshCw, ShieldAlert, Circle, ClipboardList, Presentation, History, FolderPlus, FileWarning, Hourglass } from 'lucide-react';
+import { GraduationCap, Save, RotateCcw, Check, Users, Layers, Lock, ChevronDown, Filter, AlertTriangle, Workflow, ClipboardCheck, RefreshCw, ShieldAlert, Circle, ClipboardList, Presentation, History, HeartHandshake, FolderPlus, FileWarning, Hourglass } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAulaConfig, type AulaConfig } from '../hooks/useAulaConfig';
 import { useBlackout } from '../hooks/useBlackout';
@@ -18,6 +18,7 @@ import { AulaPainelControle } from './AulaPainelControle';
 import { AulaConferenciaFluxo } from './AulaConferenciaFluxo';
 import { PendenciasView } from './PendenciasView';
 import { AulaHistorico } from './AulaHistorico';
+import { AulaGrupoApoio } from './AulaGrupoApoio';
 import type { UserProfile } from '../hooks/useUserProfile';
 import { NeuButtonAccent, LoadingSpinner, CardContador } from '../components/ui';
 import { BotaoRecarregarTurma } from '../components/BotaoRecarregarTurma';
@@ -32,9 +33,12 @@ const arraysIguais = (a: string[], b: string[]) =>
 
 // As três coisas que esta tela faz, na ordem em que a aula acontece: montar o
 // recorte, enviar o enunciado, acompanhar quem fez.
-type AbaId = 'montagem' | 'atividades' | 'controle' | 'conferencia' | 'pendencias' | 'historico';
+type AbaId = 'montagem' | 'grupo' | 'atividades' | 'controle' | 'conferencia' | 'pendencias' | 'historico';
 const ABAS: { id: AbaId; label: string; icone: any }[] = [
   { id: 'montagem',   label: 'Montagem',   icone: Workflow },
+  // Segunda config da aula para um grupo pequeno (migr. 669). Só do professor:
+  // quem está no grupo é dado de saúde, e o CEO é aluno.
+  { id: 'grupo',      label: 'Grupo de apoio', icone: HeartHandshake },
   { id: 'atividades', label: 'Atividades', icone: ClipboardList },
   { id: 'controle',   label: 'Controle',   icone: ClipboardCheck },
   // Controle conta quem FEZ; Conferência conta COMO foi feito. Separadas de
@@ -391,7 +395,7 @@ export const AulaModoView: React.FC<Props> = ({ showToast, profile }) => {
         </h1>
         {/* Conferência e Pendências só para o professor: o CEO é aluno e um dos auditados. */}
         <div className="flex gap-1 neu-pressed rounded-xl p-1 border border-white/5 flex-wrap" role="tablist">
-          {ABAS.filter(t => !['conferencia', 'pendencias'].includes(t.id) || profile?.role === 'admin').map(t => (
+          {ABAS.filter(t => !['grupo', 'conferencia', 'pendencias'].includes(t.id) || profile?.role === 'admin').map(t => (
             <button key={t.id} type="button" role="tab" aria-selected={aba === t.id} onClick={() => setAba(t.id)}
               className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-colors ${
                 aba === t.id ? 'bg-accent text-[var(--color-accent-text)]' : 'text-gray-400 hover:text-gray-200'}`}>
@@ -838,6 +842,10 @@ export const AulaModoView: React.FC<Props> = ({ showToast, profile }) => {
       </div>
 
       </>)}
+
+      {aba === 'grupo' && profile?.role === 'admin' && (
+        <AulaGrupoApoio profile={profile} showToast={showToast} configTurma={config} />
+      )}
 
       {aba === 'atividades' && (<>
       {/* O que já foi enviado e onde caiu. Conta quem ABRIU o enunciado; quem

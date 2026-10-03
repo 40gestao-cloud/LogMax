@@ -266,3 +266,33 @@ export function aulaPermiteView(
   if (submenus === null) return true;  // sem restrição de submenu → todos liberados
   return submenus.includes(view);
 }
+
+/** Config do grupo de apoio (migr. 669), lida por `useGrupoApoio`. */
+export type GrupoApoioConfig = {
+  ativo: boolean;
+  modulos_ativos: string[];
+  submenus_ativos: string[];
+  atualizado_em: string | null;
+};
+
+/**
+ * A config do Modo Aula que vale para este usuário: a do grupo, se ele está
+ * no grupo e o grupo está ligado; senão, a da turma. Mesma escolha que
+ * `auth_aula_setores()` faz no banco (migr. 669) — mudar uma exige mudar a
+ * outra.
+ */
+export function aulaConfigEfetiva(
+  turma: AulaConfig,
+  grupo: { membro: boolean; config: GrupoApoioConfig | null },
+  role: string | null | undefined,
+): AulaConfig {
+  if (!grupo.membro || !grupo.config?.ativo || !role || role === 'admin') return turma;
+  return {
+    ativo: true,
+    modulos_ativos: grupo.config.modulos_ativos,
+    submenus_ativos: grupo.config.submenus_ativos,
+    // O grupo filtra o integrante qualquer que seja o papel dele.
+    roles_afetados: [role],
+    atualizado_em: grupo.config.atualizado_em,
+  };
+}

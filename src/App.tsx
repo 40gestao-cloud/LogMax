@@ -16,8 +16,9 @@ import { RecargaRemotaModal } from './components/RecargaRemotaModal';
 import { useBlackout } from './hooks/useBlackout';
 import { BlackoutBanner } from './components/BlackoutBanner';
 import { useAulaConfig } from './hooks/useAulaConfig';
+import { useGrupoApoio } from './hooks/useGrupoApoio';
 import { useAulaAtividades } from './hooks/useAulaAtividades';
-import { aulaFiltraUsuario, aulaPermiteView, aulaSetoresConcedidos } from './lib/aulaModulos';
+import { aulaConfigEfetiva, aulaFiltraUsuario, aulaPermiteView, aulaSetoresConcedidos } from './lib/aulaModulos';
 import { SETOR_MODULES } from './lib/sectorAccess';
 import {
   SESSOES_MATRIZ_MACROS, ANALISE_IA_MACROS,
@@ -1240,7 +1241,15 @@ function LogMaxAppInner() {
   // à parte, sem realtime — ver useContadorMesa.
   const contadorMesa = useContadorMesa(profile, filialAtiva);
   const badges = useMemo(() => ({ ...badgesFilas, 'mesa-gestor': contadorMesa }), [badgesFilas, contadorMesa]);
-  const { config: aulaConfig } = useAulaConfig();
+  const { config: aulaConfigTurma } = useAulaConfig();
+  // Grupo de apoio (migr. 669): integrante com o grupo ligado segue a config
+  // do grupo no lugar da turma. Daqui para baixo, `aulaConfig` já é a que vale
+  // para este usuário — menu, guardas, setores concedidos e faixa não mudam.
+  const grupoApoio = useGrupoApoio(isAuthenticated ? profile?.id : null);
+  const aulaConfig = useMemo(
+    () => aulaConfigEfetiva(aulaConfigTurma, grupoApoio, profile?.role),
+    [aulaConfigTurma, grupoApoio.membro, grupoApoio.config, profile?.role], // eslint-disable-line react-hooks/exhaustive-deps
+  );
   // Atividade publicada pela Matriz (migr. 403). Vive no App, e não num FAB
   // como os avisos, porque todo FAB some no Modo Aula — justamente quando esta
   // é a informação mais importante da tela do aluno.

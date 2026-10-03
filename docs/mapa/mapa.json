@@ -1938,6 +1938,8 @@
     "aula_atividades",
     "aula_atividades_ciencia",
     "aula_config",
+    "aula_grupo_apoio",
+    "aula_grupo_apoio_config",
     "aula_sessoes",
     "aula_tarefas_realizadas",
     "blackout_config",
@@ -1946,6 +1948,8 @@
    ],
    "grava": [
     "aula_config",
+    "aula_grupo_apoio",
+    "aula_grupo_apoio_config",
     "comandos_turma",
     "max_shows"
    ],

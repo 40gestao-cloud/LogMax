@@ -34,6 +34,8 @@ const FORA_DA_REGUA: Record<string, string> = {
     'aplica o registro que vem no payload (aula_config é uma linha só). Nenhuma leitura.',
   'hooks/useBlackout.ts':
     'idem: aplica o payload de blackout_config, uma linha.',
+  'hooks/useGrupoApoio.ts':
+    'aula_grupo_apoio_config é uma linha só e a RLS só entrega o evento ao professor e aos integrantes do grupo (migr. 669) — no máximo meia dúzia de máquinas relê, nunca a turma.',
   'hooks/useComandoRecarga.ts':
     'lê o comando do payload para decidir se recarrega a PWA. Atrasar aqui atrasaria a recarga que o professor pediu.',
   'lib/pdv/cobranca.ts':
