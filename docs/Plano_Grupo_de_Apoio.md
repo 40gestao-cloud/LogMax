@@ -46,7 +46,7 @@ Quem está no grupo é informação de saúde (LGPD, dado sensível) e não pode
 **Reset geral:** ele esvazia toda tabela fora da lista dele. A lista de integrantes some junto com as contas de aluno, como deve. A config do grupo também some; em vez de mexer na função do reset, a tela grava por upsert e linha ausente vale "desligado".
 
 **Revisão de 02/10 (depois do teste):**
-- Grupo esquecido ligado não desligava (a aula da turma desliga no cron das 22:10). A migr. 670 põe o grupo no mesmo `encerrar_aulas_ociosas`: desliga o que ninguém tocou há mais de 6 h.
+- Grupo esquecido ligado não desligava (a aula da turma desliga no cron das 22:10). A migr. 670 (aplicada nas 4 em 02/10) põe o grupo no mesmo `encerrar_aulas_ociosas`: desliga o que ninguém tocou há mais de 6 h.
 - O admin não lê mais nada do grupo no boot, e quem está fora faz 1 leitura (não 4). A primeira assinatura do canal não relê.
 - Incluir alguém com o grupo ligado "toca" a config, para o evento chegar na máquina da pessoa. Quem é tirado do grupo não recebe evento (a RLS já não deixa); o integrante reconfere a participação a cada 1 min.
 - Não dá para salvar o grupo ligado sem nenhuma tela.
@@ -67,4 +67,4 @@ Quem está no grupo é informação de saúde (LGPD, dado sensível) e não pode
 | Migração | Aprendiz | LogMax-ERP | Contabilidade | Adm |
 |---|---|---|---|---|
 | 669 `grupo_de_apoio_no_modo_aula` | 02/10/2026 | 02/10/2026 | 02/10/2026 | 02/10/2026 |
-| 670 `grupo_de_apoio_esquecido_ligado_desliga_a_noite` | — (validada com rollback) | — | — | — |
+| 670 `grupo_de_apoio_esquecido_ligado_desliga_a_noite` | 02/10/2026 | 02/10/2026 | 02/10/2026 | 02/10/2026 |
