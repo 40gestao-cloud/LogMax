@@ -1,6 +1,6 @@
 # Plano — Grupo de apoio no Modo Aula
 
-> Situação: **em andamento** — passos 1 a 3 feitos em 02/10/2026, migração só na Aprendiz. Falta o teste com contas reais (passo 4).
+> Situação: **validado na Aprendiz** (02/10/2026) — passos 1 a 4 feitos. Falta levar às outras 3 turmas (passo 5).
 
 ## O problema
 
@@ -55,7 +55,7 @@ Quem está no grupo é informação de saúde (LGPD, dado sensível) e não pode
 1. Migração (tabelas, RLS, realtime, `auth_aula_setores`) na Aprendiz + teste com JWT simulado (integrante, não integrante, admin).
 2. `useGrupoApoio` + troca de config no `App.tsx`.
 3. Aba Grupo de apoio no Modo Aula.
-4. Teste na Aprendiz: professor + 1 conta do grupo + 1 conta de fora, com a turma e o grupo em configurações diferentes.
+4. Teste na Aprendiz: professor + 1 conta do grupo + 1 conta de fora, com a turma e o grupo em configurações diferentes. **Feito em 02/10:** turma com a montagem completa, grupo só em Cadastros › Produtos. O integrante viu só Produtos; quem estava fora viu a turma; "Desligar e juntar à turma" trocou o menu do integrante na hora, sem recarregar.
 5. Validado: aplicar nas outras 3 turmas, rodar `npm run drift` e `npm run rls:check`.
 
 | Migração | Aprendiz | LogMax-ERP | Contabilidade | Adm |
