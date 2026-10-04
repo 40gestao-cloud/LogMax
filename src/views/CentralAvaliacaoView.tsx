@@ -17,10 +17,12 @@ type Aba = 'padrao' | 'metas' | 'competicao' | 'avisos';
 // Metas migrou pra DemandasView) + Avisos (Matriz, admin/CEO/conselheiro) +
 // Competição (só quando há competição ativa + admin/CEO/conselheiro em modo
 // Matriz).
-export function CentralAvaliacaoView({ profile, showToast, initialTab = 'padrao' }: {
+export function CentralAvaliacaoView({ profile, showToast, initialTab = 'padrao', navigate }: {
   profile: UserProfile;
   showToast: any;
   initialTab?: Aba;
+  // Volta da Competição do Conselho para o Placar (Matriz › Competição).
+  navigate?: (view: string) => void;
 }) {
   const { filialAtiva, escolheu } = useFilial();
   const modoMatriz = escolheu && filialAtiva === null;
@@ -90,7 +92,7 @@ export function CentralAvaliacaoView({ profile, showToast, initialTab = 'padrao'
       {abaEfetiva === 'padrao'   && <AvaliacoesView profile={profile} showToast={showToast} />}
       {abaEfetiva === 'metas'    && modoMatriz && <MetasView profile={profile} showToast={showToast} />}
       {abaEfetiva === 'avisos'   && podeAvisos && <MatrizAvisosView profile={profile} showToast={showToast} />}
-      {abaEfetiva === 'competicao' && mostrarCompeticao && <MatrizAvaliacoesView profile={profile} showToast={showToast} />}
+      {abaEfetiva === 'competicao' && mostrarCompeticao && <MatrizAvaliacoesView profile={profile} showToast={showToast} navigate={navigate} />}
     </div>
   );
 }

@@ -51,7 +51,13 @@ const diasAte = (fim: string) => {
 // Central de Avaliação — Competição: hoje é só o painel de Tarefas da Matriz.
 // Admin/CEO cadastra atividades por tipo (treinamento em vendas, treinamento em IA,
 // apresentação, etc.); CEO+conselheiros julgam por participante.
-export function MatrizAvaliacoesView({ profile, showToast }: { profile: UserProfile; showToast: any }) {
+export function MatrizAvaliacoesView({ profile, showToast, navigate }: {
+  profile: UserProfile;
+  showToast: any;
+  // Atalho de volta ao Placar (Matriz › Competição). Opcional: sem ele o
+  // botão some, a tela segue funcionando.
+  navigate?: (view: string) => void;
+}) {
   const ehAvaliador = profile.role === 'ceo' || isConselheiro(profile);
   const podeAcessar = profile.role === 'admin' || ehAvaliador;
 
@@ -81,6 +87,8 @@ export function MatrizAvaliacoesView({ profile, showToast }: { profile: UserProf
     })(),
   );
 
+  const primeiraCarga = useRef(true);
+
   useEffect(() => {
     let cancelou = false;
     const carregar = async (comMask = true) => {
@@ -97,14 +105,21 @@ export function MatrizAvaliacoesView({ profile, showToast }: { profile: UserProf
       if (!cancelou) {
         const lista = (data ?? []) as Competicao[];
         setCompeticoes(lista);
-        // Só abre direto o que veio clicado do Histórico — navegação explícita.
-        // Fora disso a aba fica na lista: escolher é do usuário, não da tela.
-        // `alvoClicado` é zerado no uso pra que um refresh do realtime não
-        // reabra a competição depois que o usuário voltou para a lista.
+        // Abre direto: (1) o que veio clicado do Histórico — navegação
+        // explícita; ou (2) na primeira carga, a única competição viva, se
+        // houver exatamente uma — uma lista de um cartão só era um clique a
+        // mais sem escolha nenhuma. Com duas ou mais vivas, escolher é do
+        // usuário. Os dois gatilhos são zerados no uso, pra que um refresh do
+        // realtime não reabra a competição depois que ele voltou para a lista.
         if (alvoClicado.current) {
           const clicada = lista.find(c => c.id === alvoClicado.current);
           alvoClicado.current = null;
+          primeiraCarga.current = false;
           if (clicada) setSelecionadaId(clicada.id);
+        } else if (primeiraCarga.current) {
+          primeiraCarga.current = false;
+          const vivas = lista.filter(c => c.status !== 'encerrada');
+          if (vivas.length === 1) setSelecionadaId(vivas[0].id);
         }
         setLoadingComp(false);
       }
@@ -242,6 +257,15 @@ export function MatrizAvaliacoesView({ profile, showToast }: { profile: UserProf
           </div>
         </div>
         <div className="flex items-center gap-2 flex-wrap shrink-0">
+          {/* Ida e volta com a Competição: o placar manda pra cá pelo botão
+              "Central de Avaliação"; daqui se volta pelo "Placar". */}
+          {/* Só pra competição viva: encerrada não ocupa o Placar (mora no
+              Histórico), e o botão levaria a outra competição. */}
+          {navigate && competicao.status !== 'encerrada' && (
+            <button onClick={() => navigate('matriz-competicao')} className="btn-shimmer btn-shimmer--gold" title="Ver o placar desta competição">
+              <Trophy size={13} /> Placar
+            </button>
+          )}
           <button onClick={baixarPDF} disabled={exportando !== null} className="btn-solido btn-solido--vermelho" title="Baixar consolidado em PDF">
             {exportando === 'pdf' ? <Loader2 size={13} className="animate-spin" /> : <FileDown size={13} />} PDF
           </button>

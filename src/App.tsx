@@ -878,7 +878,7 @@ const SidebarNav = ({ activeView, navigate, openModules, toggleModule, handleSig
                 <Trophy size={16} /><span>Competição</span>
               </button>
               <button onPointerEnter={() => prefetchOnHover('avaliacoes')} onPointerLeave={cancelPrefetchHover} onPointerDown={() => prefetchView('avaliacoes')} onClick={() => { navigate('avaliacoes'); onClose?.(); }}
-                className={`flex items-center gap-3 p-2.5 rounded-xl text-sm font-medium ${activeView === 'avaliacoes' ? 'nav-item neu-pressed text-accent is-active' : 'nav-item neu-button text-gray-100'}`}>
+                className={`flex items-center gap-3 p-2.5 rounded-xl text-sm font-medium ${activeView === 'avaliacoes' || activeView === 'matriz-avaliacoes' ? 'nav-item neu-pressed text-accent is-active' : 'nav-item neu-button text-gray-100'}`}>
                 <Star size={16} /><span>Central de Avaliação</span>
               </button>
             </>
@@ -1704,7 +1704,7 @@ function LogMaxAppInner() {
       case 'meu-cracha':                   return <MeuCrachaView profile={profile} showToast={st} />;
       case 'cracha-virtual':               return <CrachaVirtualView showToast={st} profile={profile} />;
       case 'catalogo-produtos':            return <CatalogoProdutosView showToast={st} profile={profile} />;
-      case 'avaliacoes':                   return <CentralAvaliacaoView showToast={st} profile={profile} />;
+      case 'avaliacoes':                   return <CentralAvaliacaoView showToast={st} profile={profile} navigate={navigate} />;
       case 'demandas':                     return <DemandasView showToast={st} profile={profile} />;
       case 'demandas-metas':               return <DemandasView showToast={st} profile={profile} initialTab="metas" />;
       case 'demandas-conselho':            return <DemandasView showToast={st} profile={profile} initialTab="conselho" />;
@@ -1724,7 +1724,7 @@ function LogMaxAppInner() {
       // `matriz-avaliacoes` existe só para cair na Competição do Conselho —
       // é o destino do botão "Central de Avaliação" da tela de Competição.
       // Sem o initialTab ele abria em Padrão, que não tem nada a ver.
-      case 'matriz-avaliacoes':            return <CentralAvaliacaoView showToast={st} profile={profile} initialTab="competicao" />;
+      case 'matriz-avaliacoes':            return <CentralAvaliacaoView showToast={st} profile={profile} initialTab="competicao" navigate={navigate} />;
       case 'matriz-capital':               return <MatrizCapitalView showToast={st} profile={profile} />;
       case 'matriz-conteudo':               return <MatrizConteudoView showToast={st} profile={profile} />;
       case 'aula-modo':                    return <AulaModoView showToast={st} profile={profile} />;
