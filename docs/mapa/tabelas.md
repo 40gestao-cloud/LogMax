@@ -208,10 +208,10 @@ Para cada tabela: quem grava (tela, RPC, gatilho, servidor), quem lê, os gatilh
 <a id="t-avaliacoes"></a>
 ## avaliacoes
 
-- **Telas que gravam:** [Central de Avaliação](telas.md#s-avaliacoes), [Matriz avaliacoes *(rota matriz-avaliacoes)*](telas.md#s-matriz-avaliacoes)
+- **Telas que gravam:** [Central de Avaliação](telas.md#s-avaliacoes), [Matriz avaliacoes *(rota matriz-avaliacoes)*](telas.md#s-matriz-avaliacoes), [Competição](telas.md#s-matriz-competicao)
 - **Telas que gravam via RPC:** [TI & Suporte › Desenvolvimento com IA](telas.md#s-ti-desenvolvimentocomia), [Usuários](telas.md#s-usuarios)
 - **RPCs que gravam:** [atualizar_avaliacao](funcoes.md#f-atualizar_avaliacao), [criar_avaliacao](funcoes.md#f-criar_avaliacao), [criar_avaliacao_filial](funcoes.md#f-criar_avaliacao_filial), [criar_avaliacao_ti_dev_ia](funcoes.md#f-criar_avaliacao_ti_dev_ia), [resetar_dados_operacionais](funcoes.md#f-resetar_dados_operacionais)
-- **Telas que leem:** [Central de Avaliação](telas.md#s-avaliacoes), [Início](telas.md#s-inicio), [Matriz avaliacoes *(rota matriz-avaliacoes)*](telas.md#s-matriz-avaliacoes), [TI & Suporte › Desenvolvimento com IA](telas.md#s-ti-desenvolvimentocomia)
+- **Telas que leem:** [Central de Avaliação](telas.md#s-avaliacoes), [Início](telas.md#s-inicio), [Matriz avaliacoes *(rota matriz-avaliacoes)*](telas.md#s-matriz-avaliacoes), [Competição](telas.md#s-matriz-competicao), [TI & Suporte › Desenvolvimento com IA](telas.md#s-ti-desenvolvimentocomia)
 - **RPCs que leem:** [_calcular_placar_competicao_raw](funcoes.md#f-_calcular_placar_competicao_raw), [atualizar_avaliacao](funcoes.md#f-atualizar_avaliacao), [calcular_placar_padrao](funcoes.md#f-calcular_placar_padrao), [desempenho_funcionarios](funcoes.md#f-desempenho_funcionarios), [media_avaliacao_funcionario](funcoes.md#f-media_avaliacao_funcionario), [resetar_dados_operacionais](funcoes.md#f-resetar_dados_operacionais)
 - **Gatilhos nesta tabela:**
   - `trg_avaliacoes_filial` — BEFORE INSERT → [fn_avaliacoes_filial_from_ciclo](funcoes.md#f-fn_avaliacoes_filial_from_ciclo)
@@ -224,9 +224,9 @@ Para cada tabela: quem grava (tela, RPC, gatilho, servidor), quem lê, os gatilh
 ## avaliacoes_matriz
 
 - **Telas que gravam:** —
-- **Telas que gravam via RPC:** [Central de Avaliação](telas.md#s-avaliacoes), [Matriz avaliacoes *(rota matriz-avaliacoes)*](telas.md#s-matriz-avaliacoes), [Competição](telas.md#s-matriz-competicao)
+- **Telas que gravam via RPC:** [Matriz avaliacoes *(rota matriz-avaliacoes)*](telas.md#s-matriz-avaliacoes), [Competição](telas.md#s-matriz-competicao)
 - **RPCs que gravam:** [_tirar_funcionario_das_tarefas](funcoes.md#f-_tirar_funcionario_das_tarefas), [avaliar_item_matriz](funcoes.md#f-avaliar_item_matriz), [excluir_competicao_matriz](funcoes.md#f-excluir_competicao_matriz), [remover_avaliacao_matriz](funcoes.md#f-remover_avaliacao_matriz), [remover_matriz_participante](funcoes.md#f-remover_matriz_participante), [remover_matriz_tarefa](funcoes.md#f-remover_matriz_tarefa)
-- **Telas que leem:** [Central de Avaliação](telas.md#s-avaliacoes), [Início](telas.md#s-inicio), [Matriz avaliacoes *(rota matriz-avaliacoes)*](telas.md#s-matriz-avaliacoes), [Competição](telas.md#s-matriz-competicao)
+- **Telas que leem:** [Início](telas.md#s-inicio), [Matriz avaliacoes *(rota matriz-avaliacoes)*](telas.md#s-matriz-avaliacoes), [Competição](telas.md#s-matriz-competicao)
 - **RPCs que leem:** [_calcular_placar_competicao_raw](funcoes.md#f-_calcular_placar_competicao_raw), [lembrar_avaliacoes_pendentes](funcoes.md#f-lembrar_avaliacoes_pendentes), [media_participantes_competicao](funcoes.md#f-media_participantes_competicao), [minha_mesa](funcoes.md#f-minha_mesa), [participantes_sem_nota_competicao](funcoes.md#f-participantes_sem_nota_competicao), [progresso_avaliacao_matriz](funcoes.md#f-progresso_avaliacao_matriz), [resetar_dados_operacionais](funcoes.md#f-resetar_dados_operacionais)
 - **Views que dependem desta:** [avaliacoes_matriz_agregado](tabelas.md#t-avaliacoes_matriz_agregado), [avaliacoes_matriz_placar_filial](tabelas.md#t-avaliacoes_matriz_placar_filial)
 - **Gatilhos nesta tabela:**
@@ -249,9 +249,9 @@ Para cada tabela: quem grava (tela, RPC, gatilho, servidor), quem lê, os gatilh
 ## avisos_matriz
 
 - **Telas que gravam:** —
-- **Telas que gravam via RPC:** [Central de Avaliação](telas.md#s-avaliacoes), [Matriz avaliacoes *(rota matriz-avaliacoes)*](telas.md#s-matriz-avaliacoes)
+- **Telas que gravam via RPC:** [Central de Avaliação](telas.md#s-avaliacoes)
 - **RPCs que gravam:** [criar_aviso_matriz](funcoes.md#f-criar_aviso_matriz), [remover_aviso_matriz](funcoes.md#f-remover_aviso_matriz)
-- **Telas que leem:** [Central de Avaliação](telas.md#s-avaliacoes), [Matriz avaliacoes *(rota matriz-avaliacoes)*](telas.md#s-matriz-avaliacoes)
+- **Telas que leem:** [Central de Avaliação](telas.md#s-avaliacoes)
 - **Ao apagar uma linha daqui:** [avisos_matriz_ciencia](tabelas.md#t-avisos_matriz_ciencia).aviso_id APAGA JUNTO (CASCADE)
 - **RLS:** DELETE `avisos_matriz_delete` (Matriz/professor); INSERT `avisos_matriz_insert` (Matriz/professor); SELECT `avisos_matriz_read` (Matriz/professor); UPDATE `avisos_matriz_update` (Matriz/professor)
 
@@ -259,9 +259,9 @@ Para cada tabela: quem grava (tela, RPC, gatilho, servidor), quem lê, os gatilh
 ## avisos_matriz_ciencia
 
 - **Telas que gravam:** —
-- **Telas que gravam via RPC:** [Central de Avaliação](telas.md#s-avaliacoes), [Matriz avaliacoes *(rota matriz-avaliacoes)*](telas.md#s-matriz-avaliacoes)
+- **Telas que gravam via RPC:** [Central de Avaliação](telas.md#s-avaliacoes)
 - **RPCs que gravam:** [dar_ciencia_aviso](funcoes.md#f-dar_ciencia_aviso)
-- **Telas que leem:** [Central de Avaliação](telas.md#s-avaliacoes), [Matriz avaliacoes *(rota matriz-avaliacoes)*](telas.md#s-matriz-avaliacoes)
+- **Telas que leem:** [Central de Avaliação](telas.md#s-avaliacoes)
 - **Aponta para:** aviso_id → [avisos_matriz](tabelas.md#t-avisos_matriz)
 - **RLS:** DELETE `avisos_ciencia_delete` (Matriz/professor); INSERT `avisos_ciencia_insert` (o próprio usuário); SELECT `avisos_ciencia_read` (Matriz/professor)
 
@@ -442,9 +442,9 @@ Para cada tabela: quem grava (tela, RPC, gatilho, servidor), quem lê, os gatilh
 ## ciclo_tarefa_avaliacoes
 
 - **Telas que gravam:** —
-- **Telas que gravam via RPC:** [Central de Avaliação](telas.md#s-avaliacoes), [Matriz avaliacoes *(rota matriz-avaliacoes)*](telas.md#s-matriz-avaliacoes)
+- **Telas que gravam via RPC:** [Central de Avaliação](telas.md#s-avaliacoes), [Matriz avaliacoes *(rota matriz-avaliacoes)*](telas.md#s-matriz-avaliacoes), [Competição](telas.md#s-matriz-competicao)
 - **RPCs que gravam:** [_tirar_funcionario_das_tarefas](funcoes.md#f-_tirar_funcionario_das_tarefas), [avaliar_ciclo_tarefa](funcoes.md#f-avaliar_ciclo_tarefa), [remover_avaliacao_ciclo_tarefa](funcoes.md#f-remover_avaliacao_ciclo_tarefa)
-- **Telas que leem:** [Central de Avaliação](telas.md#s-avaliacoes), [Matriz avaliacoes *(rota matriz-avaliacoes)*](telas.md#s-matriz-avaliacoes)
+- **Telas que leem:** [Central de Avaliação](telas.md#s-avaliacoes), [Matriz avaliacoes *(rota matriz-avaliacoes)*](telas.md#s-matriz-avaliacoes), [Competição](telas.md#s-matriz-competicao)
 - **RPCs que leem:** [media_participantes_ciclo](funcoes.md#f-media_participantes_ciclo), [minha_mesa](funcoes.md#f-minha_mesa)
 - **Gatilhos nesta tabela:**
   - `trg_ciclo_tarefa_aval_upd` — BEFORE UPDATE → [trg_ciclo_tarefas_updated_at](funcoes.md#f-trg_ciclo_tarefas_updated_at)
@@ -455,9 +455,9 @@ Para cada tabela: quem grava (tela, RPC, gatilho, servidor), quem lê, os gatilh
 ## ciclo_tarefa_avaliadores
 
 - **Telas que gravam:** —
-- **Telas que gravam via RPC:** [Central de Avaliação](telas.md#s-avaliacoes), [Matriz avaliacoes *(rota matriz-avaliacoes)*](telas.md#s-matriz-avaliacoes)
+- **Telas que gravam via RPC:** [Central de Avaliação](telas.md#s-avaliacoes), [Matriz avaliacoes *(rota matriz-avaliacoes)*](telas.md#s-matriz-avaliacoes), [Competição](telas.md#s-matriz-competicao)
 - **RPCs que gravam:** [definir_avaliadores_ciclo_tarefa](funcoes.md#f-definir_avaliadores_ciclo_tarefa)
-- **Telas que leem:** [Central de Avaliação](telas.md#s-avaliacoes), [Matriz avaliacoes *(rota matriz-avaliacoes)*](telas.md#s-matriz-avaliacoes)
+- **Telas que leem:** [Central de Avaliação](telas.md#s-avaliacoes), [Matriz avaliacoes *(rota matriz-avaliacoes)*](telas.md#s-matriz-avaliacoes), [Competição](telas.md#s-matriz-competicao)
 - **RPCs que leem:** [_assert_pode_avaliar_ciclo_tarefa](funcoes.md#f-_assert_pode_avaliar_ciclo_tarefa), [liberar_ciclo_tarefa](funcoes.md#f-liberar_ciclo_tarefa)
 - **Aponta para:** tarefa_id → [ciclo_tarefas](tabelas.md#t-ciclo_tarefas); user_profile_id → [user_profiles](tabelas.md#t-user_profiles)
 - **RLS:** SELECT `ct_avaliadores_select` (o próprio usuário)
@@ -466,9 +466,9 @@ Para cada tabela: quem grava (tela, RPC, gatilho, servidor), quem lê, os gatilh
 ## ciclo_tarefa_participantes
 
 - **Telas que gravam:** —
-- **Telas que gravam via RPC:** [Central de Avaliação](telas.md#s-avaliacoes), [Matriz avaliacoes *(rota matriz-avaliacoes)*](telas.md#s-matriz-avaliacoes)
+- **Telas que gravam via RPC:** [Central de Avaliação](telas.md#s-avaliacoes), [Matriz avaliacoes *(rota matriz-avaliacoes)*](telas.md#s-matriz-avaliacoes), [Competição](telas.md#s-matriz-competicao)
 - **RPCs que gravam:** [_tirar_funcionario_das_tarefas](funcoes.md#f-_tirar_funcionario_das_tarefas), [atualizar_ciclo_tarefa](funcoes.md#f-atualizar_ciclo_tarefa), [criar_ciclo_tarefa](funcoes.md#f-criar_ciclo_tarefa), [excluir_ciclo_tarefa](funcoes.md#f-excluir_ciclo_tarefa)
-- **Telas que leem:** [Central de Avaliação](telas.md#s-avaliacoes), [Demandas](telas.md#s-demandas), [Demandas conselho *(rota demandas-conselho)*](telas.md#s-demandas-conselho), [Demandas metas *(rota demandas-metas)*](telas.md#s-demandas-metas), [Matriz avaliacoes *(rota matriz-avaliacoes)*](telas.md#s-matriz-avaliacoes), [Metas *(rota metas)*](telas.md#s-metas)
+- **Telas que leem:** [Central de Avaliação](telas.md#s-avaliacoes), [Demandas](telas.md#s-demandas), [Demandas conselho *(rota demandas-conselho)*](telas.md#s-demandas-conselho), [Demandas metas *(rota demandas-metas)*](telas.md#s-demandas-metas), [Matriz avaliacoes *(rota matriz-avaliacoes)*](telas.md#s-matriz-avaliacoes), [Competição](telas.md#s-matriz-competicao), [Metas *(rota metas)*](telas.md#s-metas)
 - **RPCs que leem:** [_assert_pode_avaliar_ciclo_tarefa](funcoes.md#f-_assert_pode_avaliar_ciclo_tarefa), [_tirar_funcionario_das_tarefas](funcoes.md#f-_tirar_funcionario_das_tarefas), [avaliar_ciclo_tarefa](funcoes.md#f-avaliar_ciclo_tarefa), [liberar_ciclo_tarefa](funcoes.md#f-liberar_ciclo_tarefa), [media_participantes_ciclo](funcoes.md#f-media_participantes_ciclo), [minha_mesa](funcoes.md#f-minha_mesa), [remover_avaliacao_ciclo_tarefa](funcoes.md#f-remover_avaliacao_ciclo_tarefa)
 - **Ao apagar uma linha daqui:** [ciclo_tarefa_avaliacoes](tabelas.md#t-ciclo_tarefa_avaliacoes).participante_id APAGA JUNTO (CASCADE)
 - **Aponta para:** tarefa_id → [ciclo_tarefas](tabelas.md#t-ciclo_tarefas); funcionario_id → [funcionarios](tabelas.md#t-funcionarios); user_profile_id → [user_profiles](tabelas.md#t-user_profiles)
@@ -478,9 +478,9 @@ Para cada tabela: quem grava (tela, RPC, gatilho, servidor), quem lê, os gatilh
 ## ciclo_tarefas
 
 - **Telas que gravam:** —
-- **Telas que gravam via RPC:** [Central de Avaliação](telas.md#s-avaliacoes), [Matriz avaliacoes *(rota matriz-avaliacoes)*](telas.md#s-matriz-avaliacoes)
+- **Telas que gravam via RPC:** [Central de Avaliação](telas.md#s-avaliacoes), [Matriz avaliacoes *(rota matriz-avaliacoes)*](telas.md#s-matriz-avaliacoes), [Competição](telas.md#s-matriz-competicao)
 - **RPCs que gravam:** [atualizar_ciclo_tarefa](funcoes.md#f-atualizar_ciclo_tarefa), [criar_ciclo_tarefa](funcoes.md#f-criar_ciclo_tarefa), [encerrar_ciclo_tarefa](funcoes.md#f-encerrar_ciclo_tarefa), [excluir_ciclo_tarefa](funcoes.md#f-excluir_ciclo_tarefa), [liberar_ciclo_tarefa](funcoes.md#f-liberar_ciclo_tarefa), [reabrir_ciclo_tarefa](funcoes.md#f-reabrir_ciclo_tarefa)
-- **Telas que leem:** [Central de Avaliação](telas.md#s-avaliacoes), [Demandas](telas.md#s-demandas), [Demandas conselho *(rota demandas-conselho)*](telas.md#s-demandas-conselho), [Demandas metas *(rota demandas-metas)*](telas.md#s-demandas-metas), [Matriz avaliacoes *(rota matriz-avaliacoes)*](telas.md#s-matriz-avaliacoes), [Metas *(rota metas)*](telas.md#s-metas)
+- **Telas que leem:** [Central de Avaliação](telas.md#s-avaliacoes), [Demandas](telas.md#s-demandas), [Demandas conselho *(rota demandas-conselho)*](telas.md#s-demandas-conselho), [Demandas metas *(rota demandas-metas)*](telas.md#s-demandas-metas), [Matriz avaliacoes *(rota matriz-avaliacoes)*](telas.md#s-matriz-avaliacoes), [Competição](telas.md#s-matriz-competicao), [Metas *(rota metas)*](telas.md#s-metas)
 - **RPCs que leem:** [_tirar_funcionario_das_tarefas](funcoes.md#f-_tirar_funcionario_das_tarefas), [atualizar_ciclo_tarefa](funcoes.md#f-atualizar_ciclo_tarefa), [avaliar_ciclo_tarefa](funcoes.md#f-avaliar_ciclo_tarefa), [definir_avaliadores_ciclo_tarefa](funcoes.md#f-definir_avaliadores_ciclo_tarefa), [encerrar_ciclo_tarefa](funcoes.md#f-encerrar_ciclo_tarefa), [excluir_ciclo_tarefa](funcoes.md#f-excluir_ciclo_tarefa), [liberar_ciclo_tarefa](funcoes.md#f-liberar_ciclo_tarefa), [media_participantes_ciclo](funcoes.md#f-media_participantes_ciclo), [minha_mesa](funcoes.md#f-minha_mesa), [reabrir_ciclo_tarefa](funcoes.md#f-reabrir_ciclo_tarefa), [remover_avaliacao_ciclo_tarefa](funcoes.md#f-remover_avaliacao_ciclo_tarefa)
 - **Gatilhos nesta tabela:**
   - `trg_ciclo_tarefas_upd` — BEFORE UPDATE → [trg_ciclo_tarefas_updated_at](funcoes.md#f-trg_ciclo_tarefas_updated_at)
@@ -491,11 +491,10 @@ Para cada tabela: quem grava (tela, RPC, gatilho, servidor), quem lê, os gatilh
 <a id="t-ciclos_avaliacao"></a>
 ## ciclos_avaliacao
 
-- **Telas que gravam:** [Central de Avaliação](telas.md#s-avaliacoes), [Matriz avaliacoes *(rota matriz-avaliacoes)*](telas.md#s-matriz-avaliacoes)
-- **Telas que gravam via RPC:** [Competição](telas.md#s-matriz-competicao)
+- **Telas que gravam:** [Central de Avaliação](telas.md#s-avaliacoes), [Matriz avaliacoes *(rota matriz-avaliacoes)*](telas.md#s-matriz-avaliacoes), [Competição](telas.md#s-matriz-competicao)
 - **RPCs que gravam:** [excluir_competicao_matriz](funcoes.md#f-excluir_competicao_matriz)
 - **Gatilhos (de outras tabelas) que gravam aqui:** [competicao_apaga_ciclo_matriz](funcoes.md#f-competicao_apaga_ciclo_matriz) (em [competicoes_matriz](tabelas.md#t-competicoes_matriz)), [competicao_criar_ciclo_matriz](funcoes.md#f-competicao_criar_ciclo_matriz) (em [competicoes_matriz](tabelas.md#t-competicoes_matriz)), [competicao_sync_ciclo_matriz](funcoes.md#f-competicao_sync_ciclo_matriz) (em [competicoes_matriz](tabelas.md#t-competicoes_matriz))
-- **Telas que leem:** [Central de Avaliação](telas.md#s-avaliacoes), [Matriz avaliacoes *(rota matriz-avaliacoes)*](telas.md#s-matriz-avaliacoes)
+- **Telas que leem:** [Central de Avaliação](telas.md#s-avaliacoes), [Matriz avaliacoes *(rota matriz-avaliacoes)*](telas.md#s-matriz-avaliacoes), [Competição](telas.md#s-matriz-competicao)
 - **RPCs que leem:** [atualizar_avaliacao](funcoes.md#f-atualizar_avaliacao), [calcular_placar_padrao](funcoes.md#f-calcular_placar_padrao), [criar_avaliacao](funcoes.md#f-criar_avaliacao), [criar_avaliacao_filial](funcoes.md#f-criar_avaliacao_filial), [criar_ciclo_tarefa](funcoes.md#f-criar_ciclo_tarefa), [desempenho_funcionarios](funcoes.md#f-desempenho_funcionarios)
 - **Ao apagar uma linha daqui:** [avaliacoes](tabelas.md#t-avaliacoes).ciclo_id APAGA JUNTO (CASCADE); [ciclo_tarefas](tabelas.md#t-ciclo_tarefas).ciclo_id APAGA JUNTO (CASCADE); [competicoes_matriz](tabelas.md#t-competicoes_matriz).ciclo_id zera o vínculo (SET NULL); [evidencias_avaliacao](tabelas.md#t-evidencias_avaliacao).ciclo_id APAGA JUNTO (CASCADE)
 - **RLS:** ALL `ciclos_write` (Matriz/professor); SELECT `ciclos_read` (todos)
@@ -536,9 +535,9 @@ Para cada tabela: quem grava (tela, RPC, gatilho, servidor), quem lê, os gatilh
 <a id="t-competicao_votos"></a>
 ## competicao_votos
 
-- **Telas que gravam:** [Competição](telas.md#s-matriz-competicao)
+- **Telas que gravam:** [Matriz avaliacoes *(rota matriz-avaliacoes)*](telas.md#s-matriz-avaliacoes), [Competição](telas.md#s-matriz-competicao)
 - **RPCs que gravam:** [excluir_competicao_matriz](funcoes.md#f-excluir_competicao_matriz)
-- **Telas que leem:** [Competição](telas.md#s-matriz-competicao)
+- **Telas que leem:** [Matriz avaliacoes *(rota matriz-avaliacoes)*](telas.md#s-matriz-avaliacoes), [Competição](telas.md#s-matriz-competicao)
 - **RPCs que leem:** [_competicao_votos_validos](funcoes.md#f-_competicao_votos_validos)
 - **Gatilhos nesta tabela:**
   - `trg_competicao_voto_touch` — BEFORE UPDATE → [_competicao_voto_touch](funcoes.md#f-_competicao_voto_touch)
@@ -549,7 +548,7 @@ Para cada tabela: quem grava (tela, RPC, gatilho, servidor), quem lê, os gatilh
 ## competicoes_matriz
 
 - **Telas que gravam:** —
-- **Telas que gravam via RPC:** [Competição](telas.md#s-matriz-competicao)
+- **Telas que gravam via RPC:** [Matriz avaliacoes *(rota matriz-avaliacoes)*](telas.md#s-matriz-avaliacoes), [Competição](telas.md#s-matriz-competicao)
 - **RPCs que gravam:** [atualizar_competicao](funcoes.md#f-atualizar_competicao), [criar_competicao](funcoes.md#f-criar_competicao), [declarar_vencedora](funcoes.md#f-declarar_vencedora), [encerrar_competicao_agora](funcoes.md#f-encerrar_competicao_agora), [excluir_competicao_matriz](funcoes.md#f-excluir_competicao_matriz), [expirar_competicoes](funcoes.md#f-expirar_competicoes), [reabrir_competicao](funcoes.md#f-reabrir_competicao)
 - **Servidor (api/) grava:** `api/ai-competicao.ts`
 - **Telas que leem:** [Central de Avaliação](telas.md#s-avaliacoes), [Demandas](telas.md#s-demandas), [Demandas conselho *(rota demandas-conselho)*](telas.md#s-demandas-conselho), [Demandas metas *(rota demandas-metas)*](telas.md#s-demandas-metas), [Início](telas.md#s-inicio), [Matriz avaliacoes *(rota matriz-avaliacoes)*](telas.md#s-matriz-avaliacoes), [Competição](telas.md#s-matriz-competicao), [Metas *(rota metas)*](telas.md#s-metas), [Recursos Humanos › Mandatos](telas.md#s-rh-mandatos)
@@ -792,9 +791,9 @@ Para cada tabela: quem grava (tela, RPC, gatilho, servidor), quem lê, os gatilh
 ## criterios_avaliacao
 
 - **Telas que gravam:** —
-- **Telas que gravam via RPC:** [Central de Avaliação](telas.md#s-avaliacoes), [Matriz avaliacoes *(rota matriz-avaliacoes)*](telas.md#s-matriz-avaliacoes), [TI & Suporte › Desenvolvimento com IA](telas.md#s-ti-desenvolvimentocomia)
+- **Telas que gravam via RPC:** [Central de Avaliação](telas.md#s-avaliacoes), [Matriz avaliacoes *(rota matriz-avaliacoes)*](telas.md#s-matriz-avaliacoes), [Competição](telas.md#s-matriz-competicao), [TI & Suporte › Desenvolvimento com IA](telas.md#s-ti-desenvolvimentocomia)
 - **RPCs que gravam:** [atualizar_avaliacao](funcoes.md#f-atualizar_avaliacao), [criar_avaliacao](funcoes.md#f-criar_avaliacao), [criar_avaliacao_filial](funcoes.md#f-criar_avaliacao_filial), [criar_avaliacao_ti_dev_ia](funcoes.md#f-criar_avaliacao_ti_dev_ia)
-- **Telas que leem:** [Central de Avaliação](telas.md#s-avaliacoes), [Matriz avaliacoes *(rota matriz-avaliacoes)*](telas.md#s-matriz-avaliacoes)
+- **Telas que leem:** [Central de Avaliação](telas.md#s-avaliacoes), [Matriz avaliacoes *(rota matriz-avaliacoes)*](telas.md#s-matriz-avaliacoes), [Competição](telas.md#s-matriz-competicao)
 - **RPCs que leem:** [_calcular_placar_competicao_raw](funcoes.md#f-_calcular_placar_competicao_raw), [calcular_placar_padrao](funcoes.md#f-calcular_placar_padrao), [desempenho_funcionarios](funcoes.md#f-desempenho_funcionarios), [media_avaliacao_funcionario](funcoes.md#f-media_avaliacao_funcionario)
 - **Aponta para:** avaliacao_id → [avaliacoes](tabelas.md#t-avaliacoes)
 - **RLS:** INSERT `criterios_insert` (o próprio usuário); SELECT `criterios_read` (regra própria)
@@ -955,9 +954,9 @@ Para cada tabela: quem grava (tela, RPC, gatilho, servidor), quem lê, os gatilh
 <a id="t-evidencias_avaliacao"></a>
 ## evidencias_avaliacao
 
-- **Telas que gravam:** [Central de Avaliação](telas.md#s-avaliacoes), [Matriz avaliacoes *(rota matriz-avaliacoes)*](telas.md#s-matriz-avaliacoes)
+- **Telas que gravam:** [Central de Avaliação](telas.md#s-avaliacoes), [Matriz avaliacoes *(rota matriz-avaliacoes)*](telas.md#s-matriz-avaliacoes), [Competição](telas.md#s-matriz-competicao)
 - **RPCs que gravam:** —
-- **Telas que leem:** [Central de Avaliação](telas.md#s-avaliacoes), [Matriz avaliacoes *(rota matriz-avaliacoes)*](telas.md#s-matriz-avaliacoes)
+- **Telas que leem:** [Central de Avaliação](telas.md#s-avaliacoes), [Matriz avaliacoes *(rota matriz-avaliacoes)*](telas.md#s-matriz-avaliacoes), [Competição](telas.md#s-matriz-competicao)
 - **Aponta para:** ciclo_id → [ciclos_avaliacao](tabelas.md#t-ciclos_avaliacao); colaborador_id → [user_profiles](tabelas.md#t-user_profiles)
 - **RLS:** DELETE `evidencias_delete` (Matriz/professor); INSERT `evidencias_insert` (o próprio usuário); SELECT `evidencias_read` (gerente da filial · Matriz/professor)
 
@@ -995,7 +994,7 @@ Para cada tabela: quem grava (tela, RPC, gatilho, servidor), quem lê, os gatilh
 ## ferias
 
 - **Telas que gravam:** [Recursos Humanos › Férias](telas.md#s-rh-férias)
-- **Telas que gravam via RPC:** [Central de Avaliação](telas.md#s-avaliacoes), [Demandas](telas.md#s-demandas), [Demandas conselho *(rota demandas-conselho)*](telas.md#s-demandas-conselho), [Demandas metas *(rota demandas-metas)*](telas.md#s-demandas-metas), [Matriz avaliacoes *(rota matriz-avaliacoes)*](telas.md#s-matriz-avaliacoes), [Metas *(rota metas)*](telas.md#s-metas)
+- **Telas que gravam via RPC:** [Central de Avaliação](telas.md#s-avaliacoes), [Demandas](telas.md#s-demandas), [Demandas conselho *(rota demandas-conselho)*](telas.md#s-demandas-conselho), [Demandas metas *(rota demandas-metas)*](telas.md#s-demandas-metas), [Metas *(rota metas)*](telas.md#s-metas)
 - **RPCs que gravam:** [gerar_folgas_acumulado](funcoes.md#f-gerar_folgas_acumulado)
 - **Telas que leem:** [Recursos Humanos › Férias](telas.md#s-rh-férias), [Recursos Humanos › Gerenciamento](telas.md#s-rh-gerenciamento), [Recursos Humanos › Relatórios](telas.md#s-rh-relatórios)
 - **RPCs que leem:** [calcular_rescisao](funcoes.md#f-calcular_rescisao), [contar_pendencias](funcoes.md#f-contar_pendencias), [minha_mesa](funcoes.md#f-minha_mesa)
@@ -1189,7 +1188,7 @@ Para cada tabela: quem grava (tela, RPC, gatilho, servidor), quem lê, os gatilh
 - **RPCs que gravam:** [decidir_desligamento](funcoes.md#f-decidir_desligamento), [demitir_funcionario](funcoes.md#f-demitir_funcionario), [efetivar_contratacao](funcoes.md#f-efetivar_contratacao), [efetivar_promocao](funcoes.md#f-efetivar_promocao), [readmitir_funcionario](funcoes.md#f-readmitir_funcionario), [resetar_geral_admin](funcoes.md#f-resetar_geral_admin), [vincular_acesso_funcionario](funcoes.md#f-vincular_acesso_funcionario)
 - **Gatilhos (de outras tabelas) que gravam aqui:** [user_profiles_propagar_filial](funcoes.md#f-user_profiles_propagar_filial) (em [user_profiles](tabelas.md#t-user_profiles))
 - **Servidor (api/) grava:** `api/users.ts`
-- **Telas que leem:** [Central de Avaliação](telas.md#s-avaliacoes), [Crachá Virtual](telas.md#s-cracha-virtual), [Matriz avaliacoes *(rota matriz-avaliacoes)*](telas.md#s-matriz-avaliacoes), [Meu Crachá](telas.md#s-meu-cracha), [Recursos Humanos › Afastamentos](telas.md#s-rh-afastamentos), [Recursos Humanos › Desligamento](telas.md#s-rh-desligamento), [Recursos Humanos › Férias](telas.md#s-rh-férias), [Recursos Humanos › Folha de Pagamento](telas.md#s-rh-folhadepagamento), [Recursos Humanos › Funcionários](telas.md#s-rh-funcionários), [Recursos Humanos › Gerenciamento](telas.md#s-rh-gerenciamento), [Recursos Humanos › Recrutamento e Seleção](telas.md#s-rh-recrutamentoeseleção), [Recursos Humanos › Registro de Ponto](telas.md#s-rh-registrodeponto), [Recursos Humanos › Relatórios](telas.md#s-rh-relatórios), [Recursos Humanos › Treinamentos](telas.md#s-rh-treinamentos), [Usuários](telas.md#s-usuarios)
+- **Telas que leem:** [Central de Avaliação](telas.md#s-avaliacoes), [Crachá Virtual](telas.md#s-cracha-virtual), [Matriz avaliacoes *(rota matriz-avaliacoes)*](telas.md#s-matriz-avaliacoes), [Competição](telas.md#s-matriz-competicao), [Meu Crachá](telas.md#s-meu-cracha), [Recursos Humanos › Afastamentos](telas.md#s-rh-afastamentos), [Recursos Humanos › Desligamento](telas.md#s-rh-desligamento), [Recursos Humanos › Férias](telas.md#s-rh-férias), [Recursos Humanos › Folha de Pagamento](telas.md#s-rh-folhadepagamento), [Recursos Humanos › Funcionários](telas.md#s-rh-funcionários), [Recursos Humanos › Gerenciamento](telas.md#s-rh-gerenciamento), [Recursos Humanos › Recrutamento e Seleção](telas.md#s-rh-recrutamentoeseleção), [Recursos Humanos › Registro de Ponto](telas.md#s-rh-registrodeponto), [Recursos Humanos › Relatórios](telas.md#s-rh-relatórios), [Recursos Humanos › Treinamentos](telas.md#s-rh-treinamentos), [Usuários](telas.md#s-usuarios)
 - **RPCs que leem:** [_frequencia_competicao](funcoes.md#f-_frequencia_competicao), [_funcionario_da_conta](funcoes.md#f-_funcionario_da_conta), [_funcionario_desligado](funcoes.md#f-_funcionario_desligado), [apurar_rateio_administrativo](funcoes.md#f-apurar_rateio_administrativo), [beneficios_do_funcionario](funcoes.md#f-beneficios_do_funcionario), [calcular_rescisao](funcoes.md#f-calcular_rescisao), [convocar_para_vaga](funcoes.md#f-convocar_para_vaga), [creditar_folha_maxbank](funcoes.md#f-creditar_folha_maxbank), [creditar_rescisao_maxbank](funcoes.md#f-creditar_rescisao_maxbank), [decidir_desligamento](funcoes.md#f-decidir_desligamento), [demitir_funcionario](funcoes.md#f-demitir_funcionario), [desempenho_funcionarios](funcoes.md#f-desempenho_funcionarios), [efetivar_contratacao](funcoes.md#f-efetivar_contratacao), [efetivar_promocao](funcoes.md#f-efetivar_promocao), [enviar_justificativa_falta](funcoes.md#f-enviar_justificativa_falta), [funcionario_filial](funcoes.md#f-funcionario_filial), [gerar_folgas_acumulado](funcoes.md#f-gerar_folgas_acumulado), [gerar_painel_bi](funcoes.md#f-gerar_painel_bi), [media_avaliacao_funcionario](funcoes.md#f-media_avaliacao_funcionario), [minha_frequencia](funcoes.md#f-minha_frequencia), [minha_mesa](funcoes.md#f-minha_mesa), [nomear_mandato](funcoes.md#f-nomear_mandato), [processar_folha](funcoes.md#f-processar_folha), [processar_rescisao](funcoes.md#f-processar_rescisao), [readmitir_funcionario](funcoes.md#f-readmitir_funcionario), [recalcular_folha_do_ponto](funcoes.md#f-recalcular_folha_do_ponto), [registrar_candidatura_interna](funcoes.md#f-registrar_candidatura_interna), [registrar_ponto_manual](funcoes.md#f-registrar_ponto_manual), [remover_ponto](funcoes.md#f-remover_ponto), [resetar_dados_da_filial](funcoes.md#f-resetar_dados_da_filial), [resetar_dados_operacionais](funcoes.md#f-resetar_dados_operacionais), [responder_convite_vaga](funcoes.md#f-responder_convite_vaga), [solicitar_desligamento](funcoes.md#f-solicitar_desligamento), [vincular_acesso_funcionario](funcoes.md#f-vincular_acesso_funcionario)
 - **Servidor (api/) lê:** `api/users.ts`
 - **Views que dependem desta:** [frequencia_trabalho_com_filial](tabelas.md#t-frequencia_trabalho_com_filial)
@@ -1454,9 +1453,9 @@ Para cada tabela: quem grava (tela, RPC, gatilho, servidor), quem lê, os gatilh
 ## matriz_tarefa_participantes
 
 - **Telas que gravam:** —
-- **Telas que gravam via RPC:** [Central de Avaliação](telas.md#s-avaliacoes), [Matriz avaliacoes *(rota matriz-avaliacoes)*](telas.md#s-matriz-avaliacoes)
+- **Telas que gravam via RPC:** [Matriz avaliacoes *(rota matriz-avaliacoes)*](telas.md#s-matriz-avaliacoes), [Competição](telas.md#s-matriz-competicao)
 - **RPCs que gravam:** [_tirar_funcionario_das_tarefas](funcoes.md#f-_tirar_funcionario_das_tarefas), [adicionar_matriz_participante](funcoes.md#f-adicionar_matriz_participante), [criar_matriz_tarefa](funcoes.md#f-criar_matriz_tarefa), [remover_matriz_participante](funcoes.md#f-remover_matriz_participante), [remover_matriz_tarefa](funcoes.md#f-remover_matriz_tarefa)
-- **Telas que leem:** [Central de Avaliação](telas.md#s-avaliacoes), [Demandas](telas.md#s-demandas), [Demandas conselho *(rota demandas-conselho)*](telas.md#s-demandas-conselho), [Demandas metas *(rota demandas-metas)*](telas.md#s-demandas-metas), [Matriz avaliacoes *(rota matriz-avaliacoes)*](telas.md#s-matriz-avaliacoes), [Metas *(rota metas)*](telas.md#s-metas)
+- **Telas que leem:** [Demandas](telas.md#s-demandas), [Demandas conselho *(rota demandas-conselho)*](telas.md#s-demandas-conselho), [Demandas metas *(rota demandas-metas)*](telas.md#s-demandas-metas), [Matriz avaliacoes *(rota matriz-avaliacoes)*](telas.md#s-matriz-avaliacoes), [Competição](telas.md#s-matriz-competicao), [Metas *(rota metas)*](telas.md#s-metas)
 - **RPCs que leem:** [_calcular_placar_competicao_raw](funcoes.md#f-_calcular_placar_competicao_raw), [_tirar_funcionario_das_tarefas](funcoes.md#f-_tirar_funcionario_das_tarefas), [avaliar_item_matriz](funcoes.md#f-avaliar_item_matriz), [encerrar_matriz_tarefa](funcoes.md#f-encerrar_matriz_tarefa), [lembrar_avaliacoes_pendentes](funcoes.md#f-lembrar_avaliacoes_pendentes), [liberar_matriz_tarefa](funcoes.md#f-liberar_matriz_tarefa), [media_participantes_competicao](funcoes.md#f-media_participantes_competicao), [minha_mesa](funcoes.md#f-minha_mesa), [participantes_sem_nota_competicao](funcoes.md#f-participantes_sem_nota_competicao), [progresso_avaliacao_matriz](funcoes.md#f-progresso_avaliacao_matriz), [remover_avaliacao_matriz](funcoes.md#f-remover_avaliacao_matriz), [remover_matriz_participante](funcoes.md#f-remover_matriz_participante), [remover_matriz_tarefa](funcoes.md#f-remover_matriz_tarefa)
 - **Gatilhos nesta tabela:**
   - `trg_historico` — AFTER INSERT/UPDATE → [registrar_historico](funcoes.md#f-registrar_historico) · grava em [historico_operacoes](tabelas.md#t-historico_operacoes)
@@ -1467,9 +1466,9 @@ Para cada tabela: quem grava (tela, RPC, gatilho, servidor), quem lê, os gatilh
 ## matriz_tarefas
 
 - **Telas que gravam:** —
-- **Telas que gravam via RPC:** [Central de Avaliação](telas.md#s-avaliacoes), [Matriz avaliacoes *(rota matriz-avaliacoes)*](telas.md#s-matriz-avaliacoes), [Competição](telas.md#s-matriz-competicao)
+- **Telas que gravam via RPC:** [Matriz avaliacoes *(rota matriz-avaliacoes)*](telas.md#s-matriz-avaliacoes), [Competição](telas.md#s-matriz-competicao)
 - **RPCs que gravam:** [atualizar_matriz_tarefa](funcoes.md#f-atualizar_matriz_tarefa), [criar_matriz_tarefa](funcoes.md#f-criar_matriz_tarefa), [encerrar_matriz_tarefa](funcoes.md#f-encerrar_matriz_tarefa), [excluir_competicao_matriz](funcoes.md#f-excluir_competicao_matriz), [liberar_matriz_tarefa](funcoes.md#f-liberar_matriz_tarefa), [reabrir_matriz_tarefa](funcoes.md#f-reabrir_matriz_tarefa), [remover_matriz_tarefa](funcoes.md#f-remover_matriz_tarefa)
-- **Telas que leem:** [Central de Avaliação](telas.md#s-avaliacoes), [Demandas](telas.md#s-demandas), [Demandas conselho *(rota demandas-conselho)*](telas.md#s-demandas-conselho), [Demandas metas *(rota demandas-metas)*](telas.md#s-demandas-metas), [Matriz avaliacoes *(rota matriz-avaliacoes)*](telas.md#s-matriz-avaliacoes), [Metas *(rota metas)*](telas.md#s-metas)
+- **Telas que leem:** [Demandas](telas.md#s-demandas), [Demandas conselho *(rota demandas-conselho)*](telas.md#s-demandas-conselho), [Demandas metas *(rota demandas-metas)*](telas.md#s-demandas-metas), [Matriz avaliacoes *(rota matriz-avaliacoes)*](telas.md#s-matriz-avaliacoes), [Competição](telas.md#s-matriz-competicao), [Metas *(rota metas)*](telas.md#s-metas)
 - **RPCs que leem:** [_assert_matriz_tarefa_gestor](funcoes.md#f-_assert_matriz_tarefa_gestor), [_tirar_funcionario_das_tarefas](funcoes.md#f-_tirar_funcionario_das_tarefas), [adicionar_matriz_participante](funcoes.md#f-adicionar_matriz_participante), [atualizar_matriz_tarefa](funcoes.md#f-atualizar_matriz_tarefa), [avaliar_item_matriz](funcoes.md#f-avaliar_item_matriz), [encerrar_matriz_tarefa](funcoes.md#f-encerrar_matriz_tarefa), [lembrar_avaliacoes_pendentes](funcoes.md#f-lembrar_avaliacoes_pendentes), [liberar_matriz_tarefa](funcoes.md#f-liberar_matriz_tarefa), [media_participantes_competicao](funcoes.md#f-media_participantes_competicao), [minha_mesa](funcoes.md#f-minha_mesa), [participantes_sem_nota_competicao](funcoes.md#f-participantes_sem_nota_competicao), [reabrir_matriz_tarefa](funcoes.md#f-reabrir_matriz_tarefa), [remover_avaliacao_matriz](funcoes.md#f-remover_avaliacao_matriz), [remover_matriz_participante](funcoes.md#f-remover_matriz_participante), [remover_matriz_tarefa](funcoes.md#f-remover_matriz_tarefa), [resetar_dados_operacionais](funcoes.md#f-resetar_dados_operacionais)
 - **Servidor (api/) lê:** `api/ai-briefing-tarefa.ts`
 - **Gatilhos nesta tabela:**
@@ -1523,7 +1522,7 @@ Para cada tabela: quem grava (tela, RPC, gatilho, servidor), quem lê, os gatilh
 ## maxbank_contas
 
 - **Telas que gravam:** —
-- **Telas que gravam via RPC:** [Central de Avaliação](telas.md#s-avaliacoes), [Demandas](telas.md#s-demandas), [Demandas conselho *(rota demandas-conselho)*](telas.md#s-demandas-conselho), [Demandas metas *(rota demandas-metas)*](telas.md#s-demandas-metas), [Matriz avaliacoes *(rota matriz-avaliacoes)*](telas.md#s-matriz-avaliacoes), [Metas *(rota metas)*](telas.md#s-metas), [Recursos Humanos › Folha de Pagamento](telas.md#s-rh-folhadepagamento)
+- **Telas que gravam via RPC:** [Central de Avaliação](telas.md#s-avaliacoes), [Demandas](telas.md#s-demandas), [Demandas conselho *(rota demandas-conselho)*](telas.md#s-demandas-conselho), [Demandas metas *(rota demandas-metas)*](telas.md#s-demandas-metas), [Metas *(rota metas)*](telas.md#s-metas), [Recursos Humanos › Folha de Pagamento](telas.md#s-rh-folhadepagamento)
 - **RPCs que gravam:** [aprovar_meta_maxbank](funcoes.md#f-aprovar_meta_maxbank), [aprovar_tarefa_tatica](funcoes.md#f-aprovar_tarefa_tatica), [autorizar_cartao_maxbank](funcoes.md#f-autorizar_cartao_maxbank), [concluir_meta_estrategica](funcoes.md#f-concluir_meta_estrategica), [creditar_folha_maxbank](funcoes.md#f-creditar_folha_maxbank), [creditar_rescisao_maxbank](funcoes.md#f-creditar_rescisao_maxbank), [debitar_maxbank_beneficios](funcoes.md#f-debitar_maxbank_beneficios), [debitar_maxbank_salario](funcoes.md#f-debitar_maxbank_salario), [excluir_transacao_maxbank](funcoes.md#f-excluir_transacao_maxbank), [recompute_saldos_maxbank](funcoes.md#f-recompute_saldos_maxbank), [transferir_pix_maxbank](funcoes.md#f-transferir_pix_maxbank)
 - **Gatilhos (de outras tabelas) que gravam aqui:** [criar_maxbank_conta_para_colaborador](funcoes.md#f-criar_maxbank_conta_para_colaborador) (em [user_profiles](tabelas.md#t-user_profiles))
 - **Telas que leem:** [Recursos Humanos › Folha de Pagamento](telas.md#s-rh-folhadepagamento)
@@ -1538,7 +1537,7 @@ Para cada tabela: quem grava (tela, RPC, gatilho, servidor), quem lê, os gatilh
 ## maxbank_folgas_conquistadas
 
 - **Telas que gravam:** —
-- **Telas que gravam via RPC:** [Central de Avaliação](telas.md#s-avaliacoes), [Demandas](telas.md#s-demandas), [Demandas conselho *(rota demandas-conselho)*](telas.md#s-demandas-conselho), [Demandas metas *(rota demandas-metas)*](telas.md#s-demandas-metas), [Matriz avaliacoes *(rota matriz-avaliacoes)*](telas.md#s-matriz-avaliacoes), [Metas *(rota metas)*](telas.md#s-metas)
+- **Telas que gravam via RPC:** [Central de Avaliação](telas.md#s-avaliacoes), [Demandas](telas.md#s-demandas), [Demandas conselho *(rota demandas-conselho)*](telas.md#s-demandas-conselho), [Demandas metas *(rota demandas-metas)*](telas.md#s-demandas-metas), [Metas *(rota metas)*](telas.md#s-metas)
 - **RPCs que gravam:** [gerar_folgas_acumulado](funcoes.md#f-gerar_folgas_acumulado)
 - **Telas que leem:** —
 - **RPCs que leem:** [gerar_folgas_acumulado](funcoes.md#f-gerar_folgas_acumulado)
@@ -1562,7 +1561,7 @@ Para cada tabela: quem grava (tela, RPC, gatilho, servidor), quem lê, os gatilh
 ## maxbank_transacoes
 
 - **Telas que gravam:** —
-- **Telas que gravam via RPC:** [Central de Avaliação](telas.md#s-avaliacoes), [Demandas](telas.md#s-demandas), [Demandas conselho *(rota demandas-conselho)*](telas.md#s-demandas-conselho), [Demandas metas *(rota demandas-metas)*](telas.md#s-demandas-metas), [Matriz avaliacoes *(rota matriz-avaliacoes)*](telas.md#s-matriz-avaliacoes), [Metas *(rota metas)*](telas.md#s-metas), [Recursos Humanos › Folha de Pagamento](telas.md#s-rh-folhadepagamento)
+- **Telas que gravam via RPC:** [Central de Avaliação](telas.md#s-avaliacoes), [Demandas](telas.md#s-demandas), [Demandas conselho *(rota demandas-conselho)*](telas.md#s-demandas-conselho), [Demandas metas *(rota demandas-metas)*](telas.md#s-demandas-metas), [Metas *(rota metas)*](telas.md#s-metas), [Recursos Humanos › Folha de Pagamento](telas.md#s-rh-folhadepagamento)
 - **RPCs que gravam:** [aprovar_meta_maxbank](funcoes.md#f-aprovar_meta_maxbank), [aprovar_tarefa_tatica](funcoes.md#f-aprovar_tarefa_tatica), [autorizar_cartao_maxbank](funcoes.md#f-autorizar_cartao_maxbank), [concluir_meta_estrategica](funcoes.md#f-concluir_meta_estrategica), [creditar_folha_maxbank](funcoes.md#f-creditar_folha_maxbank), [creditar_rescisao_maxbank](funcoes.md#f-creditar_rescisao_maxbank), [debitar_maxbank_beneficios](funcoes.md#f-debitar_maxbank_beneficios), [debitar_maxbank_salario](funcoes.md#f-debitar_maxbank_salario), [excluir_transacao_maxbank](funcoes.md#f-excluir_transacao_maxbank), [transferir_pix_maxbank](funcoes.md#f-transferir_pix_maxbank)
 - **Telas que leem:** [Recursos Humanos › Folha de Pagamento](telas.md#s-rh-folhadepagamento)
 - **RPCs que leem:** [debitar_maxbank_salario](funcoes.md#f-debitar_maxbank_salario), [excluir_transacao_maxbank](funcoes.md#f-excluir_transacao_maxbank), [gerar_folgas_acumulado](funcoes.md#f-gerar_folgas_acumulado), [recompute_saldos_maxbank](funcoes.md#f-recompute_saldos_maxbank), [reverter_folha_maxbank](funcoes.md#f-reverter_folha_maxbank)
@@ -1594,9 +1593,9 @@ Para cada tabela: quem grava (tela, RPC, gatilho, servidor), quem lê, os gatilh
 <a id="t-metas_estrategicas"></a>
 ## metas_estrategicas
 
-- **Telas que gravam:** [Central de Avaliação](telas.md#s-avaliacoes), [Demandas](telas.md#s-demandas), [Demandas conselho *(rota demandas-conselho)*](telas.md#s-demandas-conselho), [Demandas metas *(rota demandas-metas)*](telas.md#s-demandas-metas), [Matriz avaliacoes *(rota matriz-avaliacoes)*](telas.md#s-matriz-avaliacoes), [Metas *(rota metas)*](telas.md#s-metas)
+- **Telas que gravam:** [Central de Avaliação](telas.md#s-avaliacoes), [Demandas](telas.md#s-demandas), [Demandas conselho *(rota demandas-conselho)*](telas.md#s-demandas-conselho), [Demandas metas *(rota demandas-metas)*](telas.md#s-demandas-metas), [Metas *(rota metas)*](telas.md#s-metas)
 - **RPCs que gravam:** [apagar_meta_estrategica](funcoes.md#f-apagar_meta_estrategica), [concluir_meta_estrategica](funcoes.md#f-concluir_meta_estrategica), [criar_meta_estrategica](funcoes.md#f-criar_meta_estrategica), [editar_meta_estrategica](funcoes.md#f-editar_meta_estrategica), [encerrar_meta_estrategica](funcoes.md#f-encerrar_meta_estrategica), [pausar_meta_estrategica](funcoes.md#f-pausar_meta_estrategica), [publicar_meta_estrategica](funcoes.md#f-publicar_meta_estrategica), [reabrir_meta_estrategica](funcoes.md#f-reabrir_meta_estrategica)
-- **Telas que leem:** [Central de Avaliação](telas.md#s-avaliacoes), [Demandas](telas.md#s-demandas), [Demandas conselho *(rota demandas-conselho)*](telas.md#s-demandas-conselho), [Demandas metas *(rota demandas-metas)*](telas.md#s-demandas-metas), [Matriz avaliacoes *(rota matriz-avaliacoes)*](telas.md#s-matriz-avaliacoes), [Metas *(rota metas)*](telas.md#s-metas)
+- **Telas que leem:** [Central de Avaliação](telas.md#s-avaliacoes), [Demandas](telas.md#s-demandas), [Demandas conselho *(rota demandas-conselho)*](telas.md#s-demandas-conselho), [Demandas metas *(rota demandas-metas)*](telas.md#s-demandas-metas), [Metas *(rota metas)*](telas.md#s-metas)
 - **RPCs que leem:** [apagar_meta_estrategica](funcoes.md#f-apagar_meta_estrategica), [concluir_meta_estrategica](funcoes.md#f-concluir_meta_estrategica), [contar_pendencias](funcoes.md#f-contar_pendencias), [criar_tarefa_tatica](funcoes.md#f-criar_tarefa_tatica), [editar_meta_estrategica](funcoes.md#f-editar_meta_estrategica), [encerrar_meta_estrategica](funcoes.md#f-encerrar_meta_estrategica), [pausar_meta_estrategica](funcoes.md#f-pausar_meta_estrategica), [publicar_meta_estrategica](funcoes.md#f-publicar_meta_estrategica), [reabrir_meta_estrategica](funcoes.md#f-reabrir_meta_estrategica), [resetar_dados_da_filial](funcoes.md#f-resetar_dados_da_filial)
 - **Gatilhos nesta tabela:**
   - `trg_metas_estrategicas_updated_at` — BEFORE UPDATE → [metas_estrategicas_set_updated_at](funcoes.md#f-metas_estrategicas_set_updated_at)
@@ -1708,7 +1707,7 @@ Para cada tabela: quem grava (tela, RPC, gatilho, servidor), quem lê, os gatilh
 ## notificacoes
 
 - **Telas que gravam:** —
-- **Telas que gravam via RPC:** [Central de Avaliação](telas.md#s-avaliacoes), [Matriz › Briefing Diário](telas.md#s-briefing-diario), [Compras › Cotações](telas.md#s-compras-cotações), [Compras › Pedidos](telas.md#s-compras-pedidos), [Estoque › Liberar Requisições](telas.md#s-estoque-liberarrequisições), [Estoque › Movimentações](telas.md#s-estoque-movimentações), [Financeiro › Aprovações de Cotação](telas.md#s-financeiro-aprovaçõesdecotação), [Financeiro › Aprovações de Orçamento](telas.md#s-financeiro-aprovaçõesdeorçamento), [Marketing › Promoções](telas.md#s-marketing-promoções), [Matriz avaliacoes *(rota matriz-avaliacoes)*](telas.md#s-matriz-avaliacoes), [Capital](telas.md#s-matriz-capital), [Competição](telas.md#s-matriz-competicao), [Meu Crachá](telas.md#s-meu-cracha), [Requisições › Aprovações](telas.md#s-requisicoes-aprovações), [Requisições › Do Setor](telas.md#s-requisicoes-dosetor), [Recursos Humanos › Folha de Pagamento](telas.md#s-rh-folhadepagamento), [Recursos Humanos › Recrutamento e Seleção](telas.md#s-rh-recrutamentoeseleção), [Recursos Humanos › Registro de Ponto](telas.md#s-rh-registrodeponto), [Recursos Humanos › Treinamentos](telas.md#s-rh-treinamentos), [Matriz › Governança › Cliente Especial](telas.md#s-vendas-clienteespecial), [Vendas › Orçamentos](telas.md#s-vendas-orçamentos)
+- **Telas que gravam via RPC:** [Matriz › Briefing Diário](telas.md#s-briefing-diario), [Compras › Cotações](telas.md#s-compras-cotações), [Compras › Pedidos](telas.md#s-compras-pedidos), [Estoque › Liberar Requisições](telas.md#s-estoque-liberarrequisições), [Estoque › Movimentações](telas.md#s-estoque-movimentações), [Financeiro › Aprovações de Cotação](telas.md#s-financeiro-aprovaçõesdecotação), [Financeiro › Aprovações de Orçamento](telas.md#s-financeiro-aprovaçõesdeorçamento), [Marketing › Promoções](telas.md#s-marketing-promoções), [Matriz avaliacoes *(rota matriz-avaliacoes)*](telas.md#s-matriz-avaliacoes), [Capital](telas.md#s-matriz-capital), [Competição](telas.md#s-matriz-competicao), [Meu Crachá](telas.md#s-meu-cracha), [Requisições › Aprovações](telas.md#s-requisicoes-aprovações), [Requisições › Do Setor](telas.md#s-requisicoes-dosetor), [Recursos Humanos › Folha de Pagamento](telas.md#s-rh-folhadepagamento), [Recursos Humanos › Recrutamento e Seleção](telas.md#s-rh-recrutamentoeseleção), [Recursos Humanos › Registro de Ponto](telas.md#s-rh-registrodeponto), [Recursos Humanos › Treinamentos](telas.md#s-rh-treinamentos), [Matriz › Governança › Cliente Especial](telas.md#s-vendas-clienteespecial), [Vendas › Orçamentos](telas.md#s-vendas-orçamentos)
 - **RPCs que gravam:** [encerrar_matriz_tarefa](funcoes.md#f-encerrar_matriz_tarefa), [lembrar_avaliacoes_pendentes](funcoes.md#f-lembrar_avaliacoes_pendentes), [liberar_ciclo_tarefa](funcoes.md#f-liberar_ciclo_tarefa), [liberar_matriz_tarefa](funcoes.md#f-liberar_matriz_tarefa), [notificar_setor](funcoes.md#f-notificar_setor), [reabrir_competicao](funcoes.md#f-reabrir_competicao)
 - **Telas que leem:** [Matriz › Briefing Diário](telas.md#s-briefing-diario), [Compras › Cotações](telas.md#s-compras-cotações), [Compras › Pedidos](telas.md#s-compras-pedidos), [Financeiro › Aprovações de Cotação](telas.md#s-financeiro-aprovaçõesdecotação), [Financeiro › Aprovações de Orçamento](telas.md#s-financeiro-aprovaçõesdeorçamento), [Marketing › Promoções](telas.md#s-marketing-promoções), [Recursos Humanos › Treinamentos](telas.md#s-rh-treinamentos), [Matriz › Governança › Cliente Especial](telas.md#s-vendas-clienteespecial), [Vendas › Orçamentos](telas.md#s-vendas-orçamentos)
 - **RPCs que leem:** [lembrar_avaliacoes_pendentes](funcoes.md#f-lembrar_avaliacoes_pendentes), [marcar_notificacoes_lidas](funcoes.md#f-marcar_notificacoes_lidas), [marcar_todas_lidas](funcoes.md#f-marcar_todas_lidas)
@@ -1788,9 +1787,9 @@ Para cada tabela: quem grava (tela, RPC, gatilho, servidor), quem lê, os gatilh
 <a id="t-pdi_itens"></a>
 ## pdi_itens
 
-- **Telas que gravam:** [Central de Avaliação](telas.md#s-avaliacoes), [Matriz avaliacoes *(rota matriz-avaliacoes)*](telas.md#s-matriz-avaliacoes)
+- **Telas que gravam:** [Central de Avaliação](telas.md#s-avaliacoes), [Matriz avaliacoes *(rota matriz-avaliacoes)*](telas.md#s-matriz-avaliacoes), [Competição](telas.md#s-matriz-competicao)
 - **RPCs que gravam:** —
-- **Telas que leem:** [Central de Avaliação](telas.md#s-avaliacoes), [Matriz avaliacoes *(rota matriz-avaliacoes)*](telas.md#s-matriz-avaliacoes)
+- **Telas que leem:** [Central de Avaliação](telas.md#s-avaliacoes), [Matriz avaliacoes *(rota matriz-avaliacoes)*](telas.md#s-matriz-avaliacoes), [Competição](telas.md#s-matriz-competicao)
 - **RPCs que leem:** [desempenho_funcionarios](funcoes.md#f-desempenho_funcionarios)
 - **Gatilhos nesta tabela:**
   - `pdi_itens_updated_at` — BEFORE UPDATE → [trg_pdi_itens_updated_at](funcoes.md#f-trg_pdi_itens_updated_at)
@@ -1946,9 +1945,9 @@ Para cada tabela: quem grava (tela, RPC, gatilho, servidor), quem lê, os gatilh
 ## ponto_calendario_excecoes
 
 - **Telas que gravam:** —
-- **Telas que gravam via RPC:** [Central de Avaliação](telas.md#s-avaliacoes), [Matriz avaliacoes *(rota matriz-avaliacoes)*](telas.md#s-matriz-avaliacoes), [Recursos Humanos › Registro de Ponto](telas.md#s-rh-registrodeponto)
+- **Telas que gravam via RPC:** [Matriz avaliacoes *(rota matriz-avaliacoes)*](telas.md#s-matriz-avaliacoes), [Competição](telas.md#s-matriz-competicao), [Recursos Humanos › Registro de Ponto](telas.md#s-rh-registrodeponto)
 - **RPCs que gravam:** [definir_excecao_calendario](funcoes.md#f-definir_excecao_calendario), [remover_excecao_calendario](funcoes.md#f-remover_excecao_calendario)
-- **Telas que leem:** [Central de Avaliação](telas.md#s-avaliacoes), [Matriz avaliacoes *(rota matriz-avaliacoes)*](telas.md#s-matriz-avaliacoes), [Recursos Humanos › Registro de Ponto](telas.md#s-rh-registrodeponto)
+- **Telas que leem:** [Matriz avaliacoes *(rota matriz-avaliacoes)*](telas.md#s-matriz-avaliacoes), [Competição](telas.md#s-matriz-competicao), [Recursos Humanos › Registro de Ponto](telas.md#s-rh-registrodeponto)
 - **RPCs que leem:** [_dia_de_folga](funcoes.md#f-_dia_de_folga), [dias_letivos_periodo](funcoes.md#f-dias_letivos_periodo)
 - **RLS:** SELECT `excecao_read` (todos)
 
@@ -1979,9 +1978,9 @@ Para cada tabela: quem grava (tela, RPC, gatilho, servidor), quem lê, os gatilh
 ## ponto_jornada
 
 - **Telas que gravam:** —
-- **Telas que gravam via RPC:** [Central de Avaliação](telas.md#s-avaliacoes), [Matriz avaliacoes *(rota matriz-avaliacoes)*](telas.md#s-matriz-avaliacoes), [Recursos Humanos › Registro de Ponto](telas.md#s-rh-registrodeponto)
+- **Telas que gravam via RPC:** [Matriz avaliacoes *(rota matriz-avaliacoes)*](telas.md#s-matriz-avaliacoes), [Competição](telas.md#s-matriz-competicao), [Recursos Humanos › Registro de Ponto](telas.md#s-rh-registrodeponto)
 - **RPCs que gravam:** [definir_ponto_jornada](funcoes.md#f-definir_ponto_jornada)
-- **Telas que leem:** [Central de Avaliação](telas.md#s-avaliacoes), [Matriz avaliacoes *(rota matriz-avaliacoes)*](telas.md#s-matriz-avaliacoes), [Recursos Humanos › Afastamentos](telas.md#s-rh-afastamentos), [Recursos Humanos › Folha de Pagamento](telas.md#s-rh-folhadepagamento), [Recursos Humanos › Registro de Ponto](telas.md#s-rh-registrodeponto)
+- **Telas que leem:** [Matriz avaliacoes *(rota matriz-avaliacoes)*](telas.md#s-matriz-avaliacoes), [Competição](telas.md#s-matriz-competicao), [Recursos Humanos › Afastamentos](telas.md#s-rh-afastamentos), [Recursos Humanos › Folha de Pagamento](telas.md#s-rh-folhadepagamento), [Recursos Humanos › Registro de Ponto](telas.md#s-rh-registrodeponto)
 - **RPCs que leem:** [_calcular_placar_competicao_raw](funcoes.md#f-_calcular_placar_competicao_raw), [_frequencia_competicao](funcoes.md#f-_frequencia_competicao), [decidir_justificativa_falta](funcoes.md#f-decidir_justificativa_falta), [definir_ponto_jornada](funcoes.md#f-definir_ponto_jornada), [dias_letivos_periodo](funcoes.md#f-dias_letivos_periodo), [enviar_justificativa_falta](funcoes.md#f-enviar_justificativa_falta), [frequencia_filiais_competicao](funcoes.md#f-frequencia_filiais_competicao), [minha_frequencia](funcoes.md#f-minha_frequencia)
 - **RLS:** SELECT `ponto_jornada_select` (todos)
 
@@ -2367,7 +2366,7 @@ Para cada tabela: quem grava (tela, RPC, gatilho, servidor), quem lê, os gatilh
 ## tarefas_taticas
 
 - **Telas que gravam:** —
-- **Telas que gravam via RPC:** [Central de Avaliação](telas.md#s-avaliacoes), [Demandas](telas.md#s-demandas), [Demandas conselho *(rota demandas-conselho)*](telas.md#s-demandas-conselho), [Demandas metas *(rota demandas-metas)*](telas.md#s-demandas-metas), [Matriz avaliacoes *(rota matriz-avaliacoes)*](telas.md#s-matriz-avaliacoes), [Metas *(rota metas)*](telas.md#s-metas)
+- **Telas que gravam via RPC:** [Central de Avaliação](telas.md#s-avaliacoes), [Demandas](telas.md#s-demandas), [Demandas conselho *(rota demandas-conselho)*](telas.md#s-demandas-conselho), [Demandas metas *(rota demandas-metas)*](telas.md#s-demandas-metas), [Metas *(rota metas)*](telas.md#s-metas)
 - **RPCs que gravam:** [apagar_meta_estrategica](funcoes.md#f-apagar_meta_estrategica), [aprovar_tarefa_tatica](funcoes.md#f-aprovar_tarefa_tatica), [concluir_tarefa_tatica](funcoes.md#f-concluir_tarefa_tatica), [criar_tarefa_tatica](funcoes.md#f-criar_tarefa_tatica), [encerrar_tarefa_tatica](funcoes.md#f-encerrar_tarefa_tatica), [pausar_tarefa_tatica](funcoes.md#f-pausar_tarefa_tatica), [publicar_tarefa_tatica](funcoes.md#f-publicar_tarefa_tatica), [reabrir_tarefa_tatica](funcoes.md#f-reabrir_tarefa_tatica), [rejeitar_tarefa_tatica](funcoes.md#f-rejeitar_tarefa_tatica)
 - **Telas que leem:** —
 - **RPCs que leem:** [apagar_meta_estrategica](funcoes.md#f-apagar_meta_estrategica), [aprovar_tarefa_tatica](funcoes.md#f-aprovar_tarefa_tatica), [concluir_tarefa_tatica](funcoes.md#f-concluir_tarefa_tatica), [editar_meta_estrategica](funcoes.md#f-editar_meta_estrategica), [encerrar_tarefa_tatica](funcoes.md#f-encerrar_tarefa_tatica), [pausar_tarefa_tatica](funcoes.md#f-pausar_tarefa_tatica), [publicar_tarefa_tatica](funcoes.md#f-publicar_tarefa_tatica), [reabrir_tarefa_tatica](funcoes.md#f-reabrir_tarefa_tatica), [rejeitar_tarefa_tatica](funcoes.md#f-rejeitar_tarefa_tatica)
@@ -2429,7 +2428,7 @@ Para cada tabela: quem grava (tela, RPC, gatilho, servidor), quem lê, os gatilh
 
 - **Telas que gravam:** [Recursos Humanos › Treinamentos](telas.md#s-rh-treinamentos)
 - **RPCs que gravam:** —
-- **Telas que leem:** [Central de Avaliação](telas.md#s-avaliacoes), [Matriz avaliacoes *(rota matriz-avaliacoes)*](telas.md#s-matriz-avaliacoes), [Recursos Humanos › Gerenciamento](telas.md#s-rh-gerenciamento), [Recursos Humanos › Relatórios](telas.md#s-rh-relatórios), [Recursos Humanos › Treinamentos](telas.md#s-rh-treinamentos)
+- **Telas que leem:** [Central de Avaliação](telas.md#s-avaliacoes), [Matriz avaliacoes *(rota matriz-avaliacoes)*](telas.md#s-matriz-avaliacoes), [Competição](telas.md#s-matriz-competicao), [Recursos Humanos › Gerenciamento](telas.md#s-rh-gerenciamento), [Recursos Humanos › Relatórios](telas.md#s-rh-relatórios), [Recursos Humanos › Treinamentos](telas.md#s-rh-treinamentos)
 - **RPCs que leem:** [resetar_dados_operacionais](funcoes.md#f-resetar_dados_operacionais)
 - **Gatilhos nesta tabela:**
   - `trg_historico` — AFTER INSERT/UPDATE → [registrar_historico](funcoes.md#f-registrar_historico) · grava em [historico_operacoes](tabelas.md#t-historico_operacoes)

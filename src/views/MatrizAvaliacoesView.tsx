@@ -51,12 +51,11 @@ const diasAte = (fim: string) => {
 // Central de Avaliação — Competição: hoje é só o painel de Tarefas da Matriz.
 // Admin/CEO cadastra atividades por tipo (treinamento em vendas, treinamento em IA,
 // apresentação, etc.); CEO+conselheiros julgam por participante.
-export function MatrizAvaliacoesView({ profile, showToast, navigate }: {
+export function MatrizAvaliacoesView({ profile, showToast, competicaoInicial }: {
   profile: UserProfile;
   showToast: any;
-  // Atalho de volta ao Placar (Matriz › Competição). Opcional: sem ele o
-  // botão some, a tela segue funcionando.
-  navigate?: (view: string) => void;
+  // Competição clicada no Histórico da Competição: abre direto nela.
+  competicaoInicial?: string | null;
 }) {
   const ehAvaliador = profile.role === 'ceo' || isConselheiro(profile);
   const podeAcessar = profile.role === 'admin' || ehAvaliador;
@@ -74,18 +73,10 @@ export function MatrizAvaliacoesView({ profile, showToast, navigate }: {
   const [secao, setSecao] = useState<'filiais' | 'ciclo' | null>(null);
   useVoltarInterno(secao !== null, () => setSecao(null));
 
-  // Competição escolhida no Histórico da tela de Competição. Lido uma vez e
-  // apagado na hora: é intenção daquela navegação, não preferência salva —
-  // se ficasse, a próxima visita abriria a encerrada mesmo havendo uma viva.
-  const alvoClicado = useRef<string | null>(
-    (() => {
-      try {
-        const v = sessionStorage.getItem('logmax:competicaoAlvo');
-        sessionStorage.removeItem('logmax:competicaoAlvo');
-        return v;
-      } catch { return null; }
-    })(),
-  );
+  // Competição escolhida no Histórico da tela de Competição. Lida uma vez:
+  // é intenção daquela navegação, não preferência salva — se ficasse, a
+  // próxima visita abriria a encerrada mesmo havendo uma viva.
+  const alvoClicado = useRef<string | null>(competicaoInicial ?? null);
 
   const primeiraCarga = useRef(true);
 
@@ -143,10 +134,10 @@ export function MatrizAvaliacoesView({ profile, showToast, navigate }: {
   if (!competicao) {
     return (
       <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col gap-5 pb-8">
-        <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">Competições do Conselho</h2>
+        <h3 className="text-sm font-bold text-gray-200">Escolha a competição para avaliar</h3>
 
         {competicoes.length === 0 ? (
-          <EmptyState message="Nenhuma competição ainda — abra uma em Matriz → Competição." />
+          <EmptyState message="Nenhuma competição ainda — crie uma na aba Config." />
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 items-start">
             {competicoes.map(c => {
@@ -240,7 +231,7 @@ export function MatrizAvaliacoesView({ profile, showToast, navigate }: {
           >
             <ArrowLeft size={13} /> Competições
           </button>
-          <h2 className="text-2xl sm:text-3xl font-bold text-accent tracking-tight">{competicao.nome}</h2>
+          <h3 className="text-lg font-black text-gray-100">{competicao.nome}</h3>
           <div className="flex items-center gap-2 flex-wrap text-xs text-gray-400">
             <span className={`text-[10px] font-black uppercase tracking-widest px-2 py-1 rounded ${statusMeta.classe}`}>
               {statusMeta.label}
@@ -259,13 +250,6 @@ export function MatrizAvaliacoesView({ profile, showToast, navigate }: {
         <div className="flex items-center gap-2 flex-wrap shrink-0">
           {/* Ida e volta com a Competição: o placar manda pra cá pelo botão
               "Central de Avaliação"; daqui se volta pelo "Placar". */}
-          {/* Só pra competição viva: encerrada não ocupa o Placar (mora no
-              Histórico), e o botão levaria a outra competição. */}
-          {navigate && competicao.status !== 'encerrada' && (
-            <button onClick={() => navigate('matriz-competicao')} className="btn-shimmer btn-shimmer--gold" title="Ver o placar desta competição">
-              <Trophy size={13} /> Placar
-            </button>
-          )}
           <button onClick={baixarPDF} disabled={exportando !== null} className="btn-solido btn-solido--vermelho" title="Baixar consolidado em PDF">
             {exportando === 'pdf' ? <Loader2 size={13} className="animate-spin" /> : <FileDown size={13} />} PDF
           </button>

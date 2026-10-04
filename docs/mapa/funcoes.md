@@ -445,7 +445,7 @@ Para cada função: quem a chama (tela, servidor, outra função, gatilho), o qu
 <a id="f-adicionar_matriz_participante"></a>
 ## adicionar_matriz_participante (RPC, SECURITY DEFINER)
 
-- **Telas que chamam:** [Central de Avaliação](telas.md#s-avaliacoes), [Matriz avaliacoes *(rota matriz-avaliacoes)*](telas.md#s-matriz-avaliacoes)
+- **Telas que chamam:** [Matriz avaliacoes *(rota matriz-avaliacoes)*](telas.md#s-matriz-avaliacoes), [Competição](telas.md#s-matriz-competicao)
 - **Grava:** [matriz_tarefa_participantes](tabelas.md#t-matriz_tarefa_participantes)
 - **Lê:** [matriz_tarefas](tabelas.md#t-matriz_tarefas)
 - **Chama:** [_assert_matriz_tarefa_gestor](funcoes.md#f-_assert_matriz_tarefa_gestor)
@@ -531,7 +531,7 @@ Para cada função: quem a chama (tela, servidor, outra função, gatilho), o qu
 <a id="f-apagar_meta_estrategica"></a>
 ## apagar_meta_estrategica (RPC, SECURITY DEFINER)
 
-- **Telas que chamam:** [Central de Avaliação](telas.md#s-avaliacoes), [Demandas](telas.md#s-demandas), [Demandas conselho *(rota demandas-conselho)*](telas.md#s-demandas-conselho), [Demandas metas *(rota demandas-metas)*](telas.md#s-demandas-metas), [Matriz avaliacoes *(rota matriz-avaliacoes)*](telas.md#s-matriz-avaliacoes), [Metas *(rota metas)*](telas.md#s-metas)
+- **Telas que chamam:** [Central de Avaliação](telas.md#s-avaliacoes), [Demandas](telas.md#s-demandas), [Demandas conselho *(rota demandas-conselho)*](telas.md#s-demandas-conselho), [Demandas metas *(rota demandas-metas)*](telas.md#s-demandas-metas), [Metas *(rota metas)*](telas.md#s-metas)
 - **Grava:** [metas_estrategicas](tabelas.md#t-metas_estrategicas), [tarefas_taticas](tabelas.md#t-tarefas_taticas)
 - **Ao gravar, acorda os gatilhos de:** [metas_estrategicas](tabelas.md#t-metas_estrategicas) ([metas_estrategicas_set_updated_at](funcoes.md#f-metas_estrategicas_set_updated_at)); [tarefas_taticas](tabelas.md#t-tarefas_taticas) ([tarefas_taticas_set_updated_at](funcoes.md#f-tarefas_taticas_set_updated_at))
 - **Lê:** [metas_estrategicas](tabelas.md#t-metas_estrategicas), [tarefas_taticas](tabelas.md#t-tarefas_taticas), [user_profiles](tabelas.md#t-user_profiles)
@@ -668,7 +668,7 @@ Para cada função: quem a chama (tela, servidor, outra função, gatilho), o qu
 <a id="f-atualizar_avaliacao"></a>
 ## atualizar_avaliacao (RPC, SECURITY DEFINER)
 
-- **Telas que chamam:** [Central de Avaliação](telas.md#s-avaliacoes), [Matriz avaliacoes *(rota matriz-avaliacoes)*](telas.md#s-matriz-avaliacoes)
+- **Telas que chamam:** [Central de Avaliação](telas.md#s-avaliacoes), [Matriz avaliacoes *(rota matriz-avaliacoes)*](telas.md#s-matriz-avaliacoes), [Competição](telas.md#s-matriz-competicao)
 - **Grava:** [avaliacoes](tabelas.md#t-avaliacoes), [criterios_avaliacao](tabelas.md#t-criterios_avaliacao)
 - **Ao gravar, acorda os gatilhos de:** [avaliacoes](tabelas.md#t-avaliacoes) ([fn_avaliacoes_filial_from_ciclo](funcoes.md#f-fn_avaliacoes_filial_from_ciclo))
 - **Lê:** [avaliacoes](tabelas.md#t-avaliacoes), [ciclos_avaliacao](tabelas.md#t-ciclos_avaliacao), [user_profiles](tabelas.md#t-user_profiles)
@@ -676,7 +676,7 @@ Para cada função: quem a chama (tela, servidor, outra função, gatilho), o qu
 <a id="f-atualizar_ciclo_tarefa"></a>
 ## atualizar_ciclo_tarefa (RPC, SECURITY DEFINER)
 
-- **Telas que chamam:** [Central de Avaliação](telas.md#s-avaliacoes), [Matriz avaliacoes *(rota matriz-avaliacoes)*](telas.md#s-matriz-avaliacoes)
+- **Telas que chamam:** [Central de Avaliação](telas.md#s-avaliacoes), [Matriz avaliacoes *(rota matriz-avaliacoes)*](telas.md#s-matriz-avaliacoes), [Competição](telas.md#s-matriz-competicao)
 - **Grava:** [ciclo_tarefa_participantes](tabelas.md#t-ciclo_tarefa_participantes), [ciclo_tarefas](tabelas.md#t-ciclo_tarefas)
 - **Ao gravar, acorda os gatilhos de:** [ciclo_tarefas](tabelas.md#t-ciclo_tarefas) ([trg_ciclo_tarefas_updated_at](funcoes.md#f-trg_ciclo_tarefas_updated_at))
 - **Lê:** [ciclo_tarefas](tabelas.md#t-ciclo_tarefas)
@@ -685,7 +685,7 @@ Para cada função: quem a chama (tela, servidor, outra função, gatilho), o qu
 <a id="f-atualizar_competicao"></a>
 ## atualizar_competicao (RPC)
 
-- **Telas que chamam:** [Competição](telas.md#s-matriz-competicao)
+- **Telas que chamam:** [Matriz avaliacoes *(rota matriz-avaliacoes)*](telas.md#s-matriz-avaliacoes), [Competição](telas.md#s-matriz-competicao)
 - **Grava:** [competicoes_matriz](tabelas.md#t-competicoes_matriz)
 - **Ao gravar, acorda os gatilhos de:** [competicoes_matriz](tabelas.md#t-competicoes_matriz) ([competicao_apaga_ciclo_matriz](funcoes.md#f-competicao_apaga_ciclo_matriz), [competicao_criar_ciclo_matriz](funcoes.md#f-competicao_criar_ciclo_matriz), [competicao_sync_ciclo_matriz](funcoes.md#f-competicao_sync_ciclo_matriz))
 - **Lê:** [competicoes_matriz](tabelas.md#t-competicoes_matriz)
@@ -703,7 +703,7 @@ Para cada função: quem a chama (tela, servidor, outra função, gatilho), o qu
 <a id="f-atualizar_matriz_tarefa"></a>
 ## atualizar_matriz_tarefa (RPC, SECURITY DEFINER)
 
-- **Telas que chamam:** [Central de Avaliação](telas.md#s-avaliacoes), [Matriz avaliacoes *(rota matriz-avaliacoes)*](telas.md#s-matriz-avaliacoes)
+- **Telas que chamam:** [Matriz avaliacoes *(rota matriz-avaliacoes)*](telas.md#s-matriz-avaliacoes), [Competição](telas.md#s-matriz-competicao)
 - **Grava:** [matriz_tarefas](tabelas.md#t-matriz_tarefas)
 - **Ao gravar, acorda os gatilhos de:** [matriz_tarefas](tabelas.md#t-matriz_tarefas) ([trg_matriz_tarefas_updated_at](funcoes.md#f-trg_matriz_tarefas_updated_at))
 - **Lê:** [matriz_tarefas](tabelas.md#t-matriz_tarefas)
@@ -865,7 +865,7 @@ Para cada função: quem a chama (tela, servidor, outra função, gatilho), o qu
 <a id="f-avaliar_ciclo_tarefa"></a>
 ## avaliar_ciclo_tarefa (RPC, SECURITY DEFINER)
 
-- **Telas que chamam:** [Central de Avaliação](telas.md#s-avaliacoes), [Matriz avaliacoes *(rota matriz-avaliacoes)*](telas.md#s-matriz-avaliacoes)
+- **Telas que chamam:** [Central de Avaliação](telas.md#s-avaliacoes), [Matriz avaliacoes *(rota matriz-avaliacoes)*](telas.md#s-matriz-avaliacoes), [Competição](telas.md#s-matriz-competicao)
 - **Grava:** [ciclo_tarefa_avaliacoes](tabelas.md#t-ciclo_tarefa_avaliacoes)
 - **Ao gravar, acorda os gatilhos de:** [ciclo_tarefa_avaliacoes](tabelas.md#t-ciclo_tarefa_avaliacoes) ([trg_ciclo_tarefas_updated_at](funcoes.md#f-trg_ciclo_tarefas_updated_at))
 - **Lê:** [ciclo_tarefa_participantes](tabelas.md#t-ciclo_tarefa_participantes), [ciclo_tarefas](tabelas.md#t-ciclo_tarefas)
@@ -874,7 +874,7 @@ Para cada função: quem a chama (tela, servidor, outra função, gatilho), o qu
 <a id="f-avaliar_item_matriz"></a>
 ## avaliar_item_matriz (RPC, SECURITY DEFINER)
 
-- **Telas que chamam:** [Central de Avaliação](telas.md#s-avaliacoes), [Matriz avaliacoes *(rota matriz-avaliacoes)*](telas.md#s-matriz-avaliacoes)
+- **Telas que chamam:** [Matriz avaliacoes *(rota matriz-avaliacoes)*](telas.md#s-matriz-avaliacoes), [Competição](telas.md#s-matriz-competicao)
 - **Grava:** [avaliacoes_matriz](tabelas.md#t-avaliacoes_matriz)
 - **Ao gravar, acorda os gatilhos de:** [avaliacoes_matriz](tabelas.md#t-avaliacoes_matriz) ([fn_avaliacao_matriz_congela_avaliador](funcoes.md#f-fn_avaliacao_matriz_congela_avaliador), [trg_aval_matriz_updated_at](funcoes.md#f-trg_aval_matriz_updated_at))
 - **Lê:** [competicoes_matriz](tabelas.md#t-competicoes_matriz), [matriz_tarefa_participantes](tabelas.md#t-matriz_tarefa_participantes), [matriz_tarefas](tabelas.md#t-matriz_tarefas), [user_profiles](tabelas.md#t-user_profiles)
@@ -991,7 +991,7 @@ Para cada função: quem a chama (tela, servidor, outra função, gatilho), o qu
 <a id="f-calcular_placar_padrao"></a>
 ## calcular_placar_padrao (RPC, SECURITY DEFINER)
 
-- **Telas que chamam:** [Central de Avaliação](telas.md#s-avaliacoes), [Matriz avaliacoes *(rota matriz-avaliacoes)*](telas.md#s-matriz-avaliacoes)
+- **Telas que chamam:** [Central de Avaliação](telas.md#s-avaliacoes), [Matriz avaliacoes *(rota matriz-avaliacoes)*](telas.md#s-matriz-avaliacoes), [Competição](telas.md#s-matriz-competicao)
 - **Grava:** —
 - **Lê:** [avaliacoes](tabelas.md#t-avaliacoes), [ciclos_avaliacao](tabelas.md#t-ciclos_avaliacao), [criterios_avaliacao](tabelas.md#t-criterios_avaliacao), [user_profiles](tabelas.md#t-user_profiles)
 
@@ -1052,7 +1052,7 @@ Para cada função: quem a chama (tela, servidor, outra função, gatilho), o qu
 <a id="f-cancelar_meta_estrategica"></a>
 ## cancelar_meta_estrategica (RPC, SECURITY DEFINER)
 
-- **Telas que chamam:** [Central de Avaliação](telas.md#s-avaliacoes), [Demandas](telas.md#s-demandas), [Demandas conselho *(rota demandas-conselho)*](telas.md#s-demandas-conselho), [Demandas metas *(rota demandas-metas)*](telas.md#s-demandas-metas), [Matriz avaliacoes *(rota matriz-avaliacoes)*](telas.md#s-matriz-avaliacoes), [Metas *(rota metas)*](telas.md#s-metas)
+- **Telas que chamam:** [Central de Avaliação](telas.md#s-avaliacoes), [Demandas](telas.md#s-demandas), [Demandas conselho *(rota demandas-conselho)*](telas.md#s-demandas-conselho), [Demandas metas *(rota demandas-metas)*](telas.md#s-demandas-metas), [Metas *(rota metas)*](telas.md#s-metas)
 - **Grava:** —
 - **Chama:** [encerrar_meta_estrategica](funcoes.md#f-encerrar_meta_estrategica)
 
@@ -1184,7 +1184,7 @@ Para cada função: quem a chama (tela, servidor, outra função, gatilho), o qu
 <a id="f-concluir_meta_estrategica"></a>
 ## concluir_meta_estrategica (RPC, SECURITY DEFINER)
 
-- **Telas que chamam:** [Central de Avaliação](telas.md#s-avaliacoes), [Demandas](telas.md#s-demandas), [Demandas conselho *(rota demandas-conselho)*](telas.md#s-demandas-conselho), [Demandas metas *(rota demandas-metas)*](telas.md#s-demandas-metas), [Matriz avaliacoes *(rota matriz-avaliacoes)*](telas.md#s-matriz-avaliacoes), [Metas *(rota metas)*](telas.md#s-metas)
+- **Telas que chamam:** [Central de Avaliação](telas.md#s-avaliacoes), [Demandas](telas.md#s-demandas), [Demandas conselho *(rota demandas-conselho)*](telas.md#s-demandas-conselho), [Demandas metas *(rota demandas-metas)*](telas.md#s-demandas-metas), [Metas *(rota metas)*](telas.md#s-metas)
 - **Grava:** [maxbank_contas](tabelas.md#t-maxbank_contas), [maxbank_transacoes](tabelas.md#t-maxbank_transacoes), [metas_estrategicas](tabelas.md#t-metas_estrategicas)
 - **Ao gravar, acorda os gatilhos de:** [maxbank_contas](tabelas.md#t-maxbank_contas) ([maxbank_contas_set_updated_at](funcoes.md#f-maxbank_contas_set_updated_at)); [maxbank_transacoes](tabelas.md#t-maxbank_transacoes) ([maxbank_tx_protege_abertura](funcoes.md#f-maxbank_tx_protege_abertura)); [metas_estrategicas](tabelas.md#t-metas_estrategicas) ([metas_estrategicas_set_updated_at](funcoes.md#f-metas_estrategicas_set_updated_at))
 - **Lê:** [maxbank_contas](tabelas.md#t-maxbank_contas), [metas_estrategicas](tabelas.md#t-metas_estrategicas), [user_profiles](tabelas.md#t-user_profiles)
@@ -1321,7 +1321,7 @@ Para cada função: quem a chama (tela, servidor, outra função, gatilho), o qu
 <a id="f-contar_votantes_matriz"></a>
 ## contar_votantes_matriz (RPC, SECURITY DEFINER)
 
-- **Telas que chamam:** [Competição](telas.md#s-matriz-competicao)
+- **Telas que chamam:** [Matriz avaliacoes *(rota matriz-avaliacoes)*](telas.md#s-matriz-avaliacoes), [Competição](telas.md#s-matriz-competicao)
 - **Chamada por outras funções:** [_competicao_empatada](funcoes.md#f-_competicao_empatada), [declarar_vencedora](funcoes.md#f-declarar_vencedora), [lembrar_avaliacoes_pendentes](funcoes.md#f-lembrar_avaliacoes_pendentes), [participantes_sem_nota_competicao](funcoes.md#f-participantes_sem_nota_competicao), [progresso_votacao_competicao](funcoes.md#f-progresso_votacao_competicao)
 - **Grava:** —
 - **Lê:** [user_profiles](tabelas.md#t-user_profiles)
@@ -1417,7 +1417,7 @@ Para cada função: quem a chama (tela, servidor, outra função, gatilho), o qu
 <a id="f-criar_avaliacao"></a>
 ## criar_avaliacao (RPC)
 
-- **Telas que chamam:** [Central de Avaliação](telas.md#s-avaliacoes), [Matriz avaliacoes *(rota matriz-avaliacoes)*](telas.md#s-matriz-avaliacoes)
+- **Telas que chamam:** [Central de Avaliação](telas.md#s-avaliacoes), [Matriz avaliacoes *(rota matriz-avaliacoes)*](telas.md#s-matriz-avaliacoes), [Competição](telas.md#s-matriz-competicao)
 - **Grava:** [avaliacoes](tabelas.md#t-avaliacoes), [criterios_avaliacao](tabelas.md#t-criterios_avaliacao)
 - **Ao gravar, acorda os gatilhos de:** [avaliacoes](tabelas.md#t-avaliacoes) ([fn_avaliacoes_filial_from_ciclo](funcoes.md#f-fn_avaliacoes_filial_from_ciclo))
 - **Lê:** [ciclos_avaliacao](tabelas.md#t-ciclos_avaliacao)
@@ -1425,7 +1425,7 @@ Para cada função: quem a chama (tela, servidor, outra função, gatilho), o qu
 <a id="f-criar_avaliacao_filial"></a>
 ## criar_avaliacao_filial (RPC)
 
-- **Telas que chamam:** [Central de Avaliação](telas.md#s-avaliacoes), [Matriz avaliacoes *(rota matriz-avaliacoes)*](telas.md#s-matriz-avaliacoes)
+- **Telas que chamam:** [Central de Avaliação](telas.md#s-avaliacoes), [Matriz avaliacoes *(rota matriz-avaliacoes)*](telas.md#s-matriz-avaliacoes), [Competição](telas.md#s-matriz-competicao)
 - **Grava:** [avaliacoes](tabelas.md#t-avaliacoes), [criterios_avaliacao](tabelas.md#t-criterios_avaliacao)
 - **Ao gravar, acorda os gatilhos de:** [avaliacoes](tabelas.md#t-avaliacoes) ([fn_avaliacoes_filial_from_ciclo](funcoes.md#f-fn_avaliacoes_filial_from_ciclo))
 - **Lê:** [ciclos_avaliacao](tabelas.md#t-ciclos_avaliacao)
@@ -1440,7 +1440,7 @@ Para cada função: quem a chama (tela, servidor, outra função, gatilho), o qu
 <a id="f-criar_aviso_matriz"></a>
 ## criar_aviso_matriz (RPC)
 
-- **Telas que chamam:** [Central de Avaliação](telas.md#s-avaliacoes), [Matriz avaliacoes *(rota matriz-avaliacoes)*](telas.md#s-matriz-avaliacoes)
+- **Telas que chamam:** [Central de Avaliação](telas.md#s-avaliacoes)
 - **Grava:** [avisos_matriz](tabelas.md#t-avisos_matriz)
 - **Lê:** [user_profiles](tabelas.md#t-user_profiles)
 - **Chama:** [auth_is_admin](funcoes.md#f-auth_is_admin)
@@ -1448,7 +1448,7 @@ Para cada função: quem a chama (tela, servidor, outra função, gatilho), o qu
 <a id="f-criar_ciclo_tarefa"></a>
 ## criar_ciclo_tarefa (RPC, SECURITY DEFINER)
 
-- **Telas que chamam:** [Central de Avaliação](telas.md#s-avaliacoes), [Matriz avaliacoes *(rota matriz-avaliacoes)*](telas.md#s-matriz-avaliacoes)
+- **Telas que chamam:** [Central de Avaliação](telas.md#s-avaliacoes), [Matriz avaliacoes *(rota matriz-avaliacoes)*](telas.md#s-matriz-avaliacoes), [Competição](telas.md#s-matriz-competicao)
 - **Grava:** [ciclo_tarefa_participantes](tabelas.md#t-ciclo_tarefa_participantes), [ciclo_tarefas](tabelas.md#t-ciclo_tarefas)
 - **Ao gravar, acorda os gatilhos de:** [ciclo_tarefas](tabelas.md#t-ciclo_tarefas) ([trg_ciclo_tarefas_updated_at](funcoes.md#f-trg_ciclo_tarefas_updated_at))
 - **Lê:** [ciclos_avaliacao](tabelas.md#t-ciclos_avaliacao), [competicoes_matriz](tabelas.md#t-competicoes_matriz)
@@ -1457,7 +1457,7 @@ Para cada função: quem a chama (tela, servidor, outra função, gatilho), o qu
 <a id="f-criar_competicao"></a>
 ## criar_competicao (RPC)
 
-- **Telas que chamam:** [Competição](telas.md#s-matriz-competicao)
+- **Telas que chamam:** [Matriz avaliacoes *(rota matriz-avaliacoes)*](telas.md#s-matriz-avaliacoes), [Competição](telas.md#s-matriz-competicao)
 - **Grava:** [competicoes_matriz](tabelas.md#t-competicoes_matriz)
 - **Ao gravar, acorda os gatilhos de:** [competicoes_matriz](tabelas.md#t-competicoes_matriz) ([competicao_apaga_ciclo_matriz](funcoes.md#f-competicao_apaga_ciclo_matriz), [competicao_criar_ciclo_matriz](funcoes.md#f-competicao_criar_ciclo_matriz), [competicao_sync_ciclo_matriz](funcoes.md#f-competicao_sync_ciclo_matriz))
 - **Chama:** [auth_is_admin](funcoes.md#f-auth_is_admin)
@@ -1475,7 +1475,7 @@ Para cada função: quem a chama (tela, servidor, outra função, gatilho), o qu
 <a id="f-criar_matriz_tarefa"></a>
 ## criar_matriz_tarefa (RPC, SECURITY DEFINER)
 
-- **Telas que chamam:** [Central de Avaliação](telas.md#s-avaliacoes), [Matriz avaliacoes *(rota matriz-avaliacoes)*](telas.md#s-matriz-avaliacoes)
+- **Telas que chamam:** [Matriz avaliacoes *(rota matriz-avaliacoes)*](telas.md#s-matriz-avaliacoes), [Competição](telas.md#s-matriz-competicao)
 - **Grava:** [matriz_tarefa_participantes](tabelas.md#t-matriz_tarefa_participantes), [matriz_tarefas](tabelas.md#t-matriz_tarefas)
 - **Ao gravar, acorda os gatilhos de:** [matriz_tarefas](tabelas.md#t-matriz_tarefas) ([trg_matriz_tarefas_updated_at](funcoes.md#f-trg_matriz_tarefas_updated_at))
 - **Lê:** [competicoes_matriz](tabelas.md#t-competicoes_matriz), [user_profiles](tabelas.md#t-user_profiles)
@@ -1490,7 +1490,7 @@ Para cada função: quem a chama (tela, servidor, outra função, gatilho), o qu
 <a id="f-criar_meta_estrategica"></a>
 ## criar_meta_estrategica (RPC, SECURITY DEFINER)
 
-- **Telas que chamam:** [Central de Avaliação](telas.md#s-avaliacoes), [Demandas](telas.md#s-demandas), [Demandas conselho *(rota demandas-conselho)*](telas.md#s-demandas-conselho), [Demandas metas *(rota demandas-metas)*](telas.md#s-demandas-metas), [Matriz avaliacoes *(rota matriz-avaliacoes)*](telas.md#s-matriz-avaliacoes), [Metas *(rota metas)*](telas.md#s-metas)
+- **Telas que chamam:** [Central de Avaliação](telas.md#s-avaliacoes), [Demandas](telas.md#s-demandas), [Demandas conselho *(rota demandas-conselho)*](telas.md#s-demandas-conselho), [Demandas metas *(rota demandas-metas)*](telas.md#s-demandas-metas), [Metas *(rota metas)*](telas.md#s-metas)
 - **Grava:** [metas_estrategicas](tabelas.md#t-metas_estrategicas)
 - **Ao gravar, acorda os gatilhos de:** [metas_estrategicas](tabelas.md#t-metas_estrategicas) ([metas_estrategicas_set_updated_at](funcoes.md#f-metas_estrategicas_set_updated_at))
 - **Lê:** [user_profiles](tabelas.md#t-user_profiles)
@@ -1574,7 +1574,7 @@ Para cada função: quem a chama (tela, servidor, outra função, gatilho), o qu
 <a id="f-dar_ciencia_aviso"></a>
 ## dar_ciencia_aviso (RPC)
 
-- **Telas que chamam:** [Central de Avaliação](telas.md#s-avaliacoes), [Matriz avaliacoes *(rota matriz-avaliacoes)*](telas.md#s-matriz-avaliacoes)
+- **Telas que chamam:** [Central de Avaliação](telas.md#s-avaliacoes)
 - **Grava:** [avisos_matriz_ciencia](tabelas.md#t-avisos_matriz_ciencia)
 - **Lê:** [user_profiles](tabelas.md#t-user_profiles)
 
@@ -1675,7 +1675,7 @@ Para cada função: quem a chama (tela, servidor, outra função, gatilho), o qu
 <a id="f-declarar_vencedora"></a>
 ## declarar_vencedora (RPC, SECURITY DEFINER)
 
-- **Telas que chamam:** [Competição](telas.md#s-matriz-competicao)
+- **Telas que chamam:** [Matriz avaliacoes *(rota matriz-avaliacoes)*](telas.md#s-matriz-avaliacoes), [Competição](telas.md#s-matriz-competicao)
 - **Grava:** [competicoes_matriz](tabelas.md#t-competicoes_matriz)
 - **Ao gravar, acorda os gatilhos de:** [competicoes_matriz](tabelas.md#t-competicoes_matriz) ([competicao_apaga_ciclo_matriz](funcoes.md#f-competicao_apaga_ciclo_matriz), [competicao_criar_ciclo_matriz](funcoes.md#f-competicao_criar_ciclo_matriz), [competicao_sync_ciclo_matriz](funcoes.md#f-competicao_sync_ciclo_matriz))
 - **Lê:** [competicoes_matriz](tabelas.md#t-competicoes_matriz)
@@ -1684,7 +1684,7 @@ Para cada função: quem a chama (tela, servidor, outra função, gatilho), o qu
 <a id="f-definir_avaliadores_ciclo_tarefa"></a>
 ## definir_avaliadores_ciclo_tarefa (RPC, SECURITY DEFINER)
 
-- **Telas que chamam:** [Central de Avaliação](telas.md#s-avaliacoes), [Matriz avaliacoes *(rota matriz-avaliacoes)*](telas.md#s-matriz-avaliacoes)
+- **Telas que chamam:** [Central de Avaliação](telas.md#s-avaliacoes), [Matriz avaliacoes *(rota matriz-avaliacoes)*](telas.md#s-matriz-avaliacoes), [Competição](telas.md#s-matriz-competicao)
 - **Grava:** [ciclo_tarefa_avaliadores](tabelas.md#t-ciclo_tarefa_avaliadores)
 - **Lê:** [ciclo_tarefas](tabelas.md#t-ciclo_tarefas), [user_profiles](tabelas.md#t-user_profiles)
 - **Chama:** [_assert_ciclo_tarefa_gestor](funcoes.md#f-_assert_ciclo_tarefa_gestor)
@@ -1692,7 +1692,7 @@ Para cada função: quem a chama (tela, servidor, outra função, gatilho), o qu
 <a id="f-definir_excecao_calendario"></a>
 ## definir_excecao_calendario (RPC, SECURITY DEFINER)
 
-- **Telas que chamam:** [Central de Avaliação](telas.md#s-avaliacoes), [Matriz avaliacoes *(rota matriz-avaliacoes)*](telas.md#s-matriz-avaliacoes), [Recursos Humanos › Registro de Ponto](telas.md#s-rh-registrodeponto)
+- **Telas que chamam:** [Matriz avaliacoes *(rota matriz-avaliacoes)*](telas.md#s-matriz-avaliacoes), [Competição](telas.md#s-matriz-competicao), [Recursos Humanos › Registro de Ponto](telas.md#s-rh-registrodeponto)
 - **Grava:** [ponto_calendario_excecoes](tabelas.md#t-ponto_calendario_excecoes)
 - **Lê:** [ponto_eletronico](tabelas.md#t-ponto_eletronico)
 - **Chama:** [_assert_matriz_admin](funcoes.md#f-_assert_matriz_admin)
@@ -1700,7 +1700,7 @@ Para cada função: quem a chama (tela, servidor, outra função, gatilho), o qu
 <a id="f-definir_ponto_jornada"></a>
 ## definir_ponto_jornada (RPC, SECURITY DEFINER)
 
-- **Telas que chamam:** [Central de Avaliação](telas.md#s-avaliacoes), [Matriz avaliacoes *(rota matriz-avaliacoes)*](telas.md#s-matriz-avaliacoes), [Recursos Humanos › Registro de Ponto](telas.md#s-rh-registrodeponto)
+- **Telas que chamam:** [Matriz avaliacoes *(rota matriz-avaliacoes)*](telas.md#s-matriz-avaliacoes), [Competição](telas.md#s-matriz-competicao), [Recursos Humanos › Registro de Ponto](telas.md#s-rh-registrodeponto)
 - **Grava:** [ponto_jornada](tabelas.md#t-ponto_jornada)
 - **Lê:** [ponto_jornada](tabelas.md#t-ponto_jornada)
 - **Chama:** [_assert_matriz_admin](funcoes.md#f-_assert_matriz_admin), [acre_today](funcoes.md#f-acre_today)
@@ -1872,7 +1872,7 @@ Para cada função: quem a chama (tela, servidor, outra função, gatilho), o qu
 <a id="f-editar_meta_estrategica"></a>
 ## editar_meta_estrategica (RPC, SECURITY DEFINER)
 
-- **Telas que chamam:** [Central de Avaliação](telas.md#s-avaliacoes), [Demandas](telas.md#s-demandas), [Demandas conselho *(rota demandas-conselho)*](telas.md#s-demandas-conselho), [Demandas metas *(rota demandas-metas)*](telas.md#s-demandas-metas), [Matriz avaliacoes *(rota matriz-avaliacoes)*](telas.md#s-matriz-avaliacoes), [Metas *(rota metas)*](telas.md#s-metas)
+- **Telas que chamam:** [Central de Avaliação](telas.md#s-avaliacoes), [Demandas](telas.md#s-demandas), [Demandas conselho *(rota demandas-conselho)*](telas.md#s-demandas-conselho), [Demandas metas *(rota demandas-metas)*](telas.md#s-demandas-metas), [Metas *(rota metas)*](telas.md#s-metas)
 - **Grava:** [metas_estrategicas](tabelas.md#t-metas_estrategicas)
 - **Ao gravar, acorda os gatilhos de:** [metas_estrategicas](tabelas.md#t-metas_estrategicas) ([metas_estrategicas_set_updated_at](funcoes.md#f-metas_estrategicas_set_updated_at))
 - **Lê:** [metas_estrategicas](tabelas.md#t-metas_estrategicas), [tarefas_taticas](tabelas.md#t-tarefas_taticas), [user_profiles](tabelas.md#t-user_profiles)
@@ -1963,7 +1963,7 @@ Para cada função: quem a chama (tela, servidor, outra função, gatilho), o qu
 <a id="f-encerrar_competicao_agora"></a>
 ## encerrar_competicao_agora (RPC, SECURITY DEFINER)
 
-- **Telas que chamam:** [Competição](telas.md#s-matriz-competicao)
+- **Telas que chamam:** [Matriz avaliacoes *(rota matriz-avaliacoes)*](telas.md#s-matriz-avaliacoes), [Competição](telas.md#s-matriz-competicao)
 - **Grava:** [competicoes_matriz](tabelas.md#t-competicoes_matriz)
 - **Ao gravar, acorda os gatilhos de:** [competicoes_matriz](tabelas.md#t-competicoes_matriz) ([competicao_apaga_ciclo_matriz](funcoes.md#f-competicao_apaga_ciclo_matriz), [competicao_criar_ciclo_matriz](funcoes.md#f-competicao_criar_ciclo_matriz), [competicao_sync_ciclo_matriz](funcoes.md#f-competicao_sync_ciclo_matriz))
 - **Lê:** [competicoes_matriz](tabelas.md#t-competicoes_matriz)
@@ -1998,7 +1998,7 @@ Para cada função: quem a chama (tela, servidor, outra função, gatilho), o qu
 <a id="f-encerrar_matriz_tarefa"></a>
 ## encerrar_matriz_tarefa (RPC, SECURITY DEFINER)
 
-- **Telas que chamam:** [Central de Avaliação](telas.md#s-avaliacoes), [Matriz avaliacoes *(rota matriz-avaliacoes)*](telas.md#s-matriz-avaliacoes)
+- **Telas que chamam:** [Matriz avaliacoes *(rota matriz-avaliacoes)*](telas.md#s-matriz-avaliacoes), [Competição](telas.md#s-matriz-competicao)
 - **Grava:** [matriz_tarefas](tabelas.md#t-matriz_tarefas), [notificacoes](tabelas.md#t-notificacoes)
 - **Ao gravar, acorda os gatilhos de:** [matriz_tarefas](tabelas.md#t-matriz_tarefas) ([trg_matriz_tarefas_updated_at](funcoes.md#f-trg_matriz_tarefas_updated_at))
 - **Lê:** [matriz_tarefa_participantes](tabelas.md#t-matriz_tarefa_participantes), [matriz_tarefas](tabelas.md#t-matriz_tarefas)
@@ -2083,7 +2083,7 @@ Para cada função: quem a chama (tela, servidor, outra função, gatilho), o qu
 <a id="f-excluir_competicao_matriz"></a>
 ## excluir_competicao_matriz (RPC, SECURITY DEFINER)
 
-- **Telas que chamam:** [Competição](telas.md#s-matriz-competicao)
+- **Telas que chamam:** [Matriz avaliacoes *(rota matriz-avaliacoes)*](telas.md#s-matriz-avaliacoes), [Competição](telas.md#s-matriz-competicao)
 - **Grava:** [avaliacoes_matriz](tabelas.md#t-avaliacoes_matriz), [ciclos_avaliacao](tabelas.md#t-ciclos_avaliacao), [competicao_votos](tabelas.md#t-competicao_votos), [competicoes_matriz](tabelas.md#t-competicoes_matriz), [matriz_tarefas](tabelas.md#t-matriz_tarefas)
 - **Ao gravar, acorda os gatilhos de:** [avaliacoes_matriz](tabelas.md#t-avaliacoes_matriz) ([fn_avaliacao_matriz_congela_avaliador](funcoes.md#f-fn_avaliacao_matriz_congela_avaliador), [trg_aval_matriz_updated_at](funcoes.md#f-trg_aval_matriz_updated_at)); [competicao_votos](tabelas.md#t-competicao_votos) ([_competicao_voto_touch](funcoes.md#f-_competicao_voto_touch)); [competicoes_matriz](tabelas.md#t-competicoes_matriz) ([competicao_apaga_ciclo_matriz](funcoes.md#f-competicao_apaga_ciclo_matriz), [competicao_criar_ciclo_matriz](funcoes.md#f-competicao_criar_ciclo_matriz), [competicao_sync_ciclo_matriz](funcoes.md#f-competicao_sync_ciclo_matriz)); [matriz_tarefas](tabelas.md#t-matriz_tarefas) ([trg_matriz_tarefas_updated_at](funcoes.md#f-trg_matriz_tarefas_updated_at))
 - **Lê:** [competicoes_matriz](tabelas.md#t-competicoes_matriz)
@@ -2654,7 +2654,7 @@ Para cada função: quem a chama (tela, servidor, outra função, gatilho), o qu
 <a id="f-frequencia_filiais_competicao"></a>
 ## frequencia_filiais_competicao (RPC, SECURITY DEFINER)
 
-- **Telas que chamam:** [Central de Avaliação](telas.md#s-avaliacoes), [Matriz avaliacoes *(rota matriz-avaliacoes)*](telas.md#s-matriz-avaliacoes)
+- **Telas que chamam:** [Matriz avaliacoes *(rota matriz-avaliacoes)*](telas.md#s-matriz-avaliacoes), [Competição](telas.md#s-matriz-competicao)
 - **Grava:** —
 - **Lê:** [ponto_jornada](tabelas.md#t-ponto_jornada), [user_profiles](tabelas.md#t-user_profiles)
 - **Chama:** [_frequencia_competicao](funcoes.md#f-_frequencia_competicao)
@@ -2920,7 +2920,7 @@ Para cada função: quem a chama (tela, servidor, outra função, gatilho), o qu
 <a id="f-liberar_matriz_tarefa"></a>
 ## liberar_matriz_tarefa (RPC, SECURITY DEFINER)
 
-- **Telas que chamam:** [Central de Avaliação](telas.md#s-avaliacoes), [Matriz avaliacoes *(rota matriz-avaliacoes)*](telas.md#s-matriz-avaliacoes)
+- **Telas que chamam:** [Matriz avaliacoes *(rota matriz-avaliacoes)*](telas.md#s-matriz-avaliacoes), [Competição](telas.md#s-matriz-competicao)
 - **Grava:** [matriz_tarefas](tabelas.md#t-matriz_tarefas), [notificacoes](tabelas.md#t-notificacoes)
 - **Ao gravar, acorda os gatilhos de:** [matriz_tarefas](tabelas.md#t-matriz_tarefas) ([trg_matriz_tarefas_updated_at](funcoes.md#f-trg_matriz_tarefas_updated_at))
 - **Lê:** [competicoes_matriz](tabelas.md#t-competicoes_matriz), [matriz_tarefa_participantes](tabelas.md#t-matriz_tarefa_participantes), [matriz_tarefas](tabelas.md#t-matriz_tarefas)
@@ -3304,7 +3304,7 @@ Para cada função: quem a chama (tela, servidor, outra função, gatilho), o qu
 <a id="f-participantes_sem_nota_competicao"></a>
 ## participantes_sem_nota_competicao (RPC, SECURITY DEFINER)
 
-- **Telas que chamam:** [Competição](telas.md#s-matriz-competicao)
+- **Telas que chamam:** [Matriz avaliacoes *(rota matriz-avaliacoes)*](telas.md#s-matriz-avaliacoes), [Competição](telas.md#s-matriz-competicao)
 - **Chamada por outras funções:** [declarar_vencedora](funcoes.md#f-declarar_vencedora)
 - **Grava:** —
 - **Lê:** [avaliacoes_matriz](tabelas.md#t-avaliacoes_matriz), [matriz_tarefa_participantes](tabelas.md#t-matriz_tarefa_participantes), [matriz_tarefas](tabelas.md#t-matriz_tarefas), [user_profiles](tabelas.md#t-user_profiles)
@@ -3313,7 +3313,7 @@ Para cada função: quem a chama (tela, servidor, outra função, gatilho), o qu
 <a id="f-pausar_meta_estrategica"></a>
 ## pausar_meta_estrategica (RPC, SECURITY DEFINER)
 
-- **Telas que chamam:** [Central de Avaliação](telas.md#s-avaliacoes), [Demandas](telas.md#s-demandas), [Demandas conselho *(rota demandas-conselho)*](telas.md#s-demandas-conselho), [Demandas metas *(rota demandas-metas)*](telas.md#s-demandas-metas), [Matriz avaliacoes *(rota matriz-avaliacoes)*](telas.md#s-matriz-avaliacoes), [Metas *(rota metas)*](telas.md#s-metas)
+- **Telas que chamam:** [Central de Avaliação](telas.md#s-avaliacoes), [Demandas](telas.md#s-demandas), [Demandas conselho *(rota demandas-conselho)*](telas.md#s-demandas-conselho), [Demandas metas *(rota demandas-metas)*](telas.md#s-demandas-metas), [Metas *(rota metas)*](telas.md#s-metas)
 - **Grava:** [metas_estrategicas](tabelas.md#t-metas_estrategicas)
 - **Ao gravar, acorda os gatilhos de:** [metas_estrategicas](tabelas.md#t-metas_estrategicas) ([metas_estrategicas_set_updated_at](funcoes.md#f-metas_estrategicas_set_updated_at))
 - **Lê:** [metas_estrategicas](tabelas.md#t-metas_estrategicas), [user_profiles](tabelas.md#t-user_profiles)
@@ -3445,7 +3445,7 @@ Para cada função: quem a chama (tela, servidor, outra função, gatilho), o qu
 <a id="f-progresso_avaliacao_matriz"></a>
 ## progresso_avaliacao_matriz (RPC, SECURITY DEFINER)
 
-- **Telas que chamam:** [Central de Avaliação](telas.md#s-avaliacoes), [Matriz avaliacoes *(rota matriz-avaliacoes)*](telas.md#s-matriz-avaliacoes), [Competição](telas.md#s-matriz-competicao)
+- **Telas que chamam:** [Matriz avaliacoes *(rota matriz-avaliacoes)*](telas.md#s-matriz-avaliacoes), [Competição](telas.md#s-matriz-competicao)
 - **Grava:** —
 - **Lê:** [avaliacoes_matriz](tabelas.md#t-avaliacoes_matriz), [matriz_tarefa_participantes](tabelas.md#t-matriz_tarefa_participantes), [user_profiles](tabelas.md#t-user_profiles)
 - **Chama:** [_funcionario_desligado](funcoes.md#f-_funcionario_desligado)
@@ -3453,7 +3453,7 @@ Para cada função: quem a chama (tela, servidor, outra função, gatilho), o qu
 <a id="f-progresso_votacao_competicao"></a>
 ## progresso_votacao_competicao (RPC, SECURITY DEFINER)
 
-- **Telas que chamam:** [Competição](telas.md#s-matriz-competicao)
+- **Telas que chamam:** [Matriz avaliacoes *(rota matriz-avaliacoes)*](telas.md#s-matriz-avaliacoes), [Competição](telas.md#s-matriz-competicao)
 - **Grava:** —
 - **Lê:** [user_profiles](tabelas.md#t-user_profiles)
 - **Chama:** [_competicao_votos_validos](funcoes.md#f-_competicao_votos_validos), [contar_votantes_matriz](funcoes.md#f-contar_votantes_matriz)
@@ -3501,7 +3501,7 @@ Para cada função: quem a chama (tela, servidor, outra função, gatilho), o qu
 <a id="f-publicar_meta_estrategica"></a>
 ## publicar_meta_estrategica (RPC, SECURITY DEFINER)
 
-- **Telas que chamam:** [Central de Avaliação](telas.md#s-avaliacoes), [Demandas](telas.md#s-demandas), [Demandas conselho *(rota demandas-conselho)*](telas.md#s-demandas-conselho), [Demandas metas *(rota demandas-metas)*](telas.md#s-demandas-metas), [Matriz avaliacoes *(rota matriz-avaliacoes)*](telas.md#s-matriz-avaliacoes), [Metas *(rota metas)*](telas.md#s-metas)
+- **Telas que chamam:** [Central de Avaliação](telas.md#s-avaliacoes), [Demandas](telas.md#s-demandas), [Demandas conselho *(rota demandas-conselho)*](telas.md#s-demandas-conselho), [Demandas metas *(rota demandas-metas)*](telas.md#s-demandas-metas), [Metas *(rota metas)*](telas.md#s-metas)
 - **Grava:** [metas_estrategicas](tabelas.md#t-metas_estrategicas)
 - **Ao gravar, acorda os gatilhos de:** [metas_estrategicas](tabelas.md#t-metas_estrategicas) ([metas_estrategicas_set_updated_at](funcoes.md#f-metas_estrategicas_set_updated_at))
 - **Lê:** [metas_estrategicas](tabelas.md#t-metas_estrategicas), [user_profiles](tabelas.md#t-user_profiles)
@@ -3543,7 +3543,7 @@ Para cada função: quem a chama (tela, servidor, outra função, gatilho), o qu
 <a id="f-reabrir_competicao"></a>
 ## reabrir_competicao (RPC, SECURITY DEFINER)
 
-- **Telas que chamam:** [Competição](telas.md#s-matriz-competicao)
+- **Telas que chamam:** [Matriz avaliacoes *(rota matriz-avaliacoes)*](telas.md#s-matriz-avaliacoes), [Competição](telas.md#s-matriz-competicao)
 - **Grava:** [competicoes_matriz](tabelas.md#t-competicoes_matriz), [notificacoes](tabelas.md#t-notificacoes)
 - **Ao gravar, acorda os gatilhos de:** [competicoes_matriz](tabelas.md#t-competicoes_matriz) ([competicao_apaga_ciclo_matriz](funcoes.md#f-competicao_apaga_ciclo_matriz), [competicao_criar_ciclo_matriz](funcoes.md#f-competicao_criar_ciclo_matriz), [competicao_sync_ciclo_matriz](funcoes.md#f-competicao_sync_ciclo_matriz))
 - **Lê:** [competicoes_matriz](tabelas.md#t-competicoes_matriz)
@@ -3561,7 +3561,7 @@ Para cada função: quem a chama (tela, servidor, outra função, gatilho), o qu
 <a id="f-reabrir_matriz_tarefa"></a>
 ## reabrir_matriz_tarefa (RPC, SECURITY DEFINER)
 
-- **Telas que chamam:** [Central de Avaliação](telas.md#s-avaliacoes), [Matriz avaliacoes *(rota matriz-avaliacoes)*](telas.md#s-matriz-avaliacoes)
+- **Telas que chamam:** [Matriz avaliacoes *(rota matriz-avaliacoes)*](telas.md#s-matriz-avaliacoes), [Competição](telas.md#s-matriz-competicao)
 - **Grava:** [matriz_tarefas](tabelas.md#t-matriz_tarefas)
 - **Ao gravar, acorda os gatilhos de:** [matriz_tarefas](tabelas.md#t-matriz_tarefas) ([trg_matriz_tarefas_updated_at](funcoes.md#f-trg_matriz_tarefas_updated_at))
 - **Lê:** [matriz_tarefas](tabelas.md#t-matriz_tarefas)
@@ -3570,7 +3570,7 @@ Para cada função: quem a chama (tela, servidor, outra função, gatilho), o qu
 <a id="f-reabrir_meta_estrategica"></a>
 ## reabrir_meta_estrategica (RPC, SECURITY DEFINER)
 
-- **Telas que chamam:** [Central de Avaliação](telas.md#s-avaliacoes), [Demandas](telas.md#s-demandas), [Demandas conselho *(rota demandas-conselho)*](telas.md#s-demandas-conselho), [Demandas metas *(rota demandas-metas)*](telas.md#s-demandas-metas), [Matriz avaliacoes *(rota matriz-avaliacoes)*](telas.md#s-matriz-avaliacoes), [Metas *(rota metas)*](telas.md#s-metas)
+- **Telas que chamam:** [Central de Avaliação](telas.md#s-avaliacoes), [Demandas](telas.md#s-demandas), [Demandas conselho *(rota demandas-conselho)*](telas.md#s-demandas-conselho), [Demandas metas *(rota demandas-metas)*](telas.md#s-demandas-metas), [Metas *(rota metas)*](telas.md#s-metas)
 - **Grava:** [metas_estrategicas](tabelas.md#t-metas_estrategicas)
 - **Ao gravar, acorda os gatilhos de:** [metas_estrategicas](tabelas.md#t-metas_estrategicas) ([metas_estrategicas_set_updated_at](funcoes.md#f-metas_estrategicas_set_updated_at))
 - **Lê:** [metas_estrategicas](tabelas.md#t-metas_estrategicas), [user_profiles](tabelas.md#t-user_profiles)
@@ -3799,7 +3799,7 @@ Para cada função: quem a chama (tela, servidor, outra função, gatilho), o qu
 <a id="f-remover_avaliacao_matriz"></a>
 ## remover_avaliacao_matriz (RPC, SECURITY DEFINER)
 
-- **Telas que chamam:** [Central de Avaliação](telas.md#s-avaliacoes), [Matriz avaliacoes *(rota matriz-avaliacoes)*](telas.md#s-matriz-avaliacoes)
+- **Telas que chamam:** [Matriz avaliacoes *(rota matriz-avaliacoes)*](telas.md#s-matriz-avaliacoes), [Competição](telas.md#s-matriz-competicao)
 - **Grava:** [avaliacoes_matriz](tabelas.md#t-avaliacoes_matriz)
 - **Ao gravar, acorda os gatilhos de:** [avaliacoes_matriz](tabelas.md#t-avaliacoes_matriz) ([fn_avaliacao_matriz_congela_avaliador](funcoes.md#f-fn_avaliacao_matriz_congela_avaliador), [trg_aval_matriz_updated_at](funcoes.md#f-trg_aval_matriz_updated_at))
 - **Lê:** [competicoes_matriz](tabelas.md#t-competicoes_matriz), [matriz_tarefa_participantes](tabelas.md#t-matriz_tarefa_participantes), [matriz_tarefas](tabelas.md#t-matriz_tarefas), [user_profiles](tabelas.md#t-user_profiles)
@@ -3807,21 +3807,21 @@ Para cada função: quem a chama (tela, servidor, outra função, gatilho), o qu
 <a id="f-remover_aviso_matriz"></a>
 ## remover_aviso_matriz (RPC)
 
-- **Telas que chamam:** [Central de Avaliação](telas.md#s-avaliacoes), [Matriz avaliacoes *(rota matriz-avaliacoes)*](telas.md#s-matriz-avaliacoes)
+- **Telas que chamam:** [Central de Avaliação](telas.md#s-avaliacoes)
 - **Grava:** [avisos_matriz](tabelas.md#t-avisos_matriz)
 - **Chama:** [auth_is_admin](funcoes.md#f-auth_is_admin)
 
 <a id="f-remover_excecao_calendario"></a>
 ## remover_excecao_calendario (RPC, SECURITY DEFINER)
 
-- **Telas que chamam:** [Central de Avaliação](telas.md#s-avaliacoes), [Matriz avaliacoes *(rota matriz-avaliacoes)*](telas.md#s-matriz-avaliacoes), [Recursos Humanos › Registro de Ponto](telas.md#s-rh-registrodeponto)
+- **Telas que chamam:** [Matriz avaliacoes *(rota matriz-avaliacoes)*](telas.md#s-matriz-avaliacoes), [Competição](telas.md#s-matriz-competicao), [Recursos Humanos › Registro de Ponto](telas.md#s-rh-registrodeponto)
 - **Grava:** [ponto_calendario_excecoes](tabelas.md#t-ponto_calendario_excecoes)
 - **Chama:** [_assert_matriz_admin](funcoes.md#f-_assert_matriz_admin)
 
 <a id="f-remover_matriz_participante"></a>
 ## remover_matriz_participante (RPC, SECURITY DEFINER)
 
-- **Telas que chamam:** [Central de Avaliação](telas.md#s-avaliacoes), [Matriz avaliacoes *(rota matriz-avaliacoes)*](telas.md#s-matriz-avaliacoes)
+- **Telas que chamam:** [Matriz avaliacoes *(rota matriz-avaliacoes)*](telas.md#s-matriz-avaliacoes), [Competição](telas.md#s-matriz-competicao)
 - **Grava:** [avaliacoes_matriz](tabelas.md#t-avaliacoes_matriz), [matriz_tarefa_participantes](tabelas.md#t-matriz_tarefa_participantes)
 - **Ao gravar, acorda os gatilhos de:** [avaliacoes_matriz](tabelas.md#t-avaliacoes_matriz) ([fn_avaliacao_matriz_congela_avaliador](funcoes.md#f-fn_avaliacao_matriz_congela_avaliador), [trg_aval_matriz_updated_at](funcoes.md#f-trg_aval_matriz_updated_at))
 - **Lê:** [matriz_tarefa_participantes](tabelas.md#t-matriz_tarefa_participantes), [matriz_tarefas](tabelas.md#t-matriz_tarefas)
@@ -3830,7 +3830,7 @@ Para cada função: quem a chama (tela, servidor, outra função, gatilho), o qu
 <a id="f-remover_matriz_tarefa"></a>
 ## remover_matriz_tarefa (RPC, SECURITY DEFINER)
 
-- **Telas que chamam:** [Central de Avaliação](telas.md#s-avaliacoes), [Matriz avaliacoes *(rota matriz-avaliacoes)*](telas.md#s-matriz-avaliacoes)
+- **Telas que chamam:** [Matriz avaliacoes *(rota matriz-avaliacoes)*](telas.md#s-matriz-avaliacoes), [Competição](telas.md#s-matriz-competicao)
 - **Grava:** [avaliacoes_matriz](tabelas.md#t-avaliacoes_matriz), [matriz_tarefa_participantes](tabelas.md#t-matriz_tarefa_participantes), [matriz_tarefas](tabelas.md#t-matriz_tarefas)
 - **Ao gravar, acorda os gatilhos de:** [avaliacoes_matriz](tabelas.md#t-avaliacoes_matriz) ([fn_avaliacao_matriz_congela_avaliador](funcoes.md#f-fn_avaliacao_matriz_congela_avaliador), [trg_aval_matriz_updated_at](funcoes.md#f-trg_aval_matriz_updated_at)); [matriz_tarefas](tabelas.md#t-matriz_tarefas) ([trg_matriz_tarefas_updated_at](funcoes.md#f-trg_matriz_tarefas_updated_at))
 - **Lê:** [matriz_tarefa_participantes](tabelas.md#t-matriz_tarefa_participantes), [matriz_tarefas](tabelas.md#t-matriz_tarefas)

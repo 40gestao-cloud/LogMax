@@ -294,7 +294,7 @@ const PREFETCH_VIEW: Record<string, { preload: () => Promise<unknown> }> = {
   'painel-bi': PainelBIView,
   'briefing-diario': BriefingDiarioView,
   'matriz-competicao': MatrizCompeticaoView,
-  'matriz-avaliacoes': CentralAvaliacaoView,
+  'matriz-avaliacoes': MatrizCompeticaoView,
   'matriz-capital': MatrizCapitalView,
   'matriz-conteudo': MatrizConteudoView,
   'aula-modo': AulaModoView,
@@ -874,11 +874,11 @@ const SidebarNav = ({ activeView, navigate, openModules, toggleModule, handleSig
                 </button>
               )}
               <button onPointerEnter={() => prefetchOnHover('matriz-competicao')} onPointerLeave={cancelPrefetchHover} onPointerDown={() => prefetchView('matriz-competicao')} onClick={() => { navigate('matriz-competicao'); onClose?.(); }}
-                className={`flex items-center gap-3 p-2.5 rounded-xl text-sm font-medium ${activeView === 'matriz-competicao' ? 'nav-item neu-pressed text-accent is-active' : 'nav-item neu-button text-gray-100'}`}>
+                className={`flex items-center gap-3 p-2.5 rounded-xl text-sm font-medium ${activeView === 'matriz-competicao' || activeView === 'matriz-avaliacoes' ? 'nav-item neu-pressed text-accent is-active' : 'nav-item neu-button text-gray-100'}`}>
                 <Trophy size={16} /><span>Competição</span>
               </button>
               <button onPointerEnter={() => prefetchOnHover('avaliacoes')} onPointerLeave={cancelPrefetchHover} onPointerDown={() => prefetchView('avaliacoes')} onClick={() => { navigate('avaliacoes'); onClose?.(); }}
-                className={`flex items-center gap-3 p-2.5 rounded-xl text-sm font-medium ${activeView === 'avaliacoes' || activeView === 'matriz-avaliacoes' ? 'nav-item neu-pressed text-accent is-active' : 'nav-item neu-button text-gray-100'}`}>
+                className={`flex items-center gap-3 p-2.5 rounded-xl text-sm font-medium ${activeView === 'avaliacoes' ? 'nav-item neu-pressed text-accent is-active' : 'nav-item neu-button text-gray-100'}`}>
                 <Star size={16} /><span>Central de Avaliação</span>
               </button>
             </>
@@ -1704,7 +1704,7 @@ function LogMaxAppInner() {
       case 'meu-cracha':                   return <MeuCrachaView profile={profile} showToast={st} />;
       case 'cracha-virtual':               return <CrachaVirtualView showToast={st} profile={profile} />;
       case 'catalogo-produtos':            return <CatalogoProdutosView showToast={st} profile={profile} />;
-      case 'avaliacoes':                   return <CentralAvaliacaoView showToast={st} profile={profile} navigate={navigate} />;
+      case 'avaliacoes':                   return <CentralAvaliacaoView showToast={st} profile={profile} />;
       case 'demandas':                     return <DemandasView showToast={st} profile={profile} />;
       case 'demandas-metas':               return <DemandasView showToast={st} profile={profile} initialTab="metas" />;
       case 'demandas-conselho':            return <DemandasView showToast={st} profile={profile} initialTab="conselho" />;
@@ -1720,11 +1720,14 @@ function LogMaxAppInner() {
       case 'central-tempo':                return <CentralTempoView />;
       case 'painel-bi':                    return <PainelBIView showToast={st} profile={profile} />;
       case 'briefing-diario':              return <BriefingDiarioView showToast={st} profile={profile} />;
-      case 'matriz-competicao':            return <MatrizCompeticaoView showToast={st} profile={profile} navigate={navigate} />;
-      // `matriz-avaliacoes` existe só para cair na Competição do Conselho —
-      // é o destino do botão "Central de Avaliação" da tela de Competição.
-      // Sem o initialTab ele abria em Padrão, que não tem nada a ver.
-      case 'matriz-avaliacoes':            return <CentralAvaliacaoView showToast={st} profile={profile} initialTab="competicao" navigate={navigate} />;
+      // A avaliação da competição mora na própria Competição (aba Avaliação)
+      // desde 2026-10-04 — antes era a aba "Competição do Conselho" da
+      // Central de Avaliação. `matriz-avaliacoes` segue existindo porque é o
+      // `link_view` dos avisos do sino (lembrete de avaliação, tarefa
+      // liberada): abre a Competição já na aba Avaliação. `key` distinto pra
+      // remontar ao trocar entre as duas — senão a aba aberta não mudava.
+      case 'matriz-competicao':            return <MatrizCompeticaoView key="placar" showToast={st} profile={profile} navigate={navigate} />;
+      case 'matriz-avaliacoes':            return <MatrizCompeticaoView key="avaliacao" showToast={st} profile={profile} navigate={navigate} initialTab="avaliacao" />;
       case 'matriz-capital':               return <MatrizCapitalView showToast={st} profile={profile} />;
       case 'matriz-conteudo':               return <MatrizConteudoView showToast={st} profile={profile} />;
       case 'aula-modo':                    return <AulaModoView showToast={st} profile={profile} />;

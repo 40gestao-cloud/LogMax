@@ -16,6 +16,7 @@ import type { UserProfile } from '../hooks/useUserProfile';
 import { exportCompeticaoResultadoPDF } from '../lib/competicaoPdf';
 import { MenuMais, ItemMenu } from '../components/MenuMais';
 import { PESO_NOTA_ADMIN } from '../lib/pesoNotaMatriz';
+import { MatrizAvaliacoesView } from './MatrizAvaliacoesView';
 import { ordenarRanking } from '../lib/competicaoRanking';
 
 const OP_FILIAIS = ['SuperMax', 'MaxLook', 'TechMax'] as const;
@@ -164,13 +165,24 @@ function podiumFromSnapshot(snap: any): { filial: string; total: number }[] {
     .sort((a, b) => b.total - a.total);
 }
 
-type Tab = 'config' | 'placar' | 'historico';
+// `avaliacao` é a antiga "Competição do Conselho" da Central de Avaliação —
+// mudou pra cá em 2026-10-04: julgar as tarefas é parte da competição.
+type Tab = 'config' | 'placar' | 'avaliacao' | 'historico';
+const TAB_LABEL: Record<Tab, string> = {
+  placar: 'Placar', avaliacao: 'Avaliação', historico: 'Histórico', config: 'Config',
+};
 const fmtDataBR = (iso: string) => iso ? iso.split('-').reverse().join('/') : '';
 
 const isoToday   = () => new Date().toISOString().slice(0, 10);
 const isoIn = (dias: number) => { const d = new Date(); d.setDate(d.getDate() + dias); return d.toISOString().slice(0, 10); };
 
-export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToast: any; profile: UserProfile; navigate?: (view: string) => void }) {
+export function MatrizCompeticaoView({ showToast, profile, initialTab = 'placar' }: {
+  showToast: any;
+  profile: UserProfile;
+  navigate?: (view: string) => void;
+  // `matriz-avaliacoes` (link dos avisos do sino) abre direto em Avaliação.
+  initialTab?: Tab;
+}) {
   const confirm = useConfirm();
   const podeGerenciar = profile.role === 'admin' || profile.role === 'ceo';
   // Vota: Administração, CEO e conselheiros (RLS voto_write, migr. 671). O
@@ -182,7 +194,11 @@ export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToa
   // (migr. 345). Pro conselho, esta tela mostra participação, não valores.
   const vejoNotaAlheia = profile.role === 'admin';
 
-  const [tab, setTab] = useState<Tab>('placar');
+  const [tab, setTab] = useState<Tab>(initialTab);
+  // Competição clicada no Histórico pra abrir na aba Avaliação. Zerado ao
+  // trocar de aba pelo botão, senão voltar à Avaliação reabriria a encerrada.
+  const [alvoAvaliacao, setAlvoAvaliacao] = useState<string | null>(null);
+  const irPara = (t: Tab, alvo: string | null = null) => { setAlvoAvaliacao(alvo); setTab(t); };
   // Id da competição encerrada aberta para análise (leitura). Guardado como id
   // e não como objeto pra não congelar uma linha velha: a lista recarrega
   // depois de reabrir/declarar e o estado tem de acompanhar.
@@ -882,13 +898,13 @@ export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToa
         </div>
         <div className="flex items-center gap-2">
           {((podeGerenciar
-              ? ['placar','config','historico']
-              : ['placar','historico']) as Tab[]).map(t => (
-            <button key={t} onClick={() => setTab(t)}
+              ? ['placar','avaliacao','historico','config']
+              : ['placar','avaliacao','historico']) as Tab[]).map(t => (
+            <button key={t} onClick={() => irPara(t)}
               className={`text-[10px] font-bold uppercase tracking-widest px-4 py-2 rounded-lg transition-colors ${
                 tab === t ? 'bg-accent/15 text-accent border border-accent/30' : 'neu-button text-gray-400 hover:text-white'
               }`}>
-              {t === 'placar' ? 'Placar' : t === 'config' ? 'Config' : 'Histórico'}
+              {TAB_LABEL[t]}
             </button>
           ))}
         </div>
@@ -971,22 +987,18 @@ export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToa
                         <Unlock size={12} /> Reabrir de verdade
                       </button>
                     )}
-                    {/* Este botão é a ÚNICA porta para `matriz-avaliacoes` no app
-                        inteiro. Prendê-lo a 'em_andamento' deixava as tarefas, as
-                        notas e quem fez o quê inalcançáveis assim que a competição
-                        encerrava — justo quando se quer consultar. Fora de
-                        andamento a tela abre em leitura, que ela já sabe fazer. */}
-                    {navigate && (
-                      <button
-                        onClick={() => navigate('matriz-avaliacoes')}
-                        className="btn-shimmer btn-shimmer--gold"
-                        title={statusVigente === 'em_andamento'
-                          ? 'Avaliar itens das 3 filiais'
-                          : 'Consultar tarefas, notas e participantes desta competição'}
-                      >
-                        <Award size={12} /> Central de Avaliação
-                      </button>
-                    )}
+                    {/* Atalho pra aba Avaliação. Não preso a 'em_andamento': fora
+                        de andamento a avaliação abre em leitura — tarefas, notas e
+                        quem fez o quê seguem consultáveis. */}
+                    <button
+                      onClick={() => irPara('avaliacao', competicaoAtual?.id ?? null)}
+                      className="btn-shimmer btn-shimmer--gold"
+                      title={statusVigente === 'em_andamento'
+                        ? 'Avaliar itens das 3 filiais'
+                        : 'Consultar tarefas, notas e participantes desta competição'}
+                    >
+                      <Award size={12} /> Avaliação
+                    </button>
                     <MenuMais
                       titulo="Exportar o resultado por filial"
                       classe="btn-shimmer btn-shimmer--glass-black"
@@ -1225,12 +1237,12 @@ export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToa
                         <b className="text-gray-200">Frequência do ponto ({Math.round((placar.peso_frequencia ?? 0.2) * 100)}%).</b>{' '}
                         Presença pontual vale o dia inteiro;{' '}
                         {placar.atraso_conta === false
-                          ? 'atraso ainda sem desconto (horário da turma não confirmado — veja o card em Avaliação das Filiais)'
+                          ? 'atraso ainda sem desconto (horário da turma não confirmado — veja o card em Avaliação › Avaliação das Filiais)'
                           : `atraso vale meio dia (entrada após ${placar.jornada_entrada ?? '—'})`};
                         falta zera; justificado fica fora da conta.{' '}
                         {placar.calendario_turma
                           ? 'Com o calendário da turma configurado, cada pessoa ativa responde por cada dia letivo: dia sem lançamento conta como falta, e a cobertura mostra quanto foi de fato registrado.'
-                          : 'Sem o calendário da turma configurado, o que não foi lançado não entra na conta — configure os dias de aula no card de Frequência, na Central de Avaliação, para a falta descontar.'}
+                          : 'Sem o calendário da turma configurado, o que não foi lançado não entra na conta — configure os dias de aula no card de Frequência, na aba Avaliação › Avaliação das Filiais, para a falta descontar.'}
                       </span>
                     </li>
                     <li className="flex gap-2">
@@ -1521,7 +1533,7 @@ export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToa
                       <p className="text-xs text-amber-300/90 mb-4 leading-relaxed">
                         ⚠ {semNota} participante(s) de tarefa liberada ainda sem nota de todo o conselho.
                         Dá pra homologar assim, mas o banco vai pedir justificativa por escrito — o caminho
-                        limpo é a Central de Avaliação antes de declarar.
+                        limpo é a aba Avaliação antes de declarar.
                       </p>
                     )}
                     <div className="grid grid-cols-3 gap-2">
@@ -1595,6 +1607,12 @@ export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToa
             </>
           )}
         </>
+      )}
+
+      {/* Aba Avaliação: o julgamento das tarefas, Avaliação das Filiais e Visão
+          do Ciclo — a antiga "Competição do Conselho" da Central. */}
+      {tab === 'avaliacao' && (
+        <MatrizAvaliacoesView profile={profile} showToast={showToast} competicaoInicial={alvoAvaliacao} />
       )}
 
       {/* Modal de parabenização */}
@@ -1868,22 +1886,15 @@ export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToa
                           {/* É aqui que se procura uma competição encerrada, então é
                               aqui que precisa existir a porta para as notas. Sem
                               isso o Histórico mostrava só o pódio e as tarefas,
-                              notas e participantes ficavam inalcançáveis. */}
-                          {navigate && (
-                            <button
-                              onClick={() => {
-                                // A Central escolhe sozinha qual competição abrir;
-                                // isto diz qual foi clicada, senão com várias
-                                // encerradas ela abriria sempre a mais recente.
-                                try { sessionStorage.setItem('logmax:competicaoAlvo', c.id); } catch { /* modo privado */ }
-                                navigate('matriz-avaliacoes');
-                              }}
-                              className="btn-shimmer btn-shimmer--gold"
-                              title="Ver tarefas, notas e participantes desta competição"
-                            >
-                              <Award size={12} /> Central de Avaliação
-                            </button>
-                          )}
+                              notas e participantes ficavam inalcançáveis. Passa o id:
+                              com várias encerradas a aba Avaliação mostraria a lista. */}
+                          <button
+                            onClick={() => irPara('avaliacao', c.id)}
+                            className="btn-shimmer btn-shimmer--gold"
+                            title="Ver tarefas, notas e participantes desta competição"
+                          >
+                            <Award size={12} /> Avaliação
+                          </button>
                           <button
                             onClick={() => gerarPdfDeEncerrada(c, 'download')}
                             disabled={pdfHistoricoId === c.id}
