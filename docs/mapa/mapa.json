@@ -2356,26 +2356,15 @@
    "componente": "InicioView",
    "arquivo": "src/views/InicioView.tsx",
    "le": [
-    "avaliacoes",
     "avaliacoes_matriz",
-    "clientes",
     "competicoes_matriz",
     "contas_pagar",
     "contas_receber",
-    "cotacoes",
-    "fornecedores",
-    "frequencia_trabalho_com_filial",
     "mandatos",
-    "marketing_artes",
-    "marketing_campanhas",
-    "marketing_promocoes",
-    "metricas_redes_sociais",
-    "orcamentos",
+    "matriz_tarefa_participantes",
+    "matriz_tarefas",
     "pesquisa_respostas",
     "pesquisas",
-    "produtos",
-    "requisicoes",
-    "servicos",
     "user_profiles"
    ],
    "grava": [],
@@ -3196,6 +3185,25 @@
    ],
    "chama": []
   },
+  "_devolver_funcionario_as_tarefas": {
+   "gatilho": false,
+   "secdef": true,
+   "grava": [
+    "avaliacoes_matriz",
+    "ciclo_tarefa_avaliacoes",
+    "ciclo_tarefa_participantes",
+    "funcionario_tarefas_suspensas",
+    "matriz_tarefa_participantes"
+   ],
+   "le": [
+    "avaliacoes_matriz",
+    "ciclo_tarefa_avaliacoes",
+    "ciclo_tarefa_participantes",
+    "funcionario_tarefas_suspensas",
+    "matriz_tarefa_participantes"
+   ],
+   "chama": []
+  },
   "_dia_de_folga": {
    "gatilho": false,
    "secdef": true,
@@ -3449,6 +3457,19 @@
     "_receita_simples"
    ]
   },
+  "_sincronizar_funcionario_tarefas": {
+   "gatilho": false,
+   "secdef": true,
+   "grava": [],
+   "le": [
+    "funcionarios"
+   ],
+   "chama": [
+    "_devolver_funcionario_as_tarefas",
+    "_funcionario_desligado",
+    "_tirar_funcionario_das_tarefas"
+   ]
+  },
   "_sugestao_rejeicao_competicao": {
    "gatilho": false,
    "secdef": true,
@@ -3486,6 +3507,7 @@
     "avaliacoes_matriz",
     "ciclo_tarefa_avaliacoes",
     "ciclo_tarefa_participantes",
+    "funcionario_tarefas_suspensas",
     "matriz_tarefa_participantes"
    ],
    "le": [
@@ -6697,13 +6719,13 @@
    "le": [],
    "chama": []
   },
-  "fn_funcionario_excluido_sai_das_tarefas": {
+  "fn_funcionario_sincroniza_tarefas": {
    "gatilho": true,
    "secdef": true,
    "grava": [],
    "le": [],
    "chama": [
-    "_tirar_funcionario_das_tarefas"
+    "_sincronizar_funcionario_tarefas"
    ]
   },
   "fn_item_devolucao_devolve_unidade": {
@@ -6845,6 +6867,17 @@
    "grava": [],
    "le": [],
    "chama": []
+  },
+  "fn_perfil_desligado_sincroniza_tarefas": {
+   "gatilho": true,
+   "secdef": true,
+   "grava": [],
+   "le": [
+    "funcionarios"
+   ],
+   "chama": [
+    "_sincronizar_funcionario_tarefas"
+   ]
   },
   "fn_ponto_filial_from_funcionario": {
    "gatilho": true,
@@ -10392,7 +10425,7 @@
   ],
   "funcionarios": [
    "trg_auditoria:set_auditoria_campos",
-   "trg_funcionario_excluido_sai_das_tarefas:fn_funcionario_excluido_sai_das_tarefas",
+   "trg_funcionario_sincroniza_tarefas:fn_funcionario_sincroniza_tarefas",
    "trg_funcionarios_autovincular:funcionarios_autovincular_user_profile",
    "trg_funcionarios_vinculo_admin:funcionarios_vinculo_admin_guard",
    "trg_historico:registrar_historico"
@@ -10624,6 +10657,7 @@
    "trg_historico:registrar_historico"
   ],
   "user_profiles": [
+   "trg_perfil_desligado_sincroniza_tarefas:fn_perfil_desligado_sincroniza_tarefas",
    "trg_user_profiles_bloquear_privesc:user_profiles_bloquear_privesc",
    "trg_user_profiles_conselho_e_da_matriz:fn_conselho_e_da_matriz",
    "trg_user_profiles_maxbank_conta:criar_maxbank_conta_para_colaborador",

@@ -1,33 +1,17 @@
-import { supabase, ENDPOINT_TABLE_MAP } from './supabase';
+import { supabase } from './supabase';
 
-const OP_FILIAIS = ['SuperMax', 'MaxLook', 'TechMax'] as const;
-
-// Mesmo universo de tipos avaliáveis do painel Matriz → Central de Avaliação
-// (ver GRUPOS em src/views/MatrizAvaliacoesView.tsx). Duplicado aqui — só
-// {endpoint, dateField, itemTipo}, sem labels/ícones — pra não puxar o bundle
-// inteiro daquela view pro chunk da Início. Se um tipo novo entrar lá, replicar
-// aqui. NÃO inclui as "Tarefas da Matriz" (tarefa_treinamento_vendas/ia/
-// apresentacao) — são um fluxo de avaliação à parte (MatrizTarefasPanel), com
-// contagem própria; incluir o item_tipo delas aqui infla "meus" sem inflar o
-// total, subestimando pendentes.
-const TIPOS_AVALIAVEIS: { endpoint: string; dateField: string; itemTipo: string }[] = [
-  { endpoint: '/api/marketingartesview',              dateField: 'created_at',    itemTipo: 'arte' },
-  { endpoint: '/api/marketingpromocoesview',           dateField: 'created_at',    itemTipo: 'promocao' },
-  { endpoint: '/api/marketingcampanhasview',           dateField: 'created_at',    itemTipo: 'campanha' },
-  { endpoint: '/api/metricasredessociaisview',         dateField: 'data_registro', itemTipo: 'redes_sociais' },
-  { endpoint: '/api/orcamentosview',                   dateField: 'created_at',    itemTipo: 'orcamento' },
-  { endpoint: '/api/requisicoesview',                  dateField: 'created_at',    itemTipo: 'requisicao' },
-  { endpoint: '/api/cotacoesview',                     dateField: 'created_at',    itemTipo: 'cotacao' },
-  { endpoint: '/api/frequenciatrabalhocomfilialview',  dateField: 'data',          itemTipo: 'frequencia_trabalho' },
-  { endpoint: '/api/avaliacoesview',                   dateField: 'created_at',    itemTipo: 'avaliacao_desempenho' },
-  { endpoint: 'categorias_produto',                    dateField: 'created_at',    itemTipo: 'cadastro_categoria' },
-  { endpoint: '/api/crmview-fornecedores',              dateField: 'created_at',    itemTipo: 'cadastro_fornecedor' },
-  { endpoint: '/api/servicosview',                      dateField: 'created_at',    itemTipo: 'cadastro_servico' },
-  { endpoint: '/api/produtosview',                      dateField: 'created_at',    itemTipo: 'cadastro_produto' },
-  { endpoint: '/api/crmview-clientes',                  dateField: 'created_at',    itemTipo: 'cadastro_cliente' },
-  { endpoint: '/api/contaspagarview',                   dateField: 'created_at',    itemTipo: 'conta_pagar' },
-  { endpoint: '/api/contasreceberview',                 dateField: 'created_at',    itemTipo: 'conta_receber' },
-];
+// Card "Avaliações em Aberto" da Início (modo Matriz).
+//
+// Mede o que o avaliador tem de fato a julgar: participantes das Tarefas da
+// Matriz liberadas (status 'aberta') na competição EM ANDAMENTO, e quantos
+// deles ainda estão sem a nota dele. É o mesmo universo do "Sem sua nota" da
+// Competição › Avaliação e do cartão da Mesa do Gestor.
+//
+// Até 2026-10-04 isto somava 16 tipos de item (artes, requisições, contas…)
+// da avaliação antiga da Matriz, que não é mais feita — o total era enorme,
+// nada abatia, e o donut ficava parado em 0%.
+//
+// Desligado e excluído não entram: saem da tarefa sozinhos (migr. 672/675).
 
 export type ResumoAvaliacaoMatriz = {
   competicaoNome: string | null;
@@ -35,51 +19,46 @@ export type ResumoAvaliacaoMatriz = {
   pendentes: number;
 };
 
-// Total avaliável no período da competição ativa, menos o que este avaliador
-// já julgou (soma de todas as dimensões — mesmo agregado exibido nos cards
-// de progresso da Central de Avaliação). Sem competição em andamento, volta
-// zerado.
 export async function contarAvaliacoesPendentesMatriz(profileId: string): Promise<ResumoAvaliacaoMatriz> {
   const vazio: ResumoAvaliacaoMatriz = { competicaoNome: null, total: 0, pendentes: 0 };
   if (!supabase || !profileId) return vazio;
 
   const { data: competicao } = await supabase
     .from('competicoes_matriz')
-    .select('id,nome,data_inicio,data_fim')
+    .select('id,nome')
     .eq('ativo', true)
     .eq('status', 'em_andamento')
     .maybeSingle();
   if (!competicao) return vazio;
 
-  const ini = competicao.data_inicio;
-  const fim = competicao.data_fim + 'T23:59:59.999';
+  const { data: tarefas } = await supabase
+    .from('matriz_tarefas')
+    .select('id')
+    .eq('competicao_id', competicao.id)
+    .eq('ativo', true)
+    .eq('status', 'aberta');
+  const tarefaIds = (tarefas ?? []).map((t: { id: string }) => t.id);
+  // Lista vazia viraria `in.()` — e "nenhuma tarefa liberada" é zero, não erro.
+  if (tarefaIds.length === 0) return { competicaoNome: competicao.nome, total: 0, pendentes: 0 };
 
-  const [totaisPorTipo, minhasResp] = await Promise.all([
-    Promise.all(TIPOS_AVALIAVEIS.map(async t => {
-      const table = ENDPOINT_TABLE_MAP[t.endpoint] ?? t.endpoint;
-      const { count } = await supabase!
-        .from(table)
-        .select('id', { count: 'exact', head: true })
-        .in('filial', OP_FILIAIS as unknown as string[])
-        .gte(t.dateField, ini)
-        .lte(t.dateField, fim);
-      return count ?? 0;
-    })),
+  const [{ data: parts }, { data: minhas }] = await Promise.all([
+    supabase
+      .from('matriz_tarefa_participantes')
+      .select('id')
+      .in('tarefa_id', tarefaIds)
+      .eq('ativo', true),
     supabase
       .from('avaliacoes_matriz')
-      .select('id', { count: 'exact', head: true })
+      .select('item_id')
       .eq('competicao_id', competicao.id)
       .eq('avaliador_id', profileId)
       .eq('ativo', true)
-      .in('item_tipo', TIPOS_AVALIAVEIS.map(t => t.itemTipo)),
+      .not('nota', 'is', null),
   ]);
 
-  const total = totaisPorTipo.reduce((s, n) => s + n, 0);
-  const meus = minhasResp.count ?? 0;
+  const ids = (parts ?? []).map((p: { id: string }) => p.id);
+  const jaNotei = new Set((minhas ?? []).map((a: { item_id: string }) => a.item_id));
+  const pendentes = ids.filter(id => !jaNotei.has(id)).length;
 
-  return {
-    competicaoNome: competicao.nome,
-    total,
-    pendentes: Math.max(0, total - meus),
-  };
+  return { competicaoNome: competicao.nome, total: ids.length, pendentes };
 }
