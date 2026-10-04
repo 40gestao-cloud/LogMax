@@ -174,6 +174,12 @@ const TAB_LABEL: Record<Tab, string> = {
 const fmtDataBR = (iso: string) => iso ? iso.split('-').reverse().join('/') : '';
 
 const isoToday   = () => new Date().toISOString().slice(0, 10);
+// Dias corridos até o fim, na régua do Acre (datas 'YYYY-MM-DD').
+const diasAteFim = (fim: string) => {
+  const [a1, m1, d1] = todayBR().split('-').map(Number);
+  const [a2, m2, d2] = fim.split('-').map(Number);
+  return Math.round((Date.UTC(a2, m2 - 1, d2) - Date.UTC(a1, m1 - 1, d1)) / 86400_000);
+};
 const isoIn = (dias: number) => { const d = new Date(); d.setDate(d.getDate() + dias); return d.toISOString().slice(0, 10); };
 
 export function MatrizCompeticaoView({ showToast, profile, initialTab = 'placar' }: {
@@ -929,14 +935,12 @@ export function MatrizCompeticaoView({ showToast, profile, initialTab = 'placar'
             </div>
           ) : (
             <>
-              {/* Cabeçalho da competição + pódio */}
-              <div className="neu-flat rounded-3xl p-6 border border-accent/20">
-                {/* Cabeçalho: quem é a competição à esquerda (status colado no
-                    nome — antes era um chip no meio dos botões, com cara de
-                    botão); à direita, uma ação principal, exportação num menu
-                    e as ações raras/destrutivas atrás do "⋯". Eram sete
-                    botões lado a lado, com "Excluir" encostado no PDF. */}
-                <div className="flex flex-wrap items-start justify-between gap-3 mb-5">
+              {/* Ordem da tela (2026-10-04): faixa da competição → [votação, na
+                  fase de votação] → pódio → composição → progresso → análise IA.
+                  Antes tudo vivia num cartão só e a votação ficava no fim da página
+                  justo na fase em que ela é a única ação que importa. */}
+              <div className="neu-flat rounded-3xl p-5 border border-accent/20">
+                <div className="flex flex-wrap items-start justify-between gap-3">
                   <div className="min-w-0">
                     <p className={`text-[10px] uppercase tracking-widest font-bold ${emAnalise ? 'text-amber-400' : 'text-gray-500'}`}>
                       {emAnalise ? 'Análise · competição encerrada (somente leitura)' : 'Competição ativa'}
@@ -956,11 +960,20 @@ export function MatrizCompeticaoView({ showToast, profile, initialTab = 'placar'
                     <p className="text-xs text-gray-400 flex items-center gap-1.5 mt-1">
                       <Calendar size={11} />
                       {fmtDataBR(placar.competicao.data_inicio)} → {fmtDataBR(placar.competicao.data_fim)}
+                      {statusVigente === 'em_andamento' && (() => {
+                        const r = diasAteFim(placar.competicao.data_fim);
+                        return r >= 0 && (
+                          <span className="font-bold text-accent">· {r === 0 ? 'último dia' : `faltam ${r} dia${r === 1 ? '' : 's'}`}</span>
+                        );
+                      })()}
+                      {statusVigente === 'aguardando_encerramento' && (
+                        <span className="font-bold text-yellow-400">· em votação</span>
+                      )}
                     </p>
                     {/* Descrição vem da lista completa (competicaoAtual) — a RPC de placar
                         não devolve esse campo, então placar.competicao.descricao é sempre undefined. */}
                     {competicaoAtual?.descricao && (
-                      <p className="text-xs text-gray-300 mt-2 whitespace-pre-wrap max-w-xl">
+                      <p className="text-xs text-gray-400 mt-2 max-w-2xl line-clamp-2" title={competicaoAtual.descricao}>
                         {competicaoAtual.descricao}
                       </p>
                     )}
@@ -1044,323 +1057,7 @@ export function MatrizCompeticaoView({ showToast, profile, initialTab = 'placar'
                     )}
                   </div>
                 </div>
-
-                {/* Composição da nota — as três parcelas com o peso de cada
-                    uma, na mesma régua. Antes eram selos soltos: o conselho
-                    não dizia quanto valia, e frequência/pontualidade ficavam
-                    verdes mesmo sem ter entrado na conta de filial nenhuma. */}
-                <ComposicaoNota placar={placar} podio={podio} />
-
-                {/* Pódio. Sem nota do conselho em filial nenhuma, a ordem
-                    cairia no desempate (frequência) e a tela diria "1º" de
-                    quem ninguém avaliou — então não há posição até a
-                    primeira nota. */}
-                {!algumaAvaliada && (
-                  <p className="text-xs text-gray-400 mb-3">
-                    <span className="font-bold text-gray-200">Pódio ainda não formado.</span>{' '}
-                    Nenhuma filial recebeu nota de tarefa do conselho — a posição só aparece a partir da primeira nota.
-                    Abaixo, o que já está medido.
-                  </p>
-                )}
-                {/* Com pódio formado, degraus: 2º · 1º · 3º, o líder mais alto e
-                    maior. Antes eram três cartões iguais e a posição só se lia
-                    pela etiqueta pequena. Sem nota, cartões iguais e sem ordem. */}
-                <div className={`grid grid-cols-3 gap-3 ${algumaAvaliada ? 'items-end' : ''}`}>
-                  {(algumaAvaliada
-                      ? [1, 0, 2].filter(i => i < podioExibido.length).map(i => ({ p: podioExibido[i], idx: i }))
-                      : podioExibido.map((p, idx) => ({ p, idx }))
-                  ).map(({ p, idx }) => {
-                    const lider = idx === 0 && p.n > 0;
-                    const degrau = !algumaAvaliada ? 'p-4'
-                      : idx === 0 ? 'px-4 pt-5 pb-7 bg-emerald-500/[0.06]'
-                      : idx === 1 ? 'px-4 pt-4 pb-5' : 'px-4 pt-3 pb-3';
-                    return (
-                      <div key={p.filial}
-                        className={`neu-pressed rounded-2xl text-center ${degrau} ${lider ? 'ring-1 ring-emerald-500/40' : ''}`}>
-                        <div className="flex items-center justify-center gap-1 mb-1 h-4">
-                          {lider && <Award size={14} className="text-emerald-400" />}
-                          {p.n > 0 && (
-                            <span className="text-[9px] uppercase tracking-widest text-gray-500 font-bold">
-                              {['1º','2º','3º'][idx]}
-                            </span>
-                          )}
-                        </div>
-                        <div className="flex justify-center"><FilialBadge filial={p.filial} /></div>
-                        <p className={`font-black font-mono tabular-nums mt-1 ${lider ? 'text-4xl text-emerald-400' : p.n === 0 ? 'text-2xl text-gray-600' : 'text-2xl text-gray-200'}`}>
-                          {p.n === 0 ? '—' : (p.media / 10).toFixed(1)}
-                        </p>
-                        <p className="text-[9px] text-gray-500 uppercase tracking-widest mt-0.5">
-                          {p.n === 0 ? 'aguardando nota do conselho' : `nota final (${p.n} nota${p.n === 1 ? '' : 's'})`}
-                        </p>
-                        {p.n === 0 && (p.freq?.taxa != null || p.pont?.taxa != null) && (
-                          <p className="text-[10px] text-gray-400 tabular-nums mt-2">
-                            {p.freq?.taxa != null && <>Frequência {(p.freq.taxa * 100).toFixed(0)}%</>}
-                            {p.freq?.taxa != null && p.pont?.taxa != null && ' · '}
-                            {p.pont?.taxa != null && <>Pontualidade {(p.pont.taxa * 100).toFixed(0)}%</>}
-                          </p>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
               </div>
-
-              {/* Detalhe por filial. Não é "notas do conselho": a tabela traz
-                  as três parcelas e a final. */}
-              <div className="neu-flat rounded-3xl p-5 border border-white/5">
-                <h3 className="text-sm font-bold text-gray-200 mb-4 flex items-center gap-2">
-                  <Star size={13} className="text-accent" /> Composição da nota por filial
-                </h3>
-                <div className="overflow-x-auto">
-                  <table className="tabela w-full text-xs">
-                    <thead className="text-[10px] uppercase tracking-widest text-gray-500">
-                      <tr>
-                        <th className="text-left pb-3 font-bold">Filial</th>
-                        <th className="text-right pb-3 font-bold pr-4">Notas / itens</th>
-                        <th className="text-right pb-3 font-bold pr-4">Conselho (0-10)</th>
-                        <th className="text-right pb-3 font-bold pr-4">Frequência</th>
-                        <th className="text-right pb-3 font-bold pr-4">Cobertura do ponto</th>
-                        <th className="text-right pb-3 font-bold pr-4">Pontualidade</th>
-                        <th className="text-right pb-3 font-bold pr-4">Final (0-10)</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {podio.map(p => {
-                        const isBest = p.n > 0 && p.media === Math.max(...podio.map(x => x.n > 0 ? x.media : -Infinity));
-                        const c = contribuicao(p, placar);
-                        return (
-                          <tr key={p.filial} className="border-t border-white/5">
-                            <td className="py-3"><FilialBadge filial={p.filial} /></td>
-                            <td className="py-3 text-right text-gray-300 tabular-nums pr-4"
-                                title={p.itens ? `${p.n} nota(s) sobre ${p.itens} item(ns) julgado(s)` : undefined}>
-                              {p.n}{p.itens ? <span className="text-gray-600"> / {p.itens}</span> : null}
-                            </td>
-                            <td className="py-3 text-right text-gray-400 tabular-nums pr-4">
-                              {p.n === 0 ? '—' : (p.media_conselho / 10).toFixed(1)}
-                              {c && <Contrib valor={c.conselho} peso={c.pesoConselho} />}
-                            </td>
-                            <td
-                              className="py-3 text-right tabular-nums pr-4"
-                              title={p.freq
-                                ? `${p.freq.presencas} presença(s) — ${p.freq.atrasos ?? 0} com atraso (meio ponto), ${p.freq.faltas} falta(s), ${p.freq.justificados} justificado(s) fora da conta`
-                                : 'Sem ponto lançado no período'}
-                            >
-                              {p.freq?.taxa == null
-                                ? <span className="text-gray-600">—</span>
-                                : <span className={p.freq.entrou ? 'text-emerald-300' : 'text-gray-500'}>
-                                    {(p.freq.taxa * 100).toFixed(0)}%
-                                  </span>}
-                              {c && c.pesoFreq > 0 && <Contrib valor={c.freq} peso={c.pesoFreq} />}
-                            </td>
-                            {/* Cobertura: o que foi lançado sobre o que se
-                                esperava lançar (dias com ponto × gente ativa).
-                                Sem ela, 100% em 6 registros e 100% em 24 são o
-                                mesmo número — e a frequência vale 20% da nota. */}
-                            {(() => {
-                              // `esperado` vem do banco desde a 376; o produto
-                              // é o fallback pro snapshot da 374.
-                              const esperado = p.freq?.esperado
-                                ?? ((p.freq?.dias_distintos ?? 0) * (p.freq?.funcionarios_ativos ?? 0));
-                              const lancados = p.freq?.registros ?? 0;
-                              if (!esperado) {
-                                return (
-                                  <td className="py-3 text-right tabular-nums pr-4 text-gray-600"
-                                      title="Snapshot anterior à migr. 374 não guarda a cobertura.">—</td>
-                                );
-                              }
-                              const comCalendario = !!p.freq?.calendario;
-                              const pct = Math.round((lancados / esperado) * 100);
-                              return (
-                                <td className="py-3 text-right tabular-nums pr-4"
-                                    title={comCalendario
-                                      ? `${lancados} de ${esperado} lançamento(s) esperado(s) — ${p.freq?.dias_letivos} dia(s) letivo(s) × ${p.freq?.funcionarios_ativos} pessoa(s). Os ${p.freq?.ausencias ?? 0} que faltaram já contam como falta na taxa.`
-                                      : `${lancados} de ${esperado} — sem calendário da turma configurado, o que não foi lançado não entra na conta e a taxa pode estar inflada.`}>
-                                  <span className={pct >= 100 ? 'text-gray-400' : comCalendario ? 'text-gray-400' : 'text-amber-400 font-bold'}>
-                                    {pct}%
-                                  </span>
-                                  <span className="text-gray-600"> ({lancados}/{esperado})</span>
-                                </td>
-                              );
-                            })()}
-                            {/* (617) Parcela paga até o vencimento ÷ parcelas
-                                já vencidas no período. Sem dívida vencida, a
-                                unidade não ganha nem perde: o eixo não entra. */}
-                            <td
-                              className="py-3 text-right tabular-nums pr-4"
-                              title={p.pont?.taxa == null
-                                ? 'Nenhuma parcela de empréstimo venceu nesta unidade dentro do período — o eixo não entra e o peso volta para o conselho.'
-                                : `${p.pont.em_dia} de ${p.pont.vencidas} parcela(s) paga(s) até o vencimento — ${p.pont.atrasadas} em atraso ou sem pagar.`}
-                            >
-                              {p.pont?.taxa == null
-                                ? <span className="text-gray-600">—</span>
-                                : <>
-                                    <span className={p.pont.entrou ? 'text-emerald-300' : 'text-gray-500'}>
-                                      {(p.pont.taxa * 100).toFixed(0)}%
-                                    </span>
-                                    <span className="text-gray-600"> ({p.pont.em_dia}/{p.pont.vencidas})</span>
-                                  </>}
-                              {c && c.pesoPont > 0 && <Contrib valor={c.pont} peso={c.pesoPont} />}
-                            </td>
-                            <td className={`py-3 text-right tabular-nums pr-4 ${isBest ? 'text-emerald-400 font-bold' : 'text-gray-300'}`}
-                                title={c ? `${fmt1(c.conselho)} + ${fmt1(c.freq)} + ${fmt1(c.pont)} = ${fmt1(p.media / 10)}` : undefined}>
-                              {p.n === 0 ? '—' : (p.media / 10).toFixed(1)}
-                              {c && <span className="block text-[10px] font-normal text-gray-500">soma das parcelas</span>}
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-                {/* Era um parágrafo corrido de ~180 palavras sob a tabela.
-                    Agora fica recolhido e, aberto, segue a ordem da conta. */}
-                <details className="mt-3 group">
-                  <summary className="cursor-pointer list-none flex items-center gap-1.5 text-[11px] font-bold text-gray-400 hover:text-accent select-none">
-                    <Info size={12} /> Como a nota é calculada
-                    <ChevronDown size={12} className="transition-transform group-open:rotate-180" />
-                  </summary>
-                  <ol className="mt-3 flex flex-col gap-2.5 text-[11px] text-gray-400 leading-relaxed list-none">
-                    <li className="flex gap-2">
-                      <span className="shrink-0 w-4 h-4 rounded-full bg-amber-400 text-black text-[10px] font-black flex items-center justify-center">1</span>
-                      <span>
-                        <b className="text-gray-200">Conselho ({Math.round((1 - (placar.peso_frequencia ?? 0.2) - (placar.peso_pontualidade ?? 0.1)) * 100)}%).</b>{' '}
-                        Cada participante vira uma nota só (a média das notas que recebeu); depois tira-se a média dos
-                        participantes da filial. Assim um avaliador que julgue mais gente de uma unidade não pesa mais que
-                        os outros. O eixo Planejamento e Organização, da Avaliação de Filial, entra como mais um item da unidade.
-                        Dentro de cada participante a nota da Administração pesa {placar.peso_nota_admin ?? PESO_NOTA_ADMIN}× a
-                        de um conselheiro; nota dada à própria unidade não conta.
-                      </span>
-                    </li>
-                    <li className="flex gap-2">
-                      <span className="shrink-0 w-4 h-4 rounded-full bg-sky-500 text-white text-[10px] font-black flex items-center justify-center">2</span>
-                      <span>
-                        <b className="text-gray-200">Frequência do ponto ({Math.round((placar.peso_frequencia ?? 0.2) * 100)}%).</b>{' '}
-                        Presença pontual vale o dia inteiro;{' '}
-                        {placar.atraso_conta === false
-                          ? 'atraso ainda sem desconto (horário da turma não confirmado — veja o card em Avaliação › Avaliação das Filiais)'
-                          : `atraso vale meio dia (entrada após ${placar.jornada_entrada ?? '—'})`};
-                        falta zera; justificado fica fora da conta.{' '}
-                        {placar.calendario_turma
-                          ? 'Com o calendário da turma configurado, cada pessoa ativa responde por cada dia letivo: dia sem lançamento conta como falta, e a cobertura mostra quanto foi de fato registrado.'
-                          : 'Sem o calendário da turma configurado, o que não foi lançado não entra na conta — configure os dias de aula no card de Frequência, na aba Avaliação › Avaliação das Filiais, para a falta descontar.'}
-                      </span>
-                    </li>
-                    <li className="flex gap-2">
-                      <span className="shrink-0 w-4 h-4 rounded-full bg-violet-500 text-white text-[10px] font-black flex items-center justify-center">3</span>
-                      <span>
-                        <b className="text-gray-200">Pontualidade no pagamento ({Math.round((placar.peso_pontualidade ?? 0.1) * 100)}%).</b>{' '}
-                        Parcelas de empréstimo que venceram no período e foram quitadas até o vencimento (antecipar conta como
-                        em dia; não pagar conta como atraso). É uma taxa, não um valor: a régua é a mesma para quem pegou
-                        R$ 1 milhão e para quem pegou R$ 5 milhões.
-                      </span>
-                    </li>
-                    <li className="flex gap-2">
-                      <span className="shrink-0 w-4 h-4 rounded-full bg-zinc-600 text-white text-[10px] font-black flex items-center justify-center">=</span>
-                      <span>
-                        <b className="text-gray-200">Final.</b>{' '}
-                        Soma das três parcelas com os pesos acima. Parcela sem dado numa filial (sem ponto lançado, sem parcela
-                        vencida) não pune: fica de fora e o peso dela volta para o conselho daquela filial. Frequência e
-                        pontualidade só entram em filial que já tem nota do conselho.
-                      </span>
-                    </li>
-                  </ol>
-                </details>
-              </div>
-
-              {/* Quem já avaliou — nominal, com a média que cada um deu */}
-              <div className="neu-flat rounded-3xl p-5 border border-white/5">
-                <h3 className="text-sm font-bold text-gray-200 mb-4 flex items-center gap-2">
-                  <Users size={13} className="text-accent" /> Quem já avaliou — Tarefas da Matriz
-                </h3>
-                {porAvaliador.length === 0 ? (
-                  <EmptyState message="Nenhum eleitor cadastrado na Matriz." />
-                ) : (
-                  <div className="overflow-x-auto">
-                    <table className="tabela w-full text-xs">
-                      <thead className="text-[10px] uppercase tracking-widest text-gray-500">
-                        <tr>
-                          <th className="text-left pb-3 font-bold">Avaliador</th>
-                          <th className="text-right pb-3 font-bold pr-4">Notas em tarefas</th>
-                          {vejoNotaAlheia && OP_FILIAIS.map(f => (
-                            <th key={f} className={`text-right pb-3 font-bold pr-4 ${FILIAL_COLOR[f]}`}>{f}</th>
-                          ))}
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {porAvaliador.map(a => (
-                          <tr key={a.id} className="border-t border-white/5">
-                            <td className="py-3">
-                              <span className="text-gray-200">{a.nome}</span>
-                              {a.id === profile.id && <span className="text-accent"> (você)</span>}
-                              <span className="text-[9px] uppercase tracking-widest text-gray-500 font-bold ml-2">
-                                {a.role === 'ceo' ? 'CEO' : a.role === 'admin' ? `Administração · peso ${PESO_NOTA_ADMIN}` : 'Conselheiro'}
-                              </span>
-                            </td>
-                            <td className={`py-3 text-right tabular-nums pr-4 ${a.total === 0 ? 'text-yellow-400' : 'text-gray-300'}`}>
-                              {a.total === 0 ? 'sem nota em tarefas' : a.total}
-                            </td>
-                            {vejoNotaAlheia && OP_FILIAIS.map(f => {
-                              const acc = a.porFilial[f];
-                              return (
-                                <td key={f} className="py-3 text-right tabular-nums pr-4 text-gray-300">
-                                  {acc ? (acc.soma / acc.n).toFixed(1) : <span className="text-gray-600">—</span>}
-                                </td>
-                              );
-                            })}
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-                <p className="text-[10px] text-gray-500 mt-3">
-                  {vejoNotaAlheia ? (
-                    <>Média 0-10 que cada eleitor deu por filial nas Tarefas da Matriz — mesma fonte do pódio.
-                    Os eixos da Avaliação de Filial também pesam no placar quando o selo acima está aceso, mas
-                    não aparecem nesta tabela. No placar a nota da Administração pesa {PESO_NOTA_ADMIN}×.</>
-                  ) : (
-                    <>Quantas notas cada eleitor já registrou nas Tarefas da Matriz. O valor de cada nota fica
-                    selado até a tarefa ser encerrada — daí ele aparece por participante, dentro da tarefa.</>
-                  )}
-                </p>
-              </div>
-
-              {/* Análise IA */}
-              {competicaoAtual && competicaoAtual.status !== 'em_andamento' && (
-                <div className="neu-flat rounded-3xl p-5 border border-white/5">
-                  <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
-                    <h3 className="text-sm font-bold text-gray-200 flex items-center gap-2">
-                      <Sparkles size={13} className="text-accent" /> Análise IA
-                    </h3>
-                    <div className="flex items-center gap-2">
-                      {competicaoAtual.analise_ia && (
-                        <BotaoWhatsApp
-                          showToast={showToast}
-                          getTexto={() => montarMensagemWhats({
-                            titulo: 'Análise da Competição',
-                            subtitulo: competicaoAtual.nome,
-                            corpoMarkdown: competicaoAtual.analise_ia,
-                          })}
-                        />
-                      )}
-                      {competicaoAtual.status !== 'encerrada' && (
-                        <NeuButtonAccent onClick={gerarAnalise} disabled={gerandoAnalise} variant="">
-                          {gerandoAnalise
-                            ? <><Loader2 size={12} className="animate-spin" /> Analisando…</>
-                            : <><Sparkles size={12} /> {competicaoAtual.analise_ia ? 'Regenerar' : 'Gerar análise'}</>}
-                        </NeuButtonAccent>
-                      )}
-                    </div>
-                  </div>
-                  {competicaoAtual.analise_ia ? (
-                    <div className="text-sm text-gray-200 leading-relaxed">
-                      <ReactMarkdown>{competicaoAtual.analise_ia}</ReactMarkdown>
-                    </div>
-                  ) : (
-                    <EmptyState message="Análise ainda não gerada. Clique em Gerar análise pra ouvir a opinião da IA." />
-                  )}
-                </div>
-              )}
 
               {/* Votação */}
               {competicaoAtual && competicaoAtual.status === 'aguardando_encerramento' && podeVotar && (
@@ -1599,6 +1296,240 @@ export function MatrizCompeticaoView({ showToast, profile, initialTab = 'placar'
                   </div>
                 );
               })()}
+
+              {/* Pódio — o assunto da tela, em destaque logo abaixo da faixa. */}
+              <div className="neu-flat rounded-3xl p-5 border border-white/5">
+                <h3 className="text-sm font-bold text-gray-200 mb-4 flex items-center gap-2">
+                  <Trophy size={13} className="text-accent" /> Pódio
+                </h3>
+                {/* Pódio. Sem nota do conselho em filial nenhuma, a ordem
+                    cairia no desempate (frequência) e a tela diria "1º" de
+                    quem ninguém avaliou — então não há posição até a
+                    primeira nota. */}
+                {!algumaAvaliada && (
+                  <p className="text-xs text-gray-400 mb-3">
+                    <span className="font-bold text-gray-200">Pódio ainda não formado.</span>{' '}
+                    Nenhuma filial recebeu nota de tarefa do conselho — a posição só aparece a partir da primeira nota.
+                    Abaixo, o que já está medido.
+                  </p>
+                )}
+                {/* Com pódio formado, degraus: 2º · 1º · 3º, o líder mais alto e
+                    maior. Antes eram três cartões iguais e a posição só se lia
+                    pela etiqueta pequena. Sem nota, cartões iguais e sem ordem. */}
+                {/* Celular: empilha na ordem da classificação. A partir de sm,
+                    degraus 2º · 1º · 3º pela ordem do CSS (a do DOM segue 1-2-3,
+                    que é a que um leitor de tela deve ouvir). */}
+                <div className={`grid grid-cols-1 sm:grid-cols-3 gap-3 ${algumaAvaliada ? 'sm:items-end' : ''}`}>
+                  {podioExibido.map((p, idx) => {
+                    const ordem = !algumaAvaliada ? '' : idx === 0 ? 'sm:order-2' : idx === 1 ? 'sm:order-1' : 'sm:order-3';
+                    const lider = idx === 0 && p.n > 0;
+                    const degrau = !algumaAvaliada ? 'p-4'
+                      : idx === 0 ? 'px-4 pt-5 pb-7 bg-emerald-500/[0.06]'
+                      : idx === 1 ? 'px-4 pt-4 pb-5' : 'px-4 pt-3 pb-3';
+                    return (
+                      <div key={p.filial}
+                        className={`neu-pressed rounded-2xl text-center ${degrau} ${ordem} ${lider ? 'ring-1 ring-emerald-500/40' : ''}`}>
+                        <div className="flex items-center justify-center gap-1 mb-1 h-4">
+                          {lider && <Award size={14} className="text-emerald-400" />}
+                          {p.n > 0 && (
+                            <span className="text-[9px] uppercase tracking-widest text-gray-500 font-bold">
+                              {['1º','2º','3º'][idx]}
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex justify-center"><FilialBadge filial={p.filial} /></div>
+                        <p className={`font-black font-mono tabular-nums mt-1 ${lider ? 'text-4xl text-emerald-400' : p.n === 0 ? 'text-2xl text-gray-600' : 'text-2xl text-gray-200'}`}>
+                          {p.n === 0 ? '—' : (p.media / 10).toFixed(1)}
+                        </p>
+                        <p className="text-[9px] text-gray-500 uppercase tracking-widest mt-0.5">
+                          {p.n === 0 ? 'aguardando nota do conselho' : `nota final (${p.n} nota${p.n === 1 ? '' : 's'})`}
+                        </p>
+                        {p.n === 0 && (p.freq?.taxa != null || p.pont?.taxa != null) && (
+                          <p className="text-[10px] text-gray-400 tabular-nums mt-2">
+                            {p.freq?.taxa != null && <>Frequência {(p.freq.taxa * 100).toFixed(0)}%</>}
+                            {p.freq?.taxa != null && p.pont?.taxa != null && ' · '}
+                            {p.pont?.taxa != null && <>Pontualidade {(p.pont.taxa * 100).toFixed(0)}%</>}
+                          </p>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Composição: a barra de pesos e a tabela viraram uma coisa só —
+                  os pesos moram no cabeçalho, e o detalhe (notas, cobertura do
+                  ponto) desce pra dentro da célula. Eram 7 colunas com rolagem
+                  lateral, e a "Final" ficava fora da tela. */}
+              <div className="neu-flat rounded-3xl p-5 border border-white/5">
+                <h3 className="text-sm font-bold text-gray-200 mb-4 flex items-center gap-2">
+                  <Star size={13} className="text-accent" /> Composição da nota por filial
+                </h3>
+                <TabelaComposicao placar={placar} podio={podio} />
+                {/* Era um parágrafo corrido de ~180 palavras sob a tabela.
+                    Agora fica recolhido e, aberto, segue a ordem da conta. */}
+                <details className="mt-3 group">
+                  <summary className="cursor-pointer list-none flex items-center gap-1.5 text-[11px] font-bold text-gray-400 hover:text-accent select-none">
+                    <Info size={12} /> Como a nota é calculada
+                    <ChevronDown size={12} className="transition-transform group-open:rotate-180" />
+                  </summary>
+                  <ol className="mt-3 flex flex-col gap-2.5 text-[11px] text-gray-400 leading-relaxed list-none">
+                    <li className="flex gap-2">
+                      <span className="shrink-0 w-4 h-4 rounded-full bg-amber-400 text-black text-[10px] font-black flex items-center justify-center">1</span>
+                      <span>
+                        <b className="text-gray-200">Conselho ({Math.round((1 - (placar.peso_frequencia ?? 0.2) - (placar.peso_pontualidade ?? 0.1)) * 100)}%).</b>{' '}
+                        Cada participante vira uma nota só (a média das notas que recebeu); depois tira-se a média dos
+                        participantes da filial. Assim um avaliador que julgue mais gente de uma unidade não pesa mais que
+                        os outros. O eixo Planejamento e Organização, da Avaliação de Filial, entra como mais um item da unidade.
+                        Dentro de cada participante a nota da Administração pesa {placar.peso_nota_admin ?? PESO_NOTA_ADMIN}× a
+                        de um conselheiro; nota dada à própria unidade não conta.
+                      </span>
+                    </li>
+                    <li className="flex gap-2">
+                      <span className="shrink-0 w-4 h-4 rounded-full bg-sky-500 text-white text-[10px] font-black flex items-center justify-center">2</span>
+                      <span>
+                        <b className="text-gray-200">Frequência do ponto ({Math.round((placar.peso_frequencia ?? 0.2) * 100)}%).</b>{' '}
+                        Presença pontual vale o dia inteiro;{' '}
+                        {placar.atraso_conta === false
+                          ? 'atraso ainda sem desconto (horário da turma não confirmado — veja o card em Avaliação › Avaliação das Filiais)'
+                          : `atraso vale meio dia (entrada após ${placar.jornada_entrada ?? '—'})`};
+                        falta zera; justificado fica fora da conta.{' '}
+                        {placar.calendario_turma
+                          ? 'Com o calendário da turma configurado, cada pessoa ativa responde por cada dia letivo: dia sem lançamento conta como falta, e a cobertura mostra quanto foi de fato registrado.'
+                          : 'Sem o calendário da turma configurado, o que não foi lançado não entra na conta — configure os dias de aula no card de Frequência, na aba Avaliação › Avaliação das Filiais, para a falta descontar.'}
+                      </span>
+                    </li>
+                    <li className="flex gap-2">
+                      <span className="shrink-0 w-4 h-4 rounded-full bg-violet-500 text-white text-[10px] font-black flex items-center justify-center">3</span>
+                      <span>
+                        <b className="text-gray-200">Pontualidade no pagamento ({Math.round((placar.peso_pontualidade ?? 0.1) * 100)}%).</b>{' '}
+                        Parcelas de empréstimo que venceram no período e foram quitadas até o vencimento (antecipar conta como
+                        em dia; não pagar conta como atraso). É uma taxa, não um valor: a régua é a mesma para quem pegou
+                        R$ 1 milhão e para quem pegou R$ 5 milhões.
+                      </span>
+                    </li>
+                    <li className="flex gap-2">
+                      <span className="shrink-0 w-4 h-4 rounded-full bg-zinc-600 text-white text-[10px] font-black flex items-center justify-center">=</span>
+                      <span>
+                        <b className="text-gray-200">Final.</b>{' '}
+                        Soma das três parcelas com os pesos acima. Parcela sem dado numa filial (sem ponto lançado, sem parcela
+                        vencida) não pune: fica de fora e o peso dela volta para o conselho daquela filial. Frequência e
+                        pontualidade só entram em filial que já tem nota do conselho.
+                      </span>
+                    </li>
+                  </ol>
+                </details>
+              </div>
+
+              {/* Progresso da avaliação em uma linha; o quadro por avaliador fica
+                  recolhido. O acompanhamento completo mora na aba Avaliação. */}
+              <div className="neu-flat rounded-3xl p-5 border border-white/5 flex flex-col gap-3">
+                <div className="flex items-center justify-between gap-3 flex-wrap">
+                  <p className="text-xs text-gray-300 flex items-center gap-2 flex-wrap">
+                    <Users size={13} className="text-accent shrink-0" />
+                    <span className="font-bold text-gray-200">Avaliação:</span>
+                    {(() => {
+                      const total = porAvaliador.reduce((s, a) => s + a.total, 0);
+                      const comNota = porAvaliador.filter(a => a.total > 0).length;
+                      return <>{total} nota{total === 1 ? '' : 's'} dada{total === 1 ? '' : 's'} · {comNota} de {porAvaliador.length} avaliador{porAvaliador.length === 1 ? '' : 'es'} já {comNota === 1 ? 'começou' : 'começaram'}</>;
+                    })()}
+                    {semNota > 0 && <span className="text-amber-400">· {semNota} participante{semNota === 1 ? '' : 's'} sem nota de todo o conselho</span>}
+                  </p>
+                  <button onClick={() => irPara('avaliacao', competicaoAtual?.id ?? null)}
+                    className="text-[10px] font-bold uppercase tracking-widest text-accent hover:underline">
+                    Ver na aba Avaliação →
+                  </button>
+                </div>
+                {porAvaliador.length > 0 && (
+                  <details className="group">
+                    <summary className="cursor-pointer list-none flex items-center gap-1.5 text-[11px] font-bold text-gray-400 hover:text-accent select-none">
+                      Por avaliador
+                      <ChevronDown size={12} className="transition-transform group-open:rotate-180" />
+                    </summary>
+                    <div className="mt-3">
+                      <div className="overflow-x-auto">
+                        <table className="tabela w-full text-xs">
+                          <thead className="text-[10px] uppercase tracking-widest text-gray-500">
+                            <tr>
+                              <th className="text-left pb-3 font-bold">Avaliador</th>
+                              <th className="text-right pb-3 font-bold pr-4">Notas em tarefas</th>
+                              {vejoNotaAlheia && OP_FILIAIS.map(f => (
+                                <th key={f} className={`text-right pb-3 font-bold pr-4 ${FILIAL_COLOR[f]}`}>{f}</th>
+                              ))}
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {porAvaliador.map(a => (
+                              <tr key={a.id} className="border-t border-white/5">
+                                <td className="py-3">
+                                  <span className="text-gray-200">{a.nome}</span>
+                                  {a.id === profile.id && <span className="text-accent"> (você)</span>}
+                                  <span className="text-[9px] uppercase tracking-widest text-gray-500 font-bold ml-2">
+                                    {a.role === 'ceo' ? 'CEO' : a.role === 'admin' ? `Administração · peso ${PESO_NOTA_ADMIN}` : 'Conselheiro'}
+                                  </span>
+                                </td>
+                                <td className={`py-3 text-right tabular-nums pr-4 ${a.total === 0 ? 'text-yellow-400' : 'text-gray-300'}`}>
+                                  {a.total === 0 ? 'sem nota em tarefas' : a.total}
+                                </td>
+                                {vejoNotaAlheia && OP_FILIAIS.map(f => {
+                                  const acc = a.porFilial[f];
+                                  return (
+                                    <td key={f} className="py-3 text-right tabular-nums pr-4 text-gray-300">
+                                      {acc ? (acc.soma / acc.n).toFixed(1) : <span className="text-gray-600">—</span>}
+                                    </td>
+                                  );
+                                })}
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                      <p className="text-[10px] text-gray-500 mt-3">
+                        {vejoNotaAlheia
+                          ? <>Média simples que cada um deu por filial nas Tarefas da Matriz. No placar a nota da Administração pesa {PESO_NOTA_ADMIN}×.</>
+                          : <>Quantas notas cada um já deu. O valor fica selado até a tarefa encerrar.</>}
+                      </p>
+                    </div>
+                  </details>
+                )}
+              </div>
+
+              {/* Análise IA */}
+              {competicaoAtual && competicaoAtual.status !== 'em_andamento' && (
+                <div className="neu-flat rounded-3xl p-5 border border-white/5">
+                  <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+                    <h3 className="text-sm font-bold text-gray-200 flex items-center gap-2">
+                      <Sparkles size={13} className="text-accent" /> Análise IA
+                    </h3>
+                    <div className="flex items-center gap-2">
+                      {competicaoAtual.analise_ia && (
+                        <BotaoWhatsApp
+                          showToast={showToast}
+                          getTexto={() => montarMensagemWhats({
+                            titulo: 'Análise da Competição',
+                            subtitulo: competicaoAtual.nome,
+                            corpoMarkdown: competicaoAtual.analise_ia,
+                          })}
+                        />
+                      )}
+                      {competicaoAtual.status !== 'encerrada' && (
+                        <NeuButtonAccent onClick={gerarAnalise} disabled={gerandoAnalise} variant="">
+                          {gerandoAnalise
+                            ? <><Loader2 size={12} className="animate-spin" /> Analisando…</>
+                            : <><Sparkles size={12} /> {competicaoAtual.analise_ia ? 'Regenerar' : 'Gerar análise'}</>}
+                        </NeuButtonAccent>
+                      )}
+                    </div>
+                  </div>
+                  {competicaoAtual.analise_ia ? (
+                    <div className="text-sm text-gray-200 leading-relaxed">
+                      <ReactMarkdown>{competicaoAtual.analise_ia}</ReactMarkdown>
+                    </div>
+                  ) : (
+                    <EmptyState message="Análise ainda não gerada. Clique em Gerar análise pra ouvir a opinião da IA." />
+                  )}
+                </div>
+              )}
 
               {/* O painel "Vencedora declarada" saiu daqui: declarada a
                   vencedora, esta aba não carrega mais a competição. O momento
@@ -1984,103 +1915,6 @@ export function MatrizCompeticaoView({ showToast, profile, initialTab = 'placar'
   );
 }
 
-// Composição da nota final: uma barra com as três parcelas no tamanho do
-// peso, e embaixo o que entrou de fato. "Entrou" é por filial — a parcela
-// objetiva sem dado numa unidade devolve o peso ao conselho só dela —, então
-// aqui a parcela acende se entrou em ao menos uma e diz em quantas.
-type LinhaPodio = {
-  filial: string;
-  n: number;
-  freq: { entrou: boolean; taxa: number | null } | null;
-  pont: { entrou: boolean; taxa: number | null } | null;
-};
-
-function ComposicaoNota({ placar, podio }: { placar: Placar; podio: LinhaPodio[] }) {
-  const pesoFreq = placar.peso_frequencia ?? 0.2;
-  const pesoPont = placar.peso_pontualidade ?? 0.1;
-  const pesoCons = Math.max(0, 1 - pesoFreq - pesoPont);
-  const pct = (p: number) => Math.round(p * 100);
-
-  const nCons = podio.filter(p => p.n > 0).length;
-  const nFreq = podio.filter(p => p.freq?.entrou).length;
-  const nPont = podio.filter(p => p.pont?.entrou).length;
-  // Medida mas fora da conta: o banco só mistura a parcela objetiva em
-  // filial que já tem nota do conselho (`entrou = n > 0 AND taxa IS NOT
-  // NULL`). Sem isto a tela diria "sem ponto" com 95% na tabela logo abaixo.
-  const medFreq = podio.filter(p => p.freq?.taxa != null).length;
-  const medPont = podio.filter(p => p.pont?.taxa != null).length;
-  const total = podio.length || 3;
-
-  const situacao = (n: number, medidas: number, vazio: string) =>
-    n > 0
-      ? (n === total ? 'entrou nas 3 filiais' : `entrou em ${n} de ${total} filiais`)
-      : medidas > 0 ? 'já medida — entra junto com a nota do conselho' : vazio;
-
-  const partes = [
-    {
-      chave: 'conselho', rotulo: 'Conselho', peso: pesoCons, n: nCons, medidas: 0,
-      barra: 'bg-amber-400', ponto: 'bg-amber-400',
-      detalhe: (
-        <>
-          Tarefas da Matriz
-          {' + '}
-          <span className={placar.inclui_eixos_conselho ? '' : 'line-through'}
-            title={placar.inclui_eixos_conselho
-              ? 'O eixo entra como um item por filial, ao lado dos participantes.'
-              : 'Alguma filial ainda não recebeu Avaliação de Filial no período — o eixo está fora da conta.'}>
-            Planejamento e Organização
-          </span>
-        </>
-      ),
-      vazio: 'sem nota ainda',
-    },
-    {
-      chave: 'freq', rotulo: 'Frequência do ponto', peso: pesoFreq, n: nFreq, medidas: medFreq,
-      barra: 'bg-sky-500', ponto: 'bg-sky-500',
-      detalhe: <>Presença no período; justificado fica fora</>,
-      vazio: 'sem ponto no período',
-    },
-    {
-      chave: 'pont', rotulo: 'Pontualidade no pagamento', peso: pesoPont, n: nPont, medidas: medPont,
-      barra: 'bg-violet-500', ponto: 'bg-violet-500',
-      detalhe: <>Parcelas de empréstimo pagas até o vencimento</>,
-      vazio: 'nenhuma parcela venceu',
-    },
-  ];
-
-  return (
-    <div className="mb-5 flex flex-col gap-2">
-      <div className="flex items-baseline justify-between gap-2">
-        <span className="text-[10px] uppercase tracking-widest font-bold text-gray-500">Como a nota final é composta</span>
-        <span className="text-[10px] text-gray-600">parcela sem dado devolve o peso ao conselho daquela filial</span>
-      </div>
-      <div className="flex h-2.5 rounded-full overflow-hidden gap-0.5" role="img"
-        aria-label={partes.map(p => `${p.rotulo} ${pct(p.peso)}%`).join(', ')}>
-        {partes.map(p => (
-          <div key={p.chave} className={`${p.barra} ${p.n === 0 ? 'opacity-25' : ''}`}
-            style={{ width: `${pct(p.peso)}%` }} />
-        ))}
-      </div>
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-x-4 gap-y-2">
-        {partes.map(p => (
-          <div key={p.chave} className={`flex flex-col gap-0.5 ${p.n === 0 ? 'opacity-60' : ''}`}>
-            <span className="flex items-center gap-1.5 text-xs">
-              <span className={`w-2 h-2 rounded-full shrink-0 ${p.ponto}`} />
-              <span className="font-bold text-gray-200">{p.rotulo}</span>
-              <span className="font-mono font-black tabular-nums text-gray-100">{pct(p.peso)}%</span>
-            </span>
-            <span className="text-[10px] text-gray-500 pl-3.5 leading-snug">{p.detalhe}</span>
-            <span className={`text-[10px] pl-3.5 font-bold ${p.n > 0 ? 'text-emerald-400' : p.medidas > 0 ? 'text-sky-300' : 'text-gray-500'}`}>
-              {situacao(p.n, p.medidas, p.vazio)}
-            </span>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-
 // Quanto cada parcela soma na nota final (0-10) de uma filial — a mesma conta
 // do banco (`_calcular_placar_competicao_raw`, bloco `final`): parcela sem
 // dado tem peso 0 e o peso dela volta para o conselho. Sem nota do conselho
@@ -2108,5 +1942,99 @@ function Contrib({ valor, peso }: { valor: number; peso: number }) {
     <span className="block text-[10px] text-gray-500 font-normal" title={`Peso ${Math.round(peso * 100)}% na nota final`}>
       × {Math.round(peso * 100)}% = <b className="text-gray-300">{fmt1(valor)}</b>
     </span>
+  );
+}
+
+// Composição por filial: Filial · Conselho · Frequência · Pontualidade · Final.
+// Pesos no cabeçalho; o detalhe (notas, cobertura do ponto, parcelas) desce
+// pra dentro da célula; embaixo de cada parcela, quanto ela soma na final.
+type LinhaComposicao = {
+  filial: string; media: number; n: number; itens: number; media_conselho: number;
+  freq: NonNullable<Placar['por_filial'][string]['frequencia']> | null;
+  pont: NonNullable<Placar['por_filial'][string]['pontualidade']> | null;
+};
+
+function TabelaComposicao({ placar, podio }: { placar: Placar; podio: LinhaComposicao[] }) {
+  const pesoFreq = placar.peso_frequencia ?? 0.2;
+  const pesoPont = placar.peso_pontualidade ?? 0.1;
+  const pesoCons = 1 - pesoFreq - pesoPont;
+  const melhor = Math.max(...podio.map(x => x.n > 0 ? x.media : -Infinity));
+  const pct = (n: number) => `${Math.round(n * 100)}%`;
+  const Cab = ({ rotulo, peso }: { rotulo: string; peso?: number }) => (
+    <th className="text-right pb-3 font-bold pr-4 whitespace-nowrap">
+      {rotulo}{peso != null && <span className="ml-1 font-mono">{pct(peso)}</span>}
+    </th>
+  );
+  return (
+    <div className="overflow-x-auto">
+      <table className="tabela w-full text-xs">
+        <thead className="text-[10px] uppercase tracking-widest text-gray-500">
+          <tr>
+            <th className="text-left pb-3 font-bold">Filial</th>
+            <Cab rotulo="Conselho" peso={pesoCons} />
+            <Cab rotulo="Frequência" peso={pesoFreq} />
+            <Cab rotulo="Pontualidade" peso={pesoPont} />
+            <Cab rotulo="Final" />
+          </tr>
+        </thead>
+        <tbody>
+          {podio.map(p => {
+            const c = contribuicao(p, placar);
+            const isBest = p.n > 0 && p.media === melhor;
+            // Cobertura: lançado ÷ esperado (dias letivos × gente ativa). Sem ela,
+            // 100% em 6 registros e 100% em 24 são o mesmo número.
+            const esperado = p.freq?.esperado ?? ((p.freq?.dias_distintos ?? 0) * (p.freq?.funcionarios_ativos ?? 0));
+            const lancados = p.freq?.registros ?? 0;
+            const cobertura = esperado ? Math.round((lancados / esperado) * 100) : null;
+            return (
+              <tr key={p.filial} className="border-t border-white/5 align-top">
+                <td className="py-3"><FilialBadge filial={p.filial} /></td>
+                <td className="py-3 text-right tabular-nums pr-4">
+                  <span className={p.n === 0 ? 'text-gray-600' : 'text-gray-200 font-bold'}>
+                    {p.n === 0 ? '—' : (p.media_conselho / 10).toFixed(1)}
+                  </span>
+                  <span className="block text-[10px] text-gray-500"
+                    title={p.itens ? `${p.n} nota(s) sobre ${p.itens} item(ns) julgado(s)` : undefined}>
+                    {p.n === 0 ? 'sem nota' : `${p.n} nota${p.n === 1 ? '' : 's'} · ${p.itens} ite${p.itens === 1 ? 'm' : 'ns'}`}
+                  </span>
+                  {c && <Contrib valor={c.conselho} peso={c.pesoConselho} />}
+                </td>
+                <td className="py-3 text-right tabular-nums pr-4"
+                  title={p.freq
+                    ? `${p.freq.presencas} presença(s) — ${p.freq.atrasos ?? 0} com atraso (meio ponto), ${p.freq.faltas} falta(s), ${p.freq.justificados} justificado(s) fora da conta`
+                      + (esperado ? ` · ${lancados} de ${esperado} lançamento(s) esperado(s)` : '')
+                    : 'Sem ponto lançado no período'}>
+                  {p.freq?.taxa == null
+                    ? <span className="text-gray-600">—</span>
+                    : <span className={p.freq.entrou ? 'text-gray-200 font-bold' : 'text-gray-400'}>{(p.freq.taxa * 100).toFixed(0)}%</span>}
+                  {cobertura != null && (
+                    <span className={`block text-[10px] ${cobertura < 100 && !p.freq?.calendario ? 'text-amber-400' : 'text-gray-500'}`}>
+                      cobertura {cobertura}%
+                    </span>
+                  )}
+                  {c && c.pesoFreq > 0 && <Contrib valor={c.freq} peso={c.pesoFreq} />}
+                </td>
+                <td className="py-3 text-right tabular-nums pr-4"
+                  title={p.pont?.taxa == null
+                    ? 'Nenhuma parcela de empréstimo venceu nesta unidade dentro do período — o eixo não entra e o peso volta para o conselho.'
+                    : `${p.pont.em_dia} de ${p.pont.vencidas} parcela(s) paga(s) até o vencimento — ${p.pont.atrasadas} em atraso ou sem pagar.`}>
+                  {p.pont?.taxa == null
+                    ? <span className="text-gray-600">—</span>
+                    : <span className={p.pont.entrou ? 'text-gray-200 font-bold' : 'text-gray-400'}>{(p.pont.taxa * 100).toFixed(0)}%</span>}
+                  <span className="block text-[10px] text-gray-500">
+                    {p.pont?.taxa == null ? 'nada venceu' : `${p.pont.em_dia} de ${p.pont.vencidas} em dia`}
+                  </span>
+                  {c && c.pesoPont > 0 && <Contrib valor={c.pont} peso={c.pesoPont} />}
+                </td>
+                <td className={`py-3 text-right tabular-nums pr-4 text-base ${isBest ? 'text-emerald-400 font-black' : p.n === 0 ? 'text-gray-600' : 'text-gray-200 font-bold'}`}
+                  title={c ? `${fmt1(c.conselho)} + ${fmt1(c.freq)} + ${fmt1(c.pont)} = ${fmt1(p.media / 10)}` : 'Sem nota do conselho, ainda não há nota final.'}>
+                  {p.n === 0 ? '—' : (p.media / 10).toFixed(1)}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
   );
 }
