@@ -1,6 +1,6 @@
 // Export PDF do resultado da Competição entre Filiais (pódio, votação do
-// conselho e vencedora). Placar é a média das notas 0-10 do conselho nas
-// Tarefas da Matriz por filial do participante. Mesmo padrão dos outros
+// conselho e vencedora). A coluna é a nota FINAL da filial (0-10): conselho
+// 70% + frequência 20% + pontualidade 10%, a mesma do placar na tela. Mesmo padrão dos outros
 // exports do projeto: jsPDF + autoTable em dynamic import pra não inflar
 // o bundle.
 import { entregarPdf, type PdfDestino } from './maxShowUpload';
@@ -108,7 +108,7 @@ export async function exportCompeticaoResultadoPDF(
 
   autoTable(doc, {
     startY: cursorY,
-    head: [['Posição', 'Filial', 'Notas', 'Média (0-10)']],
+    head: [['Posição', 'Filial', 'Notas', 'Final (0-10)']],
     body: podio.map((p, i) => [
       `${i + 1}º`,
       p.filial,

@@ -126,7 +126,7 @@ export function MatrizAvaliacoesView({ profile, showToast, competicaoInicial }: 
   }, []);
 
   if (!podeAcessar) {
-    return <EmptyState message="⛔ Acesso restrito — Central de Avaliação Matriz é exclusiva de admin, CEO e conselheiros." />;
+    return <EmptyState message="⛔ Acesso restrito — a avaliação da competição é exclusiva da Administração, do CEO e dos conselheiros." />;
   }
   if (loadingComp) return <div className="flex items-center justify-center py-24"><LoadingSpinner /></div>;
 
@@ -248,8 +248,6 @@ export function MatrizAvaliacoesView({ profile, showToast, competicaoInicial }: 
           </div>
         </div>
         <div className="flex items-center gap-2 flex-wrap shrink-0">
-          {/* Ida e volta com a Competição: o placar manda pra cá pelo botão
-              "Central de Avaliação"; daqui se volta pelo "Placar". */}
           <button onClick={baixarPDF} disabled={exportando !== null} className="btn-solido btn-solido--vermelho" title="Baixar consolidado em PDF">
             {exportando === 'pdf' ? <Loader2 size={13} className="animate-spin" /> : <FileDown size={13} />} PDF
           </button>

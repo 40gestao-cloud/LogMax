@@ -7959,6 +7959,7 @@
     "ciclo_tarefa_avaliacoes",
     "ciclo_tarefa_participantes",
     "ciclo_tarefas",
+    "competicoes_matriz",
     "contratos",
     "demissoes",
     "ferias",
@@ -7978,6 +7979,7 @@
     "vagas"
    ],
    "chama": [
+    "_funcionario_desligado",
     "_pendencia_responsaveis",
     "auth_user_filial",
     "auth_user_role",

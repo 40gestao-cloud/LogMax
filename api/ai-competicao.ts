@@ -16,18 +16,25 @@ uma competição inter-filiais (SuperMax, MaxLook, TechMax). Escala
 interna é 0-100, mas trate como nota 0-10 na análise (divida por 10).
 Sua tarefa é analisar friamente se esse resultado faz sentido.
 
-Como o campo "media" de cada filial é composto (migr. 349/350):
-- 80% de "media_conselho" — média das notas 0-10 que o conselho
-  (CEO + conselheiros) deu aos participantes das Tarefas da Matriz,
-  agrupada pela filial de cada participante, × 10.
-- 20% de "frequencia.taxa" (0 a 1) × 100 — frequência MEDIDA no ponto
-  eletrônico do período, não votada: presença pontual vale o dia,
-  presença com atraso vale meio, falta zera, e dia justificado fica
+Como o campo "media" de cada filial é composto (migr. 349/617/671):
+- 70% de "media_conselho" — julgamento do conselho. Cada participante
+  das Tarefas da Matriz vira uma nota só (média ponderada das notas que
+  recebeu: CEO e conselheiros pesam 1, a Administração pesa
+  "peso_nota_admin", hoje 3); depois tira-se a média dos participantes da
+  filial. O eixo "Planejamento e Organização" da Avaliação de Filial entra
+  como mais um item da unidade quando "inclui_eixos_conselho" = true.
+  Escala 0-100 (× 10).
+- 20% ("peso_frequencia") de "frequencia.taxa" (0 a 1) × 100 — frequência
+  MEDIDA no ponto eletrônico do período, não votada: presença pontual vale
+  o dia, presença com atraso vale meio, falta zera, e dia justificado fica
   fora do denominador.
-- "frequencia.entrou" = false significa que a filial não tem ponto
-  lançado no período: a parcela não entra e "media" repete
-  "media_conselho". Diga isso quando for o caso, em vez de tratar
-  como desempenho.
+- 10% ("peso_pontualidade") de "pontualidade.taxa" (0 a 1) × 100 —
+  parcelas de empréstimo vencidas no período pagas até o vencimento. É uma
+  taxa, não um valor: não premia quem pegou mais ou menos dinheiro.
+- Parcela objetiva sem dado na filial ("taxa" nula; "entrou" = false) não
+  entra e o peso dela volta para o conselho daquela filial — diga isso
+  quando for o caso, em vez de tratar como desempenho. Frequência e
+  pontualidade só entram em filial que já tem nota do conselho ("n" > 0).
 - "atraso_conta" = false no topo significa que o horário da turma
   ainda não foi confirmado e nenhum atraso está descontando.
 
@@ -38,9 +45,9 @@ Diretrizes:
   defender uma posição.
 - Considere se alguma filial tem MUITO POUCAS notas — média baseada em
   poucas amostras é frágil.
-- Separe o que é julgamento do conselho do que é frequência medida: se
-  uma filial vence pela frequência com média do conselho pior (ou o
-  contrário), diga isso explicitamente.
+- Separe o que é julgamento do conselho do que é medido (frequência e
+  pontualidade): se uma filial vence pelas parcelas medidas com média do
+  conselho pior (ou o contrário), diga isso explicitamente.
 - Se concordar com o vencedor automático, explique se a vantagem foi
   robusta ou apertada.
 - Se discordar, aponte a filial que você acha que deveria vencer e o
