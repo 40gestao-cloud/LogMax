@@ -1050,12 +1050,21 @@ export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToa
                     Abaixo, o que já está medido.
                   </p>
                 )}
-                <div className="grid grid-cols-3 gap-3">
-                  {podioExibido.map((p, idx) => {
+                {/* Com pódio formado, degraus: 2º · 1º · 3º, o líder mais alto e
+                    maior. Antes eram três cartões iguais e a posição só se lia
+                    pela etiqueta pequena. Sem nota, cartões iguais e sem ordem. */}
+                <div className={`grid grid-cols-3 gap-3 ${algumaAvaliada ? 'items-end' : ''}`}>
+                  {(algumaAvaliada
+                      ? [1, 0, 2].filter(i => i < podioExibido.length).map(i => ({ p: podioExibido[i], idx: i }))
+                      : podioExibido.map((p, idx) => ({ p, idx }))
+                  ).map(({ p, idx }) => {
                     const lider = idx === 0 && p.n > 0;
+                    const degrau = !algumaAvaliada ? 'p-4'
+                      : idx === 0 ? 'px-4 pt-5 pb-7 bg-emerald-500/[0.06]'
+                      : idx === 1 ? 'px-4 pt-4 pb-5' : 'px-4 pt-3 pb-3';
                     return (
                       <div key={p.filial}
-                        className={`neu-pressed rounded-2xl p-4 text-center ${lider ? 'ring-1 ring-emerald-500/40' : ''}`}>
+                        className={`neu-pressed rounded-2xl text-center ${degrau} ${lider ? 'ring-1 ring-emerald-500/40' : ''}`}>
                         <div className="flex items-center justify-center gap-1 mb-1 h-4">
                           {lider && <Award size={14} className="text-emerald-400" />}
                           {p.n > 0 && (
@@ -1065,7 +1074,7 @@ export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToa
                           )}
                         </div>
                         <div className="flex justify-center"><FilialBadge filial={p.filial} /></div>
-                        <p className={`text-2xl font-black font-mono tabular-nums mt-1 ${lider ? 'text-emerald-400' : p.n === 0 ? 'text-gray-600' : 'text-gray-200'}`}>
+                        <p className={`font-black font-mono tabular-nums mt-1 ${lider ? 'text-4xl text-emerald-400' : p.n === 0 ? 'text-2xl text-gray-600' : 'text-2xl text-gray-200'}`}>
                           {p.n === 0 ? '—' : (p.media / 10).toFixed(1)}
                         </p>
                         <p className="text-[9px] text-gray-500 uppercase tracking-widest mt-0.5">
@@ -1106,6 +1115,7 @@ export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToa
                     <tbody>
                       {podio.map(p => {
                         const isBest = p.n > 0 && p.media === Math.max(...podio.map(x => x.n > 0 ? x.media : -Infinity));
+                        const c = contribuicao(p, placar);
                         return (
                           <tr key={p.filial} className="border-t border-white/5">
                             <td className="py-3"><FilialBadge filial={p.filial} /></td>
@@ -1115,6 +1125,7 @@ export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToa
                             </td>
                             <td className="py-3 text-right text-gray-400 tabular-nums pr-4">
                               {p.n === 0 ? '—' : (p.media_conselho / 10).toFixed(1)}
+                              {c && <Contrib valor={c.conselho} peso={c.pesoConselho} />}
                             </td>
                             <td
                               className="py-3 text-right tabular-nums pr-4"
@@ -1127,6 +1138,7 @@ export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToa
                                 : <span className={p.freq.entrou ? 'text-emerald-300' : 'text-gray-500'}>
                                     {(p.freq.taxa * 100).toFixed(0)}%
                                   </span>}
+                              {c && c.pesoFreq > 0 && <Contrib valor={c.freq} peso={c.pesoFreq} />}
                             </td>
                             {/* Cobertura: o que foi lançado sobre o que se
                                 esperava lançar (dias com ponto × gente ativa).
@@ -1175,9 +1187,12 @@ export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToa
                                     </span>
                                     <span className="text-gray-600"> ({p.pont.em_dia}/{p.pont.vencidas})</span>
                                   </>}
+                              {c && c.pesoPont > 0 && <Contrib valor={c.pont} peso={c.pesoPont} />}
                             </td>
-                            <td className={`py-3 text-right tabular-nums pr-4 ${isBest ? 'text-emerald-400 font-bold' : 'text-gray-300'}`}>
+                            <td className={`py-3 text-right tabular-nums pr-4 ${isBest ? 'text-emerald-400 font-bold' : 'text-gray-300'}`}
+                                title={c ? `${fmt1(c.conselho)} + ${fmt1(c.freq)} + ${fmt1(c.pont)} = ${fmt1(p.media / 10)}` : undefined}>
                               {p.n === 0 ? '—' : (p.media / 10).toFixed(1)}
+                              {c && <span className="block text-[10px] font-normal text-gray-500">soma das parcelas</span>}
                             </td>
                           </tr>
                         );
@@ -2051,5 +2066,36 @@ function ComposicaoNota({ placar, podio }: { placar: Placar; podio: LinhaPodio[]
         ))}
       </div>
     </div>
+  );
+}
+
+
+// Quanto cada parcela soma na nota final (0-10) de uma filial — a mesma conta
+// do banco (`_calcular_placar_competicao_raw`, bloco `final`): parcela sem
+// dado tem peso 0 e o peso dela volta para o conselho. Sem nota do conselho
+// não há final, então não há o que decompor.
+const fmt1 = (n: number) => n.toFixed(1).replace('.', ',');
+
+function contribuicao(
+  p: { n: number; media_conselho: number; freq: { taxa: number | null } | null; pont: { taxa: number | null } | null },
+  placar: Placar,
+) {
+  if (p.n === 0) return null;
+  const pesoFreq = p.freq?.taxa != null ? (placar.peso_frequencia ?? 0.2) : 0;
+  const pesoPont = p.pont?.taxa != null ? (placar.peso_pontualidade ?? 0.1) : 0;
+  const pesoConselho = 1 - pesoFreq - pesoPont;
+  return {
+    pesoConselho, pesoFreq, pesoPont,
+    conselho: (p.media_conselho / 10) * pesoConselho,
+    freq: (p.freq?.taxa ?? 0) * 10 * pesoFreq,
+    pont: (p.pont?.taxa ?? 0) * 10 * pesoPont,
+  };
+}
+
+function Contrib({ valor, peso }: { valor: number; peso: number }) {
+  return (
+    <span className="block text-[10px] text-gray-500 font-normal" title={`Peso ${Math.round(peso * 100)}% na nota final`}>
+      × {Math.round(peso * 100)}% = <b className="text-gray-300">{fmt1(valor)}</b>
+    </span>
   );
 }

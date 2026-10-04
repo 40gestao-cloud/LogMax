@@ -3463,6 +3463,23 @@
    "le": [],
    "chama": []
   },
+  "_tirar_funcionario_das_tarefas": {
+   "gatilho": false,
+   "secdef": true,
+   "grava": [
+    "avaliacoes_matriz",
+    "ciclo_tarefa_avaliacoes",
+    "ciclo_tarefa_participantes",
+    "matriz_tarefa_participantes"
+   ],
+   "le": [
+    "ciclo_tarefa_participantes",
+    "ciclo_tarefas",
+    "matriz_tarefa_participantes",
+    "matriz_tarefas"
+   ],
+   "chama": []
+  },
   "abrir_revisao_auditoria": {
    "gatilho": false,
    "secdef": true,
@@ -6663,6 +6680,15 @@
    "grava": [],
    "le": [],
    "chama": []
+  },
+  "fn_funcionario_excluido_sai_das_tarefas": {
+   "gatilho": true,
+   "secdef": true,
+   "grava": [],
+   "le": [],
+   "chama": [
+    "_tirar_funcionario_das_tarefas"
+   ]
   },
   "fn_item_devolucao_devolve_unidade": {
    "gatilho": true,
@@ -10348,6 +10374,7 @@
   ],
   "funcionarios": [
    "trg_auditoria:set_auditoria_campos",
+   "trg_funcionario_excluido_sai_das_tarefas:fn_funcionario_excluido_sai_das_tarefas",
    "trg_funcionarios_autovincular:funcionarios_autovincular_user_profile",
    "trg_funcionarios_vinculo_admin:funcionarios_vinculo_admin_guard",
    "trg_historico:registrar_historico"

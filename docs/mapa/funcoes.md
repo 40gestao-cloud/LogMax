@@ -402,6 +402,15 @@ Para cada função: quem a chama (tela, servidor, outra função, gatilho), o qu
 - **Chamada por outras funções:** [_taxa_pelo_mix](funcoes.md#f-_taxa_pelo_mix), [criar_venda_pdv](funcoes.md#f-criar_venda_pdv)
 - **Grava:** —
 
+<a id="f-_tirar_funcionario_das_tarefas"></a>
+## _tirar_funcionario_das_tarefas (RPC, SECURITY DEFINER)
+
+- **Telas que chamam:** —
+- **Chamada por outras funções:** [fn_funcionario_excluido_sai_das_tarefas](funcoes.md#f-fn_funcionario_excluido_sai_das_tarefas)
+- **Grava:** [avaliacoes_matriz](tabelas.md#t-avaliacoes_matriz), [ciclo_tarefa_avaliacoes](tabelas.md#t-ciclo_tarefa_avaliacoes), [ciclo_tarefa_participantes](tabelas.md#t-ciclo_tarefa_participantes), [matriz_tarefa_participantes](tabelas.md#t-matriz_tarefa_participantes)
+- **Ao gravar, acorda os gatilhos de:** [avaliacoes_matriz](tabelas.md#t-avaliacoes_matriz) ([fn_avaliacao_matriz_congela_avaliador](funcoes.md#f-fn_avaliacao_matriz_congela_avaliador), [trg_aval_matriz_updated_at](funcoes.md#f-trg_aval_matriz_updated_at)); [ciclo_tarefa_avaliacoes](tabelas.md#t-ciclo_tarefa_avaliacoes) ([trg_ciclo_tarefas_updated_at](funcoes.md#f-trg_ciclo_tarefas_updated_at))
+- **Lê:** [ciclo_tarefa_participantes](tabelas.md#t-ciclo_tarefa_participantes), [ciclo_tarefas](tabelas.md#t-ciclo_tarefas), [matriz_tarefa_participantes](tabelas.md#t-matriz_tarefa_participantes), [matriz_tarefas](tabelas.md#t-matriz_tarefas)
+
 <a id="f-abrir_revisao_auditoria"></a>
 ## abrir_revisao_auditoria (RPC, SECURITY DEFINER)
 
@@ -1633,7 +1642,7 @@ Para cada função: quem a chama (tela, servidor, outra função, gatilho), o qu
 
 - **Telas que chamam:** [Recursos Humanos › Desligamento](telas.md#s-rh-desligamento)
 - **Grava:** [demissoes](tabelas.md#t-demissoes), [funcionarios](tabelas.md#t-funcionarios)
-- **Ao gravar, acorda os gatilhos de:** [funcionarios](tabelas.md#t-funcionarios) ([funcionarios_autovincular_user_profile](funcoes.md#f-funcionarios_autovincular_user_profile), [funcionarios_vinculo_admin_guard](funcoes.md#f-funcionarios_vinculo_admin_guard))
+- **Ao gravar, acorda os gatilhos de:** [funcionarios](tabelas.md#t-funcionarios) ([fn_funcionario_excluido_sai_das_tarefas](funcoes.md#f-fn_funcionario_excluido_sai_das_tarefas), [funcionarios_autovincular_user_profile](funcoes.md#f-funcionarios_autovincular_user_profile), [funcionarios_vinculo_admin_guard](funcoes.md#f-funcionarios_vinculo_admin_guard))
 - **Lê:** [demissoes](tabelas.md#t-demissoes), [funcionarios](tabelas.md#t-funcionarios), [user_profiles](tabelas.md#t-user_profiles)
 - **Chama:** [_aplicar_desligado_em](funcoes.md#f-_aplicar_desligado_em), [_assert_rpc](funcoes.md#f-_assert_rpc), [auth_is_service_role](funcoes.md#f-auth_is_service_role), [auth_user_role](funcoes.md#f-auth_user_role), [calcular_rescisao](funcoes.md#f-calcular_rescisao), [rescisao_gravar](funcoes.md#f-rescisao_gravar)
 
@@ -1701,7 +1710,7 @@ Para cada função: quem a chama (tela, servidor, outra função, gatilho), o qu
 
 - **Telas que chamam:** [Recursos Humanos › Desligamento](telas.md#s-rh-desligamento)
 - **Grava:** [demissoes](tabelas.md#t-demissoes), [funcionarios](tabelas.md#t-funcionarios)
-- **Ao gravar, acorda os gatilhos de:** [funcionarios](tabelas.md#t-funcionarios) ([funcionarios_autovincular_user_profile](funcoes.md#f-funcionarios_autovincular_user_profile), [funcionarios_vinculo_admin_guard](funcoes.md#f-funcionarios_vinculo_admin_guard))
+- **Ao gravar, acorda os gatilhos de:** [funcionarios](tabelas.md#t-funcionarios) ([fn_funcionario_excluido_sai_das_tarefas](funcoes.md#f-fn_funcionario_excluido_sai_das_tarefas), [funcionarios_autovincular_user_profile](funcoes.md#f-funcionarios_autovincular_user_profile), [funcionarios_vinculo_admin_guard](funcoes.md#f-funcionarios_vinculo_admin_guard))
 - **Lê:** [demissoes](tabelas.md#t-demissoes), [funcionarios](tabelas.md#t-funcionarios), [user_profiles](tabelas.md#t-user_profiles)
 - **Chama:** [_aplicar_desligado_em](funcoes.md#f-_aplicar_desligado_em), [_assert_rpc](funcoes.md#f-_assert_rpc), [auth_is_service_role](funcoes.md#f-auth_is_service_role), [auth_user_role](funcoes.md#f-auth_user_role), [calcular_rescisao](funcoes.md#f-calcular_rescisao), [rescisao_gravar](funcoes.md#f-rescisao_gravar)
 
@@ -1881,7 +1890,7 @@ Para cada função: quem a chama (tela, servidor, outra função, gatilho), o qu
 
 - **Telas que chamam:** [Recursos Humanos › Recrutamento e Seleção](telas.md#s-rh-recrutamentoeseleção)
 - **Grava:** [candidatura_etapas](tabelas.md#t-candidatura_etapas), [candidaturas](tabelas.md#t-candidaturas), [funcionarios](tabelas.md#t-funcionarios), [vagas](tabelas.md#t-vagas)
-- **Ao gravar, acorda os gatilhos de:** [funcionarios](tabelas.md#t-funcionarios) ([funcionarios_autovincular_user_profile](funcoes.md#f-funcionarios_autovincular_user_profile), [funcionarios_vinculo_admin_guard](funcoes.md#f-funcionarios_vinculo_admin_guard))
+- **Ao gravar, acorda os gatilhos de:** [funcionarios](tabelas.md#t-funcionarios) ([fn_funcionario_excluido_sai_das_tarefas](funcoes.md#f-fn_funcionario_excluido_sai_das_tarefas), [funcionarios_autovincular_user_profile](funcoes.md#f-funcionarios_autovincular_user_profile), [funcionarios_vinculo_admin_guard](funcoes.md#f-funcionarios_vinculo_admin_guard))
 - **Lê:** [candidaturas](tabelas.md#t-candidaturas), [funcionarios](tabelas.md#t-funcionarios), [user_profiles](tabelas.md#t-user_profiles), [vagas](tabelas.md#t-vagas)
 - **Chama:** [_assert_recrutamento](funcoes.md#f-_assert_recrutamento), [_assert_rpc](funcoes.md#f-_assert_rpc)
 
@@ -1890,7 +1899,7 @@ Para cada função: quem a chama (tela, servidor, outra função, gatilho), o qu
 
 - **Telas que chamam:** [Recursos Humanos › Recrutamento e Seleção](telas.md#s-rh-recrutamentoeseleção)
 - **Grava:** [candidatura_etapas](tabelas.md#t-candidatura_etapas), [candidaturas](tabelas.md#t-candidaturas), [funcionarios](tabelas.md#t-funcionarios), [movimentacoes_carreira](tabelas.md#t-movimentacoes_carreira), [vagas](tabelas.md#t-vagas)
-- **Ao gravar, acorda os gatilhos de:** [funcionarios](tabelas.md#t-funcionarios) ([funcionarios_autovincular_user_profile](funcoes.md#f-funcionarios_autovincular_user_profile), [funcionarios_vinculo_admin_guard](funcoes.md#f-funcionarios_vinculo_admin_guard)); [movimentacoes_carreira](tabelas.md#t-movimentacoes_carreira) ([set_filial_movimentacao_carreira](funcoes.md#f-set_filial_movimentacao_carreira))
+- **Ao gravar, acorda os gatilhos de:** [funcionarios](tabelas.md#t-funcionarios) ([fn_funcionario_excluido_sai_das_tarefas](funcoes.md#f-fn_funcionario_excluido_sai_das_tarefas), [funcionarios_autovincular_user_profile](funcoes.md#f-funcionarios_autovincular_user_profile), [funcionarios_vinculo_admin_guard](funcoes.md#f-funcionarios_vinculo_admin_guard)); [movimentacoes_carreira](tabelas.md#t-movimentacoes_carreira) ([set_filial_movimentacao_carreira](funcoes.md#f-set_filial_movimentacao_carreira))
 - **Lê:** [candidaturas](tabelas.md#t-candidaturas), [demissoes](tabelas.md#t-demissoes), [funcionarios](tabelas.md#t-funcionarios), [user_profiles](tabelas.md#t-user_profiles), [vagas](tabelas.md#t-vagas)
 - **Chama:** [_assert_interfilial](funcoes.md#f-_assert_interfilial), [_assert_recrutamento](funcoes.md#f-_assert_recrutamento), [_assert_rpc](funcoes.md#f-_assert_rpc), [notificar_setor](funcoes.md#f-notificar_setor)
 
@@ -2328,6 +2337,13 @@ Para cada função: quem a chama (tela, servidor, outra função, gatilho), o qu
 
 - **Dispara em:** [formas_pagamento](tabelas.md#t-formas_pagamento)
 - **Grava:** —
+
+<a id="f-fn_funcionario_excluido_sai_das_tarefas"></a>
+## fn_funcionario_excluido_sai_das_tarefas (gatilho, SECURITY DEFINER)
+
+- **Dispara em:** [funcionarios](tabelas.md#t-funcionarios)
+- **Grava:** —
+- **Chama:** [_tirar_funcionario_das_tarefas](funcoes.md#f-_tirar_funcionario_das_tarefas)
 
 <a id="f-fn_item_devolucao_devolve_unidade"></a>
 ## fn_item_devolucao_devolve_unidade (gatilho, SECURITY DEFINER)
@@ -3590,7 +3606,7 @@ Para cada função: quem a chama (tela, servidor, outra função, gatilho), o qu
 
 - **Telas que chamam:** [Recursos Humanos › Desligamento](telas.md#s-rh-desligamento)
 - **Grava:** [demissoes](tabelas.md#t-demissoes), [funcionarios](tabelas.md#t-funcionarios), [rescisoes](tabelas.md#t-rescisoes)
-- **Ao gravar, acorda os gatilhos de:** [funcionarios](tabelas.md#t-funcionarios) ([funcionarios_autovincular_user_profile](funcoes.md#f-funcionarios_autovincular_user_profile), [funcionarios_vinculo_admin_guard](funcoes.md#f-funcionarios_vinculo_admin_guard))
+- **Ao gravar, acorda os gatilhos de:** [funcionarios](tabelas.md#t-funcionarios) ([fn_funcionario_excluido_sai_das_tarefas](funcoes.md#f-fn_funcionario_excluido_sai_das_tarefas), [funcionarios_autovincular_user_profile](funcoes.md#f-funcionarios_autovincular_user_profile), [funcionarios_vinculo_admin_guard](funcoes.md#f-funcionarios_vinculo_admin_guard))
 - **Lê:** [demissoes](tabelas.md#t-demissoes), [funcionarios](tabelas.md#t-funcionarios), [rescisoes](tabelas.md#t-rescisoes)
 - **Chama:** [_aplicar_desligado_em](funcoes.md#f-_aplicar_desligado_em), [_assert_rpc](funcoes.md#f-_assert_rpc), [auth_is_service_role](funcoes.md#f-auth_is_service_role), [auth_user_role](funcoes.md#f-auth_user_role)
 
@@ -3949,7 +3965,7 @@ Para cada função: quem a chama (tela, servidor, outra função, gatilho), o qu
 
 - **Telas que chamam:** [Usuários](telas.md#s-usuarios)
 - **Grava:** [caixa_bancos](tabelas.md#t-caixa_bancos), [configuracoes](tabelas.md#t-configuracoes), [funcionarios](tabelas.md#t-funcionarios), [user_profiles](tabelas.md#t-user_profiles)
-- **Ao gravar, acorda os gatilhos de:** [funcionarios](tabelas.md#t-funcionarios) ([funcionarios_autovincular_user_profile](funcoes.md#f-funcionarios_autovincular_user_profile), [funcionarios_vinculo_admin_guard](funcoes.md#f-funcionarios_vinculo_admin_guard)); [user_profiles](tabelas.md#t-user_profiles) ([criar_maxbank_conta_para_colaborador](funcoes.md#f-criar_maxbank_conta_para_colaborador), [fn_conselho_e_da_matriz](funcoes.md#f-fn_conselho_e_da_matriz), [user_profiles_bloquear_privesc](funcoes.md#f-user_profiles_bloquear_privesc), [user_profiles_propagar_filial](funcoes.md#f-user_profiles_propagar_filial))
+- **Ao gravar, acorda os gatilhos de:** [funcionarios](tabelas.md#t-funcionarios) ([fn_funcionario_excluido_sai_das_tarefas](funcoes.md#f-fn_funcionario_excluido_sai_das_tarefas), [funcionarios_autovincular_user_profile](funcoes.md#f-funcionarios_autovincular_user_profile), [funcionarios_vinculo_admin_guard](funcoes.md#f-funcionarios_vinculo_admin_guard)); [user_profiles](tabelas.md#t-user_profiles) ([criar_maxbank_conta_para_colaborador](funcoes.md#f-criar_maxbank_conta_para_colaborador), [fn_conselho_e_da_matriz](funcoes.md#f-fn_conselho_e_da_matriz), [user_profiles_bloquear_privesc](funcoes.md#f-user_profiles_bloquear_privesc), [user_profiles_propagar_filial](funcoes.md#f-user_profiles_propagar_filial))
 - **Lê:** [user_profiles](tabelas.md#t-user_profiles)
 - **Chama:** [auth_user_role](funcoes.md#f-auth_user_role)
 - **Tem SQL dinâmico** (EXECUTE): o que ele toca não aparece acima.
@@ -4399,7 +4415,7 @@ Para cada função: quem a chama (tela, servidor, outra função, gatilho), o qu
 
 - **Dispara em:** [user_profiles](tabelas.md#t-user_profiles)
 - **Grava:** [funcionarios](tabelas.md#t-funcionarios)
-- **Ao gravar, acorda os gatilhos de:** [funcionarios](tabelas.md#t-funcionarios) ([funcionarios_autovincular_user_profile](funcoes.md#f-funcionarios_autovincular_user_profile), [funcionarios_vinculo_admin_guard](funcoes.md#f-funcionarios_vinculo_admin_guard))
+- **Ao gravar, acorda os gatilhos de:** [funcionarios](tabelas.md#t-funcionarios) ([fn_funcionario_excluido_sai_das_tarefas](funcoes.md#f-fn_funcionario_excluido_sai_das_tarefas), [funcionarios_autovincular_user_profile](funcoes.md#f-funcionarios_autovincular_user_profile), [funcionarios_vinculo_admin_guard](funcoes.md#f-funcionarios_vinculo_admin_guard))
 
 <a id="f-usuarios_visiveis_para_auditoria"></a>
 ## usuarios_visiveis_para_auditoria (RPC, SECURITY DEFINER)
@@ -4445,7 +4461,7 @@ Para cada função: quem a chama (tela, servidor, outra função, gatilho), o qu
 
 - **Telas que chamam:** [Recursos Humanos › Recrutamento e Seleção](telas.md#s-rh-recrutamentoeseleção)
 - **Grava:** [funcionarios](tabelas.md#t-funcionarios)
-- **Ao gravar, acorda os gatilhos de:** [funcionarios](tabelas.md#t-funcionarios) ([funcionarios_autovincular_user_profile](funcoes.md#f-funcionarios_autovincular_user_profile), [funcionarios_vinculo_admin_guard](funcoes.md#f-funcionarios_vinculo_admin_guard))
+- **Ao gravar, acorda os gatilhos de:** [funcionarios](tabelas.md#t-funcionarios) ([fn_funcionario_excluido_sai_das_tarefas](funcoes.md#f-fn_funcionario_excluido_sai_das_tarefas), [funcionarios_autovincular_user_profile](funcoes.md#f-funcionarios_autovincular_user_profile), [funcionarios_vinculo_admin_guard](funcoes.md#f-funcionarios_vinculo_admin_guard))
 - **Lê:** [funcionarios](tabelas.md#t-funcionarios), [user_profiles](tabelas.md#t-user_profiles)
 - **Chama:** [_assert_recrutamento](funcoes.md#f-_assert_recrutamento), [_assert_rpc](funcoes.md#f-_assert_rpc)
 
