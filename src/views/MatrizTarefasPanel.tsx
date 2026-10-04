@@ -12,6 +12,7 @@ import { LoadingSpinner, EmptyState, CardContador, FilialBadge, NeuButtonAccent 
 import { useConfirm } from '../contexts/ConfirmContext';
 import { useVoltarInterno } from '../hooks/useVoltarInterno';
 import { todayBR } from '../lib/dates';
+import { FAIXAS_NOTA, faixaDaNota, CRITERIOS_POR_TIPO } from '../lib/rubricaTarefas';
 import type { UserProfile } from '../hooks/useUserProfile';
 import { CENTRAL_FILIAL_TONE, CENTRAL_OP_FILIAIS, type CentralCompeticao as Competicao } from './MatrizAvaliacoesView';
 
@@ -1077,6 +1078,12 @@ function ModalAvaliarParticipante({ participante, tarefa, avals, minhaId, podeAv
 
   const cor = FILIAL_COR[participante.filial] ?? { bg: '#52525b', texto: '#fff' };
   const notaNum = nota.trim() === '' ? null : Number(nota);
+  const faixaAtual = faixaDaNota(notaNum);
+  const criterios = CRITERIOS_POR_TIPO[tarefa.tipo] ?? [];
+  const areaLabel = TIPO_BY_ID.get(tarefa.tipo)?.label ?? 'esta área';
+  // Guia aberto por padrão só pra quem vai dar nota: quem só consulta não
+  // precisa do bloco empurrando as avaliações pra baixo.
+  const [guiaAberto, setGuiaAberto] = useState(podeAvaliar && !desligado);
 
   // Faixa única para os estados em que não se dá nota: um ícone e uma frase.
   const Faixa = ({ tom, icon, children }: { tom: 'amarelo' | 'vermelho' | 'neutro'; icon: React.ReactNode; children: React.ReactNode }) => (
@@ -1146,6 +1153,58 @@ function ModalAvaliarParticipante({ participante, tarefa, avals, minhaId, podeAv
         </div>
 
         <div className="p-5 flex flex-col gap-4">
+          {/* O que foi pedido + o que observar na área. A descrição da tarefa
+              só existia no card; quem abria o modal julgava de memória. */}
+          {(tarefa.descricao || criterios.length > 0) && (
+            <div className="rounded-xl border border-white/5 bg-white/[0.02]">
+              <button type="button" onClick={() => setGuiaAberto(v => !v)}
+                aria-expanded={guiaAberto}
+                className="w-full flex items-center gap-2 px-3 py-2 text-[11px] uppercase tracking-widest font-bold text-gray-400 hover:text-gray-200">
+                <ChevronDown size={13} className={`transition-transform ${guiaAberto ? '' : '-rotate-90'}`} />
+                Como avaliar
+              </button>
+              {guiaAberto && (
+                <div className="px-3 pb-3 flex flex-col gap-3 text-xs">
+                  {tarefa.descricao && (
+                    <div className="flex flex-col gap-1">
+                      <span className="text-[10px] uppercase tracking-widest font-bold text-gray-500">O que foi pedido</span>
+                      <p className="text-gray-300 whitespace-pre-wrap leading-snug">{tarefa.descricao}</p>
+                    </div>
+                  )}
+                  {criterios.length > 0 && (
+                    <div className="flex flex-col gap-1">
+                      <span className="text-[10px] uppercase tracking-widest font-bold text-gray-500">O que observar em {areaLabel}</span>
+                      <ul className="flex flex-col gap-0.5 text-gray-300">
+                        {criterios.map(c => (
+                          <li key={c} className="flex gap-2"><span className="text-amber-400">•</span>{c}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                  {/* Quem dá nota vê as faixas junto dos botões; quem só
+                      acompanha (admin) vê aqui, pra ler a nota na mesma régua. */}
+                  {!(podeAvaliar && !desligado) && (
+                    <div className="flex flex-col gap-1">
+                      <span className="text-[10px] uppercase tracking-widest font-bold text-gray-500">Faixas da nota</span>
+                      <ul className="flex flex-col gap-0.5 text-gray-300">
+                        {FAIXAS_NOTA.map(f => (
+                          <li key={f.de} className="flex gap-2">
+                            <span className="font-black tabular-nums text-amber-300 w-9 shrink-0">{f.de === f.ate ? f.de : `${f.de}–${f.ate}`}</span>
+                            <span><b className="text-gray-200">{f.titulo}.</b> {f.descricao}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                  <p className="text-[10px] text-gray-500 leading-snug">
+                    Uma nota só por pessoa, pesando o conjunto. "Cumpriu o combinado" (5–7) é a nota de quem fez
+                    o que foi pedido — acima disso, só o que foi além.
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+
           {/* `!desligado` primeiro: sem isso o form de nota ganharia do ramo
               de desligado abaixo, e o conselheiro digitaria uma nota que a
               RPC recusa (migr. 364). */}
@@ -1176,9 +1235,25 @@ function ModalAvaliarParticipante({ participante, tarefa, avals, minhaId, podeAv
                     );
                   })}
                 </div>
-                <div className="flex justify-between text-[10px] text-gray-600 px-0.5">
-                  <span>0 não entregou</span><span>5 o combinado</span><span>8 superou</span><span>10 referência</span>
+                {/* Faixas da rubrica: a faixa da nota escolhida acende e diz
+                    o que ela significa — antes eram quatro rótulos soltos e
+                    cada conselheiro lia a escala do seu jeito. */}
+                <div className="grid grid-cols-5 gap-1">
+                  {FAIXAS_NOTA.map(f => {
+                    const ativa = faixaAtual === f;
+                    return (
+                      <div key={f.de} title={f.descricao}
+                        className={`rounded-lg px-1 py-1 text-center leading-tight transition-colors ${
+                          ativa ? 'bg-amber-400/15 text-amber-200 ring-1 ring-amber-400/40' : 'text-gray-500'}`}>
+                        <span className="block text-[10px] font-black tabular-nums">{f.de === f.ate ? f.de : `${f.de}–${f.ate}`}</span>
+                        <span className="block text-[9px] uppercase tracking-wide font-bold">{f.titulo}</span>
+                      </div>
+                    );
+                  })}
                 </div>
+                <p className={`text-[11px] leading-snug min-h-[1rem] ${faixaAtual ? 'text-gray-300' : 'text-gray-600'}`}>
+                  {faixaAtual ? faixaAtual.descricao : 'Escolha a nota — a faixa dela aparece aqui.'}
+                </p>
               </div>
 
               <textarea

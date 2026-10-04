@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Trophy, Calendar, Sparkles, Loader2, Plus, Award, ThumbsUp, ThumbsDown, MessageCircle, X, Crown, StopCircle, Pencil, Trash2, FileDown, Presentation, Star, Users, Unlock } from 'lucide-react';
+import { Trophy, Calendar, Sparkles, Loader2, Plus, Award, ThumbsUp, ThumbsDown, MessageCircle, X, Crown, StopCircle, Pencil, Trash2, FileDown, Presentation, Star, Users, Unlock, ChevronDown, Info } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import { supabase } from '../lib/supabase';
 import { assinarRealtime } from '../lib/realtimeAgrupado';
@@ -14,6 +14,7 @@ import { BotaoWhatsApp } from '../components/BotaoWhatsApp';
 import { montarMensagemWhats } from '../lib/whatsappShare';
 import type { UserProfile } from '../hooks/useUserProfile';
 import { exportCompeticaoResultadoPDF } from '../lib/competicaoPdf';
+import { MenuMais, ItemMenu } from '../components/MenuMais';
 import { ordenarRanking } from '../lib/competicaoRanking';
 
 const OP_FILIAIS = ['SuperMax', 'MaxLook', 'TechMax'] as const;
@@ -50,6 +51,14 @@ const STATUS_LABEL: Record<CompeticaoStatus, string> = {
   em_andamento:            'Em andamento',
   aguardando_encerramento: 'Aguardando encerramento',
   encerrada:               'Encerrada',
+};
+
+// Etiqueta de status ao lado do nome — cor cheia, mesma régua do StatusBadge
+// e da Central (MatrizAvaliacoesView). O chip `btn-shimmer` parecia botão.
+const STATUS_ETIQUETA: Record<CompeticaoStatus, string> = {
+  em_andamento:            'bg-green-600 text-white',
+  aguardando_encerramento: 'bg-yellow-400 text-black',
+  encerrada:               'bg-zinc-600 text-white',
 };
 
 const STATUS_CHIP_CLASSE: Record<CompeticaoStatus, string> = {
@@ -907,12 +916,28 @@ export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToa
             <>
               {/* Cabeçalho da competição + pódio */}
               <div className="neu-flat rounded-3xl p-6 border border-accent/20">
+                {/* Cabeçalho: quem é a competição à esquerda (status colado no
+                    nome — antes era um chip no meio dos botões, com cara de
+                    botão); à direita, uma ação principal, exportação num menu
+                    e as ações raras/destrutivas atrás do "⋯". Eram sete
+                    botões lado a lado, com "Excluir" encostado no PDF. */}
                 <div className="flex flex-wrap items-start justify-between gap-3 mb-5">
-                  <div>
+                  <div className="min-w-0">
                     <p className={`text-[10px] uppercase tracking-widest font-bold ${emAnalise ? 'text-amber-400' : 'text-gray-500'}`}>
                       {emAnalise ? 'Análise · competição encerrada (somente leitura)' : 'Competição ativa'}
                     </p>
-                    <h3 className="text-lg font-black text-gray-100">{placar.competicao.nome}</h3>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <h3 className="text-lg font-black text-gray-100">{placar.competicao.nome}</h3>
+                      {/* Três estados, três rótulos. O ternário de dois braços que
+                          existia aqui chamava a competição já declarada de
+                          "Aguardando encerramento" — o pior momento para errar,
+                          porque é exatamente quando se apresenta o resultado. */}
+                      {statusVigente && (
+                        <span className={`text-[10px] font-black uppercase tracking-widest px-2 py-0.5 rounded ${STATUS_ETIQUETA[statusVigente] ?? STATUS_ETIQUETA.encerrada}`}>
+                          {STATUS_LABEL[statusVigente] ?? statusVigente}
+                        </span>
+                      )}
+                    </div>
                     <p className="text-xs text-gray-400 flex items-center gap-1.5 mt-1">
                       <Calendar size={11} />
                       {fmtDataBR(placar.competicao.data_inicio)} → {fmtDataBR(placar.competicao.data_fim)}
@@ -926,7 +951,6 @@ export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToa
                     )}
                   </div>
                   <div className="flex items-center gap-2 flex-wrap">
-                    {/* Ordem: Central de Avaliação → Baixar PDF → Status → Encerrar agora → Excluir */}
                     {/* Em análise as duas saídas ficam lado a lado: voltar pro
                         que está correndo, ou reabrir de fato — que aí sim é o
                         gesto que devolve a competição pra votação. */}
@@ -964,59 +988,48 @@ export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToa
                         <Award size={12} /> Central de Avaliação
                       </button>
                     )}
-                    <button
-                      onClick={baixarPdfResultado}
-                      disabled={baixandoPdf}
-                      className="btn-solido btn-solido--vermelho"
-                      title="Baixar resultado por filial em PDF"
+                    <MenuMais
+                      titulo="Exportar o resultado por filial"
+                      classe="btn-shimmer btn-shimmer--glass-black"
+                      gatilho={<>
+                        {baixandoPdf ? <Loader2 size={12} className="animate-spin" /> : <FileDown size={12} />}
+                        Exportar <ChevronDown size={12} />
+                      </>}
                     >
-                      {baixandoPdf ? <Loader2 size={12} className="animate-spin" /> : <FileDown size={12} />}
-                      Baixar PDF
-                    </button>
-                    <button
-                      onClick={enviarPdfAoMaxShow}
-                      disabled={baixandoPdf}
-                      className="btn-shimmer btn-shimmer--glass-black"
-                      title="Enviar PDF direto ao Max Show pra apresentar em tela cheia"
-                    >
-                      {baixandoPdf ? <Loader2 size={12} className="animate-spin" /> : <Presentation size={12} />}
-                      Enviar ao Max Show
-                    </button>
-                    {/* Três estados, três rótulos. O ternário de dois braços que
-                        existia aqui chamava a competição já declarada de
-                        "Aguardando encerramento" — o pior momento para errar,
-                        porque é exatamente quando se apresenta o resultado. */}
-                    {statusVigente && (
-                      <span
-                        className={`btn-shimmer ${STATUS_CHIP_CLASSE[statusVigente] ?? 'btn-shimmer--glass-gray'}`}
-                        style={{ cursor: 'default' }}
-                      >
-                        {STATUS_LABEL[statusVigente] ?? statusVigente}
-                      </span>
-                    )}
-                    {podeGerenciar && statusVigente === 'em_andamento' && (
-                      <button
-                        onClick={encerrarAgora}
-                        disabled={encerrandoAgora}
-                        className="btn-shimmer btn-shimmer--glass-yellow"
-                        title="Força encerramento antes da data_fim"
-                      >
-                        {encerrandoAgora ? <Loader2 size={12} className="animate-spin" /> : <StopCircle size={12} />}
-                        Encerrar agora
-                      </button>
-                    )}
-                    {/* Análise é leitura: excluir a competição que se está
-                        conferindo não é uma opção que deva estar à mão. */}
+                      {fechar => (
+                        <>
+                          <ItemMenu icon={FileDown} cor="text-gray-200 hover:bg-white/5" disabled={baixandoPdf}
+                            onClick={() => { fechar(); baixarPdfResultado(); }}>
+                            Baixar PDF
+                          </ItemMenu>
+                          <ItemMenu icon={Presentation} cor="text-gray-200 hover:bg-white/5" disabled={baixandoPdf}
+                            onClick={() => { fechar(); enviarPdfAoMaxShow(); }}>
+                            Enviar ao Max Show
+                          </ItemMenu>
+                        </>
+                      )}
+                    </MenuMais>
+                    {/* Análise é leitura: encerrar ou excluir a competição que
+                        se está conferindo não é opção que deva estar à mão. */}
                     {podeGerenciar && competicaoAtual && !emAnalise && (
-                      <button
-                        onClick={() => excluirCompeticao(competicaoAtual)}
-                        disabled={excluindo === competicaoAtual.id}
-                        title="Excluir competição (uso pra descartar testes)"
-                        className="btn-shimmer btn-shimmer--glass-red"
-                      >
-                        {excluindo === competicaoAtual.id ? <Loader2 size={12} className="animate-spin" /> : <Trash2 size={12} />}
-                        Excluir
-                      </button>
+                      <MenuMais titulo="Encerrar ou excluir a competição">
+                        {fechar => (
+                          <>
+                            {statusVigente === 'em_andamento' && (
+                              <ItemMenu icon={encerrandoAgora ? Loader2 : StopCircle} cor="text-amber-400 hover:bg-amber-400/10"
+                                disabled={encerrandoAgora}
+                                onClick={() => { fechar(); encerrarAgora(); }}>
+                                Encerrar agora
+                              </ItemMenu>
+                            )}
+                            <ItemMenu icon={excluindo === competicaoAtual.id ? Loader2 : Trash2} cor="text-red-400 hover:bg-red-400/10"
+                              disabled={excluindo === competicaoAtual.id}
+                              onClick={() => { fechar(); excluirCompeticao(competicaoAtual); }}>
+                              Excluir competição
+                            </ItemMenu>
+                          </>
+                        )}
+                      </MenuMais>
                     )}
                   </div>
                 </div>
@@ -1072,10 +1085,11 @@ export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToa
                 </div>
               </div>
 
-              {/* Detalhe por filial */}
+              {/* Detalhe por filial. Não é "notas do conselho": a tabela traz
+                  as três parcelas e a final. */}
               <div className="neu-flat rounded-3xl p-5 border border-white/5">
                 <h3 className="text-sm font-bold text-gray-200 mb-4 flex items-center gap-2">
-                  <Star size={13} className="text-accent" /> Notas do conselho por filial
+                  <Star size={13} className="text-accent" /> Composição da nota por filial
                 </h3>
                 <div className="overflow-x-auto">
                   <table className="tabela w-full text-xs">
@@ -1088,7 +1102,6 @@ export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToa
                         <th className="text-right pb-3 font-bold pr-4">Cobertura do ponto</th>
                         <th className="text-right pb-3 font-bold pr-4">Pontualidade</th>
                         <th className="text-right pb-3 font-bold pr-4">Final (0-10)</th>
-                        <th className="text-right pb-3 font-bold pr-4">Escala 0-100</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -1167,32 +1180,64 @@ export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToa
                             <td className={`py-3 text-right tabular-nums pr-4 ${isBest ? 'text-emerald-400 font-bold' : 'text-gray-300'}`}>
                               {p.n === 0 ? '—' : (p.media / 10).toFixed(1)}
                             </td>
-                            <td className="py-3 text-right text-gray-500 tabular-nums pr-4">
-                              {p.n === 0 ? '—' : p.media.toFixed(1)}
-                            </td>
                           </tr>
                         );
                       })}
                     </tbody>
                   </table>
                 </div>
-                <p className="text-[10px] text-gray-500 mt-3">
-                  Conselho = média por participante primeiro (as notas que ele recebeu), depois média dos
-                  participantes da filial — assim um avaliador que julgue mais gente de uma unidade não pesa
-                  mais que os outros. O eixo subjetivo da Avaliação de Filial entra como um item da unidade. Frequência = ponto do período, com presença pontual valendo o dia
-                  inteiro, {placar.atraso_conta === false
-                    ? 'atraso ainda sem desconto (horário da turma não confirmado — veja o card em Avaliação das Filiais)'
-                    : `atraso valendo meio dia (entrada após ${placar.jornada_entrada ?? '—'})`}, falta zerando e
-                  justificado fora da conta; entra na nota final com peso {Math.round((placar.peso_frequencia ?? 0.2) * 100)}%.
-                  Filial sem ponto lançado não é punida — a parcela simplesmente não entra e a final repete a do conselho.
-                  {' '}Pontualidade = parcelas de empréstimo que venceram no período e foram quitadas até o vencimento (antecipar conta como em dia,
-                  não pagar conta como atraso); vale {Math.round((placar.peso_pontualidade ?? 0.1) * 100)}% e é uma taxa, não um valor — a régua é
-                  a mesma para quem pegou R$ 1 milhão e para quem pegou R$ 5 milhões. Unidade sem parcela vencida no período fica fora do eixo, e o
-                  peso volta para o conselho.
-                  {placar.calendario_turma
-                    ? ' Com o calendário da turma configurado, cada pessoa ativa responde por cada dia letivo: dia sem lançamento conta como falta, e a cobertura mostra quanto foi de fato registrado.'
-                    : ' Sem o calendário da turma configurado, o que não foi lançado não entra na conta — configure os dias de aula no card de Frequência, na Central de Avaliação, para a falta descontar.'}
-                </p>
+                {/* Era um parágrafo corrido de ~180 palavras sob a tabela.
+                    Agora fica recolhido e, aberto, segue a ordem da conta. */}
+                <details className="mt-3 group">
+                  <summary className="cursor-pointer list-none flex items-center gap-1.5 text-[11px] font-bold text-gray-400 hover:text-accent select-none">
+                    <Info size={12} /> Como a nota é calculada
+                    <ChevronDown size={12} className="transition-transform group-open:rotate-180" />
+                  </summary>
+                  <ol className="mt-3 flex flex-col gap-2.5 text-[11px] text-gray-400 leading-relaxed list-none">
+                    <li className="flex gap-2">
+                      <span className="shrink-0 w-4 h-4 rounded-full bg-amber-400 text-black text-[10px] font-black flex items-center justify-center">1</span>
+                      <span>
+                        <b className="text-gray-200">Conselho ({Math.round((1 - (placar.peso_frequencia ?? 0.2) - (placar.peso_pontualidade ?? 0.1)) * 100)}%).</b>{' '}
+                        Cada participante vira uma nota só (a média das notas que recebeu); depois tira-se a média dos
+                        participantes da filial. Assim um avaliador que julgue mais gente de uma unidade não pesa mais que
+                        os outros. O eixo Planejamento e Organização, da Avaliação de Filial, entra como mais um item da unidade.
+                        Nota de admin e nota dada à própria unidade não contam.
+                      </span>
+                    </li>
+                    <li className="flex gap-2">
+                      <span className="shrink-0 w-4 h-4 rounded-full bg-sky-500 text-white text-[10px] font-black flex items-center justify-center">2</span>
+                      <span>
+                        <b className="text-gray-200">Frequência do ponto ({Math.round((placar.peso_frequencia ?? 0.2) * 100)}%).</b>{' '}
+                        Presença pontual vale o dia inteiro;{' '}
+                        {placar.atraso_conta === false
+                          ? 'atraso ainda sem desconto (horário da turma não confirmado — veja o card em Avaliação das Filiais)'
+                          : `atraso vale meio dia (entrada após ${placar.jornada_entrada ?? '—'})`};
+                        falta zera; justificado fica fora da conta.{' '}
+                        {placar.calendario_turma
+                          ? 'Com o calendário da turma configurado, cada pessoa ativa responde por cada dia letivo: dia sem lançamento conta como falta, e a cobertura mostra quanto foi de fato registrado.'
+                          : 'Sem o calendário da turma configurado, o que não foi lançado não entra na conta — configure os dias de aula no card de Frequência, na Central de Avaliação, para a falta descontar.'}
+                      </span>
+                    </li>
+                    <li className="flex gap-2">
+                      <span className="shrink-0 w-4 h-4 rounded-full bg-violet-500 text-white text-[10px] font-black flex items-center justify-center">3</span>
+                      <span>
+                        <b className="text-gray-200">Pontualidade no pagamento ({Math.round((placar.peso_pontualidade ?? 0.1) * 100)}%).</b>{' '}
+                        Parcelas de empréstimo que venceram no período e foram quitadas até o vencimento (antecipar conta como
+                        em dia; não pagar conta como atraso). É uma taxa, não um valor: a régua é a mesma para quem pegou
+                        R$ 1 milhão e para quem pegou R$ 5 milhões.
+                      </span>
+                    </li>
+                    <li className="flex gap-2">
+                      <span className="shrink-0 w-4 h-4 rounded-full bg-zinc-600 text-white text-[10px] font-black flex items-center justify-center">=</span>
+                      <span>
+                        <b className="text-gray-200">Final.</b>{' '}
+                        Soma das três parcelas com os pesos acima. Parcela sem dado numa filial (sem ponto lançado, sem parcela
+                        vencida) não pune: fica de fora e o peso dela volta para o conselho daquela filial. Frequência e
+                        pontualidade só entram em filial que já tem nota do conselho.
+                      </span>
+                    </li>
+                  </ol>
+                </details>
               </div>
 
               {/* Quem já avaliou — nominal, com a média que cada um deu */}
@@ -1798,19 +1843,9 @@ export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToa
                           🏆 {c.vencedora}
                         </span>
                       )}
-                      {c.status === 'em_andamento' ? (
-                        <span className="btn-shimmer btn-shimmer--glass-green" style={{ cursor: 'default' }}>
-                          Em Andamento
-                        </span>
-                      ) : c.status === 'aguardando_encerramento' ? (
-                        <span className="btn-shimmer btn-shimmer--glass-yellow" style={{ cursor: 'default' }}>
-                          Aguardando Encerramento
-                        </span>
-                      ) : (
-                        <span className="btn-shimmer btn-shimmer--glass-gray" style={{ cursor: 'default' }}>
-                          Encerrada
-                        </span>
-                      )}
+                      <span className={`btn-shimmer ${STATUS_CHIP_CLASSE[c.status] ?? 'btn-shimmer--glass-gray'}`} style={{ cursor: 'default' }}>
+                        {STATUS_LABEL[c.status] ?? c.status}
+                      </span>
                       {c.status !== 'encerrada' && (
                         <button
                           onClick={() => abrirEdicao(c)}

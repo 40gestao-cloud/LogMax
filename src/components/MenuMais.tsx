@@ -4,7 +4,14 @@ import { MoreHorizontal } from 'lucide-react';
 // Ações raras da linha (reabrir, excluir) atrás de um "⋯", para não disputarem
 // espaço com o status. Posição fixa: a tabela rola na horizontal e cortaria um
 // menu absoluto nas últimas linhas.
-export const MenuMais = ({ children }: { children: (fechar: () => void) => React.ReactNode }) => {
+// `gatilho`/`classe`/`titulo` trocam o "⋯" por um botão com rótulo (ex.:
+// "Exportar ▾") — mesmo menu, mesmo fechamento.
+export const MenuMais = ({ children, gatilho, classe = 'action-btn-mais', titulo = 'Mais ações' }: {
+  children: (fechar: () => void) => React.ReactNode;
+  gatilho?: React.ReactNode;
+  classe?: string;
+  titulo?: string;
+}) => {
   const [pos, setPos] = useState<{ top: number; right: number } | null>(null);
   const btn = useRef<HTMLButtonElement>(null);
   const menu = useRef<HTMLDivElement>(null);
@@ -28,14 +35,14 @@ export const MenuMais = ({ children }: { children: (fechar: () => void) => React
   }, [pos]);
   return (
     <>
-      <button ref={btn} title="Mais ações" aria-haspopup="menu" aria-expanded={!!pos}
+      <button ref={btn} title={titulo} aria-haspopup="menu" aria-expanded={!!pos}
         onClick={() => {
           if (pos) return setPos(null);
           const r = btn.current!.getBoundingClientRect();
           setPos({ top: r.bottom + 4, right: window.innerWidth - r.right });
         }}
-        className="action-btn-mais">
-        <MoreHorizontal size={15} strokeWidth={2.5} />
+        className={classe}>
+        {gatilho ?? <MoreHorizontal size={15} strokeWidth={2.5} />}
       </button>
       {/* Montado mesmo fechado (só escondido): um item pode ser dono de um
           modal — o Histórico é — e desmontar o menu ao fechar levaria o modal
