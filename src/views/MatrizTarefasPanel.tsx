@@ -13,6 +13,7 @@ import { useConfirm } from '../contexts/ConfirmContext';
 import { useVoltarInterno } from '../hooks/useVoltarInterno';
 import { todayBR } from '../lib/dates';
 import { FAIXAS_NOTA, faixaDaNota, CRITERIOS_POR_TIPO } from '../lib/rubricaTarefas';
+import { mediaPonderada, PESO_NOTA_ADMIN } from '../lib/pesoNotaMatriz';
 import type { UserProfile } from '../hooks/useUserProfile';
 import { CENTRAL_FILIAL_TONE, CENTRAL_OP_FILIAIS, type CentralCompeticao as Competicao } from './MatrizAvaliacoesView';
 
@@ -131,11 +132,21 @@ type AvaliacaoParticipante = {
   avaliador_id: string;
   nota: number | null;
   comentario: string | null;
-  // Vem via JOIN — `role` exclui notas de admin da média exibida (mesma
-  // regra do placar em calcular_placar_competicao) e `nome` identifica
-  // quem já avaliou na quebra por avaliador.
+  // Papel e vínculo CONGELADOS na nota (migr. 609) — é o que o placar usa
+  // para pesar (Admin = 3, migr. 671) e para barrar nota à própria unidade.
+  avaliador_role: string | null;
+  avaliador_filial: string | null;
+  // Via JOIN — só o `nome` (e o papel de hoje, para rótulo).
   avaliador?: { nome: string | null; role: string | null } | null;
 };
+
+// Notas que entram na média do item, pela régua do placar: sem a nota dada à
+// própria unidade (609), Admin com peso 3 (671).
+const notasQueContam = (avals: AvaliacaoParticipante[]) =>
+  avals.filter(a => a.nota != null && (a.avaliador_filial ?? 'Matriz') !== a.filial_avaliada);
+
+const mediaDoItem = (avals: AvaliacaoParticipante[]) =>
+  mediaPonderada(notasQueContam(avals).map(a => ({ nota: Number(a.nota), role: a.avaliador_role })));
 
 // ──────────────────────────────────────────────────────────────────────
 export function MatrizTarefasPanel({ competicao, profile, podeAvaliar, ehAvaliador, emAndamento, showToast, extras }: {
@@ -476,7 +487,7 @@ function PainelTipoTarefa({ tipoConfig, competicao, profile, podeAvaliar, ehAval
     if (partIds.length > 0) {
       const { data: as } = await supabase
         .from('avaliacoes_matriz')
-        .select('id,item_id,filial_avaliada,avaliador_id,nota,comentario,avaliador:user_profiles!avaliador_id(nome,role)')
+        .select('id,item_id,filial_avaliada,avaliador_id,nota,comentario,avaliador_role,avaliador_filial,avaliador:user_profiles!avaliador_id(nome,role)')
         .eq('competicao_id', competicao.id)
         .eq('item_tipo', tipoConfig.id)
         .in('item_id', partIds)
@@ -766,7 +777,7 @@ const iniciais = (nome: string) => {
 // própria (voto selado), o admin e a tarefa encerrada enxergam a do conselho.
 const temNota = (avals: AvaliacaoParticipante[], minhaId: string, revelado: boolean) =>
   revelado
-    ? avals.some(a => a.avaliador?.role !== 'admin' && a.nota != null)
+    ? notasQueContam(avals).length > 0
     : avals.some(a => a.avaliador_id === minhaId && a.nota != null);
 
 // ── Card de uma tarefa com lista de participantes votáveis ───────────
@@ -950,11 +961,9 @@ function ParticipanteRow({ participante, avals, minhaId, desligado, podeAvaliar,
   onAbrir: () => void;
 }) {
   const minha = avals.find(a => a.avaliador_id === minhaId);
-  // Notas de admin não entram na média — admin é moderador aqui.
-  const notas = avals
-    .filter(a => a.avaliador?.role !== 'admin' && a.nota !== null && a.nota !== undefined)
-    .map(a => Number(a.nota));
-  const media = notas.length > 0 ? notas.reduce((s, n) => s + n, 0) / notas.length : null;
+  // Média do item na régua do placar (Admin pesa 3 — migr. 671).
+  const notas = notasQueContam(avals);
+  const media = mediaDoItem(avals);
   const cor = FILIAL_COR[participante.filial] ?? { bg: '#52525b', texto: '#fff' };
 
   // Sem nota não escreve nada: o vazio já diz. Só aparece o que existe —
@@ -963,7 +972,7 @@ function ParticipanteRow({ participante, avals, minhaId, desligado, podeAvaliar,
   if (submitting) fim = <Loader2 size={14} className="animate-spin text-accent" />;
   else if (desligado) fim = <span className="text-[9px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded bg-red-600 text-white">Desligado</span>;
   else if (revelado && media !== null) fim = (
-    <span className="text-sm font-black text-amber-400 tabular-nums" title={`${notas.length} nota${notas.length === 1 ? '' : 's'} do conselho`}>
+    <span className="text-sm font-black text-amber-400 tabular-nums" title={`${notas.length} nota${notas.length === 1 ? '' : 's'} — média ponderada, Administração com peso ${PESO_NOTA_ADMIN}`}>
       {media.toFixed(1)}
     </span>
   );
@@ -1025,9 +1034,9 @@ function ModalAvaliarParticipante({ participante, tarefa, avals, minhaId, podeAv
   const [excluindo, setExcluindo] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
 
-  const avalsConselho = avals.filter(a => a.avaliador?.role !== 'admin');
-  const notas = avalsConselho.filter(a => a.nota != null).map(a => Number(a.nota));
-  const media = notas.length > 0 ? notas.reduce((s, n) => s + n, 0) / notas.length : null;
+  // Mesma régua do placar: média ponderada, Admin com peso 3 (migr. 671).
+  const notas = notasQueContam(avals);
+  const media = mediaDoItem(avals);
   const outras = avals
     .filter(a => a.avaliador_id !== minhaId && (a.nota != null || !!a.comentario))
     .sort((a, b) => (a.avaliador?.nome ?? '').localeCompare(b.avaliador?.nome ?? ''));
@@ -1182,7 +1191,7 @@ function ModalAvaliarParticipante({ participante, tarefa, avals, minhaId, podeAv
                     </div>
                   )}
                   {/* Quem dá nota vê as faixas junto dos botões; quem só
-                      acompanha (admin) vê aqui, pra ler a nota na mesma régua. */}
+                      acompanha vê aqui, pra ler a nota na mesma régua. */}
                   {!(podeAvaliar && !desligado) && (
                     <div className="flex flex-col gap-1">
                       <span className="text-[10px] uppercase tracking-widest font-bold text-gray-500">Faixas da nota</span>
@@ -1302,7 +1311,7 @@ function ModalAvaliarParticipante({ participante, tarefa, avals, minhaId, podeAv
           ) : tarefa.status === 'encerrada' ? (
             <Faixa tom="neutro" icon={<Lock size={13} />}>Tarefa encerrada — notas congeladas.</Faixa>
           ) : (
-            <Faixa tom="neutro" icon={<EyeOff size={13} />}>Você acompanha — quem dá nota é o CEO e o conselho.</Faixa>
+            <Faixa tom="neutro" icon={<EyeOff size={13} />}>Você acompanha — quem dá nota é a Administração, o CEO e o conselho.</Faixa>
           )}
 
           {revelado && (
@@ -1331,7 +1340,7 @@ function ModalAvaliarParticipante({ participante, tarefa, avals, minhaId, podeAv
 
 function LinhaAvaliacao({ aval, sou }: { aval: AvaliacaoParticipante; sou?: boolean }) {
   const nome = aval.avaliador?.nome ?? 'Avaliador';
-  const foraDaMedia = aval.avaliador?.role === 'admin';
+  const ehAdmin = (aval.avaliador_role ?? aval.avaliador?.role) === 'admin';
   return (
     <div className="flex items-start gap-3 px-3 py-2.5">
       <span className="w-8 h-8 shrink-0 rounded-full bg-zinc-700 text-gray-200 flex items-center justify-center text-[10px] font-black">
@@ -1340,12 +1349,12 @@ function LinhaAvaliacao({ aval, sou }: { aval: AvaliacaoParticipante; sou?: bool
       <div className="min-w-0 flex-1">
         <div className="text-sm text-gray-200">
           {nome}{sou && <span className="text-accent"> · você</span>}
-          {foraDaMedia && <span className="text-[10px] uppercase tracking-widest text-gray-500 font-bold ml-1.5">fora da média</span>}
+          {ehAdmin && <span className="text-[10px] uppercase tracking-widest text-gray-500 font-bold ml-1.5">Administração · peso {PESO_NOTA_ADMIN}</span>}
         </div>
         {aval.comentario && <p className="text-xs text-gray-400 break-words mt-0.5">{aval.comentario}</p>}
       </div>
       <span className={`shrink-0 text-sm font-black tabular-nums px-2 py-0.5 rounded ${
-        aval.nota != null ? (foraDaMedia ? 'bg-zinc-700 text-gray-300' : 'bg-amber-500 text-black') : 'text-gray-600'}`}>
+        aval.nota != null ? 'bg-amber-500 text-black' : 'text-gray-600'}`}>
         {aval.nota != null ? Number(aval.nota).toFixed(1) : '—'}
       </span>
     </div>

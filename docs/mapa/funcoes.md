@@ -152,7 +152,7 @@ Para cada função: quem a chama (tela, servidor, outra função, gatilho), o qu
 - **Chamada por outras funções:** [calcular_placar_competicao](funcoes.md#f-calcular_placar_competicao)
 - **Grava:** —
 - **Lê:** [avaliacoes](tabelas.md#t-avaliacoes), [avaliacoes_matriz](tabelas.md#t-avaliacoes_matriz), [competicoes_matriz](tabelas.md#t-competicoes_matriz), [criterios_avaliacao](tabelas.md#t-criterios_avaliacao), [filiais](tabelas.md#t-filiais), [matriz_tarefa_participantes](tabelas.md#t-matriz_tarefa_participantes), [ponto_jornada](tabelas.md#t-ponto_jornada), [user_profiles](tabelas.md#t-user_profiles)
-- **Chama:** [_frequencia_competicao](funcoes.md#f-_frequencia_competicao), [_funcionario_desligado](funcoes.md#f-_funcionario_desligado), [_pontualidade_competicao](funcoes.md#f-_pontualidade_competicao)
+- **Chama:** [_frequencia_competicao](funcoes.md#f-_frequencia_competicao), [_funcionario_desligado](funcoes.md#f-_funcionario_desligado), [_peso_nota_matriz](funcoes.md#f-_peso_nota_matriz), [_pontualidade_competicao](funcoes.md#f-_pontualidade_competicao)
 
 <a id="f-_cancelar_frete_compra"></a>
 ## _cancelar_frete_compra (RPC, SECURITY DEFINER)
@@ -310,6 +310,13 @@ Para cada função: quem a chama (tela, servidor, outra função, gatilho), o qu
 - **Chamada por outras funções:** [listar_pendencias](funcoes.md#f-listar_pendencias), [minha_mesa](funcoes.md#f-minha_mesa)
 - **Grava:** —
 - **Lê:** [user_profiles](tabelas.md#t-user_profiles)
+
+<a id="f-_peso_nota_matriz"></a>
+## _peso_nota_matriz (RPC)
+
+- **Telas que chamam:** —
+- **Chamada por outras funções:** [_calcular_placar_competicao_raw](funcoes.md#f-_calcular_placar_competicao_raw), [media_participantes_competicao](funcoes.md#f-media_participantes_competicao)
+- **Grava:** —
 
 <a id="f-_pontualidade_competicao"></a>
 ## _pontualidade_competicao (RPC, SECURITY DEFINER)
@@ -1306,7 +1313,7 @@ Para cada função: quem a chama (tela, servidor, outra função, gatilho), o qu
 ## contar_votantes_matriz (RPC, SECURITY DEFINER)
 
 - **Telas que chamam:** [Competição](telas.md#s-matriz-competicao)
-- **Chamada por outras funções:** [_competicao_empatada](funcoes.md#f-_competicao_empatada), [declarar_vencedora](funcoes.md#f-declarar_vencedora), [participantes_sem_nota_competicao](funcoes.md#f-participantes_sem_nota_competicao), [progresso_votacao_competicao](funcoes.md#f-progresso_votacao_competicao)
+- **Chamada por outras funções:** [_competicao_empatada](funcoes.md#f-_competicao_empatada), [declarar_vencedora](funcoes.md#f-declarar_vencedora), [lembrar_avaliacoes_pendentes](funcoes.md#f-lembrar_avaliacoes_pendentes), [participantes_sem_nota_competicao](funcoes.md#f-participantes_sem_nota_competicao), [progresso_votacao_competicao](funcoes.md#f-progresso_votacao_competicao)
 - **Grava:** —
 - **Lê:** [user_profiles](tabelas.md#t-user_profiles)
 
@@ -2868,7 +2875,8 @@ Para cada função: quem a chama (tela, servidor, outra função, gatilho), o qu
 - **Telas que chamam:** —
 - **Servidor (api/) chama:** `api/cron.ts`
 - **Grava:** [notificacoes](tabelas.md#t-notificacoes)
-- **Lê:** [avaliacoes_matriz](tabelas.md#t-avaliacoes_matriz), [competicoes_matriz](tabelas.md#t-competicoes_matriz), [matriz_tarefa_participantes](tabelas.md#t-matriz_tarefa_participantes), [matriz_tarefas](tabelas.md#t-matriz_tarefas), [notificacoes](tabelas.md#t-notificacoes), [user_profiles](tabelas.md#t-user_profiles)
+- **Lê:** [avaliacoes_matriz](tabelas.md#t-avaliacoes_matriz), [competicoes_matriz](tabelas.md#t-competicoes_matriz), [matriz_tarefa_participantes](tabelas.md#t-matriz_tarefa_participantes), [matriz_tarefas](tabelas.md#t-matriz_tarefas), [notificacoes](tabelas.md#t-notificacoes)
+- **Chama:** [contar_votantes_matriz](funcoes.md#f-contar_votantes_matriz)
 
 <a id="f-liberar_ciclo_tarefa"></a>
 ## liberar_ciclo_tarefa (RPC, SECURITY DEFINER)
@@ -3118,6 +3126,7 @@ Para cada função: quem a chama (tela, servidor, outra função, gatilho), o qu
 - **Telas que chamam:** [Demandas](telas.md#s-demandas), [Demandas conselho *(rota demandas-conselho)*](telas.md#s-demandas-conselho), [Demandas metas *(rota demandas-metas)*](telas.md#s-demandas-metas), [Metas *(rota metas)*](telas.md#s-metas)
 - **Grava:** —
 - **Lê:** [avaliacoes_matriz](tabelas.md#t-avaliacoes_matriz), [matriz_tarefa_participantes](tabelas.md#t-matriz_tarefa_participantes), [matriz_tarefas](tabelas.md#t-matriz_tarefas), [user_profiles](tabelas.md#t-user_profiles)
+- **Chama:** [_peso_nota_matriz](funcoes.md#f-_peso_nota_matriz)
 
 <a id="f-metas_estrategicas_set_updated_at"></a>
 ## metas_estrategicas_set_updated_at (gatilho)

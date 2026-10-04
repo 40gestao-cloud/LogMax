@@ -3122,6 +3122,7 @@
    "chama": [
     "_frequencia_competicao",
     "_funcionario_desligado",
+    "_peso_nota_matriz",
     "_pontualidade_competicao"
    ]
   },
@@ -3340,6 +3341,13 @@
    "le": [
     "user_profiles"
    ],
+   "chama": []
+  },
+  "_peso_nota_matriz": {
+   "gatilho": false,
+   "secdef": false,
+   "grava": [],
+   "le": [],
    "chama": []
   },
   "_pontualidade_competicao": {
@@ -7459,10 +7467,11 @@
     "competicoes_matriz",
     "matriz_tarefa_participantes",
     "matriz_tarefas",
-    "notificacoes",
-    "user_profiles"
+    "notificacoes"
    ],
-   "chama": []
+   "chama": [
+    "contar_votantes_matriz"
+   ]
   },
   "liberar_ciclo_tarefa": {
    "gatilho": false,
@@ -7866,7 +7875,9 @@
     "matriz_tarefas",
     "user_profiles"
    ],
-   "chama": []
+   "chama": [
+    "_peso_nota_matriz"
+   ]
   },
   "metas_estrategicas_set_updated_at": {
    "gatilho": true,

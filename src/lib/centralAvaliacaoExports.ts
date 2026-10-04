@@ -9,6 +9,7 @@
 // do projeto: dynamic import das libs pesadas (jsPDF/autoTable, exceljs).
 
 import { supabase } from './supabase';
+import { mediaPonderada } from './pesoNotaMatriz';
 import { entregarPdf, type PdfDestino } from './maxShowUpload';
 import { GOLD, BLACK, GRAY_INK, GRAY_MID, GRAY_SOFT, GOLD_TINT } from './pdfPalette';
 
@@ -27,8 +28,9 @@ const TAREFA_TIPOS = [
   { id: 'tarefa_treinamento_vendas', label: 'Vendas e Atendimento' },
 ];
 
-function media(notas: number[]): number | null {
-  return notas.length > 0 ? notas.reduce((s, n) => s + n, 0) / notas.length : null;
+// Média do item na régua do placar: ponderada, Admin com peso 3 (migr. 671).
+function media(notas: { nota: number; role: string | null }[]): number | null {
+  return mediaPonderada(notas);
 }
 
 export type RelatorioParticipante = { nome: string; filial: string; media: number | null; comentarios: string[] };
@@ -54,7 +56,7 @@ export type CentralRelatorio = {
 export async function buscarRelatorioCentralAvaliacao(competicao: {
   id: string; nome: string; data_inicio: string; data_fim: string;
 }, ehAdmin = false): Promise<CentralRelatorio> {
-  // Admin não é conselho — nota dele fica de fora dos agregados (regra 240).
+  // (671) A nota da Administração entra, com peso 3 — mesma régua do placar.
   // Papel e vínculo vêm CONGELADOS da própria nota (migr. 609): ler o perfil de
   // hoje fazia o relatório mudar quando alguém trocava de cargo, e a mesma nota
   // entrava aqui e ficava fora do placar. `avaliador_filial` é o que barra nota
@@ -67,7 +69,6 @@ export async function buscarRelatorioCentralAvaliacao(competicao: {
 
   const avalsPorChave = new Map<string, any[]>();
   for (const a of (avalsRaw ?? []) as any[]) {
-    if ((a.avaliador_role ?? 'conselheiro') === 'admin') continue;
     if ((a.avaliador_filial ?? 'Matriz') === a.filial_avaliada) continue;
     const key = `${a.item_tipo}:${a.item_id}`;
     const list = avalsPorChave.get(key) ?? [];
@@ -107,7 +108,7 @@ export async function buscarRelatorioCentralAvaliacao(competicao: {
           .filter(p => p.tarefa_id === t.id)
           .map(p => {
             const avs = avalsPorChave.get(`${tt.id}:${p.id}`) ?? [];
-            const notas = avs.filter(a => a.nota != null).map(a => Number(a.nota));
+            const notas = avs.filter(a => a.nota != null).map(a => ({ nota: Number(a.nota), role: a.avaliador_role ?? null }));
             return {
               nome: p.nome_snapshot,
               filial: p.filial,

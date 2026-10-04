@@ -15,6 +15,7 @@ import { montarMensagemWhats } from '../lib/whatsappShare';
 import type { UserProfile } from '../hooks/useUserProfile';
 import { exportCompeticaoResultadoPDF } from '../lib/competicaoPdf';
 import { MenuMais, ItemMenu } from '../components/MenuMais';
+import { PESO_NOTA_ADMIN } from '../lib/pesoNotaMatriz';
 import { ordenarRanking } from '../lib/competicaoRanking';
 
 const OP_FILIAIS = ['SuperMax', 'MaxLook', 'TechMax'] as const;
@@ -138,6 +139,8 @@ type Placar = {
   media_por_item?: boolean;
   // Migr. 376: com calendário da turma, dia letivo sem lançamento vira falta.
   calendario_turma?: boolean;
+  // Migr. 671: peso da nota do Admin dentro do item (3).
+  peso_nota_admin?: number;
   // Migr. 350: false enquanto o horário da turma não for confirmado em
   // `ponto_jornada` — nesse estado o atraso não desconta.
   atraso_conta?: boolean;
@@ -170,10 +173,10 @@ const isoIn = (dias: number) => { const d = new Date(); d.setDate(d.getDate() + 
 export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToast: any; profile: UserProfile; navigate?: (view: string) => void }) {
   const confirm = useConfirm();
   const podeGerenciar = profile.role === 'admin' || profile.role === 'ceo';
-  // Votação restrita a CEO + conselheiros (alinha com RLS voto_write).
-  // Admin gerencia e não vota — exceto para desfazer empate, e é ele quem
-  // declara a vencedora (migr. 369).
-  const podeVotar     = profile.role === 'ceo' || isConselheiro(profile);
+  // Vota: Administração, CEO e conselheiros (RLS voto_write, migr. 671). O
+  // Admin deixou de votar só no desempate e virou eleitor normal — e segue
+  // sendo o único que declara a vencedora (369).
+  const podeVotar     = profile.role === 'admin' || profile.role === 'ceo' || isConselheiro(profile);
   const podeAcessar   = podeGerenciar || isConselheiro(profile);
   // Só admin lê nota individual alheia enquanto a tarefa não encerra
   // (migr. 345). Pro conselho, esta tela mostra participação, não valores.
@@ -288,13 +291,14 @@ export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToa
     })();
   }, [podeAcessar]);
 
-  // CEO + conselheiros da Matriz — pra listar também quem ainda não avaliou.
+  // Administração + CEO + conselheiros da Matriz — pra listar também quem
+  // ainda não avaliou.
   useEffect(() => {
     if (!podeAcessar || !supabase) return;
     (async () => {
-      // Desligado fora do eleitorado (migr. 369): ele nunca vota, e como o
-      // empate exige que TODOS votem, uma vaga morta impediria o desempate
-      // para sempre. Tem de casar com `contar_votantes_matriz`.
+      // Desligado fora do eleitorado (migr. 369): ele nunca vota e seria uma
+      // vaga morta no quórum. Tem de casar com `contar_votantes_matriz` —
+      // que desde a 671 inclui o Admin.
       const { data } = await supabase
         .from('user_profiles')
         .select('id, nome, role, is_conselheiro, desligado_em')
@@ -302,7 +306,7 @@ export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToa
         .is('desligado_em', null)
         .order('nome', { ascending: true });
       setAvaliadores((data ?? []).filter((u: Avaliador) =>
-        u.role === 'ceo' || u.role === 'conselheiro' || (u.role === 'gerente' && u.is_conselheiro === true),
+        u.role === 'admin' || u.role === 'ceo' || u.role === 'conselheiro' || (u.role === 'gerente' && u.is_conselheiro === true),
       ));
     })();
   }, [podeAcessar]);
@@ -451,8 +455,8 @@ export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToa
     });
   }, [competicaoAtual, carregarPlacar]);
 
-  // Quem já avaliou × média que deu por filial. Nota de admin aparece
-  // marcada — ela não pesa no placar (regra da migr. 240).
+  // Quem já avaliou × média que deu por filial. A nota do Admin pesa 3 no
+  // placar (migr. 671) — aqui aparece a média simples que ele deu.
   // Contagem vem da RPC (não vaza valor). Médias por filial só existem pro
   // admin, que é o único com leitura completa depois do voto selado.
   const porAvaliador = useMemo(() => {
@@ -514,18 +518,13 @@ export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToa
     rejeita: votosValidos.filter(v => v.voto === 'rejeita').length,
   }), [votosValidos]);
 
-  // Empate é medido só entre os votos do conselho — o desempate do admin
-  // não pode se anular (migr. 369). Com eleitorado par (hoje 1 CEO + 3
-  // conselheiros) o 2×2 é possível, e é aí que a Administração entra.
+  // Empate de todo o eleitorado (Admin incluso desde a 671). Não há mais voto
+  // de desempate: rejeição sem maioria não forma sugestão, e o banco
+  // (`_sugestao_rejeicao_competicao`) cai no placar automático.
   const empate = useMemo(() => {
-    const doConselho = votosValidos.filter(v => avaliadores.some(a => a.id === v.votante_id));
-    if (doConselho.length === 0 || doConselho.length !== totalVotantes) return false;
-    const aceita  = doConselho.filter(v => v.voto === 'aceita').length;
-    const rejeita = doConselho.filter(v => v.voto === 'rejeita').length;
-    return aceita === rejeita;
-  }, [votosValidos, avaliadores, totalVotantes]);
-
-  const podeDesempatar = profile.role === 'admin' && empate;
+    if (votosValidos.length === 0 || votosValidos.length !== totalVotantes) return false;
+    return contagemVotos.aceita === contagemVotos.rejeita;
+  }, [votosValidos, totalVotantes, contagemVotos]);
 
   // Sincroniza o voto que o usuário já registrou (pra permitir editar).
   useEffect(() => {
@@ -1201,7 +1200,8 @@ export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToa
                         Cada participante vira uma nota só (a média das notas que recebeu); depois tira-se a média dos
                         participantes da filial. Assim um avaliador que julgue mais gente de uma unidade não pesa mais que
                         os outros. O eixo Planejamento e Organização, da Avaliação de Filial, entra como mais um item da unidade.
-                        Nota de admin e nota dada à própria unidade não contam.
+                        Dentro de cada participante a nota da Administração pesa {placar.peso_nota_admin ?? PESO_NOTA_ADMIN}× a
+                        de um conselheiro; nota dada à própria unidade não conta.
                       </span>
                     </li>
                     <li className="flex gap-2">
@@ -1266,7 +1266,7 @@ export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToa
                               <span className="text-gray-200">{a.nome}</span>
                               {a.id === profile.id && <span className="text-accent"> (você)</span>}
                               <span className="text-[9px] uppercase tracking-widest text-gray-500 font-bold ml-2">
-                                {a.role === 'ceo' ? 'CEO' : a.role === 'admin' ? 'admin · fora da média' : 'Conselheiro'}
+                                {a.role === 'ceo' ? 'CEO' : a.role === 'admin' ? `Administração · peso ${PESO_NOTA_ADMIN}` : 'Conselheiro'}
                               </span>
                             </td>
                             <td className={`py-3 text-right tabular-nums pr-4 ${a.total === 0 ? 'text-yellow-400' : 'text-gray-300'}`}>
@@ -1290,7 +1290,7 @@ export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToa
                   {vejoNotaAlheia ? (
                     <>Média 0-10 que cada eleitor deu por filial nas Tarefas da Matriz — mesma fonte do pódio.
                     Os eixos da Avaliação de Filial também pesam no placar quando o selo acima está aceso, mas
-                    não aparecem nesta tabela. Nota de admin nunca entra na média.</>
+                    não aparecem nesta tabela. No placar a nota da Administração pesa {PESO_NOTA_ADMIN}×.</>
                   ) : (
                     <>Quantas notas cada eleitor já registrou nas Tarefas da Matriz. O valor de cada nota fica
                     selado até a tarefa ser encerrada — daí ele aparece por participante, dentro da tarefa.</>
@@ -1336,12 +1336,12 @@ export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToa
               )}
 
               {/* Votação */}
-              {competicaoAtual && competicaoAtual.status === 'aguardando_encerramento' && (podeVotar || podeDesempatar) && (
-                <div className={`neu-flat rounded-3xl p-5 border ${podeDesempatar && !jaVotei ? 'border-amber-500/40' : 'border-white/5'}`}>
+              {competicaoAtual && competicaoAtual.status === 'aguardando_encerramento' && podeVotar && (
+                <div className="neu-flat rounded-3xl p-5 border border-white/5">
                   <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
                     <h3 className="text-sm font-bold text-gray-200 flex items-center gap-2">
                       <MessageCircle size={13} className="text-accent" />
-                      {podeDesempatar ? 'Desempate da Administração' : 'Votação do conselho'}
+                      Votação do conselho
                     </h3>
                     <div className="flex items-center gap-3 text-[10px] uppercase tracking-widest font-bold">
                       {vejoVotoAlheio ? (
@@ -1360,14 +1360,11 @@ export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToa
                     </div>
                   </div>
 
-                  {/* O conselho empatou e o eleitorado é par: quem desempata é
-                      a Administração. Só aparece nesse estado — fora dele o
-                      admin modera a competição e não julga. */}
-                  {podeDesempatar && !jaVotei && (
+                  {/* Só quem enxerga os votos (o Admin) sabe que empatou. */}
+                  {empate && vejoVotoAlheio && (
                     <p className="text-xs text-amber-300/90 mb-4 leading-relaxed">
-                      O conselho empatou em {contagemVotos.aceita}×{contagemVotos.rejeita} com todos os
-                      {' '}{totalVotantes} eleitores votando. Seu voto entra na contagem como qualquer
-                      outro e desfaz o empate.
+                      Empate em {contagemVotos.aceita}×{contagemVotos.rejeita} com todos os {totalVotantes} eleitores
+                      votando. Rejeição sem maioria não muda o resultado: vale o placar automático.
                     </p>
                   )}
 
@@ -1447,69 +1444,6 @@ export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToa
                     </div>
                   )}
 
-                  {vejoVotoAlheio && votos.length > 0 && (
-                    <div className="mt-4 pt-4 border-t border-white/5">
-                      <p className="text-[10px] uppercase tracking-widest font-bold text-gray-500 mb-2">
-                        Votos registrados ({votosValidos.length}
-                        {votos.length > votosValidos.length && <> · {votos.length - votosValidos.length} da rodada anterior</>})
-                      </p>
-                      <div className="flex flex-col gap-1.5">
-                        {votos.map(v => {
-                          // Voto anterior à reabertura fica visível como registro,
-                          // mas não conta (migr. 372).
-                          const valido = votosValidos.some(x => x.id === v.id);
-                          return (
-                          <div key={v.id} className={`flex items-start gap-2 text-xs ${valido ? '' : 'opacity-40'}`}>
-                            <span className={`shrink-0 text-[10px] font-bold uppercase tracking-widest px-2 py-0.5 rounded ${
-                              !valido
-                                ? 'bg-white/5 text-gray-500 line-through'
-                                : v.voto === 'aceita'
-                                  ? 'bg-emerald-500/15 text-emerald-400'
-                                  : 'bg-red-500/15 text-red-400'
-                            }`}>
-                              {v.voto === 'aceita' ? 'Aceita' : `Rejeita → ${v.filial_escolhida}`}
-                            </span>
-                            <span className="text-gray-400 truncate">{v.comentario ?? '—'}</span>
-                            {!valido && (
-                              <span className="shrink-0 text-[9px] uppercase tracking-widest text-gray-600">
-                                rodada anterior
-                              </span>
-                            )}
-                          </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* Aguardando votação — visão somente-leitura pra quem gerencia mas não vota (admin) */}
-              {competicaoAtual && competicaoAtual.status === 'aguardando_encerramento' && !podeVotar && !podeDesempatar && (
-                <div className="neu-flat rounded-3xl p-5 border border-white/5">
-                  <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
-                    <h3 className="text-sm font-bold text-gray-200 flex items-center gap-2">
-                      <MessageCircle size={13} className="text-accent" /> Votação do conselho
-                    </h3>
-                    <div className="flex items-center gap-3 text-[10px] uppercase tracking-widest font-bold">
-                      {vejoVotoAlheio ? (
-                        <>
-                          <span className="text-emerald-400">Aceita: {contagemVotos.aceita}</span>
-                          <span className="text-red-400">Rejeita: {contagemVotos.rejeita}</span>
-                        </>
-                      ) : (
-                        <span className="text-gray-500" title="O voto de cada eleitor fica selado até a vencedora ser declarada (migr. 375).">
-                          Votos selados
-                        </span>
-                      )}
-                      <span className={votosNoQuorum >= quorumMinimo ? 'text-emerald-400' : 'text-yellow-400'}>
-                        Quórum: {votosNoQuorum}/{quorumMinimo}
-                      </span>
-                    </div>
-                  </div>
-                  <p className="text-xs text-gray-400">
-                    Aguardando CEO e conselheiros votarem pra declarar a filial vencedora. Nenhuma ação sua é necessária aqui.
-                  </p>
                   {vejoVotoAlheio && votos.length > 0 && (
                     <div className="mt-4 pt-4 border-t border-white/5">
                       <p className="text-[10px] uppercase tracking-widest font-bold text-gray-500 mb-2">
@@ -1809,7 +1743,8 @@ export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToa
 
               <p className="text-[10px] text-gray-500 mb-4 leading-relaxed">
                 A nota final de cada filial (0-10) junta três parcelas: o julgamento do conselho (70% — Tarefas da Matriz
-                e o eixo Planejamento e Organização da Avaliação de Filial), a frequência do ponto no período (20%) e a
+                e o eixo Planejamento e Organização da Avaliação de Filial; a nota da Administração vale {PESO_NOTA_ADMIN}× a de um
+                conselheiro), a frequência do ponto no período (20%) e a
                 pontualidade no pagamento das parcelas de empréstimo (10%). Parcela sem dado no período não entra, e o peso
                 dela volta para o conselho.
               </p>

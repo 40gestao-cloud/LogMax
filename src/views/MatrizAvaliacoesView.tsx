@@ -10,6 +10,7 @@ import type { UserProfile } from '../hooks/useUserProfile';
 import { MatrizTarefasPanel } from './MatrizTarefasPanel';
 import { AvaliacaoFilialPanel } from './AvaliacaoFilialPanel';
 import { FrequenciaFiliaisCard } from './FrequenciaFiliaisCard';
+import { mediaPonderada } from '../lib/pesoNotaMatriz';
 import { buscarRelatorioCentralAvaliacao, exportCentralAvaliacaoPDF, exportCentralAvaliacaoExcel } from '../lib/centralAvaliacaoExports';
 
 const OP_FILIAIS = ['SuperMax', 'MaxLook', 'TechMax'] as const;
@@ -175,7 +176,10 @@ export function MatrizAvaliacoesView({ profile, showToast }: { profile: UserProf
   // remover avaliação, criar e liberar tarefa. Aqui a tela desce junto pra
   // leitura em vez de oferecer botão que só devolve erro.
   const emAndamento = competicao.status === 'em_andamento';
-  const podeAvaliar = ehAvaliador && emAndamento;
+  // (671) A Administração também dá nota — com peso 3. `ehAvaliador` segue
+  // sem ela de propósito: é a régua do voto SELADO, e o Admin continua
+  // vendo as notas de todos (decisão do usuário, 2026-10-04).
+  const podeAvaliar = (ehAvaliador || profile.role === 'admin') && emAndamento;
 
   const statusMeta = STATUS_COMPETICAO[competicao.status] ?? STATUS_COMPETICAO.encerrada;
   const restam = diasAte(competicao.data_fim);
@@ -468,13 +472,13 @@ function VisaoCicloPorParticipante({ competicao, ehAdmin }: { competicao: Compet
 
       const tarefaById = new Map<string, any>();
       tsArr.forEach((t: any) => tarefaById.set(t.id, t));
-      const avalsPorItem = new Map<string, number[]>();
+      // Admin entra com peso 3 (migr. 671) — a média do item é ponderada.
+      const avalsPorItem = new Map<string, { nota: number; role: string | null }[]>();
       (avals ?? []).forEach((a: any) => {
         if (a.nota == null) return;
-        if ((a.avaliador_role ?? 'conselheiro') === 'admin') return;
         if ((a.avaliador_filial ?? 'Matriz') === a.filial_avaliada) return;
         if (!avalsPorItem.has(a.item_id)) avalsPorItem.set(a.item_id, []);
-        avalsPorItem.get(a.item_id)!.push(Number(a.nota));
+        avalsPorItem.get(a.item_id)!.push({ nota: Number(a.nota), role: a.avaliador_role });
       });
 
       // Agrupa participantes pela mesma pessoa (funcionario_id quando existe,
@@ -484,8 +488,9 @@ function VisaoCicloPorParticipante({ competicao, ehAdmin }: { competicao: Compet
         const chave = p.funcionario_id ?? `${p.nome_snapshot}::${p.filial}`;
         const tarefa = tarefaById.get(p.tarefa_id);
         const desligado = !!(p.funcionario_id && deslSet.has(p.funcionario_id));
-        const notas = desligado ? [] : (avalsPorItem.get(p.id) ?? []);
-        const media = notas.length > 0 ? notas.reduce((s, n) => s + n, 0) / notas.length : null;
+        const doItem = desligado ? [] : (avalsPorItem.get(p.id) ?? []);
+        const notas = doItem.map(n => n.nota);
+        const media = mediaPonderada(doItem);
         const entrada = porPessoa.get(chave) ?? {
           chave, nome: p.nome_snapshot, filial: p.filial as FilialOp,
           tarefas: [], totalNotas: 0, mediaGeral: null, avaliaveis: 0, desligado,
