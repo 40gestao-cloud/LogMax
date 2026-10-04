@@ -176,7 +176,7 @@ Para cada tabela: quem grava (tela, RPC, gatilho, servidor), quem lê, os gatilh
 ## aula_grupo_apoio_config
 
 - **Telas que gravam:** [Modo Aula](telas.md#s-aula-modo)
-- **RPCs que gravam:** —
+- **RPCs que gravam:** [encerrar_aulas_ociosas](funcoes.md#f-encerrar_aulas_ociosas)
 - **Telas que leem:** [Modo Aula](telas.md#s-aula-modo)
 - **RPCs que leem:** [auth_aula_setores](funcoes.md#f-auth_aula_setores)
 - **Aponta para:** atualizado_por → [user_profiles](tabelas.md#t-user_profiles)

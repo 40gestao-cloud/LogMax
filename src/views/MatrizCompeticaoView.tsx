@@ -774,6 +774,13 @@ export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToa
       pont:  placar.por_filial?.[f]?.pontualidade ?? null,
     })));
   }, [placar]);
+  const algumaAvaliada = podio.some(p => p.n > 0);
+  // Sem nenhuma avaliada, ordem fixa das filiais: a ordem do ranking ali
+  // seria só o desempate, e a posição na tela já é lida como classificação.
+  const podioExibido = useMemo(
+    () => algumaAvaliada ? podio : OP_FILIAIS.map(f => podio.find(p => p.filial === f)!).filter(Boolean),
+    [podio, algumaAvaliada],
+  );
 
   if (!podeAcessar) {
     return (
@@ -1014,60 +1021,54 @@ export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToa
                   </div>
                 </div>
 
-                {/* Composição do placar — sinaliza se os eixos subjetivos da
-                    Avaliação de Filial entraram (gate: as 3 filiais precisam
-                    ter ≥1 avaliação matriz_filial no período). */}
-                <div className="mb-3 text-[10px] font-bold uppercase tracking-widest flex items-center gap-2">
-                  <span className="text-gray-500">Fontes:</span>
-                  <span className="px-2 py-0.5 rounded-full bg-white/5 border border-white/10 text-gray-300">
-                    Tarefas da Matriz
-                  </span>
-                  <span className={`px-2 py-0.5 rounded-full border ${
-                    placar.inclui_eixos_conselho
-                      ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300'
-                      : 'bg-white/5 border-white/10 text-gray-500 line-through'
-                  }`} title={placar.inclui_eixos_conselho
-                    ? 'Notas dos eixos subjetivos entraram na média'
-                    : 'Alguma filial ainda não recebeu avaliação de filial no período — fonte ignorada'}>
-                    Avaliação de Filial (eixos subjetivos)
-                  </span>
-                  {/* Frequência não é voto: sai do ponto do período (migr. 349). */}
-                  <span
-                    className="px-2 py-0.5 rounded-full border bg-emerald-500/10 border-emerald-500/30 text-emerald-300"
-                    title="Presenças e faltas do ponto eletrônico no período da competição. Justificado fica fora da conta."
-                  >
-                    Frequência do ponto ({Math.round((placar.peso_frequencia ?? 0.2) * 100)}%)
-                  </span>
-                  {/* (617) Pontualidade também não é voto: sai do vencimento
-                      das parcelas de empréstimo pagas no período. */}
-                  <span
-                    className="px-2 py-0.5 rounded-full border bg-emerald-500/10 border-emerald-500/30 text-emerald-300"
-                    title="Parcelas de empréstimo vencidas no período, quitadas até a data de vencimento. Unidade sem parcela vencida fica fora do eixo."
-                  >
-                    Pontualidade no pagamento ({Math.round((placar.peso_pontualidade ?? 0.1) * 100)}%)
-                  </span>
-                </div>
+                {/* Composição da nota — as três parcelas com o peso de cada
+                    uma, na mesma régua. Antes eram selos soltos: o conselho
+                    não dizia quanto valia, e frequência/pontualidade ficavam
+                    verdes mesmo sem ter entrado na conta de filial nenhuma. */}
+                <ComposicaoNota placar={placar} podio={podio} />
 
-                {/* Pódio — média das notas por filial (× 10, escala 0-100) */}
+                {/* Pódio. Sem nota do conselho em filial nenhuma, a ordem
+                    cairia no desempate (frequência) e a tela diria "1º" de
+                    quem ninguém avaliou — então não há posição até a
+                    primeira nota. */}
+                {!algumaAvaliada && (
+                  <p className="text-xs text-gray-400 mb-3">
+                    <span className="font-bold text-gray-200">Pódio ainda não formado.</span>{' '}
+                    Nenhuma filial recebeu nota de tarefa do conselho — a posição só aparece a partir da primeira nota.
+                    Abaixo, o que já está medido.
+                  </p>
+                )}
                 <div className="grid grid-cols-3 gap-3">
-                  {podio.map((p, idx) => (
-                    <div key={p.filial}
-                      className={`neu-pressed rounded-2xl p-4 text-center ${idx === 0 && p.n > 0 ? 'ring-1 ring-emerald-500/40' : ''}`}>
-                      <div className="flex items-center justify-center gap-1 mb-1">
-                        {idx === 0 && p.n > 0 && <Award size={14} className="text-emerald-400" />}
-                        <span className="text-[9px] uppercase tracking-widest text-gray-500 font-bold">
-                          {['1º','2º','3º'][idx]}
-                        </span>
+                  {podioExibido.map((p, idx) => {
+                    const lider = idx === 0 && p.n > 0;
+                    return (
+                      <div key={p.filial}
+                        className={`neu-pressed rounded-2xl p-4 text-center ${lider ? 'ring-1 ring-emerald-500/40' : ''}`}>
+                        <div className="flex items-center justify-center gap-1 mb-1 h-4">
+                          {lider && <Award size={14} className="text-emerald-400" />}
+                          {p.n > 0 && (
+                            <span className="text-[9px] uppercase tracking-widest text-gray-500 font-bold">
+                              {['1º','2º','3º'][idx]}
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex justify-center"><FilialBadge filial={p.filial} /></div>
+                        <p className={`text-2xl font-black font-mono tabular-nums mt-1 ${lider ? 'text-emerald-400' : p.n === 0 ? 'text-gray-600' : 'text-gray-200'}`}>
+                          {p.n === 0 ? '—' : (p.media / 10).toFixed(1)}
+                        </p>
+                        <p className="text-[9px] text-gray-500 uppercase tracking-widest mt-0.5">
+                          {p.n === 0 ? 'aguardando nota do conselho' : `nota final (${p.n} nota${p.n === 1 ? '' : 's'})`}
+                        </p>
+                        {p.n === 0 && (p.freq?.taxa != null || p.pont?.taxa != null) && (
+                          <p className="text-[10px] text-gray-400 tabular-nums mt-2">
+                            {p.freq?.taxa != null && <>Frequência {(p.freq.taxa * 100).toFixed(0)}%</>}
+                            {p.freq?.taxa != null && p.pont?.taxa != null && ' · '}
+                            {p.pont?.taxa != null && <>Pontualidade {(p.pont.taxa * 100).toFixed(0)}%</>}
+                          </p>
+                        )}
                       </div>
-                      <div className="flex justify-center"><FilialBadge filial={p.filial} /></div>
-                      <p className={`text-2xl font-black font-mono tabular-nums mt-1 ${idx === 0 && p.n > 0 ? 'text-emerald-400' : 'text-gray-200'}`}>
-                        {p.n === 0 ? '—' : (p.media / 10).toFixed(1)}
-                      </p>
-                      <p className="text-[9px] text-gray-500 uppercase tracking-widest mt-0.5">
-                        {p.n === 0 ? 'sem notas' : `nota média (${p.n} nota${p.n === 1 ? '' : 's'})`}
-                      </p>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
 
@@ -1761,8 +1762,11 @@ export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToa
                 <div />
               </div>
 
-              <p className="text-[10px] text-gray-500 mb-4">
-                Ranking será a média das notas 0-10 do conselho nas Tarefas da Matriz, por filial do participante.
+              <p className="text-[10px] text-gray-500 mb-4 leading-relaxed">
+                A nota final de cada filial (0-10) junta três parcelas: o julgamento do conselho (70% — Tarefas da Matriz
+                e o eixo Planejamento e Organização da Avaliação de Filial), a frequência do ponto no período (20%) e a
+                pontualidade no pagamento das parcelas de empréstimo (10%). Parcela sem dado no período não entra, e o peso
+                dela volta para o conselho.
               </p>
               <div className="mt-5 flex items-center justify-end">
                 <NeuButtonAccent onClick={criar} disabled={salvando || !form.nome.trim()} variant="">
@@ -1981,5 +1985,101 @@ export function MatrizCompeticaoView({ showToast, profile, navigate }: { showToa
         </>
       )}
     </motion.div>
+  );
+}
+
+// Composição da nota final: uma barra com as três parcelas no tamanho do
+// peso, e embaixo o que entrou de fato. "Entrou" é por filial — a parcela
+// objetiva sem dado numa unidade devolve o peso ao conselho só dela —, então
+// aqui a parcela acende se entrou em ao menos uma e diz em quantas.
+type LinhaPodio = {
+  filial: string;
+  n: number;
+  freq: { entrou: boolean; taxa: number | null } | null;
+  pont: { entrou: boolean; taxa: number | null } | null;
+};
+
+function ComposicaoNota({ placar, podio }: { placar: Placar; podio: LinhaPodio[] }) {
+  const pesoFreq = placar.peso_frequencia ?? 0.2;
+  const pesoPont = placar.peso_pontualidade ?? 0.1;
+  const pesoCons = Math.max(0, 1 - pesoFreq - pesoPont);
+  const pct = (p: number) => Math.round(p * 100);
+
+  const nCons = podio.filter(p => p.n > 0).length;
+  const nFreq = podio.filter(p => p.freq?.entrou).length;
+  const nPont = podio.filter(p => p.pont?.entrou).length;
+  // Medida mas fora da conta: o banco só mistura a parcela objetiva em
+  // filial que já tem nota do conselho (`entrou = n > 0 AND taxa IS NOT
+  // NULL`). Sem isto a tela diria "sem ponto" com 95% na tabela logo abaixo.
+  const medFreq = podio.filter(p => p.freq?.taxa != null).length;
+  const medPont = podio.filter(p => p.pont?.taxa != null).length;
+  const total = podio.length || 3;
+
+  const situacao = (n: number, medidas: number, vazio: string) =>
+    n > 0
+      ? (n === total ? 'entrou nas 3 filiais' : `entrou em ${n} de ${total} filiais`)
+      : medidas > 0 ? 'já medida — entra junto com a nota do conselho' : vazio;
+
+  const partes = [
+    {
+      chave: 'conselho', rotulo: 'Conselho', peso: pesoCons, n: nCons, medidas: 0,
+      barra: 'bg-amber-400', ponto: 'bg-amber-400',
+      detalhe: (
+        <>
+          Tarefas da Matriz
+          {' + '}
+          <span className={placar.inclui_eixos_conselho ? '' : 'line-through'}
+            title={placar.inclui_eixos_conselho
+              ? 'O eixo entra como um item por filial, ao lado dos participantes.'
+              : 'Alguma filial ainda não recebeu Avaliação de Filial no período — o eixo está fora da conta.'}>
+            Planejamento e Organização
+          </span>
+        </>
+      ),
+      vazio: 'sem nota ainda',
+    },
+    {
+      chave: 'freq', rotulo: 'Frequência do ponto', peso: pesoFreq, n: nFreq, medidas: medFreq,
+      barra: 'bg-sky-500', ponto: 'bg-sky-500',
+      detalhe: <>Presença no período; justificado fica fora</>,
+      vazio: 'sem ponto no período',
+    },
+    {
+      chave: 'pont', rotulo: 'Pontualidade no pagamento', peso: pesoPont, n: nPont, medidas: medPont,
+      barra: 'bg-violet-500', ponto: 'bg-violet-500',
+      detalhe: <>Parcelas de empréstimo pagas até o vencimento</>,
+      vazio: 'nenhuma parcela venceu',
+    },
+  ];
+
+  return (
+    <div className="mb-5 flex flex-col gap-2">
+      <div className="flex items-baseline justify-between gap-2">
+        <span className="text-[10px] uppercase tracking-widest font-bold text-gray-500">Como a nota final é composta</span>
+        <span className="text-[10px] text-gray-600">parcela sem dado devolve o peso ao conselho daquela filial</span>
+      </div>
+      <div className="flex h-2.5 rounded-full overflow-hidden gap-0.5" role="img"
+        aria-label={partes.map(p => `${p.rotulo} ${pct(p.peso)}%`).join(', ')}>
+        {partes.map(p => (
+          <div key={p.chave} className={`${p.barra} ${p.n === 0 ? 'opacity-25' : ''}`}
+            style={{ width: `${pct(p.peso)}%` }} />
+        ))}
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-x-4 gap-y-2">
+        {partes.map(p => (
+          <div key={p.chave} className={`flex flex-col gap-0.5 ${p.n === 0 ? 'opacity-60' : ''}`}>
+            <span className="flex items-center gap-1.5 text-xs">
+              <span className={`w-2 h-2 rounded-full shrink-0 ${p.ponto}`} />
+              <span className="font-bold text-gray-200">{p.rotulo}</span>
+              <span className="font-mono font-black tabular-nums text-gray-100">{pct(p.peso)}%</span>
+            </span>
+            <span className="text-[10px] text-gray-500 pl-3.5 leading-snug">{p.detalhe}</span>
+            <span className={`text-[10px] pl-3.5 font-bold ${p.n > 0 ? 'text-emerald-400' : p.medidas > 0 ? 'text-sky-300' : 'text-gray-500'}`}>
+              {situacao(p.n, p.medidas, p.vazio)}
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
   );
 }

@@ -360,6 +360,8 @@ type LinhaParticipante = {
   // Zero aqui significa "ninguém podia ter avaliado ainda" — bem diferente
   // de "podia e não avaliou".
   avaliaveis: number;
+  // Desligado depois de escalado: as notas dele saíram do placar (364).
+  desligado: boolean;
 };
 
 const TAREFA_TIPOS_MATRIZ = [
@@ -447,21 +449,30 @@ function VisaoCicloPorParticipante({ competicao, ehAdmin }: { competicao: Compet
           .select('id, tarefa_id, nome_snapshot, filial, funcionario_id')
           .in('tarefa_id', tarefaIds)
           .eq('ativo', true),
-        // Notas de admin não entram — admin modera mas não pesa
-        // (mesma regra do placar em calcular_placar_competicao).
+        // Papel e vínculo CONGELADOS na nota (migr. 609), não o perfil de
+        // hoje — mesmas duas cláusulas do placar, da 611/612 e do export.
         supabase.from('avaliacoes_matriz')
-          .select('item_id, item_tipo, nota, avaliador:user_profiles!avaliador_id(role)')
+          .select('item_id, item_tipo, nota, filial_avaliada, avaliador_role, avaliador_filial')
           .eq('competicao_id', competicao.id)
           .in('item_tipo', TAREFA_TIPOS_MATRIZ)
           .eq('ativo', true),
       ]);
+
+      // Desligado sai do placar (migr. 364): as notas dele não pesam na
+      // filial, então aqui também não entram em média nenhuma.
+      const funcIds = (parts ?? []).map((p: any) => p.funcionario_id).filter(Boolean);
+      const { data: desl } = funcIds.length > 0
+        ? await supabase.from('funcionarios').select('id').in('id', funcIds).eq('status', 'Desligado')
+        : { data: [] as any[] };
+      const deslSet = new Set((desl ?? []).map((d: any) => d.id));
 
       const tarefaById = new Map<string, any>();
       tsArr.forEach((t: any) => tarefaById.set(t.id, t));
       const avalsPorItem = new Map<string, number[]>();
       (avals ?? []).forEach((a: any) => {
         if (a.nota == null) return;
-        if (a.avaliador?.role === 'admin') return;
+        if ((a.avaliador_role ?? 'conselheiro') === 'admin') return;
+        if ((a.avaliador_filial ?? 'Matriz') === a.filial_avaliada) return;
         if (!avalsPorItem.has(a.item_id)) avalsPorItem.set(a.item_id, []);
         avalsPorItem.get(a.item_id)!.push(Number(a.nota));
       });
@@ -472,11 +483,12 @@ function VisaoCicloPorParticipante({ competicao, ehAdmin }: { competicao: Compet
       (parts ?? []).forEach((p: any) => {
         const chave = p.funcionario_id ?? `${p.nome_snapshot}::${p.filial}`;
         const tarefa = tarefaById.get(p.tarefa_id);
-        const notas = avalsPorItem.get(p.id) ?? [];
+        const desligado = !!(p.funcionario_id && deslSet.has(p.funcionario_id));
+        const notas = desligado ? [] : (avalsPorItem.get(p.id) ?? []);
         const media = notas.length > 0 ? notas.reduce((s, n) => s + n, 0) / notas.length : null;
         const entrada = porPessoa.get(chave) ?? {
           chave, nome: p.nome_snapshot, filial: p.filial as FilialOp,
-          tarefas: [], totalNotas: 0, mediaGeral: null, avaliaveis: 0,
+          tarefas: [], totalNotas: 0, mediaGeral: null, avaliaveis: 0, desligado,
         };
         if (tarefa?.status !== 'rascunho') entrada.avaliaveis += 1;
         entrada.tarefas.push({
@@ -489,12 +501,16 @@ function VisaoCicloPorParticipante({ competicao, ehAdmin }: { competicao: Compet
         porPessoa.set(chave, entrada);
       });
 
-      // Média geral da pessoa = média das notas planas de todas as tarefas dela.
+      // Média geral da pessoa = média das médias de cada tarefa, a régua do
+      // placar (375): cada participação é um item, e o item vira uma nota só
+      // antes de entrar na conta. Somar as notas soltas dava mais peso à
+      // tarefa em que mais conselheiros votaram — e a mesma pessoa aparecia
+      // aqui com um número e entrava no pódio com outro.
       const arr = Array.from(porPessoa.values()).map(p => {
-        const todas = p.tarefas.flatMap(t => t.notas);
+        const medias = p.tarefas.map(t => t.media).filter((m): m is number => m !== null);
         return {
           ...p,
-          mediaGeral: todas.length > 0 ? todas.reduce((s, n) => s + n, 0) / todas.length : null,
+          mediaGeral: medias.length > 0 ? medias.reduce((s, n) => s + n, 0) / medias.length : null,
         };
       }).sort((a, b) => (b.mediaGeral ?? -1) - (a.mediaGeral ?? -1) || a.nome.localeCompare(b.nome));
 
@@ -539,13 +555,17 @@ function VisaoCicloPorParticipante({ competicao, ehAdmin }: { competicao: Compet
     // dado nota, então nem "ainda sem nota" cabe — isso só aparece pro
     // admin, que é quem enxerga tarefa não liberada.
     const naoLiberados: LinhaParticipante[] = [];
+    // Também fora: desligado. Sem isto ele cairia em "ainda sem nota", como
+    // se o conselho devesse uma avaliação que a RPC nem aceita mais.
+    const desligados: LinhaParticipante[] = [];
     linhas.forEach(l => {
-      if (l.avaliaveis === 0) naoLiberados.push(l);
+      if (l.desligado) desligados.push(l);
+      else if (l.avaliaveis === 0) naoLiberados.push(l);
       else if (l.mediaGeral === null) semNota.push(l);
       else if (l.mediaGeral >= corte) desenvolveram.push(l);
       else naoDesenvolveram.push(l);
     });
-    return { desenvolveram, naoDesenvolveram, semNota, naoLiberados };
+    return { desenvolveram, naoDesenvolveram, semNota, naoLiberados, desligados };
   }, [linhas, corte]);
 
   return (
@@ -560,7 +580,8 @@ function VisaoCicloPorParticipante({ competicao, ehAdmin }: { competicao: Compet
         )}
       </div>
       <p className="text-[11px] text-gray-500 mb-4">
-        Cada linha é uma pessoa avaliada nesta competição — média das notas do conselho em todas as Tarefas da Matriz em que ela participou.
+        Cada linha é uma pessoa avaliada nesta competição. A média dela é a média das médias de cada tarefa em que participou —
+        a mesma régua do placar, em que cada participação vira uma nota só antes de entrar na conta da filial.
         {!ehAdmin && ' Entram só as tarefas já encerradas: enquanto uma tarefa está em avaliação, as notas ficam seladas.'}
       </p>
 
@@ -624,6 +645,12 @@ function VisaoCicloPorParticipante({ competicao, ehAdmin }: { competicao: Compet
                 em tarefa ainda não liberada para notas — ninguém poderia ter avaliado.
               </p>
             )}
+            {grupos.desligados.length > 0 && (
+              <p className="text-[10px] text-gray-500">
+                Fora do corte: {grupos.desligados.length} pessoa{grupos.desligados.length === 1 ? '' : 's'} desligada{grupos.desligados.length === 1 ? '' : 's'} —
+                as notas saíram do placar e não entram nas médias desta tela.
+              </p>
+            )}
 
             <p className="text-[10px] text-gray-500">
               Leitura da Matriz, não aparece para o aluno. "Ainda sem nota" não é baixo desempenho: é quem o
@@ -667,6 +694,12 @@ function VisaoCicloPorParticipante({ competicao, ehAdmin }: { competicao: Compet
                               <td className="py-2 px-2 text-gray-200 font-semibold flex items-center gap-1.5">
                                 <Users size={11} className="text-gray-500 shrink-0" />
                                 {l.nome}
+                                {l.desligado && (
+                                  <span className="text-[9px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded bg-red-600 text-white"
+                                    title="Desligado — as notas saíram do placar (migr. 364)">
+                                    Desligado
+                                  </span>
+                                )}
                               </td>
                               <td className="py-2 px-2 text-right text-gray-400 tabular-nums">{l.tarefas.length}</td>
                               <td className="py-2 px-2 text-right text-gray-400 tabular-nums">{l.totalNotas}</td>

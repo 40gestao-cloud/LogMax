@@ -6041,6 +6041,7 @@
    "secdef": true,
    "grava": [
     "aula_config",
+    "aula_grupo_apoio_config",
     "aula_sessoes"
    ],
    "le": [

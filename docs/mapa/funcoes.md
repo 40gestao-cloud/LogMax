@@ -1931,7 +1931,7 @@ Para cada função: quem a chama (tela, servidor, outra função, gatilho), o qu
 
 - **Telas que chamam:** —
 - **Servidor (api/) chama:** `api/cron.ts`
-- **Grava:** [aula_config](tabelas.md#t-aula_config), [aula_sessoes](tabelas.md#t-aula_sessoes)
+- **Grava:** [aula_config](tabelas.md#t-aula_config), [aula_grupo_apoio_config](tabelas.md#t-aula_grupo_apoio_config), [aula_sessoes](tabelas.md#t-aula_sessoes)
 - **Ao gravar, acorda os gatilhos de:** [aula_config](tabelas.md#t-aula_config) ([aula_config_registrar_sessao](funcoes.md#f-aula_config_registrar_sessao))
 - **Lê:** [aula_sessoes](tabelas.md#t-aula_sessoes)
 
