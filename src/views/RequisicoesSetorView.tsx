@@ -26,6 +26,7 @@ import type { UserProfile } from '../hooks/useUserProfile';
 import { isConselheiro, hasAnySetor } from '../lib/rbac';
 import { useConfirm } from '../contexts/ConfirmContext';
 import { semelhancaDeItem } from '../lib/similaridadeItem';
+import { normNome } from '../lib/vinculoCatalogo';
 import { SelectBusca } from '../components/SelectBusca';
 import { opcaoProduto } from '../lib/opcoesSelect';
 
@@ -215,9 +216,14 @@ const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: 
       ehContratado(sv.natureza) && (sv.filial == null || sv.filial === filial)
       && (sv.status ?? 'Ativo') !== 'Inativo'),
     [servicosCat, filial]);
-  const noCatalogoParecidos = (texto: string, servico = false) => {
+  // Com marca digitada, produto de OUTRA marca não é o mesmo item (05/10):
+  // "Óleo de soja 900ml" Soya mandado para a Reposição do 028 Liza compraria
+  // a marca errada com o código certo.
+  const noCatalogoParecidos = (texto: string, servico = false, marca = '') => {
     if (String(texto ?? '').trim().length < 4) return [];
+    const m = normNome(marca);
     return (servico ? servicosContratados : catalogoAtivo)
+      .filter(p => servico || !m || !normNome(p.marca) || normNome(p.marca) === m)
       .map(p => ({ p, s: semelhancaDeItem(texto, p.nome) }))
       .filter(x => x.s !== 'nao')
       .sort((x, y) => (x.s === 'igual' ? 0 : 1) - (y.s === 'igual' ? 0 : 1))
@@ -1227,7 +1233,7 @@ const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: 
                     {/* Já está no catálogo? Ver `noCatalogoParecidos`. */}
                     {(() => {
                       const servico = row.unidade === 'SV';
-                      const parecidos = noCatalogoParecidos(row.item, servico);
+                      const parecidos = noCatalogoParecidos(row.item, servico, row.marca);
                       if (parecidos.length === 0) return null;
                       // Serviço com o nome já idêntico ao do catálogo está
                       // certo como está — Compras reconhece sozinho.

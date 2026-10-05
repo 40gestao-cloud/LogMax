@@ -27,6 +27,7 @@ import { useReservaTrabalho } from '../hooks/useReservaTrabalho';
 import type { FilialOp } from '../components/FilialSelector';
 import { useFilial } from '../contexts/FilialContext';
 import { pedirCadastroDaCotacao } from '../lib/cadastroDaCotacao';
+import { normNome, nomeComMarca, produtoConfere } from '../lib/vinculoCatalogo';
 import { SelectBusca, type SelectBuscaGrupo } from '../components/SelectBusca';
 
 // Status considerados "propostas vivas" para contagem de concorrentes.
@@ -1040,6 +1041,9 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode, onNavigate }: { s
   /** A requisição pediu serviço? A unidade SV é a declaração (src/lib/unidades.ts). */
   const pediuServico = (cot: any) =>
     String(cot?.req?.unidade ?? '').trim().toUpperCase() === 'SV';
+  /** A marca que está sendo comprada: a da proposta aprovada, senão a pedida. */
+  const marcaPedida = (cot: any) =>
+    String(cot?.marca ?? '').trim() || String(cot?.req?.marca ?? '').trim();
 
   // ── Prontas para pedido ────────────────────────────────────────────────
   // A fila que o SAP chama de requisições atribuídas (ME57) e o Protheus
@@ -1067,9 +1071,8 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode, onNavigate }: { s
   // Nome idêntico conta como fato: comparação sem acento, caixa, espaço e
   // pontuação ("5G- Samsung" = "5G - Samsung"), e só quando há UM produto com
   // esse nome — dois iguais são duplicata, e escolher um seria palpite de novo.
-  const normNome = (t: string) => String(t ?? '')
-    .normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
-    .replace(/[^a-z0-9]+/g, ' ').trim();
+  // Produto também confere a MARCA (05/10, `produtoConfere`): Óleo Liza e Óleo
+  // Soya com o mesmo texto de item caíam os dois no cadastro da Liza.
   type EstadoPronta = 'ligado' | 'sem_cadastro' | 'bloqueado';
   // Enquanto as leituras não chegam, "sem cadastro" e "sem pedido" são o
   // vazio falando — o painel espera para não piscar a linha errada.
@@ -1110,7 +1113,9 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode, onNavigate }: { s
           estado = alvo ? 'ligado' : 'bloqueado';
           if (!alvo) motivo = 'O serviço ligado a esta requisição foi inativado — reative-o em Cadastros > Serviços';
         } else {
-          const iguais = porNome(servico ? servicosOrdenados : produtosOrdenados, req.item ?? '');
+          const iguais = servico
+            ? porNome(servicosOrdenados, req.item ?? '')
+            : produtosOrdenados.filter((p: any) => produtoConfere(req.item, marcaPedida(cot), p));
           if (iguais.length === 1) {
             estado = 'ligado';
             alvo = iguais[0];
@@ -1172,7 +1177,8 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode, onNavigate }: { s
   const podeCadastrarDaFila = temAcessoCadastros && !!onNavigate;
   const cadastrarDaFila = (cot: any, servico: boolean) => {
     if (!onNavigate || !cot.requisicao_id) return;
-    pedirCadastroDaCotacao(servico ? 'servico' : 'produto', cot.requisicao_id, filial, String(cot.req?.item ?? ''));
+    pedirCadastroDaCotacao(servico ? 'servico' : 'produto', cot.requisicao_id, filial,
+      servico ? String(cot.req?.item ?? '') : nomeComMarca(cot.req?.item, marcaPedida(cot)));
     onNavigate(servico ? 'cadastros-serviços' : 'cadastros-produtos');
   };
 

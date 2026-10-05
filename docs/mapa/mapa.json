@@ -7351,6 +7351,7 @@
     "auth_pode_filial",
     "condicao_pagamento_dias",
     "nome_item_normalizado",
+    "vinculo_item_confere",
     "vinculo_item_parece"
    ]
   },
@@ -10163,6 +10164,15 @@
    ],
    "chama": [
     "auth_user_role"
+   ]
+  },
+  "vinculo_item_confere": {
+   "gatilho": false,
+   "secdef": false,
+   "grava": [],
+   "le": [],
+   "chama": [
+    "nome_item_normalizado"
    ]
   },
   "vinculo_item_parece": {

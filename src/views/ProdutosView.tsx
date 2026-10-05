@@ -53,6 +53,7 @@ import { SecaoPrecos } from '../components/produtos/SecaoPrecos';
 import { SecaoEtiqueta } from '../components/produtos/SecaoEtiqueta';
 import { SecaoImagens } from '../components/produtos/SecaoImagens';
 import { lerCadastroDaCotacao, esquecerCadastroDaCotacao } from '../lib/cadastroDaCotacao';
+import { nomeComMarca } from '../lib/vinculoCatalogo';
 
 /**
  * O custo vive em `produtos_custo`, tabela irmã com RLS própria (migração 262) —
@@ -325,8 +326,13 @@ const ProdutosViewInner = ({ showToast, filial, profile, onNavigate }: { showToa
         // Mesmo colapso de espaço em branco do grupo de cima: requisição colada
         // de planilha traz TAB entre o produto e a marca, e o TAB ia inteiro
         // para `produtos.nome`.
-        const desc = String(r.item ?? '').replace(/\s+/g, ' ').trim();
         const cot  = cotPorReq.get(r.id);
+        // Marca no nome (05/10): o catálogo não aceita dois produtos com o
+        // mesmo nome na unidade, então "Óleo de soja 900ml" Soya só cabe ao
+        // lado do Liza como "Óleo de soja 900ml Soya" — e é esse nome que o
+        // Gerar Pedido reconhece (`produtoConfere`).
+        const marcaReq = String(cot?.marca ?? '').trim() || String(r.marca ?? '').trim();
+        const desc = nomeComMarca(r.item, marcaReq);
         // `qtd` da requisição é sempre na unidade base, mesmo pedida em fardo
         // (migr. 589) — é o mesmo divisor que o pedido e a migr. 417 usam.
         const qtdReq   = Number(r.qtd ?? 0);
@@ -338,10 +344,10 @@ const ProdutosViewInner = ({ showToast, filial, profile, onNavigate }: { showToa
           qtd: Number(r.qtd ?? 0),
           unidade: r.unidade ?? '',
           cotada: !!cot,
-          // Migr. 526: só da cotação APROVADA — que é a única que `cotPorReq`
-          // guarda. Sugerir a marca de uma proposta reprovada seria pior que o
-          // texto livre que este campo tinha antes.
-          marca: String(cot?.marca ?? '').trim(),
+          // Migr. 526: a da cotação APROVADA — que é a única que `cotPorReq`
+          // guarda; sem ela, a que a requisição pediu (migr. 582). Proposta
+          // reprovada nunca entra.
+          marca: marcaReq,
           fornecedor: cot ? (fornecedoresList.find((f: any) => f.id === cot.fornecedor_id)?.nome ?? '') : '',
           fornecedor_id: cot?.fornecedor_id ?? '',
           custoPrevisto: qtdReq > 0 && totalCot > 0 ? totalCot / qtdReq : null,

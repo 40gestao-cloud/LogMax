@@ -2779,7 +2779,7 @@ Para cada função: quem a chama (tela, servidor, outra função, gatilho), o qu
 - **Grava:** [contas_pagar](tabelas.md#t-contas_pagar), [pedidos](tabelas.md#t-pedidos), [requisicoes](tabelas.md#t-requisicoes)
 - **Ao gravar, acorda os gatilhos de:** [contas_pagar](tabelas.md#t-contas_pagar) ([bloqueia_conta_pagar_estourado](funcoes.md#f-bloqueia_conta_pagar_estourado), [conta_com_dinheiro_nao_exclui](funcoes.md#f-conta_com_dinheiro_nao_exclui), [conta_pagar_avancar_folha_e_creditar](funcoes.md#f-conta_pagar_avancar_folha_e_creditar), [conta_pagar_avancar_rescisao](funcoes.md#f-conta_pagar_avancar_rescisao), [conta_pagar_exige_recebimento](funcoes.md#f-conta_pagar_exige_recebimento), [fn_conta_de_das_congela](funcoes.md#f-fn_conta_de_das_congela), [fn_conta_de_das_inativa](funcoes.md#f-fn_conta_de_das_inativa), [fn_conta_de_frete_congela](funcoes.md#f-fn_conta_de_frete_congela), [fn_conta_de_frete_inativa](funcoes.md#f-fn_conta_de_frete_inativa), [fn_conta_de_pedido_congela](funcoes.md#f-fn_conta_de_pedido_congela), [fn_conta_de_pedido_nao_exclui](funcoes.md#f-fn_conta_de_pedido_nao_exclui), [fn_conta_pagar_natureza](funcoes.md#f-fn_conta_pagar_natureza), [fn_parcela_emprestimo_segue_o_titulo](funcoes.md#f-fn_parcela_emprestimo_segue_o_titulo), [sync_saldo_caixa_pagar](funcoes.md#f-sync_saldo_caixa_pagar)); [pedidos](tabelas.md#t-pedidos) ([documento_sem_exclusao](funcoes.md#f-documento_sem_exclusao), [fn_pedido_avisa_estoque](funcoes.md#f-fn_pedido_avisa_estoque), [fn_pedido_congela_compra](funcoes.md#f-fn_pedido_congela_compra), [fn_pedido_marca_recebimento](funcoes.md#f-fn_pedido_marca_recebimento), [fn_pedido_transicao_valida](funcoes.md#f-fn_pedido_transicao_valida), [set_numero_documento](funcoes.md#f-set_numero_documento)); [requisicoes](tabelas.md#t-requisicoes) ([aprovacao_segue_a_requisicao](funcoes.md#f-aprovacao_segue_a_requisicao), [documento_sem_exclusao](funcoes.md#f-documento_sem_exclusao), [requisicao_decisao_guard](funcoes.md#f-requisicao_decisao_guard), [requisicao_embalagem_coerente](funcoes.md#f-requisicao_embalagem_coerente), [requisicao_marca_reenvio](funcoes.md#f-requisicao_marca_reenvio), [set_numero_requisicao](funcoes.md#f-set_numero_requisicao))
 - **Lê:** [centros_custo](tabelas.md#t-centros_custo), [cotacoes](tabelas.md#t-cotacoes), [fornecedores](tabelas.md#t-fornecedores), [pedidos](tabelas.md#t-pedidos), [produtos](tabelas.md#t-produtos), [requisicoes](tabelas.md#t-requisicoes), [servicos](tabelas.md#t-servicos)
-- **Chama:** [_assert_rpc](funcoes.md#f-_assert_rpc), [acre_today](funcoes.md#f-acre_today), [auth_pode_filial](funcoes.md#f-auth_pode_filial), [condicao_pagamento_dias](funcoes.md#f-condicao_pagamento_dias), [nome_item_normalizado](funcoes.md#f-nome_item_normalizado), [vinculo_item_parece](funcoes.md#f-vinculo_item_parece)
+- **Chama:** [_assert_rpc](funcoes.md#f-_assert_rpc), [acre_today](funcoes.md#f-acre_today), [auth_pode_filial](funcoes.md#f-auth_pode_filial), [condicao_pagamento_dias](funcoes.md#f-condicao_pagamento_dias), [nome_item_normalizado](funcoes.md#f-nome_item_normalizado), [vinculo_item_confere](funcoes.md#f-vinculo_item_confere), [vinculo_item_parece](funcoes.md#f-vinculo_item_parece)
 
 <a id="f-get_vitrine_publica"></a>
 ## get_vitrine_publica (RPC, SECURITY DEFINER)
@@ -3238,7 +3238,7 @@ Para cada função: quem a chama (tela, servidor, outra função, gatilho), o qu
 ## nome_item_normalizado (RPC)
 
 - **Telas que chamam:** —
-- **Chamada por outras funções:** [aplicar_taxonomia_padrao](funcoes.md#f-aplicar_taxonomia_padrao), [gerar_pedido_de_cotacao](funcoes.md#f-gerar_pedido_de_cotacao)
+- **Chamada por outras funções:** [aplicar_taxonomia_padrao](funcoes.md#f-aplicar_taxonomia_padrao), [gerar_pedido_de_cotacao](funcoes.md#f-gerar_pedido_de_cotacao), [vinculo_item_confere](funcoes.md#f-vinculo_item_confere)
 - **Grava:** —
 
 <a id="f-nomear_mandato"></a>
@@ -4507,6 +4507,14 @@ Para cada função: quem a chama (tela, servidor, outra função, gatilho), o qu
 - **Grava:** [aula_sessoes](tabelas.md#t-aula_sessoes)
 - **Lê:** [aula_sessoes](tabelas.md#t-aula_sessoes)
 - **Chama:** [auth_user_role](funcoes.md#f-auth_user_role)
+
+<a id="f-vinculo_item_confere"></a>
+## vinculo_item_confere (RPC)
+
+- **Telas que chamam:** —
+- **Chamada por outras funções:** [gerar_pedido_de_cotacao](funcoes.md#f-gerar_pedido_de_cotacao)
+- **Grava:** —
+- **Chama:** [nome_item_normalizado](funcoes.md#f-nome_item_normalizado)
 
 <a id="f-vinculo_item_parece"></a>
 ## vinculo_item_parece (RPC)
