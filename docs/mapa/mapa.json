@@ -6922,6 +6922,20 @@
     "ean13_valido"
    ]
   },
+  "fn_produto_marca_imutavel_com_uso": {
+   "gatilho": true,
+   "secdef": true,
+   "grava": [],
+   "le": [
+    "movimentacoes_estoque",
+    "pedidos"
+   ],
+   "chama": [
+    "auth_is_service_role",
+    "eh_perfil_admin",
+    "nome_item_normalizado"
+   ]
+  },
   "fn_produto_publicavel": {
    "gatilho": true,
    "secdef": false,
@@ -10145,12 +10159,14 @@
     "requisicoes"
    ],
    "le": [
+    "cotacoes",
     "produtos",
     "requisicoes"
    ],
    "chama": [
     "_assert_rpc",
-    "auth_pode_filial"
+    "auth_pode_filial",
+    "nome_item_normalizado"
    ]
   },
   "vincular_sessao_aula": {
@@ -10598,6 +10614,7 @@
    "trg_produto_com_documento_aberto_nao_sai:fn_produto_com_documento_aberto_nao_sai",
    "trg_produto_ean_valido:fn_produto_ean_valido",
    "trg_produto_loja_online_guard:produto_loja_online_guard",
+   "trg_produto_marca_imutavel_com_uso:fn_produto_marca_imutavel_com_uso",
    "trg_produto_preco_abaixo_do_custo:produto_preco_nao_fica_abaixo_do_custo",
    "trg_produto_publicavel:fn_produto_publicavel",
    "trg_produto_status_segue_ativo:fn_produto_status_segue_ativo",

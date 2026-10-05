@@ -53,7 +53,7 @@ import { SecaoPrecos } from '../components/produtos/SecaoPrecos';
 import { SecaoEtiqueta } from '../components/produtos/SecaoEtiqueta';
 import { SecaoImagens } from '../components/produtos/SecaoImagens';
 import { lerCadastroDaCotacao, esquecerCadastroDaCotacao } from '../lib/cadastroDaCotacao';
-import { nomeComMarca } from '../lib/vinculoCatalogo';
+import { nomeComMarca, marcaConfere } from '../lib/vinculoCatalogo';
 
 /**
  * O custo vive em `produtos_custo`, tabela irmã com RLS própria (migração 262) —
@@ -1441,6 +1441,13 @@ const ProdutosViewInner = ({ showToast, filial, profile, onNavigate }: { showToa
       ee.origem_compra = modoOrigem === 'com'
         ? 'Escolha a requisição que este cadastro atende.'
         : 'Escolha "Cadastro com requisição" ou "Cadastro sem requisição".';
+    }
+    // A requisição pediu uma marca: o cadastro que a atende é dessa marca
+    // (05/10). Trocar aqui faria a compra da Soya entrar num produto Liza — e o
+    // banco recusaria o vínculo DEPOIS de o produto já estar gravado.
+    if (reqVinculo?.marca && !marcaConfere(reqVinculo.marca, { nome: form.nome, marca: extras.marca })) {
+      ee.marca = `A requisição ${reqVinculo.numero} pediu a marca "${reqVinculo.marca}". `
+        + 'Se a marca é outra, a requisição tem de ser corrigida antes — devolva-a em Compras > Requisições.';
     }
 
     // EAN só entra se for EAN. Dígito verificador errado não é "quase certo":

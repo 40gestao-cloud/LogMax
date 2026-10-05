@@ -30,6 +30,20 @@ export function nomeComMarca(item: unknown, marca: unknown): string {
   return n.includes(` ${normNome(m)} `) ? nome : `${nome} ${m}`;
 }
 
+/**
+ * O produto é da marca pedida? Sem marca pedida, qualquer uma serve. Com
+ * marca, pela coluna `marca` ou, com a coluna vazia, pelo nome. Espelho do
+ * teste de marca de `vincular_produto_requisicao` (migr. 677).
+ */
+export function marcaConfere(
+  marca: unknown, produto: { nome?: unknown; marca?: unknown },
+): boolean {
+  const m  = normNome(marca);
+  const pm = normNome(produto.marca);
+  if (!m || pm === m) return true;
+  return !pm && ` ${normNome(produto.nome)} `.includes(` ${m} `);
+}
+
 /** O produto do catálogo atende a requisição de `item` na `marca` pedida? */
 export function produtoConfere(
   item: unknown, marca: unknown,
