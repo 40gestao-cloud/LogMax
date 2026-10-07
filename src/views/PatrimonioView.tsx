@@ -9,6 +9,8 @@ import { LoadingSpinner, EmptyState, ExportButton, FilialBadge, StatusBadge, Pag
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import { exportToPDF, exportToExcel, formatBRL } from '../lib/viewUtils';
 import { ModalVenderBem } from '../components/MontagemFinanceiro';
+import { useUserProfile } from '../hooks/useUserProfile';
+import { hasAnySetor } from '../lib/rbac';
 
 const fmtBRL = (v: number) => `R$ ${formatBRL(v)}`;
 
@@ -34,7 +36,12 @@ const valorContabilAtual = (p: any): number | null => {
   if (!dataAquisicao) return null;
   const fim = p.patrimonio_baixado_em ? new Date(p.patrimonio_baixado_em) : new Date();
   const dias = Math.max(0, (fim.getTime() - dataAquisicao.getTime()) / 86400000);
-  const fracaoRestante = Math.max(0, 1 - dias / (vidaMeses * 30));
+  // Migr. 678: a vida útil tem os dias reais do calendário (mesma data N meses
+  // depois), não meses × 30 — que deixava o bem depreciar ~101,4%.
+  const fimVida = new Date(dataAquisicao);
+  fimVida.setMonth(fimVida.getMonth() + vidaMeses);
+  const diasVida = Math.max(1, (fimVida.getTime() - dataAquisicao.getTime()) / 86400000);
+  const fracaoRestante = Math.max(0, 1 - dias / diasVida);
   return Math.round(aquisicao * fracaoRestante * 100) / 100;
 };
 
@@ -80,6 +87,10 @@ const PatrimonioViewInner = ({ filial, showToast }: { filial: FilialOp; showToas
   // Baixa sem venda (quebrou, obsoleto, doado). Venda tem gesto próprio desde
   // a migr. 634 — `vender_patrimonio` baixa E lança Contas a Receber; o campo
   // "valor de venda" aqui só registrava o número, sem dinheiro a entrar.
+  // `dar_baixa_patrimonio` exige Financeiro ou Logística (admin/CEO/conselheiro
+  // passam): sem isso o botão aparecia para todos e falhava no clique.
+  const { profile } = useUserProfile();
+  const podeBaixar = hasAnySetor(profile, 'financeiro', 'logistica');
   const [baixaItem, setBaixaItem]           = useState<any | null>(null);
   const [baixaMotivo, setBaixaMotivo]       = useState('');
   const [baixando, setBaixando]             = useState(false);
@@ -201,13 +212,15 @@ const PatrimonioViewInner = ({ filial, showToast }: { filial: FilialOp; showToas
                       <td className="py-3 px-4 text-right">
                         {!baixado && (
                           <span className="inline-flex items-center gap-1.5">
-                            <button onClick={() => setVendendo({ id: p.id, nome: p.nome, filial: p.filial, custo: p.preco_custo })}
+                            <button onClick={() => setVendendo({ id: p.id, nome: p.nome, filial: p.filial, custo: p.preco_custo, estoque: Number(p.estoque ?? 1) })}
                               className="btn-solido btn-solido--roxo" title="Vender e lançar em Contas a Receber">
                               Vender
                             </button>
-                            <button onClick={() => abrirBaixa(p)} className="btn-solido btn-solido--preto" title="Baixar sem venda (descarte)">
-                              Baixar
-                            </button>
+                            {podeBaixar && (
+                              <button onClick={() => abrirBaixa(p)} className="btn-solido btn-solido--preto" title="Baixar sem venda (descarte)">
+                                Baixar
+                              </button>
+                            )}
                           </span>
                         )}
                       </td>

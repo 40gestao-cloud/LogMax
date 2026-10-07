@@ -158,8 +158,8 @@ export function ModalLancarInvestimento({ item, onClose, onLancado, showToast }:
         </label>
       )}
       <CondicaoPagamento total={total} cond={cond} setCond={setCond} repete={aluguel} />
-      {item.categoria === 'equipamento' && (
-        <p className="text-[11px] text-gray-500">Vira bem em Patrimônio pelo valor total.</p>
+      {(item.categoria === 'equipamento' || (item.categoria === 'outro' && natureza === 'imobilizado')) && (
+        <p className="text-[11px] text-gray-500">Vira bem em Patrimônio pelo valor total e passa a depreciar no DRE.</p>
       )}
       <div className="flex justify-end">
         <button onClick={lancar} disabled={salvando || !cond.primeiro || total <= 0} className="btn-solido btn-solido--dourado">
@@ -172,10 +172,18 @@ export function ModalLancarInvestimento({ item, onClose, onLancado, showToast }:
 
 // ── Vender um bem: baixa + Contas a Receber ─────────────────────────────
 export function ModalVenderBem({ bem, onClose, onVendido, showToast }: {
-  bem: { id: string; nome: string; filial?: string | null; custo?: number | null };
+  bem: { id: string; nome: string; filial?: string | null; custo?: number | null; estoque?: number | null };
   onClose: () => void; onVendido: () => void; showToast: any;
 }) {
   const [valor, setValor] = useState('');
+  // Lote com mais de uma unidade pode ser vendido em parte (migr. 678): a parte
+  // vendida vira um bem próprio com o custo proporcional, o resto segue no lote.
+  const lote = Math.max(1, Math.floor(Number(bem.estoque ?? 1)));
+  const [qtd, setQtd] = useState(String(lote));
+  const qtdRaw = parseInt(qtd || '0', 10) || 0;
+  const qtdNum = qtdRaw >= 1 && qtdRaw <= lote ? qtdRaw : 0;
+  const parcial = qtdNum > 0 && qtdNum < lote;
+  const custoParte = bem.custo != null ? Math.round(Number(bem.custo) * qtdNum / lote * 100) / 100 : null;
   const [cond, setCond] = useState<Condicao>({ parcelado: false, parcelas: 1, primeiro: todayBR(), intervalo: 30 });
   const [clienteId, setClienteId] = useState('');
   const [clientes, setClientes] = useState<{ id: string; nome: string }[]>([]);
@@ -190,9 +198,12 @@ export function ModalVenderBem({ bem, onClose, onVendido, showToast }: {
   }, [bem.filial]);
 
   const vender = async () => {
-    if (!supabase || total <= 0 || !cond.primeiro) return;
+    if (!supabase || total <= 0 || !cond.primeiro || qtdNum < 1) return;
     setSalvando(true);
     const { error } = await supabase.rpc('vender_patrimonio', {
+      // Só manda a quantidade quando é parte do lote: a venda inteira segue
+      // funcionando mesmo onde a migr. 678 ainda não foi aplicada.
+      ...(parcial ? { p_quantidade: qtdNum } : {}),
       p_produto_id: bem.id,
       p_valor: total,
       p_primeiro_vencimento: cond.primeiro,
@@ -203,7 +214,9 @@ export function ModalVenderBem({ bem, onClose, onVendido, showToast }: {
     });
     setSalvando(false);
     if (error) { showToast(error.message, 'error', true); return; }
-    showToast(`${bem.nome} vendido — lançado em Contas a Receber.`, 'success', true);
+    showToast(parcial
+      ? `${qtdNum} de ${lote} un. de ${bem.nome} vendidas — lançado em Contas a Receber.`
+      : `${bem.nome} vendido — lançado em Contas a Receber.`, 'success', true);
     onVendido();
     onClose();
   };
@@ -217,10 +230,19 @@ export function ModalVenderBem({ bem, onClose, onVendido, showToast }: {
             onChange={e => setValor(formatBRL(e.target.value))} onKeyDown={handleMoneyKeyDown} autoFocus />
         </label>
         <div className="flex flex-col gap-1">
-          <span className={rotulo}>Custo de aquisição</span>
-          <span className="py-2 text-sm font-bold text-gray-400 tabular-nums">{bem.custo != null ? brl(Number(bem.custo)) : '—'}</span>
+          <span className={rotulo}>{parcial ? `Custo de ${qtdNum} un.` : 'Custo de aquisição'}</span>
+          <span className="py-2 text-sm font-bold text-gray-400 tabular-nums">{custoParte != null ? brl(custoParte) : '—'}</span>
         </div>
       </div>
+      {lote > 1 && (
+        <label className="flex flex-col gap-1">
+          <span className={rotulo}>Quantidade vendida (lote de {lote} un.)</span>
+          <input className={campo} inputMode="numeric" value={qtd}
+            onChange={e => setQtd(e.target.value.replace(/\D/g, ''))} />
+          {parcial && <span className="text-[11px] text-gray-500">Venda parcial: {qtdNum} un. saem do Patrimônio; {lote - qtdNum} un. seguem no lote, depreciando.</span>}
+          {qtdNum < 1 ? <span className="text-[11px] text-red-400">Informe de 1 a {lote}.</span> : null}
+        </label>
+      )}
       <label className="flex flex-col gap-1">
         <span className={rotulo}>Comprador</span>
         <SelectBusca
@@ -234,7 +256,7 @@ export function ModalVenderBem({ bem, onClose, onVendido, showToast }: {
       {total > 0 && <CondicaoPagamento total={total} cond={cond} setCond={setCond} />}
       <p className="text-[11px] text-gray-500">O bem sai do Patrimônio; o ganho ou a perda entra no DRE do mês.</p>
       <div className="flex justify-end">
-        <button onClick={vender} disabled={salvando || total <= 0 || !cond.primeiro} className="btn-solido btn-solido--roxo">
+        <button onClick={vender} disabled={salvando || total <= 0 || !cond.primeiro || qtdNum < 1} className="btn-solido btn-solido--roxo">
           {salvando ? <Loader2 size={13} className="animate-spin" /> : <HandCoins size={13} />} Vender e lançar em Contas a Receber
         </button>
       </div>

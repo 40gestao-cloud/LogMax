@@ -6,7 +6,7 @@ import { HistoricoOperacoes } from '../components/HistoricoOperacoes';
 import { useFetchData, dbInsert, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
 import { supabase } from '../lib/supabase';
 import { LoadingSpinner, EmptyState, FormField, ExportButton, NeuButtonAccent, StatusBadge, FilialBadge, ModalFormulario } from '../components/ui';
-import { useFormValidation, exportToPDF, exportToExcel, formatCNPJ, formatPhone, formatBRL, parseBRL, handleMoneyKeyDown } from '../lib/viewUtils';
+import { useFormValidation, exportToPDF, exportToExcel, formatCNPJ, formatPhone, formatBRL, parseBRL, handleMoneyKeyDown, cnpjValido, formatQtd, handleQtdKeyDown } from '../lib/viewUtils';
 import { useConfirm } from '../contexts/ConfirmContext';
 import { uploadLogoFilial, removerLogoFilial, FILIAL_LOGO_ACCEPT, FILIAL_LOGO_MAX_LABEL, validarLogoFilial } from '../lib/filialLogo';
 import { FILIAIS_HOLDING, type FilialHolding } from '../lib/filiais';
@@ -244,14 +244,28 @@ export const FiliaisView = ({ showToast }: any) => {
       const itemIds = itens.map((i: any) => i.id);
       const prodIds = itens.map((i: any) => i.produto_patrimonio_id).filter(Boolean);
       const vazio = Promise.resolve({ data: [] as any[] });
-      const [{ data: contas }, { data: bens }, { data: receber }] = await Promise.all([
+      // Parte de lote vendida vira bem irmão (migr. 678, `patrimonio_origem_id`).
+      // Sem a coluna (migração ainda não aplicada) a consulta falha e a ficha
+      // segue só com os bens originais.
+      let filhos: any[] = [];
+      if (prodIds.length) {
+        const { data: fl, error: errFl } = await supabase!.from('produtos')
+          .select('id,nome,filial,status,estoque,patrimonio_baixado_em,patrimonio_valor_venda,patrimonio_origem_id')
+          .in('patrimonio_origem_id', prodIds);
+        if (!errFl) filhos = fl ?? [];
+      }
+      const todosBens = [...prodIds, ...filhos.map(f => f.id)];
+      const [{ data: contas }, { data: bens }, { data: receber }, { data: custos }] = await Promise.all([
         itemIds.length ? supabase!.from('contas_pagar').select('id,filial_investimento_id,valor,valor_pago,status,vencimento,ativo')
           .in('filial_investimento_id', itemIds).neq('status', 'Cancelado') : vazio,
-        prodIds.length ? supabase!.from('produtos').select('id,nome,filial,status,patrimonio_baixado_em,patrimonio_valor_venda').in('id', prodIds) : vazio,
-        prodIds.length ? supabase!.from('contas_receber').select('id,produto_patrimonio_id,valor,valor_pago,status,vencimento')
-          .in('produto_patrimonio_id', prodIds).neq('status', 'Cancelado') : vazio,
+        prodIds.length ? supabase!.from('produtos').select('id,nome,filial,status,estoque,patrimonio_baixado_em,patrimonio_valor_venda').in('id', prodIds) : vazio,
+        todosBens.length ? supabase!.from('contas_receber').select('id,produto_patrimonio_id,valor,valor_pago,status,vencimento')
+          .in('produto_patrimonio_id', todosBens).neq('status', 'Cancelado') : vazio,
+        prodIds.length ? supabase!.from('produtos_custo').select('produto_id,preco_custo').in('produto_id', prodIds) : vazio,
       ]);
-      if (vivo) setInv({ itens, contas: (contas ?? []).filter((c: any) => c.ativo !== false), bens: bens ?? [], receber: receber ?? [] });
+      const custoDe = new Map((custos ?? []).map((c: any) => [c.produto_id, Number(c.preco_custo ?? 0)]));
+      const bensComCusto = [...(bens ?? []), ...filhos].map((b: any) => ({ ...b, preco_custo: custoDe.get(b.id) ?? null }));
+      if (vivo) setInv({ itens, contas: (contas ?? []).filter((c: any) => c.ativo !== false), bens: bensComCusto, receber: receber ?? [] });
     })();
     return () => { vivo = false; };
   }, [idsVisiveis, versaoInv]);
@@ -262,7 +276,7 @@ export const FiliaisView = ({ showToast }: any) => {
   // ser digitado à mão porque envelhecia na primeira folha lançada. Sem acesso
   // à folha (RLS: RH, gerente da filial, Matriz) o mapa volta vazio e o
   // formulário cai no valor manual gravado em `detalhes`.
-  type FolhaUnidade = { total: number; competencia: string; funcionarios: number };
+  type FolhaUnidade = { total: number; custoTotal: number; fgts: number; beneficios: number; competencia: string; funcionarios: number };
   const [folhaPorNicho, setFolhaPorNicho] = useState<Record<string, FolhaUnidade>>({});
   const nichosVisiveis = Array.from(new Set(
     [...escopadoPorFilial.map((f: any) => detectarNicho(f.detalhes?.nicho, f.nome)), nichoAtivo].filter(Boolean)
@@ -272,19 +286,47 @@ export const FiliaisView = ({ showToast }: any) => {
     let vivo = true;
     (async () => {
       const { data: fs } = await supabase!.from('folha_pagamento')
-        .select('filial,mes_ref,salario_bruto,funcionario_id')
+        .select('filial,mes_ref,salario_bruto,fgts_deposito,valor_beneficios')
         .in('filial', nichosVisiveis.split(',')).eq('ativo', true);
       const mapa: Record<string, FolhaUnidade> = {};
       for (const f of fs ?? []) {
         if (!f.filial || !f.mes_ref) continue;
         const atual = mapa[f.filial];
-        if (!atual || f.mes_ref > atual.competencia) mapa[f.filial] = { total: 0, competencia: f.mes_ref, funcionarios: 0 };
+        if (!atual || f.mes_ref > atual.competencia) mapa[f.filial] = { total: 0, custoTotal: 0, fgts: 0, beneficios: 0, competencia: f.mes_ref, funcionarios: 0 };
         if (mapa[f.filial].competencia === f.mes_ref) {
-          mapa[f.filial].total += Number(f.salario_bruto ?? 0);
-          mapa[f.filial].funcionarios += 1;
+          const m = mapa[f.filial];
+          m.total      += Number(f.salario_bruto ?? 0);
+          m.fgts       += Number(f.fgts_deposito ?? 0);
+          m.beneficios += Number(f.valor_beneficios ?? 0);
+          // Custo da empresa: bruto + FGTS (depósito, fora do líquido) +
+          // benefícios. INSS patronal não é modelado na folha.
+          m.custoTotal  = m.total + m.fgts + m.beneficios;
+          m.funcionarios += 1;
         }
       }
       if (vivo) setFolhaPorNicho(mapa);
+    })();
+    return () => { vivo = false; };
+  }, [nichosVisiveis, versaoInv]);
+
+  // Capital que a Matriz de fato pôs na unidade: aportes (registrar_aporte_capital,
+  // migr. 326) + mútuos aprovados (migr. 473/474). Substitui o "aporte inicial"
+  // digitado quando existe — o digitado vira só estimativa de plano.
+  type CapitalUnidade = { aportes: number; mutuos: number };
+  const [capitalPorNicho, setCapitalPorNicho] = useState<Record<string, CapitalUnidade>>({});
+  useEffect(() => {
+    if (!supabase || !nichosVisiveis) return;
+    let vivo = true;
+    (async () => {
+      const nichos = nichosVisiveis.split(',');
+      const [{ data: aps }, { data: mts }] = await Promise.all([
+        supabase!.from('capital_filial').select('filial,valor').in('filial', nichos),
+        supabase!.from('emprestimos_filial').select('filial,valor,status').in('filial', nichos).eq('status', 'Aprovado'),
+      ]);
+      const mapa: Record<string, CapitalUnidade> = {};
+      for (const a of aps ?? []) (mapa[a.filial] ??= { aportes: 0, mutuos: 0 }).aportes += Number(a.valor ?? 0);
+      for (const m of mts ?? []) (mapa[m.filial] ??= { aportes: 0, mutuos: 0 }).mutuos += Number(m.valor ?? 0);
+      if (vivo) setCapitalPorNicho(mapa);
     })();
     return () => { vivo = false; };
   }, [nichosVisiveis, versaoInv]);
@@ -383,6 +425,10 @@ export const FiliaisView = ({ showToast }: any) => {
 
   const handleSave = async () => {
     if (!validate()) return;
+    if (!cnpjValido(form.cnpj)) {
+      setErrors(e => ({ ...e, cnpj: 'CNPJ inválido — confira os dígitos verificadores' }));
+      return;
+    }
     setIsSaving(true);
     showToast(editItem ? 'Atualizando filial...' : 'Salvando filial...', 'info', false);
     try {
@@ -429,6 +475,16 @@ export const FiliaisView = ({ showToast }: any) => {
       } else {
         const saved = await dbInsert('/api/filiaisview', { ...payload, status: 'Ativa' });
         setData([saved ?? { id: Date.now(), ...payload, status: 'Ativa' }, ...data]);
+        // Os itens de montagem só se amarram a filial com id: em vez de fechar
+        // e obrigar a reabrir em Editar, o formulário continua aberto já em
+        // edição da filial recém-criada.
+        if ((saved as any)?.id) {
+          setImagemUrlAnterior(imagemUrl);
+          setEditItem(saved);
+          setShowForm(false);
+          showToast('Filial criada! Agora inclua os itens de montagem abaixo.', 'success', true);
+          return;
+        }
         showToast('Filial criada com sucesso!', 'success', true);
       }
       closeForm({ skipOrphanCleanup: true });
@@ -492,16 +548,18 @@ export const FiliaisView = ({ showToast }: any) => {
     const aluguel      = totalAluguelItens > 0 ? totalAluguelItens : aluguelLegado;
     const outros       = totalCustom(['outro']);
     const folhaRH      = folhaPorNicho[nichoDoForm];
-    const folha        = folhaRH ? folhaRH.total : (detalhes.folhaPagamento ? parseBRL(detalhes.folhaPagamento) : 0);
+    const folha        = folhaRH ? folhaRH.custoTotal : (detalhes.folhaPagamento ? parseBRL(detalhes.folhaPagamento) : 0);
+    const capital      = capitalPorNicho[nichoDoForm];
     // Montagem (gasto único) e custo mensal (aluguel + folha) não se somam:
     // juntar salário do mês com gôndola comprada inflava o "total investido".
-    const aporte       = detalhes.investimentoInicial ? parseBRL(detalhes.investimentoInicial) : 0;
+    const aporte       = capital ? capital.aportes + capital.mutuos
+                       : (detalhes.investimentoInicial ? parseBRL(detalhes.investimentoInicial) : 0);
     const total        = equipamentos + outros;
     return {
-      equipPayload, precoPayload, equipamentos, aluguel, outros, folha, folhaRH,
+      equipPayload, precoPayload, equipamentos, aluguel, outros, folha, folhaRH, capital,
       total, mensal: aluguel + folha, aporte, saldoAporte: aporte - total,
     };
-  }, [itens, detalhes, nichoDoForm, folhaPorNicho]);
+  }, [itens, detalhes, nichoDoForm, folhaPorNicho, capitalPorNicho]);
 
   const itemJaNaLista = (chave: string) => (itens ?? []).some((i: any) => i.chave === chave);
 
@@ -768,17 +826,28 @@ export const FiliaisView = ({ showToast }: any) => {
               <Wallet size={12} /> Aporte e Custo Mensal
             </p>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <FormField label="Aporte inicial (capital de abertura)">
-                <input className="neu-input py-2 px-3 rounded-xl text-sm" type="text" inputMode="numeric" value={detalhes.investimentoInicial}
-                  onChange={e => setDetalhes(d => ({ ...d, investimentoInicial: formatBRL(e.target.value) }))}
-                  onKeyDown={handleMoneyKeyDown}
-                  placeholder="R$ 0,00" />
+              <FormField label="Capital recebido da Matriz">
+                {espelhoInvestimento.capital ? (
+                  <div className="neu-pressed py-2 px-3 rounded-xl text-sm flex items-center justify-between gap-2"
+                    title="Aportes de capital + mútuos aprovados (Matriz › Capital)">
+                    <span className="font-bold text-gray-100 tabular-nums">R$ {formatBRL(espelhoInvestimento.aporte)}</span>
+                    <span className="text-[11px] text-gray-500 truncate">
+                      aportes {formatBRL(espelhoInvestimento.capital.aportes)} · mútuo {formatBRL(espelhoInvestimento.capital.mutuos)}
+                    </span>
+                  </div>
+                ) : (
+                  <input className="neu-input py-2 px-3 rounded-xl text-sm" type="text" inputMode="numeric" value={detalhes.investimentoInicial}
+                    onChange={e => setDetalhes(d => ({ ...d, investimentoInicial: formatBRL(e.target.value) }))}
+                    onKeyDown={handleMoneyKeyDown}
+                    placeholder="R$ 0,00"
+                    title="Nenhum aporte ou mútuo registrado para esta unidade — valor previsto" />
+                )}
               </FormField>
-              <FormField label="Folha de pagamento (mês)">
+              <FormField label="Folha de pagamento — custo do mês">
                 {espelhoInvestimento.folhaRH ? (
                   <div className="neu-pressed py-2 px-3 rounded-xl text-sm flex items-center justify-between gap-2"
-                    title="Soma do salário bruto da competência mais recente em RH › Folha de Pagamento">
-                    <span className="font-bold text-gray-100 tabular-nums">R$ {formatBRL(espelhoInvestimento.folhaRH.total)}</span>
+                    title={`Bruto R$ ${formatBRL(espelhoInvestimento.folhaRH.total)} + FGTS R$ ${formatBRL(espelhoInvestimento.folhaRH.fgts)} + benefícios R$ ${formatBRL(espelhoInvestimento.folhaRH.beneficios)}`}>
+                    <span className="font-bold text-gray-100 tabular-nums">R$ {formatBRL(espelhoInvestimento.folhaRH.custoTotal)}</span>
                     <span className="text-[11px] text-gray-500 truncate">
                       {competenciaBR(espelhoInvestimento.folhaRH.competencia)} · {espelhoInvestimento.folhaRH.funcionarios} func.
                     </span>
@@ -794,8 +863,9 @@ export const FiliaisView = ({ showToast }: any) => {
             </div>
             <p className="text-[11px] text-gray-500 mt-2">
               {espelhoInvestimento.folhaRH
-                ? 'A folha vem do RH › Folha de Pagamento (salário bruto da competência mais recente) e se atualiza sozinha.'
+                ? `A folha vem do RH › Folha de Pagamento (competência mais recente): bruto R$ ${formatBRL(espelhoInvestimento.folhaRH.total)} + FGTS R$ ${formatBRL(espelhoInvestimento.folhaRH.fgts)} + benefícios R$ ${formatBRL(espelhoInvestimento.folhaRH.beneficios)}. INSS patronal não entra — a folha do LogMax não o calcula.`
                 : 'Sem folha lançada no RH para esta unidade — informe uma estimativa. Quando o RH lançar a folha, o valor passa a vir de lá.'}
+              {!espelhoInvestimento.capital && ' O capital é previsão até a Matriz registrar aporte ou mútuo para a unidade.'}
               {' '}O aluguel entra como item de categoria "Aluguel" na lista abaixo.
             </p>
           </div>
@@ -851,7 +921,7 @@ export const FiliaisView = ({ showToast }: any) => {
                       ? 'Conta já gerada — desvincule para editar (a conta é cancelada, não apagada)'
                       : undefined;
                     return (
-                    <div key={item.id + '_' + item.updated_at} className="flex flex-col gap-1.5">
+                    <div key={item.id} className="flex flex-col gap-1.5">
                     <div className={`neu-pressed rounded-xl p-3 border grid grid-cols-2 ${GRADE_ITEM} gap-2 items-center ${gerado ? 'border-accent/20' : 'border-white/5'}`}>
                       {item.origem_campo === 'customizado' ? (
                         <input className="neu-input py-2 px-3 rounded-lg text-sm col-span-2 md:col-span-1 disabled:opacity-60"
@@ -864,7 +934,7 @@ export const FiliaisView = ({ showToast }: any) => {
                       {item.origem_campo === 'customizado' ? (
                         <select className="neu-input py-2 px-2 rounded-lg text-xs disabled:opacity-60" value={item.categoria}
                           disabled={gerado} title={travaTitle}
-                          onChange={e => handleUpdateItem(item.id, { categoria: e.target.value })}>
+                          onChange={e => handleUpdateItem(item.id, e.target.value === 'aluguel' ? { categoria: 'aluguel', quantidade: 1 } : { categoria: e.target.value })}>
                           <option value="outro">Outro</option>
                           <option value="equipamento">Equipamento</option>
                           <option value="aluguel">Aluguel (mensal)</option>
@@ -872,10 +942,20 @@ export const FiliaisView = ({ showToast }: any) => {
                       ) : (
                         <span className="text-[10px] text-gray-500 uppercase tracking-wide text-center">Equipamento</span>
                       )}
-                      <input className="neu-input py-2 px-2 rounded-lg text-sm text-center disabled:opacity-60" type="number" min="0" step="1"
-                        defaultValue={item.quantidade} disabled={gerado}
-                        onBlur={e => { const v = Number(e.target.value); if (Number.isFinite(v) && v !== Number(item.quantidade)) handleUpdateItem(item.id, { quantidade: v }); }}
-                        title={travaTitle ?? 'Quantidade'} />
+                      {item.categoria === 'aluguel' ? (
+                        <span className="text-sm text-gray-400 text-center tabular-nums" title="Aluguel é valor mensal — quantidade sempre 1">1</span>
+                      ) : (
+                        <input className="neu-input py-2 px-2 rounded-lg text-sm text-center tabular-nums disabled:opacity-60" type="text" inputMode="numeric"
+                          defaultValue={formatQtd(Number(item.quantidade), false)} disabled={gerado}
+                          onKeyDown={handleQtdKeyDown(false)}
+                          onChange={e => { e.currentTarget.value = formatQtd(e.currentTarget.value, false); }}
+                          onBlur={e => {
+                            const v = parseInt(e.target.value || '0', 10);
+                            if (!Number.isFinite(v) || v < 1) { e.target.value = formatQtd(Number(item.quantidade), false); return; }
+                            if (v !== Number(item.quantidade)) handleUpdateItem(item.id, { quantidade: v });
+                          }}
+                          title={travaTitle ?? 'Quantidade (inteira)'} />
+                      )}
                       {/* Campo não controlado (salva no blur): a máscara reescreve
                           o próprio valor a cada tecla, senão o "1.250,00" só
                           aparecia depois de sair do campo. */}
@@ -944,7 +1024,7 @@ export const FiliaisView = ({ showToast }: any) => {
                 </div>
                 {espelhoInvestimento.aporte > 0 && (
                   <div className="flex items-center justify-between text-[11px]">
-                    <span className="text-gray-500">Aporte inicial R$ {formatBRL(espelhoInvestimento.aporte)} ·{' '}
+                    <span className="text-gray-500">{espelhoInvestimento.capital ? 'Capital da Matriz' : 'Aporte previsto'} R$ {formatBRL(espelhoInvestimento.aporte)} ·{' '}
                       {espelhoInvestimento.saldoAporte >= 0 ? 'sobra' : 'falta'}</span>
                     <span className={`font-bold tabular-nums ${espelhoInvestimento.saldoAporte >= 0 ? 'text-green-400' : 'text-red-400'}`}>
                       R$ {formatBRL(Math.abs(espelhoInvestimento.saldoAporte))}
@@ -1055,20 +1135,36 @@ export const FiliaisView = ({ showToast }: any) => {
                   const linhas = itensF.map((x: any) => {
                     const contas = inv.contas.filter((c: any) => c.filial_investimento_id === x.id);
                     const bem = inv.bens.find((b: any) => b.id === x.produto_patrimonio_id) ?? null;
-                    const receber = inv.receber.filter((r: any) => r.produto_patrimonio_id === x.produto_patrimonio_id);
-                    return { x, contas, bem, receber, sit: situacaoDoItem(x, contas, bem, receber, hoje) };
+                    // Partes do lote vendidas em separado (migr. 678) — bens irmãos.
+                    const partes = x.produto_patrimonio_id
+                      ? inv.bens.filter((b: any) => b.patrimonio_origem_id === x.produto_patrimonio_id) : [];
+                    const idsBem = [x.produto_patrimonio_id, ...partes.map((b: any) => b.id)].filter(Boolean);
+                    const receber = inv.receber.filter((r: any) => idsBem.includes(r.produto_patrimonio_id));
+                    const sit = situacaoDoItem(x, contas, bem, receber, hoje);
+                    const vendidas = partes.reduce((n: number, b: any) => n + Number(b.estoque ?? 0), 0);
+                    if (vendidas > 0 && bem && !bem.patrimonio_baixado_em) {
+                      sit.detalhe = [sit.detalhe, `${vendidas} de ${vendidas + Number(bem.estoque ?? 0)} un. vendidas`].filter(Boolean).join(' · ');
+                    }
+                    return { x, contas, bem, partes, receber, sit };
                   });
                   // Aluguel é custo do mês, não montagem: somar uma parcela dele ao
                   // "Planejado" misturava gasto único com recorrente (mesma régua
                   // do resumo do formulário). Ele aparece à parte, como Aluguel/mês.
                   const planejado = linhas.filter(l => l.sit.rotulo === 'Planejado' && l.x.categoria !== 'aluguel').reduce((s, l) => s + Number(l.x.valor_total ?? 0), 0);
                   const aluguelMes = linhas.filter(l => l.x.categoria === 'aluguel').reduce((s, l) => s + Number(l.x.valor_total ?? 0), 0);
-                  const lancado = linhas.flatMap(l => l.contas).reduce((s, c: any) => s + Number(c.valor), 0);
-                  const pago = linhas.flatMap(l => l.contas).reduce((s, c: any) => s + pagoDe(c), 0);
+                  // Lançado/Pago também separam montagem de aluguel — senão Planejado +
+                  // Lançado não fechavam com o total da montagem.
+                  const contasMontagem = linhas.filter(l => l.x.categoria !== 'aluguel').flatMap(l => l.contas);
+                  const contasAluguel = linhas.filter(l => l.x.categoria === 'aluguel').flatMap(l => l.contas);
+                  const lancado = contasMontagem.reduce((s, c: any) => s + Number(c.valor), 0);
+                  const pago = contasMontagem.reduce((s, c: any) => s + pagoDe(c), 0);
+                  const aluguelPago = contasAluguel.reduce((s, c: any) => s + pagoDe(c), 0);
+                  const aluguelMesesPagos = contasAluguel.filter((c: any) => c.status === 'Pago').length;
                   const vendas = linhas.flatMap(l => l.receber).reduce((s, r: any) => s + Number(r.valor), 0);
                   const podeMexer = canEditRow(item);
                   const folhaRHCard = folhaPorNicho[detectarNicho(d.nicho, item.nome) ?? ''];
-                  const folhaCard = folhaRHCard ? folhaRHCard.total : d.folhaPagamento;
+                  const folhaCard = folhaRHCard ? folhaRHCard.custoTotal : d.folhaPagamento;
+                  const capitalCard = capitalPorNicho[detectarNicho(d.nicho, item.nome) ?? ''];
                   return (
                     <div className="p-5 flex flex-col gap-4">
                       <div className="flex items-center justify-between gap-3 flex-wrap">
@@ -1076,32 +1172,40 @@ export const FiliaisView = ({ showToast }: any) => {
                           <Wallet size={11} /> Investimento
                         </span>
                         <span className="text-[11px] text-gray-500 flex items-center gap-3 flex-wrap">
-                          {folhaCard != null && <span title={folhaRHCard ? `RH › Folha de Pagamento, competência ${competenciaBR(folhaRHCard.competencia)}` : 'Estimativa digitada na ficha'}>
+                          {folhaCard != null && <span title={folhaRHCard ? `RH › Folha de Pagamento, competência ${competenciaBR(folhaRHCard.competencia)} — bruto ${brl(folhaRHCard.total)} + FGTS ${brl(folhaRHCard.fgts)} + benefícios ${brl(folhaRHCard.beneficios)}` : 'Estimativa digitada na ficha'}>
                             Folha/mês <b className="text-gray-300">{brl(folhaCard)}</b>{folhaRHCard ? '' : ' (est.)'}</span>}
                           {aluguelMes > 0 && <span>Aluguel/mês <b className="text-gray-300">{brl(aluguelMes)}</b></span>}
-                          {d.investimentoInicial != null && <span>Aporte inicial <b className="text-gray-300">{brl(d.investimentoInicial)}</b></span>}
+                          {capitalCard
+                            ? <span title="Aportes de capital + mútuos aprovados da Matriz">Capital da Matriz <b className="text-gray-300">{brl(capitalCard.aportes + capitalCard.mutuos)}</b></span>
+                            : d.investimentoInicial != null && <span>Aporte previsto <b className="text-gray-300">{brl(d.investimentoInicial)}</b> (est.)</span>}
                         </span>
                       </div>
 
-                      <div className={`grid grid-cols-2 gap-2 ${vendas > 0 ? 'lg:grid-cols-4' : 'lg:grid-cols-3'}`}>
-                        {[
-                          { r: 'Planejado (montagem)', v: planejado, c: 'text-gray-200' },
-                          { r: 'Lançado', v: lancado, c: 'text-amber-400' },
-                          { r: 'Pago', v: pago, c: 'text-green-400' },
+                      {(() => {
+                        const quadros = [
+                          { r: 'Montagem planejada', v: planejado, c: 'text-gray-200' },
+                          { r: 'Montagem lançada', v: lancado, c: 'text-amber-400' },
+                          { r: 'Montagem paga', v: pago, c: 'text-green-400' },
+                          ...(contasAluguel.length > 0 ? [{ r: `Aluguel pago${aluguelMesesPagos ? ` · ${aluguelMesesPagos} ${aluguelMesesPagos === 1 ? 'mês' : 'meses'}` : ''}`, v: aluguelPago, c: 'text-sky-400' }] : []),
                           ...(vendas > 0 ? [{ r: 'Vendas de bens', v: vendas, c: 'text-purple-400' }] : []),
-                        ].map(t => (
-                          <div key={t.r} className="neu-pressed rounded-xl px-3 py-2.5 flex flex-col gap-0.5">
-                            <span className="text-[10px] text-gray-500">{t.r}</span>
-                            <span className={`text-base font-black tabular-nums ${t.c}`}>{brl(t.v)}</span>
+                        ];
+                        return (
+                          <div className={`grid grid-cols-2 gap-2 ${quadros.length >= 5 ? 'lg:grid-cols-5' : quadros.length === 4 ? 'lg:grid-cols-4' : 'lg:grid-cols-3'}`}>
+                            {quadros.map(t => (
+                              <div key={t.r} className="neu-pressed rounded-xl px-3 py-2.5 flex flex-col gap-0.5">
+                                <span className="text-[10px] text-gray-500">{t.r}</span>
+                                <span className={`text-base font-black tabular-nums ${t.c}`}>{brl(t.v)}</span>
+                              </div>
+                            ))}
                           </div>
-                        ))}
-                      </div>
+                        );
+                      })()}
 
                       {linhas.length === 0 ? (
                         <span className="text-xs text-gray-600">Nenhum item de investimento — adicione pelo botão de editar.</span>
                       ) : (
                         <div className="rounded-xl border border-white/5 divide-y divide-white/5 overflow-hidden">
-                          {linhas.map(({ x, contas, bem, sit }) => {
+                          {linhas.map(({ x, contas, bem, partes, sit }) => {
                             const bemAtivo = bem && !bem.patrimonio_baixado_em;
                             const algoPago = contas.some((c: any) => c.status === 'Pago' || c.status === 'Parcial');
                             return (
@@ -1127,12 +1231,12 @@ export const FiliaisView = ({ showToast }: any) => {
                                       </button>
                                     )}
                                     {bemAtivo && (
-                                      <button onClick={() => setVendendo({ id: bem.id, nome: bem.nome, filial: bem.filial, custo: x.valor_total })}
+                                      <button onClick={() => setVendendo({ id: bem.id, nome: bem.nome, filial: bem.filial, custo: bem.preco_custo ?? x.valor_total, estoque: Number(bem.estoque ?? x.quantidade) })}
                                         className="btn-solido btn-solido--roxo" title="Vender o bem e lançar em Contas a Receber">
                                         <HandCoins size={13} /> Vender
                                       </button>
                                     )}
-                                    {x.conta_pagar_id && !algoPago && !bem?.patrimonio_baixado_em && (
+                                    {x.conta_pagar_id && !algoPago && !bem?.patrimonio_baixado_em && partes.length === 0 && (
                                       <button onClick={() => desfazerLancamento(x)} className="action-btn-neutral" title="Desfazer lançamento (cancela as contas)">
                                         <Undo2 size={12} />
                                       </button>

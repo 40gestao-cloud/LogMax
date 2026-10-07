@@ -75,6 +75,23 @@ export const formatCNPJ = (v: string): string => {
   return `${d.slice(0, 2)}.${d.slice(2, 5)}.${d.slice(5, 8)}/${d.slice(8, 12)}-${d.slice(12)}`;
 };
 
+// Dígitos verificadores do CNPJ (módulo 11). Formato não importa — só os 14
+// dígitos contam. Sequência repetida (00.000.000/0000-00) passa na conta mas
+// não é CNPJ, então é recusada à parte.
+export const cnpjValido = (v: string): boolean => {
+  const d = String(v ?? '').replace(/\D/g, '');
+  if (d.length !== 14 || /^(\d)\1{13}$/.test(d)) return false;
+  const dv = (base: string) => {
+    let soma = 0, peso = base.length - 7;
+    for (const c of base) { soma += Number(c) * peso; peso = peso === 2 ? 9 : peso - 1; }
+    const r = soma % 11;
+    return r < 2 ? 0 : 11 - r;
+  };
+  const d1 = dv(d.slice(0, 12));
+  const d2 = dv(d.slice(0, 12) + d1);
+  return d.endsWith(`${d1}${d2}`);
+};
+
 // Aceita string de input (qualquer formato) ou número (valor em reais).
 // Devolve sempre "1.234,56" — milhar com ponto, decimal com vírgula.
 export const formatBRL = (v: string | number | null | undefined): string => {
