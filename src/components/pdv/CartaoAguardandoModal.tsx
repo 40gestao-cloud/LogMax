@@ -39,11 +39,14 @@ export function CartaoAguardandoModal({ cobranca, linha = false, confirmando, on
         </div>
         <div className="p-6 space-y-4 text-center">
           <div className="flex justify-center">
-            <div className="p-3 bg-white border-4" style={{ borderColor: NAVY_DARK }}>
+            <div className="p-6 bg-white border-4" style={{ borderColor: NAVY_DARK }}>
+              {/* Nível L: QR em tela não sofre dano, e o M só adensava a grade
+                  (37×37 → 33×33 para a URL de cobrança) — módulo maior lê
+                  mais rápido no MaxBank. p-6 dá ~4 módulos de margem branca. */}
               <QRCodeSVG
                 value={buildCartaoQrValue(cobranca.id)}
                 size={220}
-                level="M"
+                level="L"
               />
             </div>
           </div>

@@ -2724,14 +2724,16 @@ const PDVViewInner = ({ showToast, profile, filialInicial, onVoltar }: {
 
               {/* QR sempre preto-sobre-branco com quiet zone — exigência dos scanners,
                   independente do tema da app. */}
-              <div className="p-4 rounded-3xl border border-white/5"
+              {/* Nível L + p-6 (~4 módulos de margem): QR em tela não sofre
+                  dano; o M só adensava a grade e o MaxBank demorava mais. */}
+              <div className="p-6 rounded-3xl border border-white/5"
                 style={{ background: '#ffffff' }}>
                 <QRCodeSVG
                   value={buildPixQrValue(pixPendente.id)}
                   size={208}
                   bgColor="#ffffff"
                   fgColor="#000000"
-                  level="M"
+                  level="L"
                 />
               </div>
 
@@ -3109,14 +3111,15 @@ const PDVViewInner = ({ showToast, profile, filialInicial, onVoltar }: {
                 </p>
               </div>
 
-              <div className="rounded-2xl px-4 py-4 flex flex-col items-center gap-2"
+              {/* Nível L + p-6 pelos mesmos motivos do QR do PIX acima. */}
+              <div className="rounded-2xl p-6 flex flex-col items-center gap-2"
                 style={{ background: '#ffffff', border: '2px solid #0a0a0a' }}>
                 <QRCodeSVG
                   value={buildCartaoQrValue(cartaoModal.id)}
                   size={180}
                   bgColor="#ffffff"
                   fgColor="#0a0a0a"
-                  level="M"
+                  level="L"
                 />
               </div>
 
