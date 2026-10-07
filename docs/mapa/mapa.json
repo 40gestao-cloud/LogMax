@@ -6,14 +6,18 @@
    "componente": "FiliaisView",
    "arquivo": "src/views/FiliaisView.tsx",
    "le": [
+    "capital_filial",
     "centros_custo",
     "clientes",
     "contas_pagar",
     "contas_receber",
+    "emprestimos_filial",
     "filiais",
     "filial_investimentos",
+    "folha_pagamento",
     "historico_operacoes",
     "produtos",
+    "produtos_custo",
     "user_profiles"
    ],
    "grava": [
@@ -812,7 +816,8 @@
    "arquivo": "src/views/PatrimonioView.tsx",
    "le": [
     "clientes",
-    "produtos_com_custo"
+    "produtos_com_custo",
+    "user_profiles"
    ],
    "grava": [],
    "rpcs": [
@@ -6696,6 +6701,13 @@
     "acre_today"
    ]
   },
+  "fn_filial_investimento_aluguel_qtd_um": {
+   "gatilho": true,
+   "secdef": false,
+   "grava": [],
+   "le": [],
+   "chama": []
+  },
   "fn_filial_investimento_carimba_filial": {
    "gatilho": true,
    "secdef": true,
@@ -7536,14 +7548,16 @@
    ],
    "le": [
     "contas_pagar",
-    "filial_investimentos"
+    "filial_investimentos",
+    "produtos"
    ],
    "chama": [
     "_assert_rpc",
     "acre_today",
     "auth_gerente_da",
     "auth_is_admin",
-    "auth_pode_filial"
+    "auth_pode_filial",
+    "nome_item_normalizado"
    ]
   },
   "lembrar_avaliacoes_pendentes": {
@@ -10123,10 +10137,12 @@
    "secdef": true,
    "grava": [
     "contas_receber",
-    "produtos"
+    "produtos",
+    "produtos_custo"
    ],
    "le": [
-    "produtos"
+    "produtos",
+    "produtos_custo"
    ],
    "chama": [
     "_assert_rpc",
@@ -10423,6 +10439,7 @@
   ],
   "filial_investimentos": [
    "trg_auditoria:set_auditoria_campos",
+   "trg_filial_investimento_aluguel_qtd_um:fn_filial_investimento_aluguel_qtd_um",
    "trg_filial_investimento_carimba_filial:fn_filial_investimento_carimba_filial",
    "trg_filial_investimento_trava_gerado:fn_filial_investimento_trava_gerado",
    "trg_historico:registrar_historico"

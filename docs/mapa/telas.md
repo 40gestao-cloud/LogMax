@@ -11,7 +11,7 @@ Para cada tela: o que ela lê e grava, as funções do banco que chama, e **quem
 ### Empresa › Filiais
 
 - **Rota:** `empresa-filiais` · **Componente:** `FiliaisView` ([src/views/FiliaisView.tsx](../../src/views/FiliaisView.tsx))
-- **Lê:** [centros_custo](tabelas.md#t-centros_custo), [clientes](tabelas.md#t-clientes), [contas_pagar](tabelas.md#t-contas_pagar), [contas_receber](tabelas.md#t-contas_receber), [filiais](tabelas.md#t-filiais), [filial_investimentos](tabelas.md#t-filial_investimentos), [historico_operacoes](tabelas.md#t-historico_operacoes), [produtos](tabelas.md#t-produtos), [user_profiles](tabelas.md#t-user_profiles)
+- **Lê:** [capital_filial](tabelas.md#t-capital_filial), [centros_custo](tabelas.md#t-centros_custo), [clientes](tabelas.md#t-clientes), [contas_pagar](tabelas.md#t-contas_pagar), [contas_receber](tabelas.md#t-contas_receber), [emprestimos_filial](tabelas.md#t-emprestimos_filial), [filiais](tabelas.md#t-filiais), [filial_investimentos](tabelas.md#t-filial_investimentos), [folha_pagamento](tabelas.md#t-folha_pagamento), [historico_operacoes](tabelas.md#t-historico_operacoes), [produtos](tabelas.md#t-produtos), [produtos_custo](tabelas.md#t-produtos_custo), [user_profiles](tabelas.md#t-user_profiles)
 - **Grava direto:** [filiais](tabelas.md#t-filiais), [filial_investimentos](tabelas.md#t-filial_investimentos)
 - **Chama (RPC):** [desvincular_investimento_conta](funcoes.md#f-desvincular_investimento_conta), [lancar_investimento_filial](funcoes.md#f-lancar_investimento_filial), [vender_patrimonio](funcoes.md#f-vender_patrimonio)
 - **Grava via RPC:** [contas_pagar](tabelas.md#t-contas_pagar), [contas_receber](tabelas.md#t-contas_receber), [produtos](tabelas.md#t-produtos), [produtos_custo](tabelas.md#t-produtos_custo)
@@ -439,7 +439,7 @@ Para cada tela: o que ela lê e grava, as funções do banco que chama, e **quem
 ### Financeiro › Patrimônio
 
 - **Rota:** `financeiro-patrimônio` · **Componente:** `PatrimonioView` ([src/views/PatrimonioView.tsx](../../src/views/PatrimonioView.tsx))
-- **Lê:** [clientes](tabelas.md#t-clientes), [produtos_com_custo](tabelas.md#t-produtos_com_custo)
+- **Lê:** [clientes](tabelas.md#t-clientes), [produtos_com_custo](tabelas.md#t-produtos_com_custo), [user_profiles](tabelas.md#t-user_profiles)
 - **Grava direto:** —
 - **Chama (RPC):** [dar_baixa_patrimonio](funcoes.md#f-dar_baixa_patrimonio), [lancar_investimento_filial](funcoes.md#f-lancar_investimento_filial), [vender_patrimonio](funcoes.md#f-vender_patrimonio)
 - **Grava via RPC:** [contas_pagar](tabelas.md#t-contas_pagar), [contas_receber](tabelas.md#t-contas_receber), [filial_investimentos](tabelas.md#t-filial_investimentos), [produtos](tabelas.md#t-produtos), [produtos_custo](tabelas.md#t-produtos_custo)
@@ -450,7 +450,7 @@ Para cada tela: o que ela lê e grava, as funções do banco que chama, e **quem
   - por [filial_investimentos](tabelas.md#t-filial_investimentos): [Empresa › Filiais](telas.md#s-empresa-filiais)
   - por [produtos](tabelas.md#t-produtos): [Cadastros › Produtos](telas.md#s-cadastros-produtos), [Empresa › Filiais](telas.md#s-empresa-filiais), [Estoque › Movimentações](telas.md#s-estoque-movimentações), [Marketing › Vitrinedateladelogin *(rota marketing-vitrinedateladelogin)*](telas.md#s-marketing-vitrinedateladelogin), [Marketing › Vitrinepública *(rota marketing-vitrinepública)*](telas.md#s-marketing-vitrinepública), [Vendas › Pedidos Online](telas.md#s-vendas-pedidosonline)
   - por [produtos_custo](tabelas.md#t-produtos_custo): [Cadastros › Produtos](telas.md#s-cadastros-produtos), [Empresa › Filiais](telas.md#s-empresa-filiais), [Financeiro › Contas a pagar](telas.md#s-financeiro-contasapagar)
-- **Arquivos que acessam dados:** `src/components/MontagemFinanceiro.tsx`, `src/views/PatrimonioView.tsx`
+- **Arquivos que acessam dados:** `src/components/MontagemFinanceiro.tsx`, `src/hooks/useUserProfile.ts`, `src/views/PatrimonioView.tsx`
 
 <a id="s-financeiro-centrosdecusto"></a>
 ### Financeiro › Centros de Custo
