@@ -730,7 +730,9 @@
    "arquivo": "src/views/ContasPagarView.tsx",
    "le": [
     "caixa_bancos",
+    "centros_custo",
     "contas_pagar",
+    "despesas_recorrentes",
     "financeiro_config",
     "fornecedores",
     "historico_operacoes",
@@ -738,13 +740,15 @@
     "recebimentos"
    ],
    "grava": [
-    "contas_pagar"
+    "contas_pagar",
+    "despesas_recorrentes"
    ],
    "rpcs": [
     "baixar_conta_pagar",
     "calcular_saldo_capital",
     "cancelar_frete_compra",
     "conferir_nota_fiscal",
+    "gerar_contas_recorrentes",
     "lancar_frete_compra",
     "pedidos_para_frete",
     "registrar_pagamento_conta",
@@ -755,6 +759,7 @@
     "contas_pagar",
     "contas_pagar_baixas",
     "contas_receber",
+    "despesas_recorrentes",
     "fretes_compra",
     "fretes_compra_rateio",
     "produtos_custo"
@@ -6636,6 +6641,13 @@
     "auth_is_service_role"
    ]
   },
+  "fn_conta_pagar_fatura_antes_de_pagar": {
+   "gatilho": true,
+   "secdef": false,
+   "grava": [],
+   "le": [],
+   "chama": []
+  },
   "fn_conta_pagar_natureza": {
    "gatilho": true,
    "secdef": true,
@@ -6729,6 +6741,15 @@
    "secdef": false,
    "grava": [],
    "le": [],
+   "chama": []
+  },
+  "fn_fornecedor_nao_e_concessionaria": {
+   "gatilho": true,
+   "secdef": false,
+   "grava": [],
+   "le": [
+    "fornecedores"
+   ],
    "chama": []
   },
   "fn_funcionario_sincroniza_tarefas": {
@@ -7274,6 +7295,25 @@
     "acre_today",
     "auth_gerente_da",
     "auth_is_admin",
+    "auth_pode_filial"
+   ]
+  },
+  "gerar_contas_recorrentes": {
+   "gatilho": false,
+   "secdef": true,
+   "grava": [
+    "contas_pagar",
+    "despesas_recorrentes"
+   ],
+   "le": [
+    "contas_pagar",
+    "despesas_recorrentes"
+   ],
+   "chama": [
+    "_assert_rpc",
+    "acre_today",
+    "auth_gerente_da",
+    "auth_in_setor",
     "auth_pode_filial"
    ]
   },
@@ -10363,6 +10403,7 @@
    "trg_conta_de_pedido_congela:fn_conta_de_pedido_congela",
    "trg_conta_de_pedido_nao_exclui:fn_conta_de_pedido_nao_exclui",
    "trg_conta_pagar_exige_recebimento:conta_pagar_exige_recebimento",
+   "trg_conta_pagar_fatura_antes_de_pagar:fn_conta_pagar_fatura_antes_de_pagar",
    "trg_conta_pagar_nao_exclui:conta_com_dinheiro_nao_exclui",
    "trg_conta_pagar_natureza:fn_conta_pagar_natureza",
    "trg_contas_pagar_avancar_folha:conta_pagar_avancar_folha_e_creditar",
@@ -10399,6 +10440,7 @@
    "trg_cotacao_marca_so_na_eventual:fn_cotacao_marca_so_na_eventual",
    "trg_cotacao_proposta_unica_fornecedor:cotacao_proposta_unica_por_fornecedor",
    "trg_cotacoes_unica_aprovada:cotacoes_unica_aprovada",
+   "trg_fornecedor_nao_e_concessionaria:fn_fornecedor_nao_e_concessionaria",
    "trg_historico:registrar_historico",
    "trg_numero_documento:set_numero_documento",
    "trg_sem_exclusao:documento_sem_exclusao"
@@ -10407,6 +10449,10 @@
    "trg_historico:registrar_historico"
   ],
   "departamentos": [
+   "trg_auditoria:set_auditoria_campos",
+   "trg_historico:registrar_historico"
+  ],
+  "despesas_recorrentes": [
    "trg_auditoria:set_auditoria_campos",
    "trg_historico:registrar_historico"
   ],
@@ -10462,6 +10508,9 @@
   ],
   "frequencia_trabalho": [
    "trg_frequencia_updated_at:frequencia_set_updated_at"
+  ],
+  "fretes_compra": [
+   "trg_fornecedor_nao_e_concessionaria:fn_fornecedor_nao_e_concessionaria"
   ],
   "funcionario_beneficios": [
    "trg_func_benef_set_filial:func_benef_set_filial"
@@ -10568,6 +10617,7 @@
   ],
   "notas_recebidas": [
    "trg_auditoria:set_auditoria_campos",
+   "trg_fornecedor_nao_e_concessionaria:fn_fornecedor_nao_e_concessionaria",
    "trg_historico:registrar_historico"
   ],
   "orcamentos": [
@@ -10587,6 +10637,7 @@
   ],
   "pedidos": [
    "trg_auditoria:set_auditoria_campos",
+   "trg_fornecedor_nao_e_concessionaria:fn_fornecedor_nao_e_concessionaria",
    "trg_historico:registrar_historico",
    "trg_numero_documento:set_numero_documento",
    "trg_pedido_avisa_estoque:fn_pedido_avisa_estoque",
@@ -10627,6 +10678,7 @@
    "trg_block_correcao_manual:fn_block_correcao_manual",
    "trg_block_estoque_manual:fn_block_estoque_manual",
    "trg_carimba_exclusao:fn_carimba_exclusao",
+   "trg_fornecedor_nao_e_concessionaria:fn_fornecedor_nao_e_concessionaria",
    "trg_historico:registrar_historico",
    "trg_produto_com_documento_aberto_nao_sai:fn_produto_com_documento_aberto_nao_sai",
    "trg_produto_ean_valido:fn_produto_ean_valido",
