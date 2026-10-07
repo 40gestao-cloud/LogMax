@@ -98,6 +98,11 @@ const equipZeros = (): Record<string, string> =>
 
 // Preço unitário por item — chave irmã `${key}Preco`, mesma grade.
 const precoKey = (k: string) => `${k}Preco`;
+
+// Colunas da lista de itens de montagem — cabeçalho e linhas usam a mesma
+// grade, senão o cabeçalho desalinha. Escrita por extenso (Tailwind não lê
+// classe montada em runtime).
+const GRADE_ITEM = 'md:grid-cols-[minmax(0,2fr)_minmax(0,1.1fr)_4.5rem_minmax(0,1fr)_minmax(0,1.2fr)_8rem]';
 const equipPrecoZeros = (): Record<string, string> =>
   Object.fromEntries(TODAS_CHAVES_EQUIP.map(k => [precoKey(k), '']));
 
@@ -252,6 +257,39 @@ export const FiliaisView = ({ showToast }: any) => {
   }, [idsVisiveis, versaoInv]);
   const atualizarInv = () => { setVersaoInv(v => v + 1); reloadItens(); };
 
+  // Folha de pagamento por unidade, lida do RH: soma do bruto da competência
+  // mais recente. É o mesmo "Total bruto" da tela de Folha — o campo deixou de
+  // ser digitado à mão porque envelhecia na primeira folha lançada. Sem acesso
+  // à folha (RLS: RH, gerente da filial, Matriz) o mapa volta vazio e o
+  // formulário cai no valor manual gravado em `detalhes`.
+  type FolhaUnidade = { total: number; competencia: string; funcionarios: number };
+  const [folhaPorNicho, setFolhaPorNicho] = useState<Record<string, FolhaUnidade>>({});
+  const nichosVisiveis = Array.from(new Set(
+    [...escopadoPorFilial.map((f: any) => detectarNicho(f.detalhes?.nicho, f.nome)), nichoAtivo].filter(Boolean)
+  )).sort().join(',');
+  useEffect(() => {
+    if (!supabase || !nichosVisiveis) return;
+    let vivo = true;
+    (async () => {
+      const { data: fs } = await supabase!.from('folha_pagamento')
+        .select('filial,mes_ref,salario_bruto,funcionario_id')
+        .in('filial', nichosVisiveis.split(',')).eq('ativo', true);
+      const mapa: Record<string, FolhaUnidade> = {};
+      for (const f of fs ?? []) {
+        if (!f.filial || !f.mes_ref) continue;
+        const atual = mapa[f.filial];
+        if (!atual || f.mes_ref > atual.competencia) mapa[f.filial] = { total: 0, competencia: f.mes_ref, funcionarios: 0 };
+        if (mapa[f.filial].competencia === f.mes_ref) {
+          mapa[f.filial].total += Number(f.salario_bruto ?? 0);
+          mapa[f.filial].funcionarios += 1;
+        }
+      }
+      if (vivo) setFolhaPorNicho(mapa);
+    })();
+    return () => { vivo = false; };
+  }, [nichosVisiveis, versaoInv]);
+  const competenciaBR = (c: string) => { const [a, m] = c.split('-'); return m ? `${m}/${a}` : c; };
+
   const [lancando, setLancando] = useState<any | null>(null);
   const [vendendo, setVendendo] = useState<any | null>(null);
   const desfazerLancamento = async (it: any) => {
@@ -298,6 +336,8 @@ export const FiliaisView = ({ showToast }: any) => {
     setImagemUrlAnterior(item.imagem_url ?? '');
     setErrors({});
     setShowForm(false);
+    // Reabrir a ficha relê a folha: o RH pode ter lançado desde o carregamento.
+    setVersaoInv(v => v + 1);
   };
 
   const closeForm = (opts?: { skipOrphanCleanup?: boolean }) => {
@@ -375,6 +415,7 @@ export const FiliaisView = ({ showToast }: any) => {
         folhaPagamento: folhaPagamento > 0 ? folhaPagamento : null,
         valorTotalEquipamentos: valorTotalEquipamentos > 0 ? valorTotalEquipamentos : null,
         valorTotalInvestido: valorTotalInvestido > 0 ? valorTotalInvestido : null,
+        custoMensal: espelhoInvestimento.mensal > 0 ? espelhoInvestimento.mensal : null,
         ...equipPayload,
         ...precoPayload,
       };
@@ -450,12 +491,17 @@ export const FiliaisView = ({ showToast }: any) => {
     const equipamentos = totalGrade + totalCustom(['equipamento']);
     const aluguel      = totalAluguelItens > 0 ? totalAluguelItens : aluguelLegado;
     const outros       = totalCustom(['outro']);
-    const folha        = detalhes.folhaPagamento ? parseBRL(detalhes.folhaPagamento) : 0;
+    const folhaRH      = folhaPorNicho[nichoDoForm];
+    const folha        = folhaRH ? folhaRH.total : (detalhes.folhaPagamento ? parseBRL(detalhes.folhaPagamento) : 0);
+    // Montagem (gasto único) e custo mensal (aluguel + folha) não se somam:
+    // juntar salário do mês com gôndola comprada inflava o "total investido".
+    const aporte       = detalhes.investimentoInicial ? parseBRL(detalhes.investimentoInicial) : 0;
+    const total        = equipamentos + outros;
     return {
-      equipPayload, precoPayload, equipamentos, aluguel, outros, folha,
-      total: equipamentos + aluguel + outros + folha,
+      equipPayload, precoPayload, equipamentos, aluguel, outros, folha, folhaRH,
+      total, mensal: aluguel + folha, aporte, saldoAporte: aporte - total,
     };
-  }, [itens, detalhes, nichoDoForm]);
+  }, [itens, detalhes, nichoDoForm, folhaPorNicho]);
 
   const itemJaNaLista = (chave: string) => (itens ?? []).some((i: any) => i.chave === chave);
 
@@ -636,47 +682,52 @@ export const FiliaisView = ({ showToast }: any) => {
             </div>
           </div>
 
-          {/* Campos */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            <FormField label="Nome da filial *" error={errors.nome}>
-              <input className={`neu-input py-2 px-3 rounded-xl text-sm ${errors.nome ? 'border border-red-500/40' : ''}`}
-                value={form.nome} onChange={e => { setForm(f => ({ ...f, nome: e.target.value })); clearError('nome'); }}
-                placeholder="Ex: Filial Sul" />
-            </FormField>
-            <FormField label="CNPJ *" error={errors.cnpj}>
-              <input className={`neu-input py-2 px-3 rounded-xl text-sm font-mono ${errors.cnpj ? 'border border-red-500/40' : ''}`}
-                value={form.cnpj} onChange={e => { setForm(f => ({ ...f, cnpj: formatCNPJ(e.target.value) })); clearError('cnpj'); }}
-                placeholder="00.000.000/0000-00" inputMode="numeric" />
-            </FormField>
-            <FormField label="Cidade/UF *" error={errors.cidade}>
-              <input className={`neu-input py-2 px-3 rounded-xl text-sm ${errors.cidade ? 'border border-red-500/40' : ''}`}
-                value={form.cidade} onChange={e => { setForm(f => ({ ...f, cidade: e.target.value })); clearError('cidade'); }}
-                placeholder="Ex: Rio Branco/AC" />
-            </FormField>
-            <FormField label="Celular">
-              <input className="neu-input py-2 px-3 rounded-xl text-sm" value={extras.celular}
-                onChange={e => setExtras(x => ({ ...x, celular: formatPhone(e.target.value) }))}
-                placeholder="(68) 99999-9999" inputMode="numeric" />
-            </FormField>
-            <FormField label="Endereço">
-              <input className="neu-input py-2 px-3 rounded-xl text-sm" value={extras.endereco}
-                onChange={e => setExtras(x => ({ ...x, endereco: e.target.value }))}
-                placeholder="Rua, número, bairro" />
-            </FormField>
-            <FormField label="Representante">
-              <input className="neu-input py-2 px-3 rounded-xl text-sm" value={extras.representante}
-                onChange={e => setExtras(x => ({ ...x, representante: e.target.value }))}
-                placeholder="Ex: João Silva" />
-            </FormField>
-          </div>
-
-          {/* Detalhes operacionais / plano de negócio */}
+          {/* Identificação */}
           <div>
             <p className="text-[10px] text-gray-600 uppercase tracking-widest font-bold mb-3 flex items-center gap-2">
-              <Ruler size={12} /> Detalhes Operacionais
+              <Building2 size={12} /> Identificação
             </p>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              <FormField label="Tamanho do espaço (m²)">
+              <FormField label="Nome da filial *" error={errors.nome}>
+                <input className={`neu-input py-2 px-3 rounded-xl text-sm ${errors.nome ? 'border border-red-500/40' : ''}`}
+                  value={form.nome} onChange={e => { setForm(f => ({ ...f, nome: e.target.value })); clearError('nome'); }}
+                  placeholder="Ex: Filial Sul" />
+              </FormField>
+              <FormField label="CNPJ *" error={errors.cnpj}>
+                <input className={`neu-input py-2 px-3 rounded-xl text-sm font-mono ${errors.cnpj ? 'border border-red-500/40' : ''}`}
+                  value={form.cnpj} onChange={e => { setForm(f => ({ ...f, cnpj: formatCNPJ(e.target.value) })); clearError('cnpj'); }}
+                  placeholder="00.000.000/0000-00" inputMode="numeric" />
+              </FormField>
+              <FormField label="Representante">
+                <input className="neu-input py-2 px-3 rounded-xl text-sm" value={extras.representante}
+                  onChange={e => setExtras(x => ({ ...x, representante: e.target.value }))}
+                  placeholder="Ex: João Silva" />
+              </FormField>
+              <FormField label="Endereço">
+                <input className="neu-input py-2 px-3 rounded-xl text-sm" value={extras.endereco}
+                  onChange={e => setExtras(x => ({ ...x, endereco: e.target.value }))}
+                  placeholder="Rua, número, bairro" />
+              </FormField>
+              <FormField label="Cidade/UF *" error={errors.cidade}>
+                <input className={`neu-input py-2 px-3 rounded-xl text-sm ${errors.cidade ? 'border border-red-500/40' : ''}`}
+                  value={form.cidade} onChange={e => { setForm(f => ({ ...f, cidade: e.target.value })); clearError('cidade'); }}
+                  placeholder="Ex: Rio Branco/AC" />
+              </FormField>
+              <FormField label="Celular">
+                <input className="neu-input py-2 px-3 rounded-xl text-sm" value={extras.celular}
+                  onChange={e => setExtras(x => ({ ...x, celular: formatPhone(e.target.value) }))}
+                  placeholder="(68) 99999-9999" inputMode="numeric" />
+              </FormField>
+            </div>
+          </div>
+
+          {/* Espaço físico e operação */}
+          <div>
+            <p className="text-[10px] text-gray-600 uppercase tracking-widest font-bold mb-3 flex items-center gap-2">
+              <Ruler size={12} /> Espaço e Operação
+            </p>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              <FormField label="Área do espaço (m²)">
                 <input className="neu-input py-2 px-3 rounded-xl text-sm" type="number" min="0" value={detalhes.tamanhoM2}
                   onChange={e => setDetalhes(d => ({ ...d, tamanhoM2: e.target.value }))}
                   placeholder="Ex: 180" />
@@ -689,38 +740,64 @@ export const FiliaisView = ({ showToast }: any) => {
                   <option value="Alugado">Alugado</option>
                 </select>
               </FormField>
-              <FormField label="Vagas de estacionamento">
-                <input className="neu-input py-2 px-3 rounded-xl text-sm" type="number" min="0" value={detalhes.vagas}
-                  onChange={e => setDetalhes(d => ({ ...d, vagas: e.target.value }))}
-                  placeholder="Ex: 10" />
-              </FormField>
-              <FormField label="Capacidade (pessoas/PDVs)">
-                <input className="neu-input py-2 px-3 rounded-xl text-sm" type="number" min="0" value={detalhes.capacidade}
-                  onChange={e => setDetalhes(d => ({ ...d, capacidade: e.target.value }))}
-                  placeholder="Ex: 40" />
+              <FormField label="Data de inauguração">
+                <input className="neu-input py-2 px-3 rounded-xl text-sm" type="date" value={detalhes.dataInauguracao}
+                  onChange={e => setDetalhes(d => ({ ...d, dataInauguracao: e.target.value }))} />
               </FormField>
               <FormField label="Horário de funcionamento">
                 <input className="neu-input py-2 px-3 rounded-xl text-sm" value={detalhes.horarioFuncionamento}
                   onChange={e => setDetalhes(d => ({ ...d, horarioFuncionamento: e.target.value }))}
                   placeholder="Ex: 08h às 18h" />
               </FormField>
-              <FormField label="Data de inauguração">
-                <input className="neu-input py-2 px-3 rounded-xl text-sm" type="date" value={detalhes.dataInauguracao}
-                  onChange={e => setDetalhes(d => ({ ...d, dataInauguracao: e.target.value }))} />
+              <FormField label="Capacidade (pessoas)">
+                <input className="neu-input py-2 px-3 rounded-xl text-sm" type="number" min="0" value={detalhes.capacidade}
+                  onChange={e => setDetalhes(d => ({ ...d, capacidade: e.target.value }))}
+                  placeholder="Ex: 40" />
               </FormField>
-              <FormField label="Investimento inicial">
+              <FormField label="Vagas de estacionamento">
+                <input className="neu-input py-2 px-3 rounded-xl text-sm" type="number" min="0" value={detalhes.vagas}
+                  onChange={e => setDetalhes(d => ({ ...d, vagas: e.target.value }))}
+                  placeholder="Ex: 10" />
+              </FormField>
+            </div>
+          </div>
+
+          {/* Custos e aporte */}
+          <div>
+            <p className="text-[10px] text-gray-600 uppercase tracking-widest font-bold mb-3 flex items-center gap-2">
+              <Wallet size={12} /> Aporte e Custo Mensal
+            </p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <FormField label="Aporte inicial (capital de abertura)">
                 <input className="neu-input py-2 px-3 rounded-xl text-sm" type="text" inputMode="numeric" value={detalhes.investimentoInicial}
                   onChange={e => setDetalhes(d => ({ ...d, investimentoInicial: formatBRL(e.target.value) }))}
                   onKeyDown={handleMoneyKeyDown}
                   placeholder="R$ 0,00" />
               </FormField>
-              <FormField label="Funcionários — Valor total da folha de pagamento">
-                <input className="neu-input py-2 px-3 rounded-xl text-sm" type="text" inputMode="numeric" value={detalhes.folhaPagamento}
-                  onChange={e => setDetalhes(d => ({ ...d, folhaPagamento: formatBRL(e.target.value) }))}
-                  onKeyDown={handleMoneyKeyDown}
-                  placeholder="R$ 0,00" />
+              <FormField label="Folha de pagamento (mês)">
+                {espelhoInvestimento.folhaRH ? (
+                  <div className="neu-pressed py-2 px-3 rounded-xl text-sm flex items-center justify-between gap-2"
+                    title="Soma do salário bruto da competência mais recente em RH › Folha de Pagamento">
+                    <span className="font-bold text-gray-100 tabular-nums">R$ {formatBRL(espelhoInvestimento.folhaRH.total)}</span>
+                    <span className="text-[11px] text-gray-500 truncate">
+                      {competenciaBR(espelhoInvestimento.folhaRH.competencia)} · {espelhoInvestimento.folhaRH.funcionarios} func.
+                    </span>
+                  </div>
+                ) : (
+                  <input className="neu-input py-2 px-3 rounded-xl text-sm" type="text" inputMode="numeric" value={detalhes.folhaPagamento}
+                    onChange={e => setDetalhes(d => ({ ...d, folhaPagamento: formatBRL(e.target.value) }))}
+                    onKeyDown={handleMoneyKeyDown}
+                    placeholder="R$ 0,00"
+                    title="Nenhuma folha lançada no RH para esta unidade — valor estimado" />
+                )}
               </FormField>
             </div>
+            <p className="text-[11px] text-gray-500 mt-2">
+              {espelhoInvestimento.folhaRH
+                ? 'A folha vem do RH › Folha de Pagamento (salário bruto da competência mais recente) e se atualiza sozinha.'
+                : 'Sem folha lançada no RH para esta unidade — informe uma estimativa. Quando o RH lançar a folha, o valor passa a vir de lá.'}
+              {' '}O aluguel entra como item de categoria "Aluguel" na lista abaixo.
+            </p>
           </div>
 
           {/* Investimento item a item (migr. 509, Fase 2) — cada linha é uma
@@ -728,12 +805,12 @@ export const FiliaisView = ({ showToast }: any) => {
               que a filial tem id (salva ao menos uma vez). */}
           <div>
             <p className="text-[10px] text-gray-600 uppercase tracking-widest font-bold mb-3 flex items-center gap-2">
-              <Package size={12} /> Investimento — Item a Item <span className="text-accent">· {nichoDoForm}</span>
+              <Package size={12} /> Montagem — Item a Item <span className="text-accent">· {nichoDoForm}</span>
             </p>
 
             {!editItem ? (
               <div className="neu-pressed rounded-xl p-4 text-xs text-gray-500">
-                Salve a filial primeiro — os itens de investimento se amarram a ela.
+                Salve a filial primeiro — os itens de montagem se amarram a ela. Depois de salvar, abra em Editar para incluir os equipamentos.
               </div>
             ) : (
               <>
@@ -754,11 +831,17 @@ export const FiliaisView = ({ showToast }: any) => {
                   ))}
                   <button type="button" onClick={handleAddItemCustom}
                     className="neu-button py-1.5 px-3 rounded-lg text-[11px] text-accent font-bold">
-                    <Plus size={11} className="inline -mt-0.5 mr-1" /> Adicionar item
+                    <Plus size={11} className="inline -mt-0.5 mr-1" /> Outro item
                   </button>
                 </div>
 
                 <div className="flex flex-col gap-2">
+                  {(itens ?? []).length > 0 && (
+                    <div className={`hidden md:grid ${GRADE_ITEM} gap-2 px-3 text-[10px] uppercase tracking-widest font-bold text-gray-500`}>
+                      <span>Item</span><span className="text-center">Categoria</span><span className="text-center">Qtd</span>
+                      <span className="text-center">Preço unit.</span><span className="text-center">Centro de custo</span><span className="text-right pr-7">Total</span>
+                    </div>
+                  )}
                   {(itens ?? []).map((item: any) => {
                     // Item com conta gerada não muda de valor pelas costas: o
                     // gatilho da migr. 512 recusa o UPDATE, e a tela evita que o
@@ -769,14 +852,14 @@ export const FiliaisView = ({ showToast }: any) => {
                       : undefined;
                     return (
                     <div key={item.id + '_' + item.updated_at} className="flex flex-col gap-1.5">
-                    <div className={`neu-pressed rounded-xl p-3 border grid grid-cols-2 md:grid-cols-6 gap-2 items-center ${gerado ? 'border-accent/20' : 'border-white/5'}`}>
+                    <div className={`neu-pressed rounded-xl p-3 border grid grid-cols-2 ${GRADE_ITEM} gap-2 items-center ${gerado ? 'border-accent/20' : 'border-white/5'}`}>
                       {item.origem_campo === 'customizado' ? (
-                        <input className="neu-input py-2 px-3 rounded-lg text-sm col-span-2 disabled:opacity-60"
+                        <input className="neu-input py-2 px-3 rounded-lg text-sm col-span-2 md:col-span-1 disabled:opacity-60"
                           defaultValue={item.rotulo} disabled={gerado} title={travaTitle}
                           onBlur={e => { const v = e.target.value.trim(); if (v && v !== item.rotulo) handleUpdateItem(item.id, { rotulo: v }); }}
-                          placeholder="Rótulo do item" />
+                          placeholder="Nome do item" />
                       ) : (
-                        <span className="text-xs text-gray-300 col-span-2 truncate" title={item.rotulo}>{item.rotulo}</span>
+                        <span className="text-sm text-gray-200 col-span-2 md:col-span-1 truncate" title={item.rotulo}>{item.rotulo}</span>
                       )}
                       {item.origem_campo === 'customizado' ? (
                         <select className="neu-input py-2 px-2 rounded-lg text-xs disabled:opacity-60" value={item.categoria}
@@ -784,19 +867,24 @@ export const FiliaisView = ({ showToast }: any) => {
                           onChange={e => handleUpdateItem(item.id, { categoria: e.target.value })}>
                           <option value="outro">Outro</option>
                           <option value="equipamento">Equipamento</option>
-                          <option value="aluguel">Aluguel</option>
+                          <option value="aluguel">Aluguel (mensal)</option>
                         </select>
                       ) : (
-                        <span className="text-[10px] text-gray-500 uppercase tracking-wide">Equipamento</span>
+                        <span className="text-[10px] text-gray-500 uppercase tracking-wide text-center">Equipamento</span>
                       )}
-                      <input className="neu-input py-2 px-2 rounded-lg text-sm disabled:opacity-60" type="number" min="0" step="0.01"
+                      <input className="neu-input py-2 px-2 rounded-lg text-sm text-center disabled:opacity-60" type="number" min="0" step="1"
                         defaultValue={item.quantidade} disabled={gerado}
                         onBlur={e => { const v = Number(e.target.value); if (Number.isFinite(v) && v !== Number(item.quantidade)) handleUpdateItem(item.id, { quantidade: v }); }}
                         title={travaTitle ?? 'Quantidade'} />
-                      <input className="neu-input py-2 px-2 rounded-lg text-sm disabled:opacity-60" type="text" inputMode="numeric"
+                      {/* Campo não controlado (salva no blur): a máscara reescreve
+                          o próprio valor a cada tecla, senão o "1.250,00" só
+                          aparecia depois de sair do campo. */}
+                      <input className="neu-input py-2 px-2 rounded-lg text-sm text-right tabular-nums disabled:opacity-60" type="text" inputMode="numeric"
                         defaultValue={formatBRL(item.preco_unitario)} disabled={gerado}
                         onKeyDown={handleMoneyKeyDown}
+                        onChange={e => { e.currentTarget.value = formatBRL(e.currentTarget.value); }}
                         onBlur={e => { const v = valorNum(e.target.value); if (v !== Number(item.preco_unitario)) handleUpdateItem(item.id, { preco_unitario: v }); }}
+                        placeholder="0,00"
                         title={travaTitle ?? 'Preço unitário'} />
                       <select className="neu-input py-2 px-2 rounded-lg text-xs disabled:opacity-60" value={item.centro_custo_id ?? ''}
                         disabled={gerado} title={travaTitle}
@@ -806,8 +894,8 @@ export const FiliaisView = ({ showToast }: any) => {
                           <option key={cc.id} value={cc.id}>{cc.nome}</option>
                         ))}
                       </select>
-                      <div className="flex items-center justify-between col-span-2 md:col-span-1">
-                        <span className="text-xs font-bold text-gray-300 tabular-nums">R$ {formatBRL(item.valor_total)}</span>
+                      <div className="flex items-center justify-end gap-2">
+                        <span className="text-xs font-bold text-gray-200 tabular-nums">R$ {formatBRL(item.valor_total)}</span>
                         <button type="button" onClick={() => handleRemoveItem(item)}
                           disabled={!!item.conta_pagar_id}
                           title={item.conta_pagar_id ? 'Conta já gerada — desvincule antes de remover' : 'Remover'}
@@ -831,7 +919,7 @@ export const FiliaisView = ({ showToast }: any) => {
                     );
                   })}
                   {(itens ?? []).length === 0 && (
-                    <p className="text-xs text-gray-500 py-2">Nenhum item ainda — use os atalhos acima ou "Adicionar item".</p>
+                    <p className="text-xs text-gray-500 py-2">Nenhum item ainda — use os atalhos acima ou "Outro item".</p>
                   )}
                 </div>
 
@@ -839,32 +927,44 @@ export const FiliaisView = ({ showToast }: any) => {
               </>
             )}
 
-            <div className="neu-flat rounded-xl p-4 mt-4 border border-accent/20 flex flex-col gap-2">
-              <div className="flex items-center justify-between text-[11px] text-gray-500">
-                <span>Equipamentos & mobiliário</span>
-                <span className="tabular-nums">R$ {formatBRL(espelhoInvestimento.equipamentos)}</span>
-              </div>
-              {espelhoInvestimento.aluguel > 0 && (
+            {/* Resumo: montagem (gasto único) separada do custo que se repete todo mês. */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-4">
+              <div className="neu-flat rounded-xl p-4 border border-accent/20 flex flex-col gap-2">
                 <div className="flex items-center justify-between text-[11px] text-gray-500">
-                  <span>Aluguel</span>
-                  <span className="tabular-nums">R$ {formatBRL(espelhoInvestimento.aluguel)}</span>
+                  <span>Equipamentos & mobiliário</span>
+                  <span className="tabular-nums">R$ {formatBRL(espelhoInvestimento.equipamentos)}</span>
                 </div>
-              )}
-              {espelhoInvestimento.outros > 0 && (
                 <div className="flex items-center justify-between text-[11px] text-gray-500">
                   <span>Outros itens</span>
                   <span className="tabular-nums">R$ {formatBRL(espelhoInvestimento.outros)}</span>
                 </div>
-              )}
-              {detalhes.folhaPagamento && (
-                <div className="flex items-center justify-between text-[11px] text-gray-500">
-                  <span>Folha de pagamento</span>
-                  <span className="tabular-nums">R$ {detalhes.folhaPagamento}</span>
+                <div className="flex items-center justify-between pt-2 border-t border-white/5">
+                  <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">Total da montagem</span>
+                  <span className="text-lg font-black text-accent tabular-nums">R$ {formatBRL(espelhoInvestimento.total)}</span>
                 </div>
-              )}
-              <div className="flex items-center justify-between pt-2 border-t border-white/5">
-                <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">Valor total investido</span>
-                <span className="text-lg font-black text-accent tabular-nums">R$ {formatBRL(espelhoInvestimento.total)}</span>
+                {espelhoInvestimento.aporte > 0 && (
+                  <div className="flex items-center justify-between text-[11px]">
+                    <span className="text-gray-500">Aporte inicial R$ {formatBRL(espelhoInvestimento.aporte)} ·{' '}
+                      {espelhoInvestimento.saldoAporte >= 0 ? 'sobra' : 'falta'}</span>
+                    <span className={`font-bold tabular-nums ${espelhoInvestimento.saldoAporte >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                      R$ {formatBRL(Math.abs(espelhoInvestimento.saldoAporte))}
+                    </span>
+                  </div>
+                )}
+              </div>
+              <div className="neu-flat rounded-xl p-4 border border-white/10 flex flex-col gap-2">
+                <div className="flex items-center justify-between text-[11px] text-gray-500">
+                  <span>Aluguel</span>
+                  <span className="tabular-nums">R$ {formatBRL(espelhoInvestimento.aluguel)}</span>
+                </div>
+                <div className="flex items-center justify-between text-[11px] text-gray-500">
+                  <span>Folha de pagamento{espelhoInvestimento.folhaRH ? '' : ' (estimada)'}</span>
+                  <span className="tabular-nums">R$ {formatBRL(espelhoInvestimento.folha)}</span>
+                </div>
+                <div className="flex items-center justify-between pt-2 border-t border-white/5">
+                  <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">Custo fixo mensal</span>
+                  <span className="text-lg font-black text-gray-100 tabular-nums">R$ {formatBRL(espelhoInvestimento.mensal)}</span>
+                </div>
               </div>
             </div>
           </div>
@@ -963,6 +1063,8 @@ export const FiliaisView = ({ showToast }: any) => {
                   const pago = linhas.flatMap(l => l.contas).reduce((s, c: any) => s + pagoDe(c), 0);
                   const vendas = linhas.flatMap(l => l.receber).reduce((s, r: any) => s + Number(r.valor), 0);
                   const podeMexer = canEditRow(item);
+                  const folhaRHCard = folhaPorNicho[detectarNicho(d.nicho, item.nome) ?? ''];
+                  const folhaCard = folhaRHCard ? folhaRHCard.total : d.folhaPagamento;
                   return (
                     <div className="p-5 flex flex-col gap-4">
                       <div className="flex items-center justify-between gap-3 flex-wrap">
@@ -970,7 +1072,8 @@ export const FiliaisView = ({ showToast }: any) => {
                           <Wallet size={11} /> Investimento
                         </span>
                         <span className="text-[11px] text-gray-500 flex items-center gap-3 flex-wrap">
-                          {d.folhaPagamento != null && <span>Folha/mês <b className="text-gray-300">{brl(d.folhaPagamento)}</b></span>}
+                          {folhaCard != null && <span title={folhaRHCard ? `RH › Folha de Pagamento, competência ${competenciaBR(folhaRHCard.competencia)}` : 'Estimativa digitada na ficha'}>
+                            Folha/mês <b className="text-gray-300">{brl(folhaCard)}</b>{folhaRHCard ? '' : ' (est.)'}</span>}
                           {d.investimentoInicial != null && <span>Aporte inicial <b className="text-gray-300">{brl(d.investimentoInicial)}</b></span>}
                         </span>
                       </div>
