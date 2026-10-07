@@ -1058,7 +1058,11 @@ export const FiliaisView = ({ showToast }: any) => {
                     const receber = inv.receber.filter((r: any) => r.produto_patrimonio_id === x.produto_patrimonio_id);
                     return { x, contas, bem, receber, sit: situacaoDoItem(x, contas, bem, receber, hoje) };
                   });
-                  const planejado = linhas.filter(l => l.sit.rotulo === 'Planejado').reduce((s, l) => s + Number(l.x.valor_total ?? 0), 0);
+                  // Aluguel é custo do mês, não montagem: somar uma parcela dele ao
+                  // "Planejado" misturava gasto único com recorrente (mesma régua
+                  // do resumo do formulário). Ele aparece à parte, como Aluguel/mês.
+                  const planejado = linhas.filter(l => l.sit.rotulo === 'Planejado' && l.x.categoria !== 'aluguel').reduce((s, l) => s + Number(l.x.valor_total ?? 0), 0);
+                  const aluguelMes = linhas.filter(l => l.x.categoria === 'aluguel').reduce((s, l) => s + Number(l.x.valor_total ?? 0), 0);
                   const lancado = linhas.flatMap(l => l.contas).reduce((s, c: any) => s + Number(c.valor), 0);
                   const pago = linhas.flatMap(l => l.contas).reduce((s, c: any) => s + pagoDe(c), 0);
                   const vendas = linhas.flatMap(l => l.receber).reduce((s, r: any) => s + Number(r.valor), 0);
@@ -1074,13 +1078,14 @@ export const FiliaisView = ({ showToast }: any) => {
                         <span className="text-[11px] text-gray-500 flex items-center gap-3 flex-wrap">
                           {folhaCard != null && <span title={folhaRHCard ? `RH › Folha de Pagamento, competência ${competenciaBR(folhaRHCard.competencia)}` : 'Estimativa digitada na ficha'}>
                             Folha/mês <b className="text-gray-300">{brl(folhaCard)}</b>{folhaRHCard ? '' : ' (est.)'}</span>}
+                          {aluguelMes > 0 && <span>Aluguel/mês <b className="text-gray-300">{brl(aluguelMes)}</b></span>}
                           {d.investimentoInicial != null && <span>Aporte inicial <b className="text-gray-300">{brl(d.investimentoInicial)}</b></span>}
                         </span>
                       </div>
 
                       <div className={`grid grid-cols-2 gap-2 ${vendas > 0 ? 'lg:grid-cols-4' : 'lg:grid-cols-3'}`}>
                         {[
-                          { r: 'Planejado', v: planejado, c: 'text-gray-200' },
+                          { r: 'Planejado (montagem)', v: planejado, c: 'text-gray-200' },
                           { r: 'Lançado', v: lancado, c: 'text-amber-400' },
                           { r: 'Pago', v: pago, c: 'text-green-400' },
                           ...(vendas > 0 ? [{ r: 'Vendas de bens', v: vendas, c: 'text-purple-400' }] : []),
