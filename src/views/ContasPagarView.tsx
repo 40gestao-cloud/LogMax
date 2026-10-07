@@ -3,7 +3,9 @@ import React, { useState, useEffect, useMemo } from 'react';
 import type { FilialSelectorValue } from '../components/FilialSelector';
 import { useFilial } from '../contexts/FilialContext';
 import { motion, AnimatePresence } from 'motion/react';
-import { Search, Edit2, Trash2, Plus, Save, Check, Landmark, X, FileDown, Sheet, FileCheck, Clock, Truck, Ban } from 'lucide-react';
+import { Search, Edit2, Trash2, Plus, Save, Check, Landmark, X, FileDown, Sheet, FileCheck, Clock, Truck, Ban, Repeat, Receipt } from 'lucide-react';
+import { PainelContasRecorrentes, ModalInformarFatura, gerarRecorrentes } from '../components/ContasRecorrentes';
+import { ATALHOS_CONSUMO, centroPorNome, gruposFornecedorPorTipo, fornecedoresDeCompra } from '../lib/contasConsumo';
 import { FreteCompraModal } from '../components/FreteCompraModal';
 import { HistoricoOperacoes } from '../components/HistoricoOperacoes';
 import { useFetchData, dbInsert, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
@@ -67,6 +69,23 @@ const ContasPagarViewInner = ({ showToast, filial }: { showToast: any; filial: F
     { page, searchTerm: debouncedSearch, searchColumns: ['descricao', 'status'] }
   );
   const { data: fornecedores } = useFetchData<any>('/api/crmview-fornecedores', { filial });
+  // Centro de custo (migr. 679 na tela; a coluna já existia): é o que leva a
+  // conta à linha certa do DRE. Sem ele, luz e água caíam em "Não classificado".
+  const { data: centros } = useFetchData<any>('/api/centroscustoview', undefined, false, { orderBy: 'nome', ascending: true });
+  const [recorrentesAberto, setRecorrentesAberto] = useState(false);
+  const [informandoFatura, setInformandoFatura] = useState<any | null>(null);
+  // Contas recorrentes do mês: o gerador é idempotente e roda ao abrir a tela.
+  // Falha calada (sem permissão, migração ausente) não pode travar a lista.
+  useEffect(() => {
+    if (!filial) return;
+    let vivo = true;
+    gerarRecorrentes(filial).then(r => {
+      if (!vivo || !r || r.erro) return;
+      if (r.geradas > 0) { showToast(`${r.geradas} conta(s) recorrente(s) do mês gerada(s).`, 'info', true); reload(); }
+      r.avisos?.forEach(a => showToast(a, 'error', true));
+    });
+    return () => { vivo = false; };
+  }, [filial]); // eslint-disable-line react-hooks/exhaustive-deps
   // A conta nasce do pedido com a descrição "Pedido #ABC123 — Toner", e só.
   // A quantidade fica no pedido (`item_qtd`), então quem lê a conta — na tela
   // ou no PDF — não sabe se aquele valor pagou uma unidade ou doze. Buscamos o
@@ -100,7 +119,13 @@ const ContasPagarViewInner = ({ showToast, filial }: { showToast: any; filial: F
    * do clique. Trava sem aviso é armadilha: o aluno tenta, leva um erro que não
    * pede nada dele e conclui que o sistema quebrou.
    */
-  const pendenciaDe = (conta: any): { pronta: boolean; acao: 'pagar' | 'conferir' | 'esperar'; aviso?: string } => {
+  const pendenciaDe = (conta: any): { pronta: boolean; acao: 'pagar' | 'conferir' | 'esperar' | 'fatura'; aviso?: string } => {
+    // Conta de consumo variável nasce como previsão (migr. 679): o banco só
+    // aceita a baixa depois de informada a fatura.
+    if (conta.valor_estimado) {
+      return { pronta: false, acao: 'fatura',
+        aviso: 'Valor previsto (média das últimas faturas). Informe o valor da fatura quando ela chegar para liberar o pagamento.' };
+    }
     if (!conta.pedido_id) return { pronta: true, acao: 'pagar' };
     if (conta.nf_conferida_em) return { pronta: true, acao: 'pagar' };
 
@@ -131,7 +156,7 @@ const ContasPagarViewInner = ({ showToast, filial }: { showToast: any; filial: F
   const [form, setForm] = useState({ descricao: '' });
   // `natureza` (migr. 447): no que este pagamento se transforma. Só existe na
   // conta AVULSA — a de pedido é sempre estoque, e o gatilho do banco força.
-  const [extras, setExtras] = useState({ valor: '', vencimento: '', fornecedor_id: '', filial: filial as string, natureza: 'despesa' });
+  const [extras, setExtras] = useState({ valor: '', vencimento: '', fornecedor_id: '', filial: filial as string, natureza: 'despesa', centro_custo_id: '' });
   const { errors, validate, clearError, setErrors } = useFormValidation(form);
   // Diálogo inline de pagamento: pede o banco de débito antes de confirmar.
   const [payingId, setPayingId] = useState<string | null>(null);
@@ -321,7 +346,7 @@ const ContasPagarViewInner = ({ showToast, filial }: { showToast: any; filial: F
   const openEdit = (item: any) => {
     setEditItem(item);
     setForm({ descricao: item.descricao ?? '' });
-    setExtras({ valor: item.valor != null && item.valor !== '' ? formatBRL(Number(item.valor)) : '', vencimento: item.vencimento ?? '', fornecedor_id: item.fornecedor_id ?? '', filial, natureza: item.natureza ?? 'despesa' });
+    setExtras({ valor: item.valor != null && item.valor !== '' ? formatBRL(Number(item.valor)) : '', vencimento: item.vencimento ?? '', fornecedor_id: item.fornecedor_id ?? '', filial, natureza: item.natureza ?? 'despesa', centro_custo_id: item.centro_custo_id ?? '' });
     setErrors({});
     setShowForm(false);
   };
@@ -330,7 +355,7 @@ const ContasPagarViewInner = ({ showToast, filial }: { showToast: any; filial: F
     setShowForm(false);
     setEditItem(null);
     setForm({ descricao: '' });
-    setExtras({ valor: '', vencimento: '', fornecedor_id: '', filial, natureza: 'despesa' });
+    setExtras({ valor: '', vencimento: '', fornecedor_id: '', filial, natureza: 'despesa', centro_custo_id: '' });
     setErrors({});
   };
 
@@ -345,6 +370,7 @@ const ContasPagarViewInner = ({ showToast, filial }: { showToast: any; filial: F
       fornecedor_id: extras.fornecedor_id || null,
       filial: filialTarget,
       natureza: extras.natureza || 'despesa',
+      centro_custo_id: extras.centro_custo_id || null,
     };
     try {
       // Verificar saldo de capital antes de criar nova despesa
@@ -531,6 +557,10 @@ const ContasPagarViewInner = ({ showToast, filial }: { showToast: any; filial: F
             <button onClick={() => setFreteAberto(true)} title="Lançar o CT-e da transportadora e ratear o frete no custo dos pedidos da carga"
               className="btn-solido btn-solido--azul"><Truck size={15} /> Frete (CT-e)</button>
           )}
+          {filial && (
+            <button onClick={() => setRecorrentesAberto(true)} title="Luz, água, internet, aluguel: contas que se repetem todo mês"
+              className="btn-solido btn-solido--preto"><Repeat size={15} className="text-accent" /> Recorrentes</button>
+          )}
           <NeuButtonAccent onClick={() => { closeForm(); setShowForm(v => !v); }}><Plus size={16} /> Nova</NeuButtonAccent>
         </div>
       </div>
@@ -544,12 +574,29 @@ const ContasPagarViewInner = ({ showToast, filial }: { showToast: any; filial: F
             <NeuButtonAccent onClick={handleSave} isLoading={isSaving}><Save size={14} /> {editItem ? 'Atualizar' : 'Salvar'}</NeuButtonAccent>
           </>}
         >
+          {!editItem && (
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-[10px] uppercase tracking-widest font-bold text-gray-500">Conta de consumo:</span>
+              {ATALHOS_CONSUMO.map(a => (
+                <button key={a.rotulo} type="button"
+                  onClick={() => {
+                    setForm(f => ({ ...f, descricao: f.descricao || a.descricao })); clearError('descricao');
+                    setExtras(x => ({ ...x, natureza: 'despesa', centro_custo_id: centroPorNome(centros, a.centro) || x.centro_custo_id }));
+                  }}
+                  className="neu-button py-1.5 px-3 rounded-lg text-[11px] text-gray-400 hover:text-accent">{a.rotulo}</button>
+              ))}
+              <button type="button" onClick={() => { closeForm(); setRecorrentesAberto(true); }}
+                className="text-[11px] text-accent hover:underline flex items-center gap-1 ml-1">
+                <Repeat size={11} /> Todo mês? Cadastre como recorrente
+              </button>
+            </div>
+          )}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <div className="sm:col-span-2">
             <FormField label="Descrição *" error={errors.descricao}>
               <input className={`neu-input py-2 px-3 rounded-xl text-sm ${errors.descricao ? 'border border-red-500/40' : ''}`}
                 value={form.descricao} onChange={e => { setForm(f => ({ ...f, descricao: e.target.value })); clearError('descricao'); }}
-                placeholder="Ex: Fornecimento de material" />
+                placeholder="Ex: Energia elétrica, Material de limpeza" />
             </FormField>
             </div>
             <FormField label="Valor (R$)">
@@ -574,9 +621,19 @@ const ContasPagarViewInner = ({ showToast, filial }: { showToast: any; filial: F
                 disabled={!!editItem?.pedido_id}
                 placeholder="Nenhum"
                 permitirVazio="Nenhum"
-                grupos={gruposDeCadastro(fornecedores)}
+                grupos={gruposFornecedorPorTipo(fornecedores)}
               />
             </FormField>
+            {!editItem?.pedido_id && !editItem?.folha_pagamento_id && !editItem?.rescisao_id && (
+              <FormField label="Centro de custo">
+                <select className="neu-input py-2 px-3 rounded-xl text-sm" value={extras.centro_custo_id}
+                  onChange={e => setExtras(x => ({ ...x, centro_custo_id: e.target.value }))}
+                  title="Define a linha do DRE em que a despesa aparece">
+                  <option value="">Não classificado</option>
+                  {(centros ?? []).map((c: any) => <option key={c.id} value={c.id}>{c.nome}</option>)}
+                </select>
+              </FormField>
+            )}
 
             {/* Migr. 447: conta de pedido é estoque por definição e não mostra o campo. */}
             {!editItem?.pedido_id && !editItem?.folha_pagamento_id && !editItem?.rescisao_id && (
@@ -639,6 +696,14 @@ const ContasPagarViewInner = ({ showToast, filial }: { showToast: any; filial: F
                               Frete
                             </span>
                           )}
+                          {item.recorrencia_id && (
+                            <span className="ml-2 px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider bg-accent/15 text-accent align-middle"
+                              title="Gerada por uma conta recorrente (Recorrentes)">Recorrente</span>
+                          )}
+                          {item.valor_estimado && (
+                            <span className="ml-2 px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider bg-sky-500/15 text-sky-300 align-middle"
+                              title="Valor previsto — informe a fatura para pagar">Previsão</span>
+                          )}
                           {qtdDe(item) != null && (
                             <span className="ml-2 text-[10px] font-mono text-gray-500 align-middle"
                               title={`Pedido de ${qtdDe(item)!.toLocaleString('pt-BR')} un — R$ ${(Number(item.valor ?? 0) / qtdDe(item)!).toLocaleString('pt-BR', { minimumFractionDigits: 2 })} cada`}>
@@ -690,6 +755,15 @@ const ContasPagarViewInner = ({ showToast, filial }: { showToast: any; filial: F
                                     className="aviso-neutro py-1.5 px-3 rounded-lg text-xs font-bold text-gray-500 border border-white/5 flex items-center gap-1 cursor-help">
                                     <Clock size={11} /> Aguardando o Estoque
                                   </span>
+                                );
+                              }
+                              if (pend.acao === 'fatura') {
+                                return (
+                                  <button onClick={() => setInformandoFatura(item)}
+                                    title="Troque a previsão pelo valor da fatura para liberar o pagamento."
+                                    className="neu-button py-1.5 px-3 rounded-lg text-xs font-bold text-sky-300 hover:bg-sky-400/10 transition-colors flex items-center gap-1">
+                                    <Receipt size={11} /> Informar fatura
+                                  </button>
                                 );
                               }
                               if (pend.acao === 'conferir') {
@@ -801,8 +875,22 @@ const ContasPagarViewInner = ({ showToast, filial }: { showToast: any; filial: F
         </div>
       )}
 
+      <AnimatePresence>
+        {informandoFatura && (
+          <ModalInformarFatura conta={informandoFatura} showToast={showToast}
+            onClose={() => setInformandoFatura(null)}
+            onSalvo={v => setData((prev: any[]) => prev.map(d => d.id === informandoFatura.id ? { ...d, valor: v, valor_estimado: false } : d))} />
+        )}
+      </AnimatePresence>
+      {filial && (
+        <AnimatePresence>
+          <PainelContasRecorrentes aberto={recorrentesAberto} onFechar={() => setRecorrentesAberto(false)}
+            filial={filial} fornecedores={fornecedores ?? []} centros={centros ?? []} showToast={showToast} onGerou={reload} />
+        </AnimatePresence>
+      )}
+
       {filial && filial !== 'Matriz' && (
-        <FreteCompraModal aberto={freteAberto} filial={filial} fornecedores={fornecedores}
+        <FreteCompraModal aberto={freteAberto} filial={filial} fornecedores={fornecedoresDeCompra(fornecedores)}
           onFechar={() => setFreteAberto(false)} onLancado={reload} showToast={showToast} />
       )}
 

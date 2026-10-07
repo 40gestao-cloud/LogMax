@@ -107,6 +107,7 @@ export const ENDPOINT_TABLE_MAP: Record<string, string> = {
   '/api/vencimentosestoqueview':       'vencimentos_estoque',
   '/api/contasreceberview':            'contas_receber',
   '/api/contaspagarview':              'contas_pagar',
+  '/api/despesasrecorrentesview':      'despesas_recorrentes',
   '/api/previsoesview':                'previsoes',
   '/api/duplicatasview':               'duplicatas',
   '/api/caixabancosview':              'caixa_bancos',

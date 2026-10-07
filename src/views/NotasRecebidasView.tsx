@@ -1,4 +1,5 @@
 import { MenuMais, ItemMenu } from '../components/MenuMais';
+import { fornecedoresDeCompra } from '../lib/contasConsumo';
 import React, { useEffect, useRef, useState } from 'react';
 import { useFilial } from '../contexts/FilialContext';
 import { motion, AnimatePresence } from 'motion/react';
@@ -257,7 +258,7 @@ const NotasRecebidasViewInner = ({ showToast, filial }: any) => {
                 onChange={v => setExtras(x => ({ ...x, fornecedor_id: v }))}
                 placeholder="Nenhum"
                 permitirVazio="Nenhum"
-                grupos={gruposDeCadastro(fornecedores)}
+                grupos={gruposDeCadastro(fornecedoresDeCompra(fornecedores))}
               />
             </FormField>
 

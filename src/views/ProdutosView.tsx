@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { fornecedoresDeCompra } from '../lib/contasConsumo';
 import { todayBR } from '../lib/dates';
 import type { FilialOp } from '../components/FilialSelector';
 import { useFilial } from '../contexts/FilialContext';
@@ -131,7 +132,7 @@ const ProdutosViewInner = ({ showToast, filial, profile, onNavigate }: { showToa
   const { data: fornecedoresList } = useFetchData<any>('/api/crmview-fornecedores', { filial });
 
   const fornecedoresOrdenados = useMemo(
-    () => [...fornecedoresList].sort((a: any, b: any) => (a.nome ?? '').localeCompare(b.nome ?? '', 'pt-BR')),
+    () => fornecedoresDeCompra([...fornecedoresList]).sort((a: any, b: any) => (a.nome ?? '').localeCompare(b.nome ?? '', 'pt-BR')),
     [fornecedoresList]
   );
 

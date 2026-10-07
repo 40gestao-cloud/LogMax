@@ -1,4 +1,5 @@
 import { CondicaoCompra } from '../components/CondicaoCompra';
+import { fornecedoresDeCompra } from '../lib/contasConsumo';
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Plus, Save, Check, X, ShoppingBag, MessageSquare, Send, Loader2, Search, GitCompare, Award, RotateCcw, Ban, CornerUpLeft, Pencil, AlertTriangle, Copy, Package, Truck, DollarSign, CalendarClock, MessageSquareText } from 'lucide-react';
@@ -663,7 +664,7 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode, onNavigate }: { s
   // CRMView grava pessoa_tipo como 'Empresa' / 'Pessoa Física' (não 'PJ'/'PF') —
   // filtramos pelos valores reais do banco e tratamos NULL como Empresa.
   const agruparFornecedoresPorFilial = (tipo: 'Empresa' | 'Pessoa Física') => {
-    const filtrados = fornecedores.filter((f: any) => (f.pessoa_tipo ?? 'Empresa') === tipo);
+    const filtrados = fornecedoresDeCompra(fornecedores).filter((f: any) => (f.pessoa_tipo ?? 'Empresa') === tipo);
     return groupCadastrosParaSelect(filtrados).map(g => ({
       // groupCadastrosParaSelect retorna label "Empresa — TechMax". Aqui só queremos
       // a filial (pessoa_tipo já está separada na nossa caixa).

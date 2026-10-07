@@ -15,6 +15,7 @@ import { useFormValidation, exportToPDF, exportToExcel, formatPhone, formatCPF, 
 import { useConfirm } from '../contexts/ConfirmContext';
 
 type PessoaTipo = 'Empresa' | 'Pessoa Física';
+import { TIPOS_FORNECEDOR, CATEGORIAS_SUGERIDAS, rotuloTipoFornecedor, type TipoFornecedor } from '../lib/contasConsumo';
 
 // MaxID — app irmão que gera CPF, CNPJ e celular de treino com dígito
 // verificador válido. O aluno precisa de documento para cadastrar cliente e
@@ -30,6 +31,9 @@ const makeEmptyExtras = (filial: string) => ({
   endereco: '',
   cpf_cnpj: '',
   categoria: '',
+  // Só fornecedor (migr. 679): o que ele fornece. Concessionária não passa por
+  // compra — conta direto em Contas a Pagar.
+  tipo: 'mercadoria' as TipoFornecedor,
   // Campo comum às 3 filiais (migr. 360): prazo de entrega é do processo de
   // compras, não do ramo — alimenta a cotação e a data prometida a quem pediu.
   // Vivia em `atributos` na MaxLook e na TechMax, e não existia no SuperMax.
@@ -121,6 +125,7 @@ const CRMViewInner = ({ type, showToast, filial }: {
       endereco:    item.endereco   ?? '',
       cpf_cnpj:    item.cpf_cnpj   ?? '',
       categoria:   item.categoria  ?? '',
+      tipo:        (item.tipo ?? 'mercadoria') as TipoFornecedor,
       prazo_entrega_dias: item.prazo_entrega_dias == null ? '' : String(item.prazo_entrega_dias),
       limite_credito: item.limite_credito == null ? '' : formatBRL(Number(item.limite_credito)),
       logo_url:    item.logo_url ?? '',
@@ -188,7 +193,10 @@ const CRMViewInner = ({ type, showToast, filial }: {
           limite_credito: extras.limite_credito.trim() === ''
             ? null : parseBRL(extras.limite_credito),
         } : {
-          prazo_entrega_dias: extras.prazo_entrega_dias.trim() === ''
+          tipo: extras.tipo,
+          // Prazo de entrega é de quem entrega mercadoria; serviço e
+          // concessionária não têm carga a chegar.
+          prazo_entrega_dias: extras.tipo !== 'mercadoria' || extras.prazo_entrega_dias.trim() === ''
             ? null : Number(extras.prazo_entrega_dias),
           logo_url: logoUrl || null,
         }),
@@ -196,6 +204,7 @@ const CRMViewInner = ({ type, showToast, filial }: {
       // Atributos JSONB (fornecedor apenas). Filtra pra manter só campos
       // válidos do nicho da filial atual — evita salvar lixo.
       const buildAtributosFornecedor = () => {
+        if (extras.tipo !== 'mercadoria') return {};
         const defs = ATRIBUTOS_FORNECEDOR[extras.filial] ?? [];
         const out: Record<string, any> = {};
         for (const d of defs) {
@@ -322,6 +331,23 @@ const CRMViewInner = ({ type, showToast, filial }: {
             </div>
           )}
 
+          {!isClientes && (
+            <div>
+              <span className="text-[10px] text-gray-500 uppercase tracking-widest font-bold block mb-2" id="crm-tipo-forn-label">O que fornece</span>
+              <div className="flex flex-wrap gap-1 neu-pressed rounded-xl p-1 w-fit border border-white/5" role="radiogroup" aria-labelledby="crm-tipo-forn-label">
+                {TIPOS_FORNECEDOR.map(t => (
+                  <button key={t.valor} type="button" title={t.dica}
+                    onClick={() => setExtras(x => ({ ...x, tipo: t.valor }))}
+                    className={`px-4 py-1.5 rounded-lg text-xs font-bold uppercase tracking-widest transition-all ${
+                      extras.tipo === t.valor ? 'neu-flat text-gray-200 border border-white/10' : 'text-gray-600 hover:text-gray-400'}`}>
+                    {t.rotulo}
+                  </button>
+                ))}
+              </div>
+              <p className="text-[11px] text-gray-500 mt-1.5">{TIPOS_FORNECEDOR.find(t => t.valor === extras.tipo)?.dica}</p>
+            </div>
+          )}
+
           {/* Toggle Empresa / Pessoa Física */}
           <div>
             <span className="text-[10px] text-gray-500 uppercase tracking-widest font-bold block mb-2" id="crm-tipo-pessoa-label">Tipo de pessoa</span>
@@ -378,10 +404,13 @@ const CRMViewInner = ({ type, showToast, filial }: {
 
             {!isClientes && (
               <FormField label="Categoria">
-                <input className="neu-input py-2 px-3 rounded-xl text-sm"
+                <input className="neu-input py-2 px-3 rounded-xl text-sm" list="crm-categorias-forn"
                   value={extras.categoria}
                   onChange={e => setExtras(x => ({ ...x, categoria: e.target.value }))}
-                  placeholder="Ex: Materiais, Serviços" />
+                  placeholder={`Ex: ${CATEGORIAS_SUGERIDAS[extras.tipo].slice(0, 2).join(', ')}`} />
+                <datalist id="crm-categorias-forn">
+                  {CATEGORIAS_SUGERIDAS[extras.tipo].map(c => <option key={c} value={c} />)}
+                </datalist>
               </FormField>
             )}
 
@@ -395,7 +424,7 @@ const CRMViewInner = ({ type, showToast, filial }: {
               </FormField>
             )}
 
-            {!isClientes && (
+            {!isClientes && extras.tipo === 'mercadoria' && (
               <FormField label="Prazo de entrega (dias)">
                 <input className="neu-input py-2 px-3 rounded-xl text-sm" inputMode="numeric"
                   value={extras.prazo_entrega_dias}
@@ -407,7 +436,7 @@ const CRMViewInner = ({ type, showToast, filial }: {
 
           {/* Atributos JSONB — só fornecedor + MaxLook/TechMax. Cliente e
               SuperMax mantêm o form padrão sem seção extra. */}
-          {!isClientes && (ATRIBUTOS_FORNECEDOR[extras.filial] ?? []).length > 0 && (
+          {!isClientes && extras.tipo === 'mercadoria' && (ATRIBUTOS_FORNECEDOR[extras.filial] ?? []).length > 0 && (
             <div className="mt-2 pt-6 border-t border-white/5">
               <p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-3">
                 {extras.filial === 'MaxLook' ? 'Perfil do parceiro (Moda)' : 'Perfil do parceiro (Assistência)'}
@@ -479,6 +508,11 @@ const CRMViewInner = ({ type, showToast, filial }: {
                       <span className={`px-2 py-0.5 rounded-md text-[9px] font-bold uppercase tracking-widest ${pj ? 'bg-blue-900 text-white' : 'bg-purple-700 text-white'}`}>
                         {pj ? 'Empresa' : 'Pessoa física'}
                       </span>
+                      {!isClientes && (item.tipo ?? 'mercadoria') !== 'mercadoria' && (
+                        <span className={`px-2 py-0.5 rounded-md text-[9px] font-bold uppercase tracking-widest ${item.tipo === 'concessionaria' ? 'bg-sky-700 text-white' : 'bg-emerald-700 text-white'}`}>
+                          {rotuloTipoFornecedor(item.tipo)}
+                        </span>
+                      )}
                       {item.status && <StatusBadge status={item.status} solido />}
                     </div>
                   </div>
