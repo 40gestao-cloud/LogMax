@@ -1625,7 +1625,15 @@ const ProdutosViewInner = ({ showToast, filial, profile, onNavigate }: { showToa
       };
       if (editItem) {
         const updated = await dbUpdate('/api/produtosview', editItem.id, basePayload);
-        await salvarPrecoCusto(editItem.id, custoValor);
+        // Só grava o custo quando ele MUDOU. Regravar a cada edição (trocar a
+        // foto, o nome) virava o custo médio apurado pela compra em 'manual',
+        // arredondado às 2 casas do campo — e o campo em branco gravava zero.
+        // A comparação é com o valor exibido (2 casas), não com as 4 do banco.
+        const custoAntes = editItem.preco_custo != null && editItem.preco_custo !== ''
+          ? Math.round(Number(editItem.preco_custo) * 100) / 100 : null;
+        const custoMudou = custoInformado && (custoAntes === null || Math.abs(custoValor - custoAntes) >= 0.005);
+        if (custoMudou) await salvarPrecoCusto(editItem.id, custoValor);
+        const custoFinal = custoMudou ? custoNaGrade : (editItem.preco_custo ?? null);
         // Virou patrimônio: sai desta listagem, que filtra `tipo neq patrimonio`
         // no servidor. Antes ele continuava na grade até o próximo reload e
         // então desaparecia sem explicação.
@@ -1636,7 +1644,7 @@ const ProdutosViewInner = ({ showToast, filial, profile, onNavigate }: { showToa
           // salvo para a grade refletir a edição sem esperar um reload.
           setData((prev: any[]) => prev.map(d =>
             d.id === editItem.id
-              ? { ...(updated ?? { ...d, ...basePayload }), preco_custo: custoNaGrade }
+              ? { ...(updated ?? { ...d, ...basePayload }), preco_custo: custoFinal }
               : d));
         }
         // Best-effort cleanup: se alguma imagem foi trocada ou removida,

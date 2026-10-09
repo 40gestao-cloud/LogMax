@@ -13,7 +13,7 @@ export type Notificacao = {
     | 'mensagem_setor' | 'tarefa_atribuida' | 'tarefa_concluida'
     | 'ti_chamado' | 'ti_resolvido' | 'info'
     | 'treinamento_atribuido' | 'briefing_diario' | 'justificativa_falta'
-    | 'devolvido_correcao';
+    | 'devolvido_correcao' | 'alerta';
   titulo: string;
   mensagem?: string | null;
   link_view?: string | null;

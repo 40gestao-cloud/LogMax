@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
-  Bell, X, Check, CheckCheck, AlertCircle, Inbox,
+  Bell, X, Check, CheckCheck, AlertCircle, AlertTriangle, Inbox,
   Megaphone, ClipboardList, Monitor, RotateCcw, GraduationCap, Sunrise, CalendarClock,
 } from 'lucide-react';
 import { useNotificacoes, type Notificacao } from '../hooks/useNotificacoes';
@@ -38,6 +38,9 @@ const TIPO_ICON: Record<Notificacao['tipo'], any> = {
   // Devolvido não é reprovado (migr. 517/518): o documento voltou para
   // conserto, não foi recusado. Ícone e cor dizem isso antes do texto.
   devolvido_correcao:    RotateCcw,
+  // Aviso de risco gerado pelo banco (migr. 683): folha sem crédito, custo
+  // de compra acima do preço, rescisão.
+  alerta:                AlertTriangle,
 };
 
 const TIPO_COLOR: Record<Notificacao['tipo'], string> = {
@@ -54,6 +57,7 @@ const TIPO_COLOR: Record<Notificacao['tipo'], string> = {
   briefing_diario:       'text-blue-400',
   justificativa_falta:   'text-yellow-400',
   devolvido_correcao:    'text-amber-400',
+  alerta:                'text-red-400',
 };
 
 const TIPO_LABEL: Record<Notificacao['tipo'], string> = {
@@ -70,6 +74,7 @@ const TIPO_LABEL: Record<Notificacao['tipo'], string> = {
   briefing_diario:       'Briefing',
   justificativa_falta:   'Justificativa de falta',
   devolvido_correcao:    'Devolvido para correção',
+  alerta:                'Alerta',
 };
 
 const formatRelative = (iso: string) => {

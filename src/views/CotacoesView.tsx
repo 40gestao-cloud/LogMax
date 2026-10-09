@@ -1074,13 +1074,15 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode, onNavigate }: { s
   // esse nome — dois iguais são duplicata, e escolher um seria palpite de novo.
   // Produto também confere a MARCA (05/10, `produtoConfere`): Óleo Liza e Óleo
   // Soya com o mesmo texto de item caíam os dois no cadastro da Liza.
-  type EstadoPronta = 'ligado' | 'sem_cadastro' | 'bloqueado';
+  // `vencida` (migr. 682): o preço aprovado passou da validade — o banco não
+  // gera pedido com ele, então a linha pede a revalidação antes de tudo.
+  type EstadoPronta = 'ligado' | 'sem_cadastro' | 'vencida' | 'bloqueado';
   // Enquanto as leituras não chegam, "sem cadastro" e "sem pedido" são o
   // vazio falando — o painel espera para não piscar a linha errada.
   const prontasCarregando = !pedidosLidos || requisicoesCarregando || produtosCarregando || todasCotacoesCarregando;
   const prontasParaPedido = useMemo(() => {
     if (prontasCarregando) return [];
-    const ordem: Record<EstadoPronta, number> = { ligado: 0, sem_cadastro: 1, bloqueado: 2 };
+    const ordem: Record<EstadoPronta, number> = { ligado: 0, sem_cadastro: 1, vencida: 2, bloqueado: 3 };
     const porNome = (lista: any[], nome: string) => {
       const n = normNome(nome);
       return n ? lista.filter((p: any) => normNome(p.nome ?? '') === n) : [];
@@ -1125,6 +1127,12 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode, onNavigate }: { s
             estado = 'bloqueado';
             motivo = `Há ${iguais.length} ${servico ? 'serviços' : 'produtos'} com o nome "${iguais[0].nome}" no catálogo — inative o duplicado em Cadastros > ${servico ? 'Serviços' : 'Produtos'}`;
           }
+        }
+        // Vencida passa na frente de "sem cadastro": cadastrar o produto de um
+        // preço que talvez nem volte não adianta. Bloqueio continua mandando.
+        if (estado !== 'bloqueado' && propostaVencida(c.validade)) {
+          estado = 'vencida';
+          motivo = `O preço venceu em ${dataBR(c.validade)} — revalide com o fornecedor`;
         }
         return { cot, servico, estado, alvo, motivo, vinculo };
       })
@@ -1405,6 +1413,30 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode, onNavigate }: { s
     }
   };
 
+  // Aprovada e vencida (migr. 682): o preço que o Financeiro aprovou não vale
+  // mais, e o pedido não sai com ele. Compras devolve a proposta para "Em
+  // correção" — ela reaparece na aba Cotações com o "Corrigir", onde entra a
+  // validade nova — e o Financeiro decide de novo.
+  const [revalidandoCot, setRevalidandoCot] = useState<string | null>(null);
+  const handleRevalidarCot = async (cot: any) => {
+    if (!supabase) return;
+    if (!await confirm(
+      `O preço da cotação ${numeroCotacao(cot)} venceu em ${dataBR(cot.validade)}.\n\n` +
+      'Ela volta para "Em correção": confirme com o fornecedor o preço e a nova validade, ' +
+      'use "Corrigir" na aba Cotações e o Financeiro decide de novo.')) return;
+    setRevalidandoCot(cot.id);
+    try {
+      const { error } = await supabase.rpc('revalidar_cotacao_vencida', { p_cotacao_id: cot.id, p_motivo: null });
+      if (error) throw error;
+      showToast('Cotação devolvida para revalidar — está na aba Cotações, em correção.', 'success', true);
+      await reload();
+    } catch (err: any) {
+      showToast(err?.message ?? 'Não foi possível devolver a cotação.', 'error', true);
+    } finally {
+      setRevalidandoCot(null);
+    }
+  };
+
   // Inativar cotação saiu (migr. 340): apagar a proposta some com o preço que o
   // fornecedor deu e com o motivo da recusa — o material da aula sobre compras.
   // Cancelar continua sendo o caminho normal; reabrir existe para o engano.
@@ -1439,6 +1471,16 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode, onNavigate }: { s
           className={`${base} btn-solido--verde`}>
           {generating === cot.id ? <Loader2 size={12} className="animate-spin" /> : <ShoppingBag size={12} />}
           {rotulo('Gerar pedido')}
+        </button>
+      );
+    }
+    if (estado === 'vencida') {
+      return (
+        <button type="button" onClick={() => handleRevalidarCot(cot)} disabled={ocupada || revalidandoCot === cot.id}
+          title="Devolver para correção: confirme preço e validade com o fornecedor e reenvie ao Financeiro"
+          className={`${base} btn-solido--dourado`}>
+          {revalidandoCot === cot.id ? <Loader2 size={12} className="animate-spin" /> : <CalendarClock size={12} />}
+          {rotulo('Revalidar')}
         </button>
       );
     }
@@ -1658,6 +1700,12 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode, onNavigate }: { s
                           <span className="px-2.5 py-1 rounded-md text-[10px] uppercase tracking-widest font-bold bg-red-600 text-white"
                             title={servico ? 'Serviço ainda não cadastrado — cadastre para gerar o pedido' : 'Produto ainda não cadastrado — cadastre para gerar o pedido'}>
                             Sem cadastro
+                          </span>
+                        )}
+                        {estado === 'vencida' && (
+                          <span className="inline-flex flex-col items-center gap-1 max-w-[14rem]" title={motivo ?? undefined}>
+                            <span className="px-2.5 py-1 rounded-md text-[10px] uppercase tracking-widest font-bold bg-amber-600 text-white">Preço vencido</span>
+                            <span className="text-[10px] text-gray-400 leading-snug line-clamp-2">{motivo}</span>
                           </span>
                         )}
                         {estado === 'bloqueado' && (
