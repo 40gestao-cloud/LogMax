@@ -9,7 +9,7 @@ import { useIdleLogout } from './hooks/useIdleLogout';
 import { SessaoExpirandoModal } from './components/SessaoExpirandoModal';
 import { useAlarmeGlobal } from './hooks/useAlarmesTurma';
 import { AlarmeModal } from './components/AlarmeModal';
-import { limparCarimbos, limparEstadoDeSessao, registrarMotivoSaida } from './lib/sessaoGuard';
+import { limparCarimbos, limparEstadoDeSessao, marcarSessaoSemExpiracao, registrarMotivoSaida } from './lib/sessaoGuard';
 import { reportarRelogioDaMaquina } from './lib/relogioDiagnostico';
 import { useComandoRecarga } from './hooks/useComandoRecarga';
 import { RecargaRemotaModal } from './components/RecargaRemotaModal';
@@ -1277,8 +1277,16 @@ function LogMaxAppInner() {
     await signOut();
   }, [clearFilial, signOut]);
 
+  // O administrador (o professor) não cai por inatividade nem por fim de turno
+  // (pedido de 2026-10-09). A marca em localStorage estende a isenção à purga
+  // do boot, que roda antes de o perfil carregar (sessaoGuard.ts).
+  const sessaoSemExpirar = profile?.role === 'admin';
+  useEffect(() => {
+    if (!profile) return;
+    marcarSessaoSemExpiracao(sessaoSemExpirar);
+  }, [profile, sessaoSemExpirar]);
   const { expiraEm: sessaoExpiraEm, continuar: continuarSessao } = useIdleLogout({
-    enabled: isAuthenticated,
+    enabled: isAuthenticated && !sessaoSemExpirar,
     onExpirar: encerrarSessaoAutomatica,
   });
 

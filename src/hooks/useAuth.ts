@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import type { User, Session } from '@supabase/supabase-js';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
 import { ancorarComTokenFresco } from '../lib/horaServidor';
+import { marcarSessaoSemExpiracao } from '../lib/sessaoGuard';
 
 interface AuthState {
   user: User | null;
@@ -79,6 +80,8 @@ export function useAuth() {
    */
   const signOut = async () => {
     if (!supabase) return;
+    // A isenção de expiração do admin não sobrevive à saída dele.
+    marcarSessaoSemExpiracao(false);
     await supabase.auth.signOut({ scope: 'local' });
     setAuthState({ user: null, session: null, isLoading: false });
   };

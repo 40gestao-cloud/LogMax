@@ -34,6 +34,11 @@ const MARGEM_FIM_TURNO_MIN = 30;
 const CHAVE_ATIVIDADE      = 'logmax:ultimaAtividade';
 const CHAVE_INICIO_SESSAO  = 'logmax:inicioSessao';
 const CHAVE_COMPARTILHADO  = 'logmax:dispositivoCompartilhado';
+// Sessão do administrador (o professor): não expira por inatividade nem por fim
+// de turno — pedido do usuário em 2026-10-09. A purga do boot roda antes de o
+// perfil carregar, então o app deixa esta marca quando o perfil é admin e a
+// tira para qualquer outro perfil e em toda saída (limparCarimbos).
+const CHAVE_SEM_EXPIRAR    = 'logmax:sessaoSemExpirar';
 
 /** Lido pelo LoginScreen para explicar por que a sessão caiu. */
 export const CHAVE_MOTIVO_SAIDA = 'logmax:motivoSaida';
@@ -91,6 +96,7 @@ export function garantirInicioSessao(ts: number = Date.now()): number {
 
 export function limparCarimbos(): void {
   try {
+    localStorage.removeItem(CHAVE_SEM_EXPIRAR);
     localStorage.removeItem(CHAVE_ATIVIDADE);
     localStorage.removeItem(CHAVE_INICIO_SESSAO);
   } catch { /* modo privado */ }
@@ -100,6 +106,14 @@ export function limparCarimbos(): void {
  * Estado de navegação da sessão anterior. Sem isto o próximo usuário cairia na
  * tela e na filial de quem estava antes.
  */
+/** Liga/desliga a isenção de expiração (só para o perfil admin). */
+export function marcarSessaoSemExpiracao(ligar: boolean): void {
+  try {
+    if (ligar) localStorage.setItem(CHAVE_SEM_EXPIRAR, '1');
+    else localStorage.removeItem(CHAVE_SEM_EXPIRAR);
+  } catch { /* modo privado */ }
+}
+
 export function limparEstadoDeSessao(): void {
   try {
     sessionStorage.removeItem('logmax:activeView');
@@ -178,6 +192,8 @@ function purgarTokenSupabase(): void {
  */
 export function purgarSessaoSeExpirada(): boolean {
   if (!isDispositivoCompartilhado()) return false;
+  // Sessão do administrador não expira (ver CHAVE_SEM_EXPIRAR).
+  try { if (localStorage.getItem(CHAVE_SEM_EXPIRAR) === '1') return false; } catch { /* modo privado */ }
 
   const ultima = lerUltimaAtividade();
   if (ultima === null) return false;  // nunca houve sessão carimbada aqui
