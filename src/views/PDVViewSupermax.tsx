@@ -299,7 +299,6 @@ export const PDVViewSupermax = ({
   const sessionStartRef = useRef<string>(new Date().toISOString());
 
   const [cupomSeq]   = useState(() => String(Date.now()).slice(-6));
-  const [nowTick, setNowTick] = useState(0);
   const codeInputRef   = useRef<HTMLInputElement>(null);
   const codeNativeRef  = useRef('');
   // Raiz do PDV: escopo do Tab. Ver `devolverTabAoPdv` em lib/focoPdv.
@@ -325,12 +324,6 @@ export const PDVViewSupermax = ({
   // cobrança. Ver caixaAtivo, antes do RENDER.
   const ultimoCaixaRef       = useRef(caixa);
   const finalizarVendaRef    = useRef<(forma: string, cidOverride?: string, parcelas?: number, dinheiroEmEspecie?: number) => Promise<string>>(null!);
-
-  // Relógio do header — atualiza a cada 30s, evita repaint frenético
-  useEffect(() => {
-    const id = setInterval(() => setNowTick(t => t + 1), 30000);
-    return () => clearInterval(id);
-  }, []);
 
   // Carrinho e gancheira são trabalho não gravado que não tem campo na tela:
   // o reload automático da PWA não pode passar por cima nem de um nem do outro.
@@ -1881,8 +1874,6 @@ export const PDVViewSupermax = ({
   }, [pagamentos.length, paymentModalOpen]);
 
   const operadorNome = (profile?.nome ?? user?.email ?? '—').toUpperCase();
-  // nowTick é dep só pra forçar recálculo a cada 30s
-  const datetime = useMemo(() => new Date().toLocaleString('pt-BR', { timeZone: 'America/Rio_Branco' }), [nowTick]);
 
   // Classe do container raiz — fullscreen sobrepõe o app shell (sidebar+topbar).
   const rootClass = fullscreen ? 'fixed inset-0 z-[100]' : 'h-full';
@@ -1945,7 +1936,6 @@ export const PDVViewSupermax = ({
         <Header
           operadorNome={operadorNome}
           cupomSeq={cupomSeq}
-          datetime={datetime}
           onSwitchFilial={onSwitchFilial}
           fullscreen={fullscreen}
           onToggleFullscreen={() => setFullscreen(f => !f)}
@@ -1977,7 +1967,6 @@ export const PDVViewSupermax = ({
       <Header
         operadorNome={operadorNome}
         cupomSeq={cupomSeq}
-        datetime={datetime}
         onSwitchFilial={onSwitchFilial}
         fullscreen={fullscreen}
         onToggleFullscreen={() => setFullscreen(f => !f)}

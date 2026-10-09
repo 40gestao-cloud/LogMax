@@ -1,16 +1,29 @@
 import type React from 'react';
+import { useEffect, useState } from 'react';
 import { HelpCircle, Maximize2, Minimize2 } from 'lucide-react';
 import { YELLOW, YELLOW_DARK, NAVY_DARK } from './coresMaxPos';
+
+// Relógio da faixa, isolado como o RelogioPdv do MaxPOS: o tique de 1s
+// redesenha só este texto. Antes o PDVViewSupermax guardava um tique de 30s
+// e repassava a hora por prop — os segundos ficavam parados na tela e cada
+// tique redesenhava o PDV inteiro.
+function RelogioPdv() {
+  const [agora, setAgora] = useState(() => new Date());
+  useEffect(() => {
+    const id = setInterval(() => setAgora(new Date()), 1000);
+    return () => clearInterval(id);
+  }, []);
+  return <>{agora.toLocaleString('pt-BR', { timeZone: 'America/Rio_Branco' })}</>;
+}
 
 // Faixa amarela do topo do PDV SuperMax (réplica do MaxPOS): operador, cupom,
 // hora, trocar PDV, tela cheia e manual. Sem selo "caixa aberto": o botão de
 // fechar o caixa ao lado já diz que ele está aberto.
 export const Header = ({
-  operadorNome, cupomSeq, datetime, onSwitchFilial, fullscreen, onToggleFullscreen, onOpenHelp, extraActions,
+  operadorNome, cupomSeq, onSwitchFilial, fullscreen, onToggleFullscreen, onOpenHelp, extraActions,
 }: {
   operadorNome: string;
   cupomSeq: string;
-  datetime: string;
   onSwitchFilial?: (filial: string) => void;
   fullscreen: boolean;
   onToggleFullscreen: () => void;
@@ -59,7 +72,7 @@ export const Header = ({
           CUPOM: {cupomSeq}
         </span>
         <span className="hidden lg:inline-flex shrink-0 px-3 py-1.5 rounded-md text-sm font-bold tabular-nums border-2" style={{ background: '#ffffff', color: NAVY_DARK, borderColor: NAVY_DARK }}>
-          {datetime}
+          <RelogioPdv />
         </span>
       </div>
     </div>
