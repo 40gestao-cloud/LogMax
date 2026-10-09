@@ -2975,11 +2975,30 @@
    ],
    "le": [
     "contas_pagar",
-    "folha_pagamento"
+    "folha_pagamento",
+    "rescisoes"
    ],
    "chama": [
     "_centro_custo_pessoal",
     "_vencimento_encargo_folha"
+   ]
+  },
+  "_apurar_fgts_rescisorio": {
+   "gatilho": false,
+   "secdef": true,
+   "grava": [
+    "contas_pagar"
+   ],
+   "le": [
+    "contas_pagar",
+    "funcionarios",
+    "rescisoes",
+    "rh_parametros"
+   ],
+   "chama": [
+    "_centro_custo_pessoal",
+    "_rescisao_multa_no_termo",
+    "rh_vigencia_em"
    ]
   },
   "_assert_blackout": {
@@ -3470,6 +3489,13 @@
    "le": [
     "rescisoes"
    ],
+   "chama": []
+  },
+  "_rescisao_multa_no_termo": {
+   "gatilho": false,
+   "secdef": false,
+   "grava": [],
+   "le": [],
    "chama": []
   },
   "_reverter_ponto_do_afastamento": {
@@ -6858,6 +6884,23 @@
     "_sincronizar_funcionario_tarefas"
    ]
   },
+  "fn_guia_rescisoria_credita_multa": {
+   "gatilho": true,
+   "secdef": true,
+   "grava": [
+    "maxbank_contas",
+    "maxbank_transacoes"
+   ],
+   "le": [
+    "funcionarios",
+    "maxbank_contas",
+    "rescisoes"
+   ],
+   "chama": [
+    "_rescisao_multa_no_termo",
+    "notificar_setor"
+   ]
+  },
   "fn_item_devolucao_devolve_unidade": {
    "gatilho": true,
    "secdef": true,
@@ -7209,6 +7252,16 @@
    "le": [],
    "chama": [
     "_encerrar_folhas_da_rescisao"
+   ]
+  },
+  "fn_rescisao_reapura_encargos": {
+   "gatilho": true,
+   "secdef": true,
+   "grava": [],
+   "le": [],
+   "chama": [
+    "_apurar_encargos_folha",
+    "_apurar_fgts_rescisorio"
    ]
   },
   "fn_sync_ponto_eletronico": {
@@ -10535,6 +10588,7 @@
    "trg_contas_pagar_bloqueio_insert:bloqueia_conta_pagar_estourado",
    "trg_contas_pagar_bloqueio_pagar:bloqueia_conta_pagar_estourado",
    "trg_contas_pagar_sync_parcela:fn_parcela_emprestimo_segue_o_titulo",
+   "trg_guia_rescisoria_credita_multa:fn_guia_rescisoria_credita_multa",
    "trg_historico:registrar_historico",
    "trg_sync_saldo_contas_pagar:sync_saldo_caixa_pagar"
   ],
@@ -10858,7 +10912,8 @@
   ],
   "rescisoes": [
    "trg_historico:registrar_historico",
-   "trg_rescisao_encerra_folhas:fn_rescisao_encerra_folhas"
+   "trg_rescisao_encerra_folhas:fn_rescisao_encerra_folhas",
+   "trg_rescisao_reapura_encargos:fn_rescisao_reapura_encargos"
   ],
   "riscos": [
    "trg_historico:registrar_historico"

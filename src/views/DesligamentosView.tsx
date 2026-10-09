@@ -674,6 +674,12 @@ const DesligamentosViewInner = ({ showToast, profile, filial }: {
 
 /** Extrato das verbas. Usado no preview do formulário e no modal da lista. */
 function Demonstrativo({ r }: { r: any }) {
+  // Rescisão anterior à migr. 689 tem a multa somada no termo; a nova, não.
+  // Decide pela conta, como o banco (_rescisao_multa_no_termo).
+  const somaVerbas = ['saldo_salario', 'aviso_previo_valor', 'decimo_terceiro', 'ferias_vencidas',
+    'ferias_proporcionais', 'terco_ferias'].reduce((s, k) => s + Number(r[k] ?? 0), 0);
+  const multaNoTermo = Number(r.multa_fgts) > 0
+    && Math.abs(Number(r.total_bruto ?? 0) - (somaVerbas + Number(r.multa_fgts))) < 0.02;
   return (
     <div className="space-y-2 text-xs">
       <Linha label="Salário base" value={brl(r.salario_base)} muted />
@@ -706,7 +712,7 @@ function Demonstrativo({ r }: { r: any }) {
       />
       <Linha label="Férias proporcionais" value={brl(r.ferias_proporcionais)} />
       <Linha label="1/3 constitucional" value={brl(r.terco_ferias)} />
-      <Linha label="Multa do FGTS" value={brl(r.multa_fgts)} colorClass="text-blue-400" />
+      {multaNoTermo && <Linha label="Multa do FGTS" value={brl(r.multa_fgts)} colorClass="text-blue-400" />}
       <Linha label="Total bruto" value={brl(r.total_bruto)} bold />
 
       <div className="border-t border-white/5 my-3" />
@@ -729,6 +735,12 @@ function Demonstrativo({ r }: { r: any }) {
           da folha (migr. 321) ou do fallback simulado da 306. */}
       <Linha label={`FGTS depositado (${r.fgts_origem === 'real' ? 'folha' : 'simulado'}, fora do líquido)`}
         value={brl(r.fgts_depositado)} muted />
+      {/* Migr. 689: a multa vai pela guia do FGTS rescisório, não pelo termo.
+          Cai na carteira quando o Financeiro paga a guia (o "saque"). */}
+      {!multaNoTermo && Number(r.multa_fgts) > 0 && (
+        <Linha label="Multa do FGTS (guia rescisória, sacada quando a guia é paga)"
+          value={brl(r.multa_fgts)} colorClass="text-blue-400" />
+      )}
       {r.vigencia_tabela && (
         <Linha label="Tabelas INSS/IRRF" value={`vigência ${r.vigencia_tabela}${(r.dependentes ?? 0) > 0 ? ` · ${r.dependentes} dep.` : ''}`} muted />
       )}
