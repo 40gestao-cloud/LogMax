@@ -42,7 +42,7 @@ import {
   Sun, Moon, Megaphone, ArrowLeft, Monitor, Eye,
   Star, MessageSquare, BookOpen, Database, Target, Brain, ListTodo,
   Layers, Landmark, GraduationCap, Lock, Trophy, ClipboardList, Inbox,
-  Presentation, FileText, Hourglass, SquareKanban, Dices, FileSignature, PanelLeftClose, PanelLeftOpen,
+  Presentation, FileText, Hourglass, Library, Award, SquareKanban, Dices, FileSignature, PanelLeftClose, PanelLeftOpen,
 } from 'lucide-react';
 import { NotificationBell } from './components/NotificationBell';
 import { AvisoDisjuntor } from './components/AvisoDisjuntor';
@@ -664,6 +664,79 @@ const migrarViewAntiga = (raw: string): string => {
     .replace(/^estoque-requisiçõesrecebidas$/, 'estoque-requisiçõesdematerial');
 };
 
+type ItemSanfona = { view: string; label: string; icon: any };
+
+// Grupo colapsável de itens de primeiro nível, no mesmo visual dos módulos.
+// `itens` chega com `false` no lugar do que o perfil não vê: a régua de
+// visibilidade continua sendo a de cada item, escrita onde o grupo é montado.
+// Sem itens o grupo não aparece; com um só, vira o botão simples — sanfona de
+// um elemento é um clique a mais para nada.
+const GrupoSanfona = ({ id, label, icon: Icon, itens, openModules, toggleModule, activeView, navigate, onClose, badges }: {
+  id: string; label: string; icon: any; itens: (ItemSanfona | false | null | undefined)[];
+  openModules: Record<string, boolean>; toggleModule: (id: string) => void;
+  activeView: string; navigate: (v: string) => void; onClose?: () => void; badges?: Record<string, number>;
+}) => {
+  const visiveis = itens.filter(Boolean) as ItemSanfona[];
+  if (visiveis.length === 0) return null;
+  const badge = (v: string) => (badges?.[v] ?? 0) > 0 && (
+    <span className="w-4 h-4 rounded-full bg-accent flex items-center justify-center text-[9px] font-black text-black shrink-0 ml-1">
+      {badges![v] > 9 ? '9+' : badges![v]}
+    </span>
+  );
+  if (visiveis.length === 1) {
+    const it = visiveis[0];
+    const I = it.icon;
+    return (
+      <button onPointerEnter={() => prefetchOnHover(it.view)} onPointerLeave={cancelPrefetchHover} onPointerDown={() => prefetchView(it.view)}
+        onClick={() => { navigate(it.view); onClose?.(); }}
+        className={`flex items-center gap-3 p-2.5 rounded-xl text-sm font-semibold text-left ${activeView === it.view ? 'nav-item neu-pressed text-accent is-active' : 'nav-item neu-button text-gray-100'}`}>
+        <I size={18} className="shrink-0" /><span className="leading-tight flex-1">{it.label}</span>{badge(it.view)}
+      </button>
+    );
+  }
+  const isOpen = !!openModules[id];
+  const contemAtiva = visiveis.some(it => it.view === activeView);
+  const somaBadges = visiveis.reduce((n, it) => n + (badges?.[it.view] ?? 0), 0);
+  return (
+    <div className="flex flex-col">
+      <button onClick={() => toggleModule(id)} aria-expanded={isOpen}
+        className={`flex items-center justify-between p-2.5 rounded-xl text-sm font-semibold ${isOpen ? 'nav-item neu-flat text-gray-200 border border-white/5 is-active' : 'nav-item neu-button text-gray-100'}`}>
+        <div className="flex items-center gap-3">
+          <Icon size={18} className={isOpen || contemAtiva ? 'text-accent' : ''} />
+          <span className={contemAtiva && !isOpen ? 'text-accent' : ''}>{label}</span>
+        </div>
+        <div className="flex items-center gap-1.5">
+          {!isOpen && somaBadges > 0 && (
+            <span className="w-4 h-4 rounded-full bg-accent flex items-center justify-center text-[9px] font-black text-black">
+              {somaBadges > 9 ? '9+' : somaBadges}
+            </span>
+          )}
+          <ChevronDown size={14} className={`transition-transform duration-200 ${isOpen ? 'rotate-180 text-accent' : 'text-gray-500'}`} />
+        </div>
+      </button>
+      <AnimatePresence>
+        {isOpen && (
+          <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="flex flex-col overflow-hidden">
+            <div className="flex flex-col gap-1 pt-2 pb-1 ml-6 mr-3">
+              {visiveis.map(it => {
+                const ativa = activeView === it.view;
+                return (
+                  <button key={it.view} onPointerEnter={() => prefetchOnHover(it.view)} onPointerLeave={cancelPrefetchHover} onPointerDown={() => prefetchView(it.view)}
+                    onClick={() => { navigate(it.view); onClose?.(); }}
+                    className={`w-full nav-subitem flex items-center justify-between gap-2 text-xs py-2 px-3 rounded-lg leading-tight border-l-2 text-left ${ativa ? 'is-active font-bold bg-white/5 text-accent border-accent' : 'text-gray-200 border-transparent'}`}>
+                    <span className="flex-1 min-w-0 text-left">{it.label}</span>
+                    {badge(it.view)}
+                  </button>
+                );
+              })}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+};
+
 const SidebarNav = ({ activeView, navigate, openModules, toggleModule, handleSignOut, onClose, visibleModules, profile, badges, matrizMode, aulaAllow, aulaFiltro, atividadesAula, atividadesNaoLidas }: any) => (
   <>
     <div className="relative flex justify-center px-1 pt-2 pb-3">
@@ -765,19 +838,6 @@ const SidebarNav = ({ activeView, navigate, openModules, toggleModule, handleSig
             <GraduationCap size={18} /><span>Modo Aula</span>
           </button>
         )}
-        {/* Max Show: era o submódulo "Show" do módulo Max Work, que também tinha
-            Max Docs e Max Planilhas. Os dois saíram em 2026-07-29 — cinco dias no
-            ar, zero documento e zero planilha criados nas 4 turmas, e levavam 157 MB
-            de @univerjs no node_modules mais um bug recorrente de singleton
-            duplicado. Sobrando um só, módulo colapsável com um item dentro era
-            cerimônia sem conteúdo: virou item de primeiro nível.
-            Aberto pra todo mundo; cada aluno edita só o próprio material; docente
-            (admin/CEO/conselheiro) enxerga todos via RLS. Aula-aware. */}
-        {aulaAllow('max-show') && (
-          <button onPointerEnter={() => prefetchOnHover('max-show')} onPointerLeave={cancelPrefetchHover} onPointerDown={() => prefetchView('max-show')} onClick={() => { navigate('max-show'); onClose?.(); }} className={`flex items-center gap-3 p-2.5 rounded-xl text-sm font-semibold ${activeView === 'max-show' ? 'nav-item neu-pressed text-accent is-active' : 'nav-item neu-button text-gray-100'}`}>
-            <Presentation size={18} /><span>Max Show</span>
-          </button>
-        )}
         {/* Catálogo de Produtos: vitrine read-only visível pra todos os setores */}
         {aulaAllow('catalogo-produtos') && (
           <button onPointerEnter={() => prefetchOnHover('catalogo-produtos')} onPointerLeave={cancelPrefetchHover} onPointerDown={() => prefetchView('catalogo-produtos')} onClick={() => { navigate('catalogo-produtos'); onClose?.(); }} className={`flex items-center gap-3 p-2.5 rounded-xl text-sm font-semibold ${activeView === 'catalogo-produtos' ? 'nav-item neu-pressed text-accent is-active' : 'nav-item neu-button text-gray-100'}`}>
@@ -809,48 +869,36 @@ const SidebarNav = ({ activeView, navigate, openModules, toggleModule, handleSig
             <Hourglass size={18} /><span>Pendências</span>
           </button>
         )}
-        {/* Documentos da Matriz: mão única — o professor publica, todo mundo
-            baixa. Sem aulaAllow de propósito: o roteiro da atividade costuma
-            ser um PDF, e some-lo no Modo Aula tiraria o módulo justamente da
-            hora em que ele serve. */}
-        <button onPointerEnter={() => prefetchOnHover('documentos')} onPointerLeave={cancelPrefetchHover} onPointerDown={() => prefetchView('documentos')} onClick={() => { navigate('documentos'); onClose?.(); }} className={`flex items-center gap-3 p-2.5 rounded-xl text-sm font-semibold ${activeView === 'documentos' ? 'nav-item neu-pressed text-accent is-active' : 'nav-item neu-button text-gray-100'}`}>
-          <FileText size={18} /><span>Documentos</span>
-        </button>
-        {/* Contratos entre unidades (migr. 623). Papel de gestão: o gerente e o
-            professor assinam, CEO e conselheiro acompanham. Colaborador não
-            tem contrato nenhum para ver — a RLS devolveria a lista vazia. */}
-        {['admin', 'ceo', 'conselheiro', 'gerente'].includes(profile?.role) && (
-          <button onPointerEnter={() => prefetchOnHover('contratos')} onPointerLeave={cancelPrefetchHover} onPointerDown={() => prefetchView('contratos')} onClick={() => { navigate('contratos'); onClose?.(); }} className={`flex items-center gap-3 p-2.5 rounded-xl text-sm font-semibold ${activeView === 'contratos' ? 'nav-item neu-pressed text-accent is-active' : 'nav-item neu-button text-gray-100'}`}>
-            <FileSignature size={18} /><span>Contratos</span>
-          </button>
-        )}
-        {/* Central de Avaliação (modo filial): hub com abas Padrão/Metas.
-            No modo Matriz o item vive sob Competição, na seção Matriz abaixo. */}
-        {!matrizMode && aulaAllow('avaliacoes') && (
-          <button onPointerEnter={() => prefetchOnHover('avaliacoes')} onPointerLeave={cancelPrefetchHover} onPointerDown={() => prefetchView('avaliacoes')} onClick={() => { navigate('avaliacoes'); onClose?.(); }} className={`flex items-center gap-3 p-2.5 rounded-xl text-sm font-semibold ${activeView === 'avaliacoes' ? 'nav-item neu-pressed text-accent is-active' : 'nav-item neu-button text-gray-100'}`}>
-            <Star size={18} /><span>Central de Avaliação</span>
-          </button>
-        )}
-        {/* Demandas (modo filial): Metas Estratégicas + Demandas do Conselho.
-            Admin/CEO em filial mode também veem — permite controlar o que
-            chegou pra filial. Some em modo Matriz (lá as demandas são criadas). */}
-        {!matrizMode && aulaAllow('demandas') && (
-          <button onPointerEnter={() => prefetchOnHover('demandas')} onPointerLeave={cancelPrefetchHover} onPointerDown={() => prefetchView('demandas')} onClick={() => { navigate('demandas'); onClose?.(); }} className={`flex items-center gap-3 p-2.5 rounded-xl text-sm font-semibold ${activeView === 'demandas' ? 'nav-item neu-pressed text-accent is-active' : 'nav-item neu-button text-gray-100'}`}>
-            <Inbox size={18} /><span>Demandas</span>
-          </button>
-        )}
-        {/* Sessões Gerais: no modo Matriz, aparece dentro da seção Matriz abaixo.
-            No modo filial já foi renderizado acima. */}
-        {/* Feedback & Requerimentos: unificado numa tela com abas — canal anônimo
-            (colaborador/gerente envia, admin/CEO lê) + requerimentos formais
-            (todos criam, gerente/Matriz respondem). Funciona nos dois modos:
-            a view decide internamente Requerimentos vs MatrizRequerimentos
-            olhando filialAtiva. */}
-        {aulaAllow('feedback-org') && (
-          <button onPointerEnter={() => prefetchOnHover('feedback-org')} onPointerLeave={cancelPrefetchHover} onPointerDown={() => prefetchView('feedback-org')} onClick={() => { navigate('feedback-org'); onClose?.(); }} className={`flex items-start gap-3 p-2.5 rounded-xl text-sm font-semibold text-left ${activeView === 'feedback-org' ? 'nav-item neu-pressed text-accent is-active' : 'nav-item neu-button text-gray-100'}`}>
-            <MessageSquare size={18} className="shrink-0 mt-0.5" /><span className="leading-tight">Feedback & Requerimentos</span>
-          </button>
-        )}
+        {/* Sanfonas (2026-10-09, pedido do usuário): itens soltos de primeiro
+            nível agrupados por assunto. Cada item mantém a MESMA régua de
+            visibilidade de antes — o grupo só monta a lista com o que sobra
+            para quem está logado (GrupoSanfona some sem itens e vira botão
+            simples com um só).
+            · Biblioteca: Max Show (aula-aware; cada aluno edita o próprio
+              material), Documentos da Matriz (todos, sem aulaAllow de
+              propósito — o roteiro da aula costuma ser PDF) e Contratos entre
+              unidades (migr. 623: gestão assina; colaborador não tem contrato).
+            · Desempenho & Feedback: Central de Avaliação e Demandas só no modo
+              filial (na Matriz a Central vive na seção Matriz abaixo, e as
+              demandas são criadas lá); Feedback & Requerimentos nos dois modos,
+              a view decide internamente. */}
+        <GrupoSanfona id="grupo-biblioteca" label="Biblioteca" icon={Library}
+          openModules={openModules} toggleModule={toggleModule} activeView={activeView}
+          navigate={navigate} onClose={onClose} badges={badges}
+          itens={[
+            aulaAllow('max-show') && { view: 'max-show', label: 'Max Show', icon: Presentation },
+            { view: 'documentos', label: 'Documentos', icon: FileText },
+            ['admin', 'ceo', 'conselheiro', 'gerente'].includes(profile?.role)
+              && { view: 'contratos', label: 'Contratos', icon: FileSignature },
+          ]} />
+        <GrupoSanfona id="grupo-desempenho" label="Desempenho & Feedback" icon={Award}
+          openModules={openModules} toggleModule={toggleModule} activeView={activeView}
+          navigate={navigate} onClose={onClose} badges={badges}
+          itens={[
+            !matrizMode && aulaAllow('avaliacoes') && { view: 'avaliacoes', label: 'Central de Avaliação', icon: Star },
+            !matrizMode && aulaAllow('demandas') && { view: 'demandas', label: 'Demandas', icon: Inbox },
+            aulaAllow('feedback-org') && { view: 'feedback-org', label: 'Feedback & Requerimentos', icon: MessageSquare },
+          ]} />
         {/* Metas foi consolidada dentro da Central de Avaliação (aba Metas). */}
       </div>
 
