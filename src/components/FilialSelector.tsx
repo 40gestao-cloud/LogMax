@@ -26,7 +26,7 @@ const FILIAL_META: Record<FilialOp, {
   plate: string;
 }> = {
   SuperMax: {
-    logo:        '/icon-supermax-view.png',
+    logo:        '/icon-supermax.png',
     segmento:    'Supermercado',
     corTexto:    'rgb(130,165,255)',
     glowHover:   'rgba(29,78,216,0.28)',

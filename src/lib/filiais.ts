@@ -58,7 +58,7 @@ export const FILIAL_IDENTIDADE: Record<FilialHolding, {
   plate: string | null;
 }> = {
   SuperMax: {
-    logo: '/icon-supermax-view.png',
+    logo: '/icon-supermax.png',
     cor: '#000070', claro: '#608CFF', escuro: '#000070',
     // AMARELO, e não o dourado #F8C840 que o brasão usa: dourado sobre o
     // azul-marinho lê como bronze apagado, e o pedido era amarelo.

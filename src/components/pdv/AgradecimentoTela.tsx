@@ -20,7 +20,7 @@ export function AgradecimentoTela({ onContinuar }: { onContinuar: () => void }) 
     >
       <div className="flex flex-col items-center justify-center text-center px-8 py-6 max-h-screen w-full">
         <img
-          src="/icon-supermax.png"
+          src="/logo-supermax-agradecimento.png"
           alt="SuperMax"
           className="object-contain drop-shadow-2xl"
           style={{ maxHeight: '60vh', maxWidth: '70vw', width: 'auto', height: 'auto' }}

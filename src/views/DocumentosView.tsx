@@ -40,7 +40,7 @@ type FilialAlvo = (typeof FILIAIS)[number];
 // para fundo preto e a MaxLook escreve "LOOK" em branco — no tema claro ela
 // perderia metade do nome. O losango dá o mesmo chão nos dois temas.
 const FILIAL_LOGO: Record<FilialAlvo, string> = {
-  SuperMax: '/icon-supermax-view.png',
+  SuperMax: '/icon-supermax.png',
   MaxLook:  '/icon-maxlook.png',
   TechMax:  '/icon-techmax.png',
 };
