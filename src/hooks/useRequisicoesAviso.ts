@@ -30,7 +30,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { assinarRealtime } from '../lib/realtimeAgrupado';
-import { isConselheiro } from '../lib/rbac';
+import { isConselheiro, isGerencia } from '../lib/rbac';
 import type { UserProfile } from './useUserProfile';
 
 export type EventoRequisicao = 'devolvida' | 'reenviada';
@@ -76,7 +76,7 @@ export function useRequisicoesAviso(profile: UserProfile | null, filialAtiva: st
   // recebia o modal de CADA reenvio das três filiais só por estar logado.
   const decide =
     !!filialAtiva && (
-      profile?.role === 'gerente' || profile?.role === 'admin' ||
+      isGerencia(profile) || profile?.role === 'admin' ||
       profile?.role === 'ceo' || isConselheiro(profile)
     );
 

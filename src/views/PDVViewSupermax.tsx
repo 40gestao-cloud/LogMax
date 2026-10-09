@@ -1257,10 +1257,17 @@ export const PDVViewSupermax = ({
       }
       const { data: perfil } = await cliente
         .from('user_profiles')
-        .select('nome, role, filial')
+        .select('nome, role, filial, gerente_assistente')
         .eq('id', auth.user.id)
         .maybeSingle();
-      const ehGerenteDaUnidade = perfil?.role === 'gerente' && perfil?.filial === filial;
+      // Migr. 690: o Gerente Assistente também autoriza — mas não o desconto da
+      // venda que ele mesmo está operando (não decide o que fez).
+      const ehAssistente = perfil?.role === 'colaborador' && perfil?.gerente_assistente === true;
+      if (ehAssistente && auth.user.id === user?.id) {
+        showToast?.('Quem opera o caixa não autoriza o próprio desconto — chame o gerente.', 'error', true);
+        return;
+      }
+      const ehGerenteDaUnidade = (perfil?.role === 'gerente' || ehAssistente) && perfil?.filial === filial;
       // O professor (admin) também autoriza: em aula é ele quem faz o papel do
       // fiscal quando o gerente da filial não está na sala.
       const ehAdmin = perfil?.role === 'admin';

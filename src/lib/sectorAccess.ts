@@ -1,3 +1,5 @@
+import { allSetores } from './rbac';
+
 // --- acesso por setor (UX only — NÃO é segurança) ---
 // Este mapa controla o que aparece no menu lateral por setor. NÃO é a fonte
 // de verdade pra autorização: a RLS no Supabase (010_20260516_rls_hardening.sql
@@ -43,6 +45,7 @@ export function podeVerModulo(
   if (!profile) return false;
   // Gerente vê todos os módulos da própria filial (RLS recorta a linha).
   if (profile.role === 'gerente') return SETOR_MODULES.all.includes(modulo);
-  const setores = [profile.setor, ...(profile.setores_extras ?? [])].filter(Boolean) as string[];
+  // Migr. 690: inclui os setores concedidos pela função (assistente sem RH; Head → marketing).
+  const setores = allSetores(profile as any).filter(Boolean) as string[];
   return setores.some(s => (SETOR_MODULES[s] ?? []).includes(modulo));
 }

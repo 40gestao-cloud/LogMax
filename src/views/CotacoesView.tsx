@@ -17,7 +17,7 @@ import { supabase } from '../lib/supabase';
 import { notificarSetor } from '../lib/notificar';
 import { acompanharReservas, RESERVA_COLUNAS, type ReservaLinha } from '../lib/reservasTrabalho';
 import { assinarRealtime } from '../lib/realtimeAgrupado';
-import { hasAnySetor, hasSetor, isConselheiro } from '../lib/rbac';
+import { hasAnySetor, hasSetor, isConselheiro, isGerencia } from '../lib/rbac';
 import { podeVerModulo } from '../lib/sectorAccess';
 import type { UserProfile } from '../hooks/useUserProfile';
 import { useConfirm } from '../contexts/ConfirmContext';
@@ -502,11 +502,11 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode, onNavigate }: { s
   // RLS já libera via auth_gerente_da (migr. 20260713i). Antes o frontend
   // exigia gerente COM setor financeiro pra decidir, o que travava gerentes
   // "puros" que a régua canônica manda liberar.
-  const isCompras    = hasAnySetor(profile, 'compras', 'logistica') || profile.role === 'gerente';
+  const isCompras    = hasAnySetor(profile, 'compras', 'logistica') || isGerencia(profile);
   const isFinanceiro = hasSetor(profile, 'financeiro');
   const podeDecidir  =
     profile.role === 'admin' || profile.role === 'ceo' || isConselheiro(profile) ||
-    profile.role === 'gerente' || isFinanceiro;
+    isGerencia(profile) || isFinanceiro;
 
   // Alçada de aprovação por valor (migr. 204). Buscada 1x por filial.
   // Regra: valor <= limite → Financeiro decide; valor > limite → Gerente
@@ -551,7 +551,7 @@ const CotacoesViewInner = ({ showToast, profile, filial, mode, onNavigate }: { s
     if (cot.criado_por && cot.criado_por === profile.id) return false;
     return Number(cot.valor_total ?? 0) <= limiteEfetivo
       ? isFinanceiro               // dentro da alçada → Financeiro
-      : profile.role === 'gerente'; // acima da alçada → Gerente da filial
+      : isGerencia(profile); // acima da alçada → Gerente da filial
   };
 
   // Quem corrige a proposta devolvida: quem a cadastrou, ou Compras/Logística

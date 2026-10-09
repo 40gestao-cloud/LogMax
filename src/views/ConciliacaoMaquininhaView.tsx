@@ -8,7 +8,7 @@ import { useTravaAtualizacao } from '../hooks/useTravaAtualizacao';
 import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent, StatusBadge } from '../components/ui';
 import { formatBRL } from '../lib/viewUtils';
 import { supabase } from '../lib/supabase';
-import { hasSetor } from '../lib/rbac';
+import { hasSetor, isGerencia } from '../lib/rbac';
 import { todayBR } from '../lib/dates';
 import type { UserProfile } from '../hooks/useUserProfile';
 import type { FilialOp } from '../components/FilialSelector';
@@ -55,7 +55,7 @@ const ConciliacaoMaquininhaViewInner = ({
   );
 
   const podeConciliar = hasSetor(profile, 'financeiro')
-    || profile.role === 'admin' || profile.role === 'ceo' || profile.role === 'gerente';
+    || profile.role === 'admin' || profile.role === 'ceo' || isGerencia(profile);
 
   const [formaId, setFormaId]   = useState('');
   const [bancoId, setBancoId]   = useState('');

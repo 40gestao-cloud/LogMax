@@ -7,12 +7,12 @@ import { exportToExcel, gerarReciboVendaPDF } from '../lib/viewUtils';
 import { useFilial } from '../contexts/FilialContext';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import { supabase } from '../lib/supabase';
-import { hasSetor } from '../lib/rbac';
+import { hasSetor, isGerencia } from '../lib/rbac';
 import { garantiaAte } from '../lib/atributosProduto';
 import type { UserProfile } from '../hooks/useUserProfile';
 
 export const RecibosVendasView = ({ showToast, profile }: { showToast: any; profile: UserProfile }) => {
-  if (!hasSetor(profile, 'financeiro') && profile?.role !== 'gerente') {
+  if (!hasSetor(profile, 'financeiro') && !isGerencia(profile)) {
     return (
       <div className="flex-1 flex items-center justify-center flex-col gap-4 text-center">
         <Lock size={36} className="text-gray-600" />

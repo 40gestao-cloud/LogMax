@@ -27,6 +27,13 @@ export interface UserProfile {
    * serve só para a UI avisar; quem barra de verdade é a RLS.
    */
   desligado_em?: string | null;
+  /**
+   * Migr. 690: Gerente Assistente da filial (só colaborador, 1 por filial).
+   * Opera a filial como a gerência, sem RH; não decide o que ele abriu.
+   */
+  gerente_assistente?: boolean;
+  /** Migr. 690: Head de Comunicação da filial (1 por filial) — Marketing + aprova conteúdo. */
+  head_comunicacao?: boolean;
 }
 
 export function useUserProfile() {

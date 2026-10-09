@@ -13,6 +13,7 @@ import { usePrompt } from '../contexts/PromptContext';
 import { groupCadastrosParaSelect } from '../lib/cadastrosSelect';
 import { formatBRL, parseBRL } from '../lib/viewUtils';
 import { SelectBusca } from '../components/SelectBusca';
+import { isGerencia } from '../lib/rbac';
 
 // Fila da loja pública. O pedido chega de fora sem virar venda — quem vende é
 // o aluno, aqui, e a venda nasce por `criar_venda_pdv` como qualquer outra
@@ -85,7 +86,7 @@ const PedidosOnlineInner = ({ showToast, profile, filial }: { showToast: any; pr
   const [excluindo, setExcluindo] = useState<string | null>(null);
 
   const cfg = lojaCfg?.[0];
-  const podeAbrirFechar = profile?.role === 'admin' || profile?.role === 'ceo' || profile?.role === 'gerente';
+  const podeAbrirFechar = profile?.role === 'admin' || profile?.role === 'ceo' || isGerencia(profile);
   // Excluir é da Matriz: some com registro, e gerente já tem 'Cancelar' — que
   // preserva o histórico e é o caminho certo para pedido real desistido.
   const podeExcluir = profile?.role === 'admin' || profile?.role === 'ceo';

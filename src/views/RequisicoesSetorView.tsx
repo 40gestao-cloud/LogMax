@@ -23,7 +23,7 @@ import { formatQtd, parseQtd, handleQtdKeyDown, qtdBR } from '../lib/viewUtils';
 import { temEstoque, ehVendavel } from '../lib/tipoProduto';
 import { ehContratado } from '../lib/naturezaServico';
 import type { UserProfile } from '../hooks/useUserProfile';
-import { isConselheiro, hasAnySetor } from '../lib/rbac';
+import { isConselheiro, hasAnySetor, isGerencia } from '../lib/rbac';
 import { useConfirm } from '../contexts/ConfirmContext';
 import { semelhancaDeItem } from '../lib/similaridadeItem';
 import { normNome } from '../lib/vinculoCatalogo';
@@ -168,7 +168,7 @@ const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: 
   // Repor mercadoria de revenda é papel de quem cuida do estoque da loja; os
   // demais setores repõem o que usam (uso e consumo).
   const podeReporMercadoria = hasAnySetor(profile, 'estoque', 'compras', 'logistica')
-    || profile?.role === 'gerente';
+    || isGerencia(profile);
   const catalogoRepo = useMemo(() => {
     const termo = buscaCat.trim().toLowerCase();
     return [...produtos]
@@ -394,7 +394,7 @@ const RequisicoesSetorViewInner = ({ showToast, profile, filial }: { showToast: 
     || r.criadoPor === profile?.id
     || profile?.role === 'admin'
     || profile?.role === 'ceo'
-    || profile?.role === 'gerente'
+    || isGerencia(profile)
     || isConselheiro(profile);
 
   const abrirCorrecao = (r: any) => {

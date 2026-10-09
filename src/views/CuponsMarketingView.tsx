@@ -7,7 +7,7 @@ import { Plus, X, Trash2, Edit3, Ticket, Copy, CheckCircle2, Search } from 'luci
 import { useFetchData, dbInsert, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
 import { LoadingSpinner, EmptyState, NeuButtonAccent, CardContador, type TomContador, ModalFormulario } from '../components/ui';
 import { formatBRL, parseBRL, handleMoneyKeyDown } from '../lib/viewUtils';
-import { hasSetor } from '../lib/rbac';
+import { hasSetor, isGerencia } from '../lib/rbac';
 import { useConfirm } from '../contexts/ConfirmContext';
 
 type Tipo = 'percentual' | 'fixo';
@@ -65,7 +65,7 @@ const CuponsMarketingViewInner = ({ showToast, profile, filial }: { showToast: a
   const [copied, setCopied] = useState<string | null>(null);
   const [searchCup, setSearchCup] = useState('');
 
-  const canCRUD = hasSetor(profile, 'marketing') || profile?.role === 'gerente';
+  const canCRUD = hasSetor(profile, 'marketing') || isGerencia(profile);
 
   const campanhasAtivasMap = useMemo(() => {
     const m: Record<string, string> = {};

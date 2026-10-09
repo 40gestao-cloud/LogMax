@@ -8,7 +8,7 @@ import { supabase } from '../lib/supabase';
 import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent, StatusBadge, ModalFormulario } from '../components/ui';
 import { HistoricoOperacoes } from '../components/HistoricoOperacoes';
 import { useFormValidation, formatBRL, parseBRL, handleMoneyKeyDown, gerarNotaEmitidaPDF } from '../lib/viewUtils';
-import { hasSetor } from '../lib/rbac';
+import { hasSetor, isGerencia } from '../lib/rbac';
 import { todayBR } from '../lib/dates';
 import type { UserProfile } from '../hooks/useUserProfile';
 import { SelectBusca } from '../components/SelectBusca';
@@ -67,7 +67,7 @@ const NotasEmitidasViewInner = ({ showToast, filial, profile }: {
   const { errors, validate, clearError, setErrors } = useFormValidation(form);
 
   const podeEmitir = hasSetor(profile, 'vendas') || hasSetor(profile, 'financeiro')
-    || profile?.role === 'admin' || profile?.role === 'ceo' || profile?.role === 'gerente';
+    || profile?.role === 'admin' || profile?.role === 'ceo' || isGerencia(profile);
 
   const clienteMap = useMemo(() => {
     const m: Record<string, any> = {};

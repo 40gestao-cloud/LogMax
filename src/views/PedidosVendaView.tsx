@@ -9,7 +9,7 @@ import { supabase } from '../lib/supabase';
 import { LoadingSpinner, EmptyState, StatusBadge, Pagination } from '../components/ui';
 import { formatBRL, qtdBR } from '../lib/viewUtils';
 import { normalizarUnidade, embalagemDoProduto, pluralEmbalagem } from '../lib/unidades';
-import { hasAnySetor, hasSetor, isConselheiro } from '../lib/rbac';
+import { hasAnySetor, hasSetor, isConselheiro, isGerencia } from '../lib/rbac';
 import type { UserProfile } from '../hooks/useUserProfile';
 import { useConfirm } from '../contexts/ConfirmContext';
 import type { FilialOp } from '../components/FilialSelector';
@@ -270,7 +270,7 @@ const PedidosVendaViewInner = ({ showToast, profile, filial, mode }: { showToast
     }
   };
 
-  if (!hasAnySetor(profile, 'vendas', 'logistica', 'financeiro') && !isAdminOuCeo && profile.role !== 'gerente') {
+  if (!hasAnySetor(profile, 'vendas', 'logistica', 'financeiro') && !isAdminOuCeo && !isGerencia(profile)) {
     return (
       <div className="flex-1 flex items-center justify-center text-center">
         <p className="text-sm text-gray-400">Sem acesso a Pedidos de Venda.</p>

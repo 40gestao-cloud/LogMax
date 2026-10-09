@@ -542,16 +542,6 @@ Para cada tela: o que ela lê e grava, as funções do banco que chama, e **quem
   - por [marketing_campanhas](tabelas.md#t-marketing_campanhas): [Marketing › Campanhas](telas.md#s-marketing-campanhas)
   - por [marketing_promocoes](tabelas.md#t-marketing_promocoes): [Marketing › Promoções](telas.md#s-marketing-promoções)
 
-<a id="s-financeiro-aprovaçõesdeconteúdo"></a>
-### Financeiro › Aprovações de Conteúdo
-
-- **Rota:** `financeiro-aprovaçõesdeconteúdo` · **Componente:** `AprovacoesConteudoMarketingView` ([src/views/AprovacoesConteudoMarketingView.tsx](../../src/views/AprovacoesConteudoMarketingView.tsx))
-- **Lê:** [marketing_tarefas](tabelas.md#t-marketing_tarefas)
-- **Grava direto:** [marketing_tarefas](tabelas.md#t-marketing_tarefas)
-- **Chama (RPC):** —
-- **⚠ Confira também — outras telas que gravam as mesmas tabelas:**
-  - por [marketing_tarefas](tabelas.md#t-marketing_tarefas): [Matriz › Briefing Diário](telas.md#s-briefing-diario)
-
 <a id="s-financeiro-alçadas"></a>
 ### Financeiro › Alçadas
 
@@ -882,7 +872,7 @@ Para cada tela: o que ela lê e grava, as funções do banco que chama, e **quem
 ### Vendas › Pedidos Online
 
 - **Rota:** `vendas-pedidosonline` · **Componente:** `PedidosOnlineView` ([src/views/PedidosOnlineView.tsx](../../src/views/PedidosOnlineView.tsx))
-- **Lê:** [clientes](tabelas.md#t-clientes), [loja_config](tabelas.md#t-loja_config), [pedidos_online](tabelas.md#t-pedidos_online), [pedidos_online_itens](tabelas.md#t-pedidos_online_itens), [produtos](tabelas.md#t-produtos)
+- **Lê:** [clientes](tabelas.md#t-clientes), [loja_config](tabelas.md#t-loja_config), [pedidos_online](tabelas.md#t-pedidos_online), [pedidos_online_itens](tabelas.md#t-pedidos_online_itens), [produtos](tabelas.md#t-produtos), [user_profiles](tabelas.md#t-user_profiles)
 - **Grava direto:** [loja_config](tabelas.md#t-loja_config), [pedidos_online](tabelas.md#t-pedidos_online), [produtos](tabelas.md#t-produtos)
 - **Chama (RPC):** [cancelar_pedido_online](funcoes.md#f-cancelar_pedido_online), [confirmar_pedido_online](funcoes.md#f-confirmar_pedido_online)
 - **Grava via RPC:** [contas_receber](tabelas.md#t-contas_receber), [itens_venda](tabelas.md#t-itens_venda), [marketing_cupons](tabelas.md#t-marketing_cupons), [movimentacoes_estoque](tabelas.md#t-movimentacoes_estoque), [notas_emitidas](tabelas.md#t-notas_emitidas), [vendas](tabelas.md#t-vendas), [vendas_pagamentos](tabelas.md#t-vendas_pagamentos)
@@ -896,6 +886,7 @@ Para cada tela: o que ela lê e grava, as funções do banco que chama, e **quem
   - por [produtos](tabelas.md#t-produtos): [Cadastros › Produtos](telas.md#s-cadastros-produtos), [Empresa › Filiais](telas.md#s-empresa-filiais), [Estoque › Movimentações](telas.md#s-estoque-movimentações), [Financeiro › Patrimônio](telas.md#s-financeiro-patrimônio), [Marketing › Vitrinedateladelogin *(rota marketing-vitrinedateladelogin)*](telas.md#s-marketing-vitrinedateladelogin), [Marketing › Vitrinepública *(rota marketing-vitrinepública)*](telas.md#s-marketing-vitrinepública)
   - por [vendas](tabelas.md#t-vendas): [Estoque › Pedidos de Venda](telas.md#s-estoque-pedidosdevenda), [Financeiro › Aprovações de Orçamento](telas.md#s-financeiro-aprovaçõesdeorçamento), [Financeiro › Pedidos de Venda](telas.md#s-financeiro-pedidosdevenda), [Vendas › Histórico de Vendas](telas.md#s-vendas-históricodevendas), [Vendas › Orçamentos](telas.md#s-vendas-orçamentos), [Vendas › PDV](telas.md#s-vendas-pdv), [Vendas › Pedidos de Venda](telas.md#s-vendas-pedidosdevenda)
   - por [vendas_pagamentos](tabelas.md#t-vendas_pagamentos): [Financeiro › Aprovações de Orçamento](telas.md#s-financeiro-aprovaçõesdeorçamento), [Vendas › Orçamentos](telas.md#s-vendas-orçamentos), [Vendas › PDV](telas.md#s-vendas-pdv)
+- **Arquivos que acessam dados:** `src/hooks/useUserProfile.ts`, `src/views/PedidosOnlineView.tsx`
 
 <a id="s-vendas-históricodevendas"></a>
 ### Vendas › Histórico de Vendas
@@ -991,7 +982,20 @@ Para cada tela: o que ela lê e grava, as funções do banco que chama, e **quem
 - **Grava direto:** [marketing_calendario](tabelas.md#t-marketing_calendario)
 - **Chama (RPC):** —
 - **API do servidor:** `/api/ai-legenda`
+- **⚠ Confira também — outras telas que gravam as mesmas tabelas:**
+  - por [marketing_calendario](tabelas.md#t-marketing_calendario): [Marketing › Aprovações de Conteúdo](telas.md#s-marketing-aprovaçõesdeconteúdo)
 - **Arquivos que acessam dados:** `src/hooks/useUserProfile.ts`, `src/views/CalendarioEditorialView.tsx`
+
+<a id="s-marketing-aprovaçõesdeconteúdo"></a>
+### Marketing › Aprovações de Conteúdo
+
+- **Rota:** `marketing-aprovaçõesdeconteúdo` · **Componente:** `AprovacoesConteudoMarketingView` ([src/views/AprovacoesConteudoMarketingView.tsx](../../src/views/AprovacoesConteudoMarketingView.tsx))
+- **Lê:** [marketing_calendario](tabelas.md#t-marketing_calendario)
+- **Grava direto:** —
+- **Chama (RPC):** [decidir_conteudo](funcoes.md#f-decidir_conteudo)
+- **Grava via RPC:** [marketing_calendario](tabelas.md#t-marketing_calendario), [notificacoes](tabelas.md#t-notificacoes)
+- **⚠ Confira também — outras telas que gravam as mesmas tabelas:**
+  - por [marketing_calendario](tabelas.md#t-marketing_calendario): [Marketing › Calendário](telas.md#s-marketing-calendário)
 
 ## TI & Suporte
 
@@ -1108,8 +1112,6 @@ Para cada tela: o que ela lê e grava, as funções do banco que chama, e **quem
 - **Chama (RPC):** [descartar_tarefa_briefing](funcoes.md#f-descartar_tarefa_briefing), [editar_tarefa_briefing](funcoes.md#f-editar_tarefa_briefing), [excluir_briefing_cascade](funcoes.md#f-excluir_briefing_cascade), [marcar_notificacoes_lidas](funcoes.md#f-marcar_notificacoes_lidas), [notificar_setor](funcoes.md#f-notificar_setor)
 - **Grava via RPC:** [notificacoes](tabelas.md#t-notificacoes), [notificacoes_lidas](tabelas.md#t-notificacoes_lidas)
 - **API do servidor:** `/api/ai-briefing`
-- **⚠ Confira também — outras telas que gravam as mesmas tabelas:**
-  - por [marketing_tarefas](tabelas.md#t-marketing_tarefas): [Financeiro › Aprovações de Conteúdo](telas.md#s-financeiro-aprovaçõesdeconteúdo)
 - **Arquivos que acessam dados:** `src/hooks/useNotificacoes.ts`, `src/hooks/useUserProfile.ts`, `src/lib/notificar.ts`, `src/views/BriefingDiarioView.tsx`
 
 ## Outras telas (barra lateral, hubs, atalhos)

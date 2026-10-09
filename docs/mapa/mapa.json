@@ -1016,20 +1016,6 @@
    ],
    "apis": []
   },
-  "financeiro-aprovaçõesdeconteúdo": {
-   "nome": "Financeiro › Aprovações de Conteúdo",
-   "componente": "AprovacoesConteudoMarketingView",
-   "arquivo": "src/views/AprovacoesConteudoMarketingView.tsx",
-   "le": [
-    "marketing_tarefas"
-   ],
-   "grava": [
-    "marketing_tarefas"
-   ],
-   "rpcs": [],
-   "grava_via_rpc": [],
-   "apis": []
-  },
   "financeiro-alçadas": {
    "nome": "Financeiro › Alçadas",
    "componente": "AlcadasView",
@@ -1671,7 +1657,8 @@
     "loja_config",
     "pedidos_online",
     "pedidos_online_itens",
-    "produtos"
+    "produtos",
+    "user_profiles"
    ],
    "grava": [
     "loja_config",
@@ -1850,6 +1837,23 @@
    "apis": [
     "ai-legenda"
    ]
+  },
+  "marketing-aprovaçõesdeconteúdo": {
+   "nome": "Marketing › Aprovações de Conteúdo",
+   "componente": "AprovacoesConteudoMarketingView",
+   "arquivo": "src/views/AprovacoesConteudoMarketingView.tsx",
+   "le": [
+    "marketing_calendario"
+   ],
+   "grava": [],
+   "rpcs": [
+    "decidir_conteudo"
+   ],
+   "grava_via_rpc": [
+    "marketing_calendario",
+    "notificacoes"
+   ],
+   "apis": []
   },
   "ti-desenvolvimentocomia": {
    "nome": "TI & Suporte › Desenvolvimento com IA",
@@ -3128,7 +3132,7 @@
    "le": [],
    "chama": [
     "_assert_rpc",
-    "auth_gerente_da",
+    "auth_gerente_titular_da",
     "auth_in_setor",
     "auth_is_service_role",
     "auth_pode_filial"
@@ -3787,7 +3791,7 @@
    "chama": [
     "_assert_rpc",
     "acre_today",
-    "auth_gerente_da",
+    "auth_gerente_titular_da",
     "auth_in_setor",
     "auth_pode_filial",
     "baixar_conta_pagar",
@@ -3863,7 +3867,7 @@
    ],
    "chama": [
     "_assert_rpc",
-    "auth_gerente_da",
+    "auth_gerente_titular_da",
     "auth_in_setor",
     "auth_pode_filial",
     "auth_user_role",
@@ -4203,7 +4207,35 @@
    ],
    "chama": []
   },
+  "auth_e_gerencia": {
+   "gatilho": false,
+   "secdef": true,
+   "grava": [],
+   "le": [
+    "user_profiles"
+   ],
+   "chama": []
+  },
+  "auth_e_gerente_assistente": {
+   "gatilho": false,
+   "secdef": true,
+   "grava": [],
+   "le": [
+    "user_profiles"
+   ],
+   "chama": []
+  },
   "auth_gerente_da": {
+   "gatilho": false,
+   "secdef": true,
+   "grava": [],
+   "le": [],
+   "chama": [
+    "auth_e_gerencia",
+    "auth_user_filial"
+   ]
+  },
+  "auth_gerente_titular_da": {
    "gatilho": false,
    "secdef": true,
    "grava": [],
@@ -4212,6 +4244,15 @@
     "auth_user_filial",
     "auth_user_role"
    ]
+  },
+  "auth_head_comunicacao_da": {
+   "gatilho": false,
+   "secdef": true,
+   "grava": [],
+   "le": [
+    "user_profiles"
+   ],
+   "chama": []
   },
   "auth_in_setor": {
    "gatilho": false,
@@ -5067,8 +5108,8 @@
     "desenvolvimentos_ia",
     "expedicao",
     "ferias",
+    "marketing_calendario",
     "marketing_promocoes",
-    "marketing_tarefas",
     "metas_estrategicas",
     "orcamentos",
     "pedidos",
@@ -5132,9 +5173,9 @@
    "grava": [],
    "le": [],
    "chama": [
+    "auth_e_gerencia",
     "auth_in_setor",
-    "auth_pode_filial",
-    "auth_user_role"
+    "auth_pode_filial"
    ]
   },
   "converter_orcamento_em_pedido": {
@@ -5585,6 +5626,7 @@
     "user_profiles"
    ],
    "chama": [
+    "auth_e_gerencia",
     "auth_user_role",
     "auth_user_setor"
    ]
@@ -5631,6 +5673,24 @@
     "maxbank_transacoes"
    ],
    "chama": []
+  },
+  "decidir_conteudo": {
+   "gatilho": false,
+   "secdef": true,
+   "grava": [
+    "marketing_calendario"
+   ],
+   "le": [
+    "marketing_calendario",
+    "user_profiles"
+   ],
+   "chama": [
+    "_assert_rpc",
+    "auth_gerente_da",
+    "auth_head_comunicacao_da",
+    "eh_perfil_admin",
+    "notificar_setor"
+   ]
   },
   "decidir_cotacao": {
    "gatilho": false,
@@ -5835,7 +5895,7 @@
    ],
    "chama": [
     "_assert_rpc",
-    "auth_gerente_da",
+    "auth_gerente_titular_da",
     "auth_in_setor",
     "auth_pode_filial"
    ]
@@ -5855,7 +5915,7 @@
    ],
    "chama": [
     "_assert_rpc",
-    "auth_gerente_da",
+    "auth_gerente_titular_da",
     "auth_is_admin",
     "auth_pode_filial"
    ]
@@ -6556,7 +6616,7 @@
     "user_profiles"
    ],
    "chama": [
-    "auth_gerente_da",
+    "auth_gerente_titular_da",
     "auth_in_setor",
     "auth_is_admin",
     "auth_is_service_role"
@@ -6623,6 +6683,16 @@
    "grava": [],
    "le": [],
    "chama": []
+  },
+  "fn_calendario_aprovacao_guard": {
+   "gatilho": true,
+   "secdef": true,
+   "grava": [],
+   "le": [],
+   "chama": [
+    "auth_is_service_role",
+    "eh_perfil_admin"
+   ]
   },
   "fn_carimba_exclusao": {
    "gatilho": true,
@@ -6900,6 +6970,17 @@
     "_rescisao_multa_no_termo",
     "notificar_setor"
    ]
+  },
+  "fn_historico_decisao_do_assistente": {
+   "gatilho": true,
+   "secdef": true,
+   "grava": [
+    "notificacoes"
+   ],
+   "le": [
+    "user_profiles"
+   ],
+   "chama": []
   },
   "fn_item_devolucao_devolve_unidade": {
    "gatilho": true,
@@ -7290,6 +7371,13 @@
    "le": [],
    "chama": []
   },
+  "fn_user_profile_funcoes_normaliza": {
+   "gatilho": true,
+   "secdef": false,
+   "grava": [],
+   "le": [],
+   "chama": []
+  },
   "fn_valida_filial_item_venda": {
    "gatilho": true,
    "secdef": true,
@@ -7452,7 +7540,7 @@
    "chama": [
     "_assert_rpc",
     "acre_today",
-    "auth_gerente_da",
+    "auth_gerente_titular_da",
     "auth_is_admin",
     "auth_pode_filial"
    ]
@@ -7550,6 +7638,7 @@
    ],
    "chama": [
     "_assert_blackout",
+    "auth_e_gerencia",
     "auth_user_role"
    ]
   },
@@ -7753,7 +7842,7 @@
    "chama": [
     "_assert_rpc",
     "acre_today",
-    "auth_gerente_da",
+    "auth_gerente_titular_da",
     "auth_is_admin",
     "auth_pode_filial",
     "nome_item_normalizado"
@@ -7894,8 +7983,8 @@
     "contas_receber",
     "controle_caixa",
     "cotacoes",
+    "marketing_calendario",
     "marketing_promocoes",
-    "marketing_tarefas",
     "orcamentos",
     "pedidos",
     "recebimentos",
@@ -8279,9 +8368,9 @@
     "controle_caixa"
    ],
    "chama": [
+    "auth_e_gerencia",
     "auth_in_setor",
-    "auth_pode_filial",
-    "auth_user_role"
+    "auth_pode_filial"
    ]
   },
   "movimentar_estoque": {
@@ -9211,7 +9300,7 @@
    "chama": [
     "_assert_rpc",
     "_funcionario_desligado",
-    "auth_gerente_da",
+    "auth_gerente_titular_da",
     "auth_in_setor",
     "auth_pode_filial",
     "auth_user_role",
@@ -9647,7 +9736,7 @@
    "chama": [
     "_assert_rpc",
     "acre_today",
-    "auth_gerente_da",
+    "auth_gerente_titular_da",
     "auth_in_setor",
     "auth_pode_filial",
     "auth_user_role",
@@ -10032,7 +10121,7 @@
    ],
    "chama": [
     "_assert_rpc",
-    "auth_gerente_da",
+    "auth_gerente_titular_da",
     "auth_in_setor",
     "auth_is_service_role",
     "auth_pode_filial",
@@ -10363,7 +10452,7 @@
    "chama": [
     "_assert_rpc",
     "acre_today",
-    "auth_gerente_da",
+    "auth_gerente_titular_da",
     "auth_in_setor",
     "auth_is_admin",
     "auth_pode_filial"
@@ -10702,6 +10791,9 @@
    "trg_funcionarios_vinculo_admin:funcionarios_vinculo_admin_guard",
    "trg_historico:registrar_historico"
   ],
+  "historico_operacoes": [
+   "trg_historico_decisao_do_assistente:fn_historico_decisao_do_assistente"
+  ],
   "inventarios": [
    "trg_auditoria:set_auditoria_campos",
    "trg_historico:registrar_historico"
@@ -10729,7 +10821,8 @@
    "trg_arte_produto_e_cota:fn_arte_produto_e_cota"
   ],
   "marketing_calendario": [
-   "marketing_calendario_updated_at:trg_marketing_calendario_updated_at"
+   "marketing_calendario_updated_at:trg_marketing_calendario_updated_at",
+   "trg_calendario_aprovacao_guard:fn_calendario_aprovacao_guard"
   ],
   "marketing_campanhas": [
    "marketing_campanhas_updated_at:trg_marketing_campanhas_updated_at"
@@ -10937,6 +11030,7 @@
   ],
   "user_profiles": [
    "trg_perfil_desligado_sincroniza_tarefas:fn_perfil_desligado_sincroniza_tarefas",
+   "trg_user_profile_funcoes_normaliza:fn_user_profile_funcoes_normaliza",
    "trg_user_profiles_bloquear_privesc:user_profiles_bloquear_privesc",
    "trg_user_profiles_conselho_e_da_matriz:fn_conselho_e_da_matriz",
    "trg_user_profiles_maxbank_conta:criar_maxbank_conta_para_colaborador",

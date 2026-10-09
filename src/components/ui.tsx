@@ -36,7 +36,7 @@ const COR_STATUS: Record<string, string> = {
   'Novo': AZUL, 'Hora Extra': AZUL, 'Em Atendimento': AZUL,
   // esperando decisão
   'Pendente': AMARELO, 'Aguardando Financeiro': AMARELO, 'Aguardando Matriz': AMARELO,
-  'Aguardando Aprovação': AMARELO, 'Aguardando Confirmação': AMARELO, 'Solicitada': AMARELO, 'Próximo': AMARELO,
+  'Aguardando Aprovação': AMARELO, 'Em aprovação': AMARELO, 'Aguardando Confirmação': AMARELO, 'Solicitada': AMARELO, 'Próximo': AMARELO,
   'Justificado': AMARELO, 'Justificada': AMARELO, 'aguardando': AMARELO,
   // voltou para ajuste / pela metade
   'Em correção': LARANJA, 'Parcial': LARANJA, 'Parcialmente Aprovado': LARANJA, 'Presente com Atraso': LARANJA, 'Pausada': LARANJA, 'Suspenso': LARANJA,

@@ -15,7 +15,7 @@ import {
   uploadImagemArte, validarImagemArte, avaliarResolucaoArte, removerArteAntiga,
   ehArteHospedada, ARTE_IMAGEM_ACCEPT, ARTE_IMAGEM_OUTPUT_MAX_LABEL,
 } from '../lib/arteImagem';
-import { hasSetor } from '../lib/rbac';
+import { hasSetor, isGerencia } from '../lib/rbac';
 import { ArteLightbox, periodoArte } from '../components/ArteLightbox';
 import { useConfirm } from '../contexts/ConfirmContext';
 
@@ -127,7 +127,7 @@ const PromocoesMarketingViewInner = ({ showToast, profile, filial }: { showToast
   // admin/CEO. Financeiro consegue ler `marketing_promocoes` (e abrir esta
   // view) mas a RLS de `marketing_artes_insert/update` recusa — escondemos
   // o botão pra não mostrar uma ação que falha.
-  const canPublicarArte = hasSetor(profile, 'marketing') || profile?.role === 'gerente';
+  const canPublicarArte = hasSetor(profile, 'marketing') || isGerencia(profile);
 
   // promocao_id → LISTA de artes. Era 1 por promoção enquanto existia o
   // UNIQUE(promocao_id); a migr. 539 soltou essa amarra e passou a cota a

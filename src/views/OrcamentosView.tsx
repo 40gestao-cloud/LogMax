@@ -14,7 +14,7 @@ import {
   type FormaPagamento,
 } from '../lib/condicaoPagamento';
 import { supabase } from '../lib/supabase';
-import { hasSetor, isConselheiro } from '../lib/rbac';
+import { hasSetor, isConselheiro, isGerencia } from '../lib/rbac';
 import type { UserProfile } from '../hooks/useUserProfile';
 import { useConfirm } from '../contexts/ConfirmContext';
 import type { FilialOp } from '../components/FilialSelector';
@@ -155,7 +155,7 @@ const OrcamentosViewInner = ({
   const isVendas       = hasSetor(profile, 'vendas');
   const isFinanceiro   = hasSetor(profile, 'financeiro');
   const isAdminOuCeo   = profile.role === 'admin' || profile.role === 'ceo' || isConselheiro(profile);
-  const isGerente      = profile.role === 'gerente';
+  const isGerente      = isGerencia(profile);
   const podeDecidirFin = isFinanceiro || isAdminOuCeo || isGerente;
   const podeCriarVenda = isVendas || isAdminOuCeo || isGerente;
 

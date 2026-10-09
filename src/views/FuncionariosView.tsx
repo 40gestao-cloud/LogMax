@@ -11,7 +11,7 @@ import { useFetchData, dbInsert, dbUpdate, dbDelete } from '../hooks/useSupabase
 import { LoadingSpinner, EmptyState, StatusBadge, NeuButtonAccent, ExportButton, CardContador, type TomContador, ModalFormulario } from '../components/ui';
 import { exportToPDF, exportToExcel, formatCPF, formatPhone, formatBRL, parseBRL } from '../lib/viewUtils';
 import { uploadFotoDeFuncionario, validarFotoPerfil, PERFIL_FOTO_ACCEPT } from '../lib/perfilFoto';
-import { roleLabel } from '../lib/rbac';
+import { roleLabel, cargoComFuncoes } from '../lib/rbac';
 import { setorLabel } from '../lib/setores';
 import { SelectBusca } from '../components/SelectBusca';
 
@@ -124,7 +124,7 @@ const FuncionariosViewInner = ({ showToast, filial }: { showToast: any; filial: 
     .map((u: any) => ({
       ...u,
       jaCadastrado: !!u.funcionario_id || perfisComCadastro.has(u.id),
-      cargoTexto:   roleLabel(u.role),
+      cargoTexto:   cargoComFuncoes(u),
       deptoTexto:   u.setor ? setorLabel(u.setor) : '',
     }));
   const usuariosSemCadastro = usuariosDaUnidade.filter((u: any) => !u.jaCadastrado);

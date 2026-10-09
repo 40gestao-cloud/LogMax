@@ -99,7 +99,6 @@ const BADGE_DEFS: BadgeDef[] = [
   { viewId: 'financeiro-aprovaçõesdecotação',   modulo: 'financeiro', listenTables: ['cotacoes'] },
   { viewId: 'financeiro-aprovaçõesdeorçamento', modulo: 'financeiro', listenTables: ['orcamentos'] },
   { viewId: 'financeiro-aprovaçõesdepromoções', modulo: 'financeiro', listenTables: ['marketing_promocoes'] },
-  { viewId: 'financeiro-aprovaçõesdeconteúdo',  modulo: 'financeiro', listenTables: ['marketing_tarefas'] },
   { viewId: 'financeiro-pedidosdevenda',        modulo: 'financeiro', listenTables: ['pedidos_venda'] },
 
   // ─── Vendas ───────────────────────────────────────────────────────────────
@@ -109,9 +108,9 @@ const BADGE_DEFS: BadgeDef[] = [
   { viewId: 'vendas-orçamentos', modulo: 'vendas', listenTables: ['orcamentos'] },
 
   // ─── Marketing ────────────────────────────────────────────────────────────
-  // 'Tarefas' do marketing não entra: o status_link 'Aguardando Aprovação' já
-  // vira 'financeiro-aprovaçõesdeconteúdo', e dois badges para a mesma fila
-  // inflam a conta da sala.
+  // Migr. 691: a fila de conteúdo saiu do Financeiro. Lê o Calendário Editorial
+  // (posts 'Em aprovação'); quem vê o item é o Head, a gerência e o admin.
+  { viewId: 'marketing-aprovaçõesdeconteúdo', modulo: 'marketing', listenTables: ['marketing_calendario'] },
   { viewId: 'marketing-promoções', modulo: 'marketing', listenTables: ['marketing_promocoes'] },
 
   // ─── RH ───────────────────────────────────────────────────────────────────

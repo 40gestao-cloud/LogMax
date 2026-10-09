@@ -6,7 +6,7 @@ import { supabase } from '../lib/supabase';
 import { useFetchData } from '../hooks/useSupabaseData';
 import { LoadingSpinner, EmptyState, NeuButtonAccent, CardContador, SecaoFormulario, AbaColorida, type CorAba, ModalFormulario } from '../components/ui';
 import { useConfirm } from '../contexts/ConfirmContext';
-import { hasSetor } from '../lib/rbac';
+import { hasSetor, isGerencia } from '../lib/rbac';
 import { useFilial } from '../contexts/FilialContext';
 import { FILIAIS_HOLDING } from '../lib/filiais';
 import type { UserProfile } from '../hooks/useUserProfile';
@@ -82,7 +82,7 @@ export function MetricasRedesSociaisView({ showToast, profile }: { showToast: an
   const [filialForm, setFilialForm] = useState('');
 
   const isAdminCeo = profile.role === 'admin' || profile.role === 'ceo';
-  const podeRegistrar = isAdminCeo || hasSetor(profile, 'marketing') || profile.role === 'gerente';
+  const podeRegistrar = isAdminCeo || hasSetor(profile, 'marketing') || isGerencia(profile);
 
   // Links das redes sociais — configuração por filial (1 link por
   // plataforma, no máximo 4), não por registro de métrica. Editado uma

@@ -591,6 +591,40 @@ async function handleUpdate(
     updates.pode_acessar_usuarios = pode_acessar_usuarios;
   }
 
+  // Migr. 690: funções sobre o perfil. Escolher o assistente e o Head é do
+  // gerente TITULAR da unidade (ele só edita colaboradores dela — régua acima)
+  // e da Matriz/professor. 1 de cada por unidade: o índice único do banco
+  // garante; aqui a mensagem diz quem já ocupa a função.
+  const { gerente_assistente, head_comunicacao } = req.body ?? {};
+  for (const [campo, valor] of [['gerente_assistente', gerente_assistente], ['head_comunicacao', head_comunicacao]] as const) {
+    if (valor === undefined) continue;
+    if (typeof valor !== 'boolean') return res.status(400).json({ error: `${campo} deve ser booleano.` });
+    if (!isGlobalCaller && callerProfile.role !== 'gerente') {
+      return res.status(403).json({ error: 'Só o gerente da unidade (ou a Matriz) define Gerente Assistente e Head de Comunicação.' });
+    }
+    const roleDepois = updates.role ?? targetProfile.role;
+    const filialDepois = updates.filial !== undefined ? updates.filial : targetProfile.filial;
+    if (valor && (!filialDepois || filialDepois === 'Matriz')) {
+      return res.status(400).json({ error: 'A função é de uma unidade operacional — aloque a pessoa numa filial primeiro.' });
+    }
+    if (valor && campo === 'gerente_assistente' && roleDepois !== 'colaborador') {
+      return res.status(400).json({ error: 'Gerente Assistente é um colaborador — o gerente já é o titular.' });
+    }
+    if (valor && campo === 'head_comunicacao' && roleDepois !== 'colaborador' && roleDepois !== 'gerente') {
+      return res.status(400).json({ error: 'Head de Comunicação é colaborador ou gerente da unidade.' });
+    }
+    if (valor) {
+      const { data: ocupante, indisponivel: indOcup } = await lerLinha<any>(log, `ocupante:${campo}`, () => admin
+        .from('user_profiles').select('id, nome').eq('filial', filialDepois).eq(campo, true).neq('id', userId).maybeSingle());
+      if (indOcup) return res.status(503).json({ error: MSG_CONEXAO });
+      if (ocupante) {
+        const nomeFuncao = campo === 'gerente_assistente' ? 'Gerente Assistente' : 'Head de Comunicação';
+        return res.status(409).json({ error: `${filialDepois} já tem ${nomeFuncao}: ${ocupante.nome}. Retire a função dessa pessoa antes de passá-la adiante.` });
+      }
+    }
+    updates[campo] = valor;
+  }
+
   const authUpdates: { email?: string; password?: string } = {};
   if (updates.email) authUpdates.email = updates.email;
   // Trocar a senha de OUTRA pessoa é só do admin (o professor). Gerente e CEO
@@ -627,6 +661,10 @@ async function handleUpdate(
 
   const { error: profileErr } = await admin.from('user_profiles').update(updates).eq('id', userId);
   if (profileErr) {
+    // Duas pessoas promovidas ao mesmo tempo: o índice único da migr. 690.
+    if ((profileErr as any).code === '23505' && /gerente_assistente|head_comunicacao/.test(profileErr.message ?? '')) {
+      return res.status(409).json({ error: 'A unidade já tem alguém nesta função. Atualize a lista e tente de novo.' });
+    }
     log.error('profile.update_failed', profileErr, { target_id: userId, ...descreverErro(profileErr) });
     return ehFalhaDeConexao(profileErr)
       ? res.status(503).json({ error: MSG_CONEXAO })

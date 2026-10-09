@@ -10,7 +10,7 @@ import { supabase } from '../lib/supabase';
 import { todayBR } from '../lib/dates';
 import { LoadingSpinner, NeuButtonAccent, FilialBadge, SecaoFormulario, ModalFormulario, FormField, StatusBadge, Pagination } from '../components/ui';
 import type { UserProfile } from '../hooks/useUserProfile';
-import { hasAnySetor, isConselheiro } from '../lib/rbac';
+import { hasAnySetor, isConselheiro, isGerencia } from '../lib/rbac';
 import { formatBRL, parseBRL, handleMoneyKeyDown } from '../lib/viewUtils';
 import { useConfirm } from '../contexts/ConfirmContext';
 import { useFilial } from '../contexts/FilialContext';
@@ -537,7 +537,7 @@ export const ControleCaixaView = ({ showToast, profile }: { showToast: any; prof
   // Guard: caixa é financeiro+vendas, ou gerente (cobre a própria filial
   // mesmo fora desses setores — RLS acompanha em auth_in_setor(...)).
   const confirm = useConfirm();
-  if (!hasAnySetor(profile, 'financeiro', 'vendas') && profile?.role !== 'gerente') {
+  if (!hasAnySetor(profile, 'financeiro', 'vendas') && !isGerencia(profile)) {
     return (
       <div className="flex-1 flex items-center justify-center flex-col gap-4 text-center">
         <Lock size={36} className="text-gray-600" />

@@ -7,7 +7,7 @@ import { Plus, X, Trash2, Edit3, TrendingUp, TrendingDown, Target, Calendar, Dol
 import { useFetchData, dbInsert, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
 import { LoadingSpinner, EmptyState, NeuButtonAccent, CardContador, SecaoFormulario, type TomContador, corDoStatus, ModalFormulario } from '../components/ui';
 import { formatBRL, parseBRL, handleMoneyKeyDown } from '../lib/viewUtils';
-import { hasSetor } from '../lib/rbac';
+import { hasSetor, isGerencia } from '../lib/rbac';
 import { supabase } from '../lib/supabase';
 import { useConfirm } from '../contexts/ConfirmContext';
 import { usePrompt } from '../contexts/PromptContext';
@@ -139,7 +139,7 @@ function ModalProdutos({ campanha, onClose, showToast, profile }: {
     } finally { setEnviando(false); }
   };
 
-  const canEnviar = (hasSetor(profile, 'marketing') || profile?.role === 'gerente') && campanha.status === 'Rascunho';
+  const canEnviar = (hasSetor(profile, 'marketing') || isGerencia(profile)) && campanha.status === 'Rascunho';
 
   return (
     <div className="fixed inset-0 z-50 bg-black/70 flex items-start justify-center p-4 overflow-y-auto">
@@ -282,7 +282,7 @@ const CampanhasMarketingViewInner = ({ showToast, profile, filial }: { showToast
   const [modalCamp, setModalCamp] = useState<Campanha | null>(null);
   const [searchCamp, setSearchCamp] = useState('');
 
-  const canCRUD        = hasSetor(profile, 'marketing') || profile?.role === 'gerente';
+  const canCRUD        = hasSetor(profile, 'marketing') || isGerencia(profile);
   const canEditarGasto = canCRUD || hasSetor(profile, 'financeiro');
 
   const roiMap = useMemo(() => {

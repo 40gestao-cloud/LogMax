@@ -1,4 +1,4 @@
-import { isConselheiro } from '../lib/rbac';
+import { isConselheiro, isGerencia } from '../lib/rbac';
 import React, { useEffect, useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import ReactMarkdown from 'react-markdown';
@@ -88,7 +88,7 @@ type HistoricoRow = {
 };
 
 export const PainelBIView = ({ showToast, profile }: any) => {
-  const podeAcessar = profile?.role === 'admin' || profile?.role === 'ceo' || isConselheiro(profile) || profile?.role === 'gerente';
+  const podeAcessar = profile?.role === 'admin' || profile?.role === 'ceo' || isConselheiro(profile) || isGerencia(profile);
 
   const [preset, setPreset]   = useState<Preset>('mes');
   const [inicio, setInicio]   = useState<string>(firstOfMonthISO());

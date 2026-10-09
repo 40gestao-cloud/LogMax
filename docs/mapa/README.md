@@ -11,7 +11,7 @@
 
 **Tabelas transversais** (aparecem nas listas, mas não entram no "Confira também", porque quase toda tela as toca por uma ferramenta comum): `documento_sequencias`, `historico_operacoes`, `max_shows`, `notificacoes`, `notificacoes_lidas`, `planilhas_trabalho`, `trabalho_reservas`.
 
-**Tamanho:** 116 telas · 202 tabelas · 10 views · 430 RPCs · 171 funções de gatilho · 286 gatilhos
+**Tamanho:** 116 telas · 202 tabelas · 10 views · 435 RPCs · 174 funções de gatilho · 289 gatilhos
 
 ## Menus
 
@@ -73,7 +73,6 @@
 - [Financeiro › Aprovações de Cotação](telas.md#s-financeiro-aprovaçõesdecotação)
 - [Financeiro › Aprovações de Orçamento](telas.md#s-financeiro-aprovaçõesdeorçamento)
 - [Financeiro › Aprovações de Promoções](telas.md#s-financeiro-aprovaçõesdepromoções)
-- [Financeiro › Aprovações de Conteúdo](telas.md#s-financeiro-aprovaçõesdeconteúdo)
 - [Financeiro › Alçadas](telas.md#s-financeiro-alçadas)
 - [Financeiro › Pedidos de Venda](telas.md#s-financeiro-pedidosdevenda)
 - [Financeiro › Recibos de Vendas](telas.md#s-financeiro-recibosdevendas)
@@ -118,6 +117,7 @@
 - [Marketing › Promoções](telas.md#s-marketing-promoções)
 - [Marketing › Cupons](telas.md#s-marketing-cupons)
 - [Marketing › Calendário](telas.md#s-marketing-calendário)
+- [Marketing › Aprovações de Conteúdo](telas.md#s-marketing-aprovaçõesdeconteúdo)
 
 ### TI & Suporte
 

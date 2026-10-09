@@ -18,7 +18,7 @@ import { LoadingSpinner, EmptyState, CardContador, StatusBadge } from '../compon
 import { exportToPDF, exportToExcel } from '../lib/viewUtils';
 import { FILIAIS_HOLDING } from '../lib/filiais';
 import type { UserProfile } from '../hooks/useUserProfile';
-import { isConselheiro } from '../lib/rbac';
+import { isConselheiro, isGerencia } from '../lib/rbac';
 
 type Period = '7d' | '30d' | 'year';
 type KpiKey = 'receita' | 'despesa' | 'ordens' | 'estoque';
@@ -58,7 +58,7 @@ export const DashboardAnalyticsView = ({ profile }: { profile?: UserProfile | nu
   const canExpandKpis = !!profile && (
     profile.role === 'admin' || isConselheiro(profile) ||
     profile.role === 'ceo' ||
-    profile.role === 'gerente'
+    isGerencia(profile)
   );
   const [expandedKpi, setExpandedKpi] = useState<KpiKey | null>(null);
   const detailPanelRef = useRef<HTMLDivElement>(null);

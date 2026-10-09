@@ -22,10 +22,55 @@ export const ROLE_LABEL: Record<string, string> = {
 export const roleLabel = (role: string | null | undefined): string =>
   ROLE_LABEL[String(role ?? '')] ?? String(role ?? '');
 
-/** Lista plana de todos os setores do usuário (primário + extras). */
-export function allSetores(profile: Pick<UserProfile, 'setor' | 'setores_extras'> | null | undefined): Setor[] {
+// ── Funções sobre o perfil (migr. 690) ──────────────────────────────────────
+// Espelho de `auth_user_setores()` / `auth_e_gerencia()` no banco. Mudou lá,
+// muda aqui — a tela que discorda da RLS mostra botão que falha.
+
+/** Setores que o Gerente Assistente opera: os do gerente, sem RH. */
+export const SETORES_GERENTE_ASSISTENTE: Setor[] = ['logistica', 'vendas', 'financeiro', 'marketing', 'ti'];
+
+type PerfilFuncoes = Pick<UserProfile, 'role'> & Partial<Pick<UserProfile, 'gerente_assistente' | 'head_comunicacao'>>;
+
+/** Colaborador que é o braço direito do gerente na filial. */
+export const isGerenteAssistente = (p: PerfilFuncoes | null | undefined): boolean =>
+  !!p && p.role === 'colaborador' && p.gerente_assistente === true;
+
+/** Gerência da filial: o gerente titular ou o Gerente Assistente. */
+export const isGerencia = (p: PerfilFuncoes | null | undefined): boolean =>
+  !!p && (p.role === 'gerente' || isGerenteAssistente(p));
+
+/** Head de Comunicação da filial (colaborador ou gerente). */
+export const isHeadComunicacao = (p: PerfilFuncoes | null | undefined): boolean =>
+  !!p && (p.role === 'colaborador' || p.role === 'gerente') && p.head_comunicacao === true;
+
+/**
+ * Quem vê a fila de Aprovações de Conteúdo. O banco decide entre o Head e a
+ * gerência (a gerência só aprova sem Head na unidade — `decidir_conteudo`).
+ */
+export const podeAprovarConteudo = (p: PerfilFuncoes | null | undefined): boolean =>
+  !!p && (p.role === 'admin' || isHeadComunicacao(p) || isGerencia(p));
+
+/** "Colaborador · Gerente Assistente", "Gerente · Head de Comunicação"… */
+export const cargoComFuncoes = (p: PerfilFuncoes | null | undefined): string => {
+  if (!p) return '';
+  const partes = [roleLabel(p.role)];
+  if (isGerenteAssistente(p)) partes.push('Gerente Assistente');
+  if (isHeadComunicacao(p)) partes.push('Head de Comunicação');
+  return partes.join(' · ');
+};
+
+/**
+ * Lista plana de todos os setores do usuário (primário + extras + os que as
+ * funções concedem: assistente → operacionais sem RH; Head → marketing).
+ */
+export function allSetores(
+  profile: (Pick<UserProfile, 'setor' | 'setores_extras'> & Partial<Pick<UserProfile, 'role' | 'gerente_assistente' | 'head_comunicacao'>>) | null | undefined,
+): Setor[] {
   if (!profile) return [];
-  return [profile.setor, ...(profile.setores_extras ?? [])];
+  const extras: Setor[] = [];
+  if (profile.role && isGerenteAssistente(profile as PerfilFuncoes)) extras.push(...SETORES_GERENTE_ASSISTENTE);
+  if (profile.role && isHeadComunicacao(profile as PerfilFuncoes)) extras.push('marketing');
+  return Array.from(new Set([profile.setor, ...(profile.setores_extras ?? []), ...extras]));
 }
 
 /**
@@ -93,6 +138,8 @@ export function hasSetor(
   if (profile.setor === 'all') return true;
   if (profile.setor === setor) return true;
   if ((profile.setores_extras ?? []).includes(setor)) return true;
+  // Migr. 690: setores concedidos pela função (assistente / Head).
+  if (allSetores(profile as any).includes(setor)) return true;
   return aulaSetoresConcedidos.includes(setor);
 }
 

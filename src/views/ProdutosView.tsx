@@ -55,6 +55,7 @@ import { SecaoEtiqueta } from '../components/produtos/SecaoEtiqueta';
 import { SecaoImagens } from '../components/produtos/SecaoImagens';
 import { lerCadastroDaCotacao, esquecerCadastroDaCotacao } from '../lib/cadastroDaCotacao';
 import { nomeComMarca, marcaConfere } from '../lib/vinculoCatalogo';
+import { isGerencia } from '../lib/rbac';
 
 /**
  * O custo vive em `produtos_custo`, tabela irmã com RLS própria (migração 262) —
@@ -1288,7 +1289,7 @@ const ProdutosViewInner = ({ showToast, filial, profile, onNavigate }: { showToa
   // não mostrar um botão que voltaria 42501.
   const podeEncerrarCorrecao = !!editItem?.correcao_pendente && (
     editItem.correcao_responsavel_id === profile?.id
-    || (profile?.role === 'gerente' && profile?.filial === filial)
+    || (isGerencia(profile) && profile?.filial === filial)
     || profile?.role === 'admin'
   );
   const [encerrandoCorrecao, setEncerrandoCorrecao] = useState(false);

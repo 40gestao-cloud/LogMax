@@ -13,7 +13,7 @@ import { FILIAIS_HOLDING } from '../lib/filiais';
 import { exportToExcel, drawPdfHeader } from '../lib/viewUtils';
 import { GOLD, BLACK, GRAY_INK, GOLD_TINT } from '../lib/pdfPalette';
 import { useFilial } from '../contexts/FilialContext';
-import { ROLE_LABEL } from '../lib/rbac';
+import { ROLE_LABEL, isGerenteAssistente, isHeadComunicacao } from '../lib/rbac';
 import { SelectBusca } from '../components/SelectBusca';
 import { opcaoFuncionario } from '../lib/opcoesSelect';
 
@@ -221,6 +221,9 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
   // Admin e CEO têm visão/escopo global; CEO não pode promover admin/CEO.
   const isConselheiroCaller = callerProfile.role === 'conselheiro' || (callerProfile.role === 'gerente' && callerProfile.is_conselheiro === true);
   const isGlobal = isAdmin || isCEO || isConselheiroCaller;
+  // Migr. 690: escolher Gerente Assistente e Head é do gerente titular e da
+  // Matriz. O gerente só abre colaboradores da própria unidade.
+  const podeDefinirFuncoes = isGlobal || isGerente;
 
   // Form vazio depende do papel: gerente herda seu próprio setor (não pode trocar)
   // e tem default de filial fora da Matriz.
@@ -883,6 +886,9 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
       // Default true preserva comportamento atual quando coluna ainda é nula em registros antigos.
       pode_acessar_usuarios: u.pode_acessar_usuarios !== false,
       is_conselheiro: u.is_conselheiro === true,
+      // Migr. 690: funções sobre o perfil, 1 de cada por unidade.
+      gerente_assistente: u.gerente_assistente === true,
+      head_comunicacao: u.head_comunicacao === true,
       funcionario_id: vinculoDe(u),
     });
     setEditShowPass(false);
@@ -937,6 +943,15 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
         payload.setor = editForm.setor;
         if (editForm.filial && editForm.filial !== 'Matriz') payload.filial = editForm.filial;
       }
+      // Migr. 690: só manda o que mudou — o servidor confere quem pode.
+      if (podeDefinirFuncoes) {
+        if (!!editForm.gerente_assistente !== (editingUser.gerente_assistente === true)) {
+          payload.gerente_assistente = !!editForm.gerente_assistente;
+        }
+        if (!!editForm.head_comunicacao !== (editingUser.head_comunicacao === true)) {
+          payload.head_comunicacao = !!editForm.head_comunicacao;
+        }
+      }
 
       const res = await fetch('/api/users', {
         method: 'POST',
@@ -970,6 +985,8 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
           filial: payload.filial ?? u.filial,
           pode_acessar_usuarios: payload.pode_acessar_usuarios ?? u.pode_acessar_usuarios,
           is_conselheiro: payload.is_conselheiro ?? u.is_conselheiro,
+          gerente_assistente: payload.gerente_assistente ?? u.gerente_assistente,
+          head_comunicacao: payload.head_comunicacao ?? u.head_comunicacao,
         };
       }));
       closeEdit();
@@ -1304,6 +1321,12 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
                         <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide border border-current/25 ${roleCls(u.role)}`}>
                           {ROLE_LABEL[u.role] ?? u.role}
                         </span>
+                        {/* Migr. 690: funções sobre o perfil. */}
+                        {(isGerenteAssistente(u) || isHeadComunicacao(u)) && (
+                          <span className="block mt-1 text-[9px] font-bold uppercase tracking-wide text-accent">
+                            {[isGerenteAssistente(u) && 'Gerente Assistente', isHeadComunicacao(u) && 'Head de Comunicação'].filter(Boolean).join(' · ')}
+                          </span>
+                        )}
                       </td>
                       <td className="py-3 px-4 text-center">
                         {u.filial
@@ -1913,6 +1936,27 @@ export const UsuariosView = ({ showToast, profile: callerProfile }: { showToast:
                       descricao="Desligado, o item Usuários some do menu deste gerente."
                       ligado={!!editForm.pode_acessar_usuarios}
                       onChange={() => setEditForm((p: any) => ({ ...p, pode_acessar_usuarios: !p.pode_acessar_usuarios }))} />
+                  </div>
+                </SecaoForm>
+              )}
+
+              {podeDefinirFuncoes && editForm.filial && editForm.filial !== 'Matriz' && editForm.filial !== SEM_ALOCACAO
+                && (editForm.role === 'colaborador' || editForm.role === 'gerente') && (
+                <SecaoForm icon={ShieldCheck} titulo="Funções na unidade"
+                  dica="Uma pessoa de cada por unidade. A pessoa continua no setor dela.">
+                  <div className="flex flex-col gap-2">
+                    {editForm.role === 'colaborador' && (
+                      <Alternador titulo="Gerente Assistente"
+                        descricao="Braço direito do gerente: opera a unidade como a gerência (sem RH) e decide o que o gerente decide — menos o que ele mesmo abriu. Pessoas, capital e investimentos ficam com o gerente."
+                        ligado={!!editForm.gerente_assistente}
+                        onChange={() => setEditForm((p: any) => ({ ...p, gerente_assistente: !p.gerente_assistente }))} />
+                    )}
+                    {(editForm.role === 'colaborador' || isGlobal) && (
+                      <Alternador titulo="Head de Comunicação"
+                        descricao="Cuida do Marketing da unidade e aprova o conteúdo do Calendário Editorial antes de ser publicado."
+                        ligado={!!editForm.head_comunicacao}
+                        onChange={() => setEditForm((p: any) => ({ ...p, head_comunicacao: !p.head_comunicacao }))} />
+                    )}
                   </div>
                 </SecaoForm>
               )}

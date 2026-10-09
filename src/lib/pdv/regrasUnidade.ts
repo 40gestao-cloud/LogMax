@@ -1,4 +1,4 @@
-import { isConselheiro } from '../rbac';
+import { isConselheiro, isGerencia } from '../rbac';
 
 // Regras do PDV que mudam conforme a unidade ou a alçada de quem opera.
 // Hoje só o PDV de MaxLook/TechMax (PDVView) as usa; a SuperMax tem a própria
@@ -16,7 +16,7 @@ export const podeAlternarFilial = (profile: any): boolean =>
 // regra que vale é a do banco.
 export const podeDevolver = (profile: any, filial: string): boolean =>
   profile?.role === 'admin' || profile?.role === 'ceo' || isConselheiro(profile)
-  || (profile?.role === 'gerente' && profile?.filial === filial);
+  || (isGerencia(profile) && profile?.filial === filial);
 
 // MaxLook/TechMax não aceitam MaxBank Benefícios — só faz sentido no
 // SuperMax (supermercado tem itens elegíveis, roupa e eletrônico não).

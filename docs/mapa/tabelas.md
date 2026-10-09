@@ -36,7 +36,7 @@ Para cada tabela: quem grava (tela, RPC, gatilho, servidor), quem lê, os gatilh
 - **Telas que leem:** —
 - **RPCs que leem:** [_ajustar_custo_pela_nota](funcoes.md#f-_ajustar_custo_pela_nota), [_dre_calculo](funcoes.md#f-_dre_calculo)
 - **Aponta para:** pedido_id → [pedidos](tabelas.md#t-pedidos); produto_id → [produtos](tabelas.md#t-produtos)
-- **RLS:** SELECT `ajustes_custo_select` (setores: estoque, financeiro, logistica · gerente da filial · Matriz/professor)
+- **RLS:** SELECT `ajustes_custo_select` (setores: estoque, financeiro, logistica · Matriz/professor)
 
 <a id="t-alarmes_turma"></a>
 ## alarmes_turma
@@ -81,7 +81,7 @@ Para cada tabela: quem grava (tela, RPC, gatilho, servidor), quem lê, os gatilh
   - `trg_aprovacao_carimba_decisao` — BEFORE INSERT/UPDATE → [fn_aprovacao_carimba_decisao](funcoes.md#f-fn_aprovacao_carimba_decisao)
   - `trg_historico` — AFTER INSERT/UPDATE → [registrar_historico](funcoes.md#f-registrar_historico) · grava em [historico_operacoes](tabelas.md#t-historico_operacoes)
 - **Aponta para:** requisicao_id → [requisicoes](tabelas.md#t-requisicoes)
-- **RLS:** DELETE `compras_delete` (setores: compras · gerente da filial · Matriz/professor); SELECT `compras_select` (setores: compras · gerente da filial · Matriz/professor); UPDATE `compras_update` (setores: compras · gerente da filial · Matriz/professor)
+- **RLS:** DELETE `compras_delete` (setores: compras · Matriz/professor); SELECT `compras_select` (setores: compras · Matriz/professor); UPDATE `compras_update` (setores: compras · Matriz/professor)
 
 <a id="t-aprovacoes_estoque"></a>
 ## aprovacoes_estoque
@@ -96,7 +96,7 @@ Para cada tabela: quem grava (tela, RPC, gatilho, servidor), quem lê, os gatilh
   - `trg_aprovacao_carimba_decisao` — BEFORE INSERT/UPDATE → [fn_aprovacao_carimba_decisao](funcoes.md#f-fn_aprovacao_carimba_decisao)
   - `trg_historico` — AFTER INSERT/UPDATE → [registrar_historico](funcoes.md#f-registrar_historico) · grava em [historico_operacoes](tabelas.md#t-historico_operacoes)
 - **Aponta para:** requisicao_estoque_id → [requisicoes_estoque](tabelas.md#t-requisicoes_estoque)
-- **RLS:** DELETE `logist_delete` (setores: logistica · gerente da filial · Matriz/professor); SELECT `logist_select` (setores: logistica · gerente da filial · Matriz/professor); UPDATE `logist_update` (setores: logistica · gerente da filial · Matriz/professor)
+- **RLS:** DELETE `logist_delete` (setores: logistica · Matriz/professor); SELECT `logist_select` (setores: logistica · Matriz/professor); UPDATE `logist_update` (setores: logistica · Matriz/professor)
 
 <a id="t-apuracao_bonus_itens"></a>
 ## apuracao_bonus_itens
@@ -422,7 +422,7 @@ Para cada tabela: quem grava (tela, RPC, gatilho, servidor), quem lê, os gatilh
   - `trg_carimba_exclusao` — BEFORE UPDATE → [fn_carimba_exclusao](funcoes.md#f-fn_carimba_exclusao)
   - `trg_taxonomia_padrao_protege` — BEFORE INSERT/UPDATE/DELETE → [fn_taxonomia_padrao_protege](funcoes.md#f-fn_taxonomia_padrao_protege)
 - **Ao apagar uma linha daqui:** [orcamento_mensal_categoria](tabelas.md#t-orcamento_mensal_categoria).categoria_id APAGA JUNTO (CASCADE); [produtos](tabelas.md#t-produtos).categoria_id zera o vínculo (SET NULL); [subcategorias_produto](tabelas.md#t-subcategorias_produto).categoria_id APAGA JUNTO (CASCADE)
-- **RLS:** ALL `categorias_produto_write` (setores: compras, logistica · gerente da filial · Matriz/professor); SELECT `categorias_produto_select` (qualquer um da própria filial · Matriz/professor)
+- **RLS:** ALL `categorias_produto_write` (setores: compras, logistica · Matriz/professor); SELECT `categorias_produto_select` (qualquer um da própria filial · Matriz/professor)
 
 <a id="t-centros_custo"></a>
 ## centros_custo
@@ -521,7 +521,7 @@ Para cada tabela: quem grava (tela, RPC, gatilho, servidor), quem lê, os gatilh
   - `trg_carimba_exclusao` — BEFORE UPDATE → [fn_carimba_exclusao](funcoes.md#f-fn_carimba_exclusao)
   - `trg_historico` — AFTER INSERT/UPDATE → [registrar_historico](funcoes.md#f-registrar_historico) · grava em [historico_operacoes](tabelas.md#t-historico_operacoes)
 - **Ao apagar uma linha daqui:** [contas_receber](tabelas.md#t-contas_receber).cliente_id zera o vínculo (SET NULL); [notas_emitidas](tabelas.md#t-notas_emitidas).cliente_id zera o vínculo (SET NULL); [orcamentos](tabelas.md#t-orcamentos).cliente_id zera o vínculo (SET NULL); [pedidos_venda](tabelas.md#t-pedidos_venda).cliente_id zera o vínculo (SET NULL); [pix_pendentes](tabelas.md#t-pix_pendentes).cliente_id zera o vínculo (SET NULL); [projetos](tabelas.md#t-projetos).cliente_id zera o vínculo (SET NULL); [vendas](tabelas.md#t-vendas).cliente_id zera o vínculo (SET NULL)
-- **RLS:** ALL `write_clientes` (setores: financeiro, vendas · gerente da filial · Matriz/professor); SELECT `read_clientes` (qualquer um da própria filial · Matriz/professor)
+- **RLS:** ALL `write_clientes` (setores: financeiro, vendas · Matriz/professor); SELECT `read_clientes` (qualquer um da própria filial · Matriz/professor)
 
 <a id="t-comandos_turma"></a>
 ## comandos_turma
@@ -576,7 +576,7 @@ Para cada tabela: quem grava (tela, RPC, gatilho, servidor), quem lê, os gatilh
 - **Telas que leem:** [Financeiro › Conciliação da Maquininha](telas.md#s-financeiro-conciliaçãodamaquininha)
 - **RPCs que leem:** [cancelar_conciliacao_maquininha](funcoes.md#f-cancelar_conciliacao_maquininha)
 - **Aponta para:** conciliacao_id → [conciliacoes_maquininha](tabelas.md#t-conciliacoes_maquininha); conta_receber_id → [contas_receber](tabelas.md#t-contas_receber)
-- **RLS:** SELECT `fin_select` (setores: financeiro · gerente da filial · Matriz/professor)
+- **RLS:** SELECT `fin_select` (setores: financeiro · Matriz/professor)
 
 <a id="t-conciliacoes_maquininha"></a>
 ## conciliacoes_maquininha
@@ -591,7 +591,7 @@ Para cada tabela: quem grava (tela, RPC, gatilho, servidor), quem lê, os gatilh
   - `trg_historico` — AFTER INSERT/UPDATE → [registrar_historico](funcoes.md#f-registrar_historico) · grava em [historico_operacoes](tabelas.md#t-historico_operacoes)
 - **Ao apagar uma linha daqui:** [conciliacao_maquininha_itens](tabelas.md#t-conciliacao_maquininha_itens).conciliacao_id APAGA JUNTO (CASCADE)
 - **Aponta para:** banco_id → [caixa_bancos](tabelas.md#t-caixa_bancos); conta_pagar_id → [contas_pagar](tabelas.md#t-contas_pagar); forma_pagamento_id → [formas_pagamento](tabelas.md#t-formas_pagamento)
-- **RLS:** SELECT `fin_select` (setores: financeiro · gerente da filial · Matriz/professor); UPDATE `fin_update` (setores: financeiro · gerente da filial · Matriz/professor)
+- **RLS:** SELECT `fin_select` (setores: financeiro · Matriz/professor); UPDATE `fin_update` (setores: financeiro · Matriz/professor)
 
 <a id="t-condicoes_pagamento"></a>
 ## condicoes_pagamento
@@ -602,7 +602,7 @@ Para cada tabela: quem grava (tela, RPC, gatilho, servidor), quem lê, os gatilh
 - **Gatilhos nesta tabela:**
   - `trg_auditoria` — BEFORE INSERT/UPDATE → [set_auditoria_campos](funcoes.md#f-set_auditoria_campos)
   - `trg_historico` — AFTER INSERT/UPDATE → [registrar_historico](funcoes.md#f-registrar_historico) · grava em [historico_operacoes](tabelas.md#t-historico_operacoes)
-- **RLS:** ALL `condicoes_pagamento_write` (setores: financeiro · gerente da filial · Matriz/professor); SELECT `condicoes_pagamento_select` (qualquer um da própria filial · Matriz/professor)
+- **RLS:** ALL `condicoes_pagamento_write` (setores: financeiro · Matriz/professor); SELECT `condicoes_pagamento_select` (qualquer um da própria filial · Matriz/professor)
 
 <a id="t-configuracoes"></a>
 ## configuracoes
@@ -676,7 +676,7 @@ Para cada tabela: quem grava (tela, RPC, gatilho, servidor), quem lê, os gatilh
   -   2. [rescisoes](tabelas.md#t-rescisoes) → [fn_rescisao_encerra_folhas](funcoes.md#f-fn_rescisao_encerra_folhas) → [folha_pagamento](tabelas.md#t-folha_pagamento)
 - **Ao apagar uma linha daqui:** [conciliacoes_maquininha](tabelas.md#t-conciliacoes_maquininha).conta_pagar_id zera o vínculo (SET NULL); [contas_pagar_baixas](tabelas.md#t-contas_pagar_baixas).conta_id APAGA JUNTO (CASCADE); [das_apuracoes](tabelas.md#t-das_apuracoes).conta_pagar_id APAGA JUNTO (CASCADE); [filial_investimentos](tabelas.md#t-filial_investimentos).conta_pagar_id zera o vínculo (SET NULL); [folha_credito_falhas](tabelas.md#t-folha_credito_falhas).conta_pagar_id zera o vínculo (SET NULL); [fretes_compra](tabelas.md#t-fretes_compra).conta_pagar_id APAGA JUNTO (CASCADE); [notas_recebidas](tabelas.md#t-notas_recebidas).conta_pagar_id zera o vínculo (SET NULL); [parcelas_emprestimo](tabelas.md#t-parcelas_emprestimo).contas_pagar_id zera o vínculo (SET NULL); [rateio_administrativo_itens](tabelas.md#t-rateio_administrativo_itens).conta_pagar_id zera o vínculo (SET NULL)
 - **Aponta para:** banco_id → [caixa_bancos](tabelas.md#t-caixa_bancos); centro_custo_id → [centros_custo](tabelas.md#t-centros_custo); recorrencia_id → [despesas_recorrentes](tabelas.md#t-despesas_recorrentes); filial_investimento_id → [filial_investimentos](tabelas.md#t-filial_investimentos); folha_pagamento_id → [folha_pagamento](tabelas.md#t-folha_pagamento); fornecedor_id → [fornecedores](tabelas.md#t-fornecedores); pedido_id → [pedidos](tabelas.md#t-pedidos); rescisao_id → [rescisoes](tabelas.md#t-rescisoes); encargo_rescisao_id → [rescisoes](tabelas.md#t-rescisoes)
-- **RLS:** DELETE `fin_delete` (setores: financeiro · gerente da filial · Matriz/professor); INSERT `fin_insert` (setores: financeiro · gerente da filial · Matriz/professor); SELECT `fin_select` (setores: financeiro · gerente da filial · Matriz/professor); UPDATE `fin_update` (setores: financeiro · gerente da filial · Matriz/professor)
+- **RLS:** DELETE `fin_delete` (setores: financeiro · Matriz/professor); INSERT `fin_insert` (setores: financeiro · Matriz/professor); SELECT `fin_select` (setores: financeiro · Matriz/professor); UPDATE `fin_update` (setores: financeiro · Matriz/professor)
 
 <a id="t-contas_pagar_baixas"></a>
 ## contas_pagar_baixas
@@ -710,7 +710,7 @@ Para cada tabela: quem grava (tela, RPC, gatilho, servidor), quem lê, os gatilh
   - 1. [contas_receber](tabelas.md#t-contas_receber) → [_conta_receber_fecha_pedido_venda](funcoes.md#f-_conta_receber_fecha_pedido_venda) → [pedidos_venda](tabelas.md#t-pedidos_venda)
 - **Ao apagar uma linha daqui:** [conciliacao_maquininha_itens](tabelas.md#t-conciliacao_maquininha_itens).conta_receber_id APAGA JUNTO (CASCADE); [contas_receber_baixas](tabelas.md#t-contas_receber_baixas).conta_id APAGA JUNTO (CASCADE); [notas_emitidas](tabelas.md#t-notas_emitidas).conta_receber_id zera o vínculo (SET NULL); [parcelas_emprestimo](tabelas.md#t-parcelas_emprestimo).contas_receber_id zera o vínculo (SET NULL); [pedidos_venda](tabelas.md#t-pedidos_venda).conta_receber_id zera o vínculo (SET NULL); [rateio_administrativo_itens](tabelas.md#t-rateio_administrativo_itens).conta_receber_id zera o vínculo (SET NULL)
 - **Aponta para:** banco_id → [caixa_bancos](tabelas.md#t-caixa_bancos); cliente_id → [clientes](tabelas.md#t-clientes); forma_pagamento_id → [formas_pagamento](tabelas.md#t-formas_pagamento); pedido_venda_id → [pedidos_venda](tabelas.md#t-pedidos_venda); produto_patrimonio_id → [produtos](tabelas.md#t-produtos); venda_id → [vendas](tabelas.md#t-vendas)
-- **RLS:** DELETE `fin_delete` (setores: financeiro · gerente da filial · Matriz/professor); INSERT `fin_insert` (setores: financeiro · gerente da filial · Matriz/professor); SELECT `fin_select` (setores: financeiro · gerente da filial · Matriz/professor); UPDATE `fin_update` (setores: financeiro · gerente da filial · Matriz/professor)
+- **RLS:** DELETE `fin_delete` (setores: financeiro · Matriz/professor); INSERT `fin_insert` (setores: financeiro · Matriz/professor); SELECT `fin_select` (setores: financeiro · Matriz/professor); UPDATE `fin_update` (setores: financeiro · Matriz/professor)
 
 <a id="t-contas_receber_baixas"></a>
 ## contas_receber_baixas
@@ -761,7 +761,7 @@ Para cada tabela: quem grava (tela, RPC, gatilho, servidor), quem lê, os gatilh
   - `trg_controle_caixa_guard` — BEFORE INSERT/UPDATE → [controle_caixa_guard](funcoes.md#f-controle_caixa_guard)
   - `trg_historico` — AFTER INSERT/UPDATE → [registrar_historico](funcoes.md#f-registrar_historico) · grava em [historico_operacoes](tabelas.md#t-historico_operacoes)
 - **Ao apagar uma linha daqui:** [controle_caixa_reaberturas](tabelas.md#t-controle_caixa_reaberturas).controle_caixa_id APAGA JUNTO (CASCADE); [movimentacoes_caixa](tabelas.md#t-movimentacoes_caixa).controle_caixa_id APAGA JUNTO (CASCADE)
-- **RLS:** ALL `caixa_filial_write` (setores: financeiro, vendas · gerente da filial · Matriz/professor); SELECT `caixa_filial_select` (setores: financeiro, vendas · gerente da filial · Matriz/professor)
+- **RLS:** ALL `caixa_filial_write` (setores: financeiro, vendas · Matriz/professor); SELECT `caixa_filial_select` (setores: financeiro, vendas · Matriz/professor)
 
 <a id="t-controle_caixa_reaberturas"></a>
 ## controle_caixa_reaberturas
@@ -795,7 +795,7 @@ Para cada tabela: quem grava (tela, RPC, gatilho, servidor), quem lê, os gatilh
   - `trg_sem_exclusao` — BEFORE UPDATE → [documento_sem_exclusao](funcoes.md#f-documento_sem_exclusao)
 - **Ao apagar uma linha daqui:** [pedidos](tabelas.md#t-pedidos).cotacao_id zera o vínculo (SET NULL)
 - **Aponta para:** fornecedor_id → [fornecedores](tabelas.md#t-fornecedores); requisicao_id → [requisicoes](tabelas.md#t-requisicoes)
-- **RLS:** DELETE `cot_delete` (Matriz/professor); INSERT `cot_insert` (setores: compras, logistica · gerente da filial · Matriz/professor); SELECT `cot_select` (setores: compras, financeiro, logistica · gerente da filial · Matriz/professor); UPDATE `cot_update` (setores: compras, financeiro, logistica · gerente da filial · Matriz/professor)
+- **RLS:** DELETE `cot_delete` (Matriz/professor); INSERT `cot_insert` (setores: compras, logistica · Matriz/professor); SELECT `cot_select` (setores: compras, financeiro, logistica · Matriz/professor); UPDATE `cot_update` (setores: compras, financeiro, logistica · Matriz/professor)
 
 <a id="t-criterios_avaliacao"></a>
 ## criterios_avaliacao
@@ -818,7 +818,7 @@ Para cada tabela: quem grava (tela, RPC, gatilho, servidor), quem lê, os gatilh
 - **Telas que leem:** —
 - **RPCs que leem:** [apurar_das](funcoes.md#f-apurar_das), [das_competencias](funcoes.md#f-das_competencias)
 - **Aponta para:** conta_pagar_id → [contas_pagar](tabelas.md#t-contas_pagar)
-- **RLS:** SELECT `das_apuracoes_select` (setores: financeiro · gerente da filial · Matriz/professor)
+- **RLS:** SELECT `das_apuracoes_select` (setores: financeiro · Matriz/professor)
 
 <a id="t-demissoes"></a>
 ## demissoes
@@ -869,7 +869,7 @@ Para cada tabela: quem grava (tela, RPC, gatilho, servidor), quem lê, os gatilh
   - `trg_historico` — AFTER INSERT/UPDATE → [registrar_historico](funcoes.md#f-registrar_historico) · grava em [historico_operacoes](tabelas.md#t-historico_operacoes)
 - **Ao apagar uma linha daqui:** [contas_pagar](tabelas.md#t-contas_pagar).recorrencia_id zera o vínculo (SET NULL)
 - **Aponta para:** centro_custo_id → [centros_custo](tabelas.md#t-centros_custo); fornecedor_id → [fornecedores](tabelas.md#t-fornecedores)
-- **RLS:** DELETE `desp_rec_delete` (setores: financeiro · gerente da filial · Matriz/professor); INSERT `desp_rec_insert` (setores: financeiro · gerente da filial · Matriz/professor); SELECT `desp_rec_select` (setores: financeiro · gerente da filial · Matriz/professor); UPDATE `desp_rec_update` (setores: financeiro · gerente da filial · Matriz/professor)
+- **RLS:** DELETE `desp_rec_delete` (setores: financeiro · Matriz/professor); INSERT `desp_rec_insert` (setores: financeiro · Matriz/professor); SELECT `desp_rec_select` (setores: financeiro · Matriz/professor); UPDATE `desp_rec_update` (setores: financeiro · Matriz/professor)
 
 <a id="t-destinacoes_resultado"></a>
 ## destinacoes_resultado
@@ -894,7 +894,7 @@ Para cada tabela: quem grava (tela, RPC, gatilho, servidor), quem lê, os gatilh
   - `trg_historico` — AFTER INSERT/UPDATE → [registrar_historico](funcoes.md#f-registrar_historico) · grava em [historico_operacoes](tabelas.md#t-historico_operacoes)
 - **Ao apagar uma linha daqui:** [itens_devolucao](tabelas.md#t-itens_devolucao).devolucao_id APAGA JUNTO (CASCADE)
 - **Aponta para:** venda_id → [vendas](tabelas.md#t-vendas)
-- **RLS:** INSERT `devolucoes_insert` (gerente da filial · Matriz/professor); SELECT `devolucoes_select` (qualquer um da própria filial · Matriz/professor); UPDATE `devolucoes_update` (gerente da filial · Matriz/professor)
+- **RLS:** INSERT `devolucoes_insert` (qualquer um da própria filial · Matriz/professor); SELECT `devolucoes_select` (qualquer um da própria filial · Matriz/professor); UPDATE `devolucoes_update` (qualquer um da própria filial · Matriz/professor)
 
 <a id="t-devolucoes_fornecedor"></a>
 ## devolucoes_fornecedor
@@ -1158,7 +1158,7 @@ Para cada tabela: quem grava (tela, RPC, gatilho, servidor), quem lê, os gatilh
   - `trg_formas_pagamento_normaliza` — BEFORE INSERT/UPDATE → [fn_formas_pagamento_normaliza](funcoes.md#f-fn_formas_pagamento_normaliza)
   - `trg_historico` — AFTER INSERT/UPDATE → [registrar_historico](funcoes.md#f-registrar_historico) · grava em [historico_operacoes](tabelas.md#t-historico_operacoes)
 - **Ao apagar uma linha daqui:** [conciliacoes_maquininha](tabelas.md#t-conciliacoes_maquininha).forma_pagamento_id zera o vínculo (SET NULL); [contas_receber](tabelas.md#t-contas_receber).forma_pagamento_id zera o vínculo (SET NULL); [orcamentos](tabelas.md#t-orcamentos).forma_pagamento_id zera o vínculo (SET NULL)
-- **RLS:** ALL `formas_pagamento_write` (setores: financeiro · gerente da filial · Matriz/professor); SELECT `formas_pagamento_select` (qualquer um da própria filial · Matriz/professor)
+- **RLS:** ALL `formas_pagamento_write` (setores: financeiro · Matriz/professor); SELECT `formas_pagamento_select` (qualquer um da própria filial · Matriz/professor)
 
 <a id="t-fornecedores"></a>
 ## fornecedores
@@ -1172,7 +1172,7 @@ Para cada tabela: quem grava (tela, RPC, gatilho, servidor), quem lê, os gatilh
   - `trg_carimba_exclusao` — BEFORE UPDATE → [fn_carimba_exclusao](funcoes.md#f-fn_carimba_exclusao)
   - `trg_historico` — AFTER INSERT/UPDATE → [registrar_historico](funcoes.md#f-registrar_historico) · grava em [historico_operacoes](tabelas.md#t-historico_operacoes)
 - **Ao apagar uma linha daqui:** [contas_pagar](tabelas.md#t-contas_pagar).fornecedor_id zera o vínculo (SET NULL); [cotacoes](tabelas.md#t-cotacoes).fornecedor_id zera o vínculo (SET NULL); [despesas_recorrentes](tabelas.md#t-despesas_recorrentes).fornecedor_id zera o vínculo (SET NULL); [fretes_compra](tabelas.md#t-fretes_compra).transportadora_id zera o vínculo (SET NULL); [notas_recebidas](tabelas.md#t-notas_recebidas).fornecedor_id zera o vínculo (SET NULL); [pedidos](tabelas.md#t-pedidos).fornecedor_id zera o vínculo (SET NULL); [produtos](tabelas.md#t-produtos).fornecedor_id zera o vínculo (SET NULL)
-- **RLS:** ALL `write_fornecedores` (setores: compras, financeiro, logistica · gerente da filial · Matriz/professor); SELECT `read_fornecedores` (qualquer um da própria filial · Matriz/professor)
+- **RLS:** ALL `write_fornecedores` (setores: compras, financeiro, logistica · Matriz/professor); SELECT `read_fornecedores` (qualquer um da própria filial · Matriz/professor)
 
 <a id="t-frequencia_trabalho"></a>
 ## frequencia_trabalho
@@ -1204,7 +1204,7 @@ Para cada tabela: quem grava (tela, RPC, gatilho, servidor), quem lê, os gatilh
   - `trg_fornecedor_nao_e_concessionaria` — BEFORE INSERT/UPDATE → [fn_fornecedor_nao_e_concessionaria](funcoes.md#f-fn_fornecedor_nao_e_concessionaria)
 - **Ao apagar uma linha daqui:** [fretes_compra_rateio](tabelas.md#t-fretes_compra_rateio).frete_id APAGA JUNTO (CASCADE)
 - **Aponta para:** conta_pagar_id → [contas_pagar](tabelas.md#t-contas_pagar); transportadora_id → [fornecedores](tabelas.md#t-fornecedores)
-- **RLS:** SELECT `fretes_compra_select` (setores: estoque, financeiro, logistica · gerente da filial · Matriz/professor)
+- **RLS:** SELECT `fretes_compra_select` (setores: estoque, financeiro, logistica · Matriz/professor)
 
 <a id="t-fretes_compra_rateio"></a>
 ## fretes_compra_rateio
@@ -1215,7 +1215,7 @@ Para cada tabela: quem grava (tela, RPC, gatilho, servidor), quem lê, os gatilh
 - **Telas que leem:** —
 - **RPCs que leem:** [_ajustar_custo_pela_nota](funcoes.md#f-_ajustar_custo_pela_nota), [_cancelar_frete_compra](funcoes.md#f-_cancelar_frete_compra), [composicao_custo_produto](funcoes.md#f-composicao_custo_produto), [pedidos_para_frete](funcoes.md#f-pedidos_para_frete)
 - **Aponta para:** frete_id → [fretes_compra](tabelas.md#t-fretes_compra); pedido_id → [pedidos](tabelas.md#t-pedidos)
-- **RLS:** SELECT `fretes_rateio_select` (setores: estoque, financeiro, logistica · gerente da filial · Matriz/professor)
+- **RLS:** SELECT `fretes_rateio_select` (setores: estoque, financeiro, logistica · Matriz/professor)
 
 <a id="t-funcionario_beneficios"></a>
 ## funcionario_beneficios
@@ -1274,6 +1274,8 @@ Para cada tabela: quem grava (tela, RPC, gatilho, servidor), quem lê, os gatilh
 - **Gatilhos (de outras tabelas) que gravam aqui:** [registrar_historico](funcoes.md#f-registrar_historico) (em [afastamentos](tabelas.md#t-afastamentos), [aprovacoes_compras](tabelas.md#t-aprovacoes_compras), [aprovacoes_estoque](tabelas.md#t-aprovacoes_estoque), [avaliacoes](tabelas.md#t-avaliacoes), [beneficios](tabelas.md#t-beneficios), [caixa_bancos](tabelas.md#t-caixa_bancos), [candidaturas](tabelas.md#t-candidaturas), [cargos](tabelas.md#t-cargos), [centros_custo](tabelas.md#t-centros_custo), [clientes](tabelas.md#t-clientes), [competicoes_matriz](tabelas.md#t-competicoes_matriz), [conciliacoes_maquininha](tabelas.md#t-conciliacoes_maquininha), [condicoes_pagamento](tabelas.md#t-condicoes_pagamento), [contas_pagar](tabelas.md#t-contas_pagar), [contas_receber](tabelas.md#t-contas_receber), [controle_caixa](tabelas.md#t-controle_caixa), [cotacoes](tabelas.md#t-cotacoes), [demissoes](tabelas.md#t-demissoes), [departamentos](tabelas.md#t-departamentos), [despesas_recorrentes](tabelas.md#t-despesas_recorrentes), [devolucoes](tabelas.md#t-devolucoes), [expedicao](tabelas.md#t-expedicao), [ferias](tabelas.md#t-ferias), [filiais](tabelas.md#t-filiais), [filial_investimentos](tabelas.md#t-filial_investimentos), [folha_pagamento](tabelas.md#t-folha_pagamento), [formas_pagamento](tabelas.md#t-formas_pagamento), [fornecedores](tabelas.md#t-fornecedores), [funcionarios](tabelas.md#t-funcionarios), [inventarios](tabelas.md#t-inventarios), [mandatos](tabelas.md#t-mandatos), [matriz_tarefa_participantes](tabelas.md#t-matriz_tarefa_participantes), [matriz_tarefas](tabelas.md#t-matriz_tarefas), [movimentacoes_carreira](tabelas.md#t-movimentacoes_carreira), [movimentacoes_estoque](tabelas.md#t-movimentacoes_estoque), [notas_emitidas](tabelas.md#t-notas_emitidas), [notas_recebidas](tabelas.md#t-notas_recebidas), [orcamentos](tabelas.md#t-orcamentos), [pdi_itens](tabelas.md#t-pdi_itens), [pedidos](tabelas.md#t-pedidos), [pedidos_venda](tabelas.md#t-pedidos_venda), [produtos](tabelas.md#t-produtos), [projetos](tabelas.md#t-projetos), [recebimentos](tabelas.md#t-recebimentos), [requisicoes](tabelas.md#t-requisicoes), [requisicoes_estoque](tabelas.md#t-requisicoes_estoque), [rescisoes](tabelas.md#t-rescisoes), [riscos](tabelas.md#t-riscos), [treinamentos](tabelas.md#t-treinamentos), [vagas](tabelas.md#t-vagas), [vencimentos_estoque](tabelas.md#t-vencimentos_estoque), [vendas](tabelas.md#t-vendas))
 - **Telas que leem:** [Cadastros › Fornecedores](telas.md#s-cadastros-fornecedores), [Cadastros › Produtos](telas.md#s-cadastros-produtos), [Compras › Cotações](telas.md#s-compras-cotações), [Compras › Notas recebidas](telas.md#s-compras-notasrecebidas), [Compras › Pedidos](telas.md#s-compras-pedidos), [Compras › Requisições de Compra](telas.md#s-compras-requisiçõesdecompra), [Empresa › Filiais](telas.md#s-empresa-filiais), [Empresa › Formas de pagamento](telas.md#s-empresa-formasdepagamento), [Empresa › Projetos](telas.md#s-empresa-projetos), [Estoque › Expedição](telas.md#s-estoque-expedição), [Estoque › Inventários](telas.md#s-estoque-inventários), [Estoque › Liberar Requisições](telas.md#s-estoque-liberarrequisições), [Estoque › Movimentações](telas.md#s-estoque-movimentações), [Estoque › Pedidos de Venda](telas.md#s-estoque-pedidosdevenda), [Estoque › Recebimentos](telas.md#s-estoque-recebimentos), [Estoque › Requisições de Material](telas.md#s-estoque-requisiçõesdematerial), [Estoque › Validades](telas.md#s-estoque-validades), [Financeiro › Aprovações de Cotação](telas.md#s-financeiro-aprovaçõesdecotação), [Financeiro › Aprovações de Orçamento](telas.md#s-financeiro-aprovaçõesdeorçamento), [Financeiro › Caixa / Bancos](telas.md#s-financeiro-caixabancos), [Financeiro › Centros de Custo](telas.md#s-financeiro-centrosdecusto), [Financeiro › Conciliação da Maquininha](telas.md#s-financeiro-conciliaçãodamaquininha), [Financeiro › Contas a pagar](telas.md#s-financeiro-contasapagar), [Financeiro › Contas a receber](telas.md#s-financeiro-contasareceber), [Financeiro › Controle de Caixa](telas.md#s-financeiro-controledecaixa), [Financeiro › Notas Emitidas](telas.md#s-financeiro-notasemitidas), [Financeiro › Pedidos de Venda](telas.md#s-financeiro-pedidosdevenda), [Requisições › Aprovações](telas.md#s-requisicoes-aprovações), [Requisições › Do Setor](telas.md#s-requisicoes-dosetor), [Recursos Humanos › Benefícios](telas.md#s-rh-benefícios), [Recursos Humanos › Cargos](telas.md#s-rh-cargos), [Recursos Humanos › Departamentos](telas.md#s-rh-departamentos), [Recursos Humanos › Folha de Pagamento](telas.md#s-rh-folhadepagamento), [Recursos Humanos › Funcionários](telas.md#s-rh-funcionários), [Vendas › Clientes](telas.md#s-vendas-clientes), [Vendas › Devoluções](telas.md#s-vendas-devoluções), [Vendas › Histórico de Vendas](telas.md#s-vendas-históricodevendas), [Vendas › Orçamentos](telas.md#s-vendas-orçamentos), [Vendas › Pedidos de Venda](telas.md#s-vendas-pedidosdevenda)
 - **RPCs que leem:** [abrir_revisao_auditoria](funcoes.md#f-abrir_revisao_auditoria), [auditar_fluxo_compras](funcoes.md#f-auditar_fluxo_compras), [encerrar_revisao_auditoria](funcoes.md#f-encerrar_revisao_auditoria)
+- **Gatilhos nesta tabela:**
+  - `trg_historico_decisao_do_assistente` — AFTER INSERT → [fn_historico_decisao_do_assistente](funcoes.md#f-fn_historico_decisao_do_assistente) · grava em [notificacoes](tabelas.md#t-notificacoes)
 - **Ao apagar uma linha daqui:** [auditoria_revisoes](tabelas.md#t-auditoria_revisoes).operacao_id APAGA JUNTO (CASCADE)
 - **RLS:** SELECT `historico_select` (setores: ceo, conselheiro · Matriz/professor)
 
@@ -1312,7 +1314,7 @@ Para cada tabela: quem grava (tela, RPC, gatilho, servidor), quem lê, os gatilh
 - **RPCs que gravam:** —
 - **Telas que leem:** [Financeiro › Aprovações de Promoções](telas.md#s-financeiro-aprovaçõesdepromoções), [Marketing › Campanhas](telas.md#s-marketing-campanhas)
 - **Aponta para:** campanha_id → [marketing_campanhas](tabelas.md#t-marketing_campanhas); produto_id → [produtos](tabelas.md#t-produtos)
-- **RLS:** DELETE `itens_campanha_delete` (setores: marketing · gerente da filial · Matriz/professor); INSERT `itens_campanha_insert` (setores: marketing · gerente da filial · Matriz/professor); SELECT `itens_campanha_select` (setores: financeiro, marketing · gerente da filial · Matriz/professor); UPDATE `itens_campanha_update` (setores: marketing · gerente da filial · Matriz/professor)
+- **RLS:** DELETE `itens_campanha_delete` (setores: marketing · Matriz/professor); INSERT `itens_campanha_insert` (setores: marketing · Matriz/professor); SELECT `itens_campanha_select` (setores: financeiro, marketing · Matriz/professor); UPDATE `itens_campanha_update` (setores: marketing · Matriz/professor)
 
 <a id="t-itens_devolucao"></a>
 ## itens_devolucao
@@ -1328,7 +1330,7 @@ Para cada tabela: quem grava (tela, RPC, gatilho, servidor), quem lê, os gatilh
 - **Cadeia de gatilhos ao gravar aqui:**
   - 1. [itens_devolucao](tabelas.md#t-itens_devolucao) → [fn_item_devolucao_devolve_unidade](funcoes.md#f-fn_item_devolucao_devolve_unidade) → [produto_unidades](tabelas.md#t-produto_unidades)
 - **Aponta para:** devolucao_id → [devolucoes](tabelas.md#t-devolucoes); produto_id → [produtos](tabelas.md#t-produtos); servico_id → [servicos](tabelas.md#t-servicos)
-- **RLS:** ALL `itens_devolucao_write` (gerente da filial · Matriz/professor); SELECT `itens_devolucao_select` (Matriz/professor)
+- **RLS:** ALL `itens_devolucao_write` (Matriz/professor); SELECT `itens_devolucao_select` (Matriz/professor)
 
 <a id="t-itens_venda"></a>
 ## itens_venda
@@ -1348,7 +1350,7 @@ Para cada tabela: quem grava (tela, RPC, gatilho, servidor), quem lê, os gatilh
   - 1. [itens_venda](tabelas.md#t-itens_venda) → [fn_item_venda_aloca_unidade](funcoes.md#f-fn_item_venda_aloca_unidade) → [produto_unidades](tabelas.md#t-produto_unidades)
 - **Ao apagar uma linha daqui:** [produto_unidades](tabelas.md#t-produto_unidades).item_venda_id zera o vínculo (SET NULL)
 - **Aponta para:** produto_id → [produtos](tabelas.md#t-produtos); servico_id → [servicos](tabelas.md#t-servicos); venda_id → [vendas](tabelas.md#t-vendas)
-- **RLS:** ALL `itens_write` (setores: vendas · gerente da filial · Matriz/professor); SELECT `itens_select` (setores: financeiro, vendas · gerente da filial · Matriz/professor)
+- **RLS:** ALL `itens_write` (setores: vendas · Matriz/professor); SELECT `itens_select` (setores: financeiro, vendas · Matriz/professor)
 
 <a id="t-justificativas_falta"></a>
 ## justificativas_falta
@@ -1368,7 +1370,7 @@ Para cada tabela: quem grava (tela, RPC, gatilho, servidor), quem lê, os gatilh
 - **RPCs que gravam:** —
 - **Telas que leem:** [Vendas › Pedidos Online](telas.md#s-vendas-pedidosonline)
 - **Servidor (api/) lê:** `api/loja.ts`
-- **RLS:** SELECT `loja_config_read` (qualquer um da própria filial · Matriz/professor); UPDATE `loja_config_write` (gerente da filial · Matriz/professor)
+- **RLS:** SELECT `loja_config_read` (qualquer um da própria filial · Matriz/professor); UPDATE `loja_config_write` (qualquer um da própria filial · Matriz/professor)
 
 <a id="t-loja_palavras_bloqueadas"></a>
 ## loja_palavras_bloqueadas
@@ -1411,7 +1413,7 @@ Para cada tabela: quem grava (tela, RPC, gatilho, servidor), quem lê, os gatilh
 - **Gatilhos nesta tabela:**
   - `marketing_arte_feedback_updated_at` — BEFORE UPDATE → [trg_marketing_arte_feedback_updated_at](funcoes.md#f-trg_marketing_arte_feedback_updated_at)
 - **Aponta para:** arte_id → [marketing_artes](tabelas.md#t-marketing_artes)
-- **RLS:** DELETE `feedback_delete` (Matriz/professor); INSERT `feedback_insert` (setores: admin, ceo, gerente · gerente da filial); SELECT `feedback_read` (setores: financeiro, marketing · gerente da filial · Matriz/professor); UPDATE `feedback_update` (Matriz/professor)
+- **RLS:** DELETE `feedback_delete` (Matriz/professor); INSERT `feedback_insert` (setores: admin, ceo, gerente · gerente da filial); SELECT `feedback_read` (setores: financeiro, marketing · Matriz/professor); UPDATE `feedback_update` (Matriz/professor)
 
 <a id="t-marketing_artes"></a>
 ## marketing_artes
@@ -1427,18 +1429,21 @@ Para cada tabela: quem grava (tela, RPC, gatilho, servidor), quem lê, os gatilh
   - `trg_arte_produto_e_cota` — BEFORE INSERT/UPDATE → [fn_arte_produto_e_cota](funcoes.md#f-fn_arte_produto_e_cota)
 - **Ao apagar uma linha daqui:** [marketing_arte_feedback](tabelas.md#t-marketing_arte_feedback).arte_id APAGA JUNTO (CASCADE)
 - **Aponta para:** promocao_id → [marketing_promocoes](tabelas.md#t-marketing_promocoes)
-- **RLS:** DELETE `artes_delete` (setores: marketing · gerente da filial · Matriz/professor); INSERT `artes_insert` (setores: marketing · gerente da filial · Matriz/professor); SELECT `artes_read` (setores: financeiro, marketing · gerente da filial · Matriz/professor); UPDATE `artes_update` (setores: marketing · gerente da filial · Matriz/professor)
+- **RLS:** DELETE `artes_delete` (setores: marketing · Matriz/professor); INSERT `artes_insert` (setores: marketing · Matriz/professor); SELECT `artes_read` (setores: financeiro, marketing · Matriz/professor); UPDATE `artes_update` (setores: marketing · Matriz/professor)
 
 <a id="t-marketing_calendario"></a>
 ## marketing_calendario
 
 - **Telas que gravam:** [Marketing › Calendário](telas.md#s-marketing-calendário)
-- **RPCs que gravam:** —
-- **Telas que leem:** [Marketing › Calendário](telas.md#s-marketing-calendário)
+- **Telas que gravam via RPC:** [Marketing › Aprovações de Conteúdo](telas.md#s-marketing-aprovaçõesdeconteúdo)
+- **RPCs que gravam:** [decidir_conteudo](funcoes.md#f-decidir_conteudo)
+- **Telas que leem:** [Marketing › Aprovações de Conteúdo](telas.md#s-marketing-aprovaçõesdeconteúdo), [Marketing › Calendário](telas.md#s-marketing-calendário)
+- **RPCs que leem:** [contar_pendencias](funcoes.md#f-contar_pendencias), [decidir_conteudo](funcoes.md#f-decidir_conteudo), [listar_pendencias](funcoes.md#f-listar_pendencias)
 - **Gatilhos nesta tabela:**
   - `marketing_calendario_updated_at` — BEFORE UPDATE → [trg_marketing_calendario_updated_at](funcoes.md#f-trg_marketing_calendario_updated_at)
+  - `trg_calendario_aprovacao_guard` — BEFORE INSERT/UPDATE → [fn_calendario_aprovacao_guard](funcoes.md#f-fn_calendario_aprovacao_guard)
 - **Aponta para:** promocao_id → [marketing_promocoes](tabelas.md#t-marketing_promocoes)
-- **RLS:** DELETE `calendario_delete` (setores: marketing · gerente da filial · Matriz/professor); INSERT `calendario_insert` (setores: marketing · gerente da filial · Matriz/professor); SELECT `calendario_read` (setores: financeiro, marketing · gerente da filial · Matriz/professor); UPDATE `calendario_update` (setores: marketing · gerente da filial · Matriz/professor)
+- **RLS:** DELETE `calendario_delete` (setores: marketing · Matriz/professor); INSERT `calendario_insert` (setores: marketing · Matriz/professor); SELECT `calendario_read` (setores: financeiro, marketing · Matriz/professor); UPDATE `calendario_update` (setores: marketing · Matriz/professor)
 
 <a id="t-marketing_campanhas"></a>
 ## marketing_campanhas
@@ -1451,7 +1456,7 @@ Para cada tabela: quem grava (tela, RPC, gatilho, servidor), quem lê, os gatilh
 - **Gatilhos nesta tabela:**
   - `marketing_campanhas_updated_at` — BEFORE UPDATE → [trg_marketing_campanhas_updated_at](funcoes.md#f-trg_marketing_campanhas_updated_at)
 - **Ao apagar uma linha daqui:** [itens_campanha](tabelas.md#t-itens_campanha).campanha_id APAGA JUNTO (CASCADE); [marketing_cupons](tabelas.md#t-marketing_cupons).campanha_id zera o vínculo (SET NULL); [marketing_promocoes](tabelas.md#t-marketing_promocoes).campanha_id zera o vínculo (SET NULL)
-- **RLS:** DELETE `campanhas_delete` (setores: marketing · gerente da filial · Matriz/professor); INSERT `campanhas_insert` (setores: marketing · gerente da filial · Matriz/professor); SELECT `campanhas_read` (setores: financeiro, marketing · gerente da filial · Matriz/professor); UPDATE `campanhas_update` (setores: financeiro, marketing · gerente da filial · Matriz/professor)
+- **RLS:** DELETE `campanhas_delete` (setores: marketing · Matriz/professor); INSERT `campanhas_insert` (setores: marketing · Matriz/professor); SELECT `campanhas_read` (setores: financeiro, marketing · Matriz/professor); UPDATE `campanhas_update` (setores: financeiro, marketing · Matriz/professor)
 
 <a id="t-marketing_config"></a>
 ## marketing_config
@@ -1477,7 +1482,7 @@ Para cada tabela: quem grava (tela, RPC, gatilho, servidor), quem lê, os gatilh
   - `marketing_cupons_updated_at` — BEFORE UPDATE → [trg_marketing_cupons_updated_at](funcoes.md#f-trg_marketing_cupons_updated_at)
 - **Ao apagar uma linha daqui:** [vendas](tabelas.md#t-vendas).cupom_id zera o vínculo (SET NULL)
 - **Aponta para:** campanha_id → [marketing_campanhas](tabelas.md#t-marketing_campanhas)
-- **RLS:** DELETE `cupons_delete` (setores: marketing · gerente da filial · Matriz/professor); INSERT `cupons_insert` (setores: marketing · gerente da filial · Matriz/professor); SELECT `cupons_read` (setores: financeiro, marketing · gerente da filial · Matriz/professor); UPDATE `cupons_update` (setores: marketing · gerente da filial · Matriz/professor)
+- **RLS:** DELETE `cupons_delete` (setores: marketing · Matriz/professor); INSERT `cupons_insert` (setores: marketing · Matriz/professor); SELECT `cupons_read` (setores: financeiro, marketing · Matriz/professor); UPDATE `cupons_update` (setores: marketing · Matriz/professor)
 
 <a id="t-marketing_promocoes"></a>
 ## marketing_promocoes
@@ -1495,17 +1500,16 @@ Para cada tabela: quem grava (tela, RPC, gatilho, servidor), quem lê, os gatilh
   - 1. [marketing_promocoes](tabelas.md#t-marketing_promocoes) → [trg_marketing_promocoes_soft_delete_arte](funcoes.md#f-trg_marketing_promocoes_soft_delete_arte) → [marketing_artes](tabelas.md#t-marketing_artes)
 - **Ao apagar uma linha daqui:** [marketing_artes](tabelas.md#t-marketing_artes).promocao_id APAGA JUNTO (CASCADE); [marketing_calendario](tabelas.md#t-marketing_calendario).promocao_id zera o vínculo (SET NULL)
 - **Aponta para:** campanha_id → [marketing_campanhas](tabelas.md#t-marketing_campanhas); produto_id → [produtos](tabelas.md#t-produtos)
-- **RLS:** DELETE `mkt_delete` (setores: marketing · gerente da filial · Matriz/professor); INSERT `mkt_insert` (setores: marketing · gerente da filial · Matriz/professor); SELECT `mkt_select` (setores: financeiro, marketing · gerente da filial · Matriz/professor); UPDATE `mkt_update` (setores: financeiro, marketing · gerente da filial · Matriz/professor)
+- **RLS:** DELETE `mkt_delete` (setores: marketing · Matriz/professor); INSERT `mkt_insert` (setores: marketing · Matriz/professor); SELECT `mkt_select` (setores: financeiro, marketing · Matriz/professor); UPDATE `mkt_update` (setores: financeiro, marketing · Matriz/professor)
 
 <a id="t-marketing_tarefas"></a>
 ## marketing_tarefas
 
-- **Telas que gravam:** [Matriz › Briefing Diário](telas.md#s-briefing-diario), [Financeiro › Aprovações de Conteúdo](telas.md#s-financeiro-aprovaçõesdeconteúdo)
+- **Telas que gravam:** [Matriz › Briefing Diário](telas.md#s-briefing-diario)
 - **RPCs que gravam:** [descartar_tarefa_briefing](funcoes.md#f-descartar_tarefa_briefing), [editar_tarefa_briefing](funcoes.md#f-editar_tarefa_briefing), [excluir_briefing_cascade](funcoes.md#f-excluir_briefing_cascade)
-- **Telas que leem:** [Financeiro › Aprovações de Conteúdo](telas.md#s-financeiro-aprovaçõesdeconteúdo)
-- **RPCs que leem:** [contar_pendencias](funcoes.md#f-contar_pendencias), [listar_pendencias](funcoes.md#f-listar_pendencias)
+- **Telas que leem:** —
 - **Aponta para:** briefing_id → [briefings_diarios](tabelas.md#t-briefings_diarios)
-- **RLS:** DELETE `mkt_delete` (setores: marketing · gerente da filial · Matriz/professor); INSERT `mkt_insert` (setores: marketing · gerente da filial · Matriz/professor); SELECT `mkt_select` (setores: financeiro, marketing · gerente da filial · Matriz/professor); UPDATE `mkt_update` (setores: financeiro, marketing · gerente da filial · Matriz/professor)
+- **RLS:** DELETE `mkt_delete` (setores: marketing · Matriz/professor); INSERT `mkt_insert` (setores: marketing · Matriz/professor); SELECT `mkt_select` (setores: financeiro, marketing · Matriz/professor); UPDATE `mkt_update` (setores: financeiro, marketing · Matriz/professor)
 
 <a id="t-matriz_tarefa_participantes"></a>
 ## matriz_tarefa_participantes
@@ -1564,7 +1568,7 @@ Para cada tabela: quem grava (tela, RPC, gatilho, servidor), quem lê, os gatilh
 - **Telas que leem:** [Max Show](telas.md#s-max-show), [Max work show *(rota max-work-show)*](telas.md#s-max-work-show)
 - **Gatilhos nesta tabela:**
   - `max_shows_touch` — BEFORE UPDATE → [max_work_touch_updated_at](funcoes.md#f-max_work_touch_updated_at)
-- **RLS:** DELETE `max_shows_delete` (o próprio usuário); INSERT `max_shows_insert` (o próprio usuário); SELECT `max_shows_select` (gerente da filial); UPDATE `max_shows_update` (o próprio usuário)
+- **RLS:** DELETE `max_shows_delete` (o próprio usuário); INSERT `max_shows_insert` (o próprio usuário); SELECT `max_shows_select` (o próprio usuário); UPDATE `max_shows_update` (o próprio usuário)
 
 <a id="t-maxbank_config"></a>
 ## maxbank_config
@@ -1689,7 +1693,7 @@ Para cada tabela: quem grava (tela, RPC, gatilho, servidor), quem lê, os gatilh
 - **Gatilhos nesta tabela:**
   - `trg_movimentacao_caixa_guard` — BEFORE INSERT/UPDATE → [movimentacao_caixa_guard](funcoes.md#f-movimentacao_caixa_guard)
 - **Aponta para:** controle_caixa_id → [controle_caixa](tabelas.md#t-controle_caixa)
-- **RLS:** ALL `mov_caixa_all` (setores: financeiro, vendas · gerente da filial · Matriz/professor)
+- **RLS:** ALL `mov_caixa_all` (setores: financeiro, vendas · Matriz/professor)
 
 <a id="t-movimentacoes_carreira"></a>
 ## movimentacoes_carreira
@@ -1734,7 +1738,7 @@ Para cada tabela: quem grava (tela, RPC, gatilho, servidor), quem lê, os gatilh
   - 1. [movimentacoes_estoque](tabelas.md#t-movimentacoes_estoque) → [fn_custo_medio_da_entrada](funcoes.md#f-fn_custo_medio_da_entrada) → [produtos_custo](tabelas.md#t-produtos_custo)
 - **Ao apagar uma linha daqui:** [consumos_material](tabelas.md#t-consumos_material).movimentacao_id zera o vínculo (SET NULL)
 - **Aponta para:** pedido_venda_id → [pedidos_venda](tabelas.md#t-pedidos_venda); produto_id → [produtos](tabelas.md#t-produtos); recebimento_id → [recebimentos](tabelas.md#t-recebimentos); requisicao_estoque_id → [requisicoes_estoque](tabelas.md#t-requisicoes_estoque)
-- **RLS:** DELETE `mov_delete` (setores: logistica · gerente da filial · Matriz/professor); INSERT `mov_insert` (setores: estoque, logistica · gerente da filial · Matriz/professor); SELECT `mov_select` (setores: compras, logistica · gerente da filial · Matriz/professor); UPDATE `mov_update` (setores: logistica · gerente da filial · Matriz/professor)
+- **RLS:** DELETE `mov_delete` (setores: logistica · Matriz/professor); INSERT `mov_insert` (setores: estoque, logistica · Matriz/professor); SELECT `mov_select` (setores: compras, logistica · Matriz/professor); UPDATE `mov_update` (setores: logistica · Matriz/professor)
 
 <a id="t-notas_emitidas"></a>
 ## notas_emitidas
@@ -1748,7 +1752,7 @@ Para cada tabela: quem grava (tela, RPC, gatilho, servidor), quem lê, os gatilh
   - `trg_historico` — AFTER INSERT/UPDATE → [registrar_historico](funcoes.md#f-registrar_historico) · grava em [historico_operacoes](tabelas.md#t-historico_operacoes)
   - `trg_nota_emitida_guard` — BEFORE INSERT/UPDATE → [nota_emitida_guard](funcoes.md#f-nota_emitida_guard)
 - **Aponta para:** cliente_id → [clientes](tabelas.md#t-clientes); conta_receber_id → [contas_receber](tabelas.md#t-contas_receber); criado_por → [user_profiles](tabelas.md#t-user_profiles); atualizado_por → [user_profiles](tabelas.md#t-user_profiles); venda_id → [vendas](tabelas.md#t-vendas)
-- **RLS:** DELETE `notas_emitidas_delete` (Matriz/professor); INSERT `notas_emitidas_insert` (setores: financeiro, vendas · gerente da filial · Matriz/professor); SELECT `notas_emitidas_select` (setores: financeiro, vendas · gerente da filial · Matriz/professor); UPDATE `notas_emitidas_update` (setores: financeiro, vendas · gerente da filial · Matriz/professor)
+- **RLS:** DELETE `notas_emitidas_delete` (Matriz/professor); INSERT `notas_emitidas_insert` (setores: financeiro, vendas · Matriz/professor); SELECT `notas_emitidas_select` (setores: financeiro, vendas · Matriz/professor); UPDATE `notas_emitidas_update` (setores: financeiro, vendas · Matriz/professor)
 
 <a id="t-notas_recebidas"></a>
 ## notas_recebidas
@@ -1761,14 +1765,15 @@ Para cada tabela: quem grava (tela, RPC, gatilho, servidor), quem lê, os gatilh
   - `trg_fornecedor_nao_e_concessionaria` — BEFORE INSERT/UPDATE → [fn_fornecedor_nao_e_concessionaria](funcoes.md#f-fn_fornecedor_nao_e_concessionaria)
   - `trg_historico` — AFTER INSERT/UPDATE → [registrar_historico](funcoes.md#f-registrar_historico) · grava em [historico_operacoes](tabelas.md#t-historico_operacoes)
 - **Aponta para:** conta_pagar_id → [contas_pagar](tabelas.md#t-contas_pagar); fornecedor_id → [fornecedores](tabelas.md#t-fornecedores)
-- **RLS:** ALL `compras_all` (setores: compras, financeiro · gerente da filial · Matriz/professor)
+- **RLS:** ALL `compras_all` (setores: compras, financeiro · Matriz/professor)
 
 <a id="t-notificacoes"></a>
 ## notificacoes
 
 - **Telas que gravam:** —
-- **Telas que gravam via RPC:** [Matriz › Briefing Diário](telas.md#s-briefing-diario), [Compras › Cotações](telas.md#s-compras-cotações), [Compras › Pedidos](telas.md#s-compras-pedidos), [Estoque › Liberar Requisições](telas.md#s-estoque-liberarrequisições), [Estoque › Movimentações](telas.md#s-estoque-movimentações), [Financeiro › Aprovações de Cotação](telas.md#s-financeiro-aprovaçõesdecotação), [Financeiro › Aprovações de Orçamento](telas.md#s-financeiro-aprovaçõesdeorçamento), [Marketing › Promoções](telas.md#s-marketing-promoções), [Matriz avaliacoes *(rota matriz-avaliacoes)*](telas.md#s-matriz-avaliacoes), [Capital](telas.md#s-matriz-capital), [Competição](telas.md#s-matriz-competicao), [Meu Crachá](telas.md#s-meu-cracha), [Requisições › Aprovações](telas.md#s-requisicoes-aprovações), [Requisições › Do Setor](telas.md#s-requisicoes-dosetor), [Recursos Humanos › Folha de Pagamento](telas.md#s-rh-folhadepagamento), [Recursos Humanos › Recrutamento e Seleção](telas.md#s-rh-recrutamentoeseleção), [Recursos Humanos › Registro de Ponto](telas.md#s-rh-registrodeponto), [Recursos Humanos › Treinamentos](telas.md#s-rh-treinamentos), [Matriz › Governança › Cliente Especial](telas.md#s-vendas-clienteespecial), [Vendas › Orçamentos](telas.md#s-vendas-orçamentos)
+- **Telas que gravam via RPC:** [Matriz › Briefing Diário](telas.md#s-briefing-diario), [Compras › Cotações](telas.md#s-compras-cotações), [Compras › Pedidos](telas.md#s-compras-pedidos), [Estoque › Liberar Requisições](telas.md#s-estoque-liberarrequisições), [Estoque › Movimentações](telas.md#s-estoque-movimentações), [Financeiro › Aprovações de Cotação](telas.md#s-financeiro-aprovaçõesdecotação), [Financeiro › Aprovações de Orçamento](telas.md#s-financeiro-aprovaçõesdeorçamento), [Marketing › Aprovações de Conteúdo](telas.md#s-marketing-aprovaçõesdeconteúdo), [Marketing › Promoções](telas.md#s-marketing-promoções), [Matriz avaliacoes *(rota matriz-avaliacoes)*](telas.md#s-matriz-avaliacoes), [Capital](telas.md#s-matriz-capital), [Competição](telas.md#s-matriz-competicao), [Meu Crachá](telas.md#s-meu-cracha), [Requisições › Aprovações](telas.md#s-requisicoes-aprovações), [Requisições › Do Setor](telas.md#s-requisicoes-dosetor), [Recursos Humanos › Folha de Pagamento](telas.md#s-rh-folhadepagamento), [Recursos Humanos › Recrutamento e Seleção](telas.md#s-rh-recrutamentoeseleção), [Recursos Humanos › Registro de Ponto](telas.md#s-rh-registrodeponto), [Recursos Humanos › Treinamentos](telas.md#s-rh-treinamentos), [Matriz › Governança › Cliente Especial](telas.md#s-vendas-clienteespecial), [Vendas › Orçamentos](telas.md#s-vendas-orçamentos)
 - **RPCs que gravam:** [encerrar_matriz_tarefa](funcoes.md#f-encerrar_matriz_tarefa), [lembrar_avaliacoes_pendentes](funcoes.md#f-lembrar_avaliacoes_pendentes), [liberar_ciclo_tarefa](funcoes.md#f-liberar_ciclo_tarefa), [liberar_matriz_tarefa](funcoes.md#f-liberar_matriz_tarefa), [notificar_setor](funcoes.md#f-notificar_setor), [reabrir_competicao](funcoes.md#f-reabrir_competicao)
+- **Gatilhos (de outras tabelas) que gravam aqui:** [fn_historico_decisao_do_assistente](funcoes.md#f-fn_historico_decisao_do_assistente) (em [historico_operacoes](tabelas.md#t-historico_operacoes))
 - **Telas que leem:** [Matriz › Briefing Diário](telas.md#s-briefing-diario), [Compras › Cotações](telas.md#s-compras-cotações), [Compras › Pedidos](telas.md#s-compras-pedidos), [Financeiro › Aprovações de Cotação](telas.md#s-financeiro-aprovaçõesdecotação), [Financeiro › Aprovações de Orçamento](telas.md#s-financeiro-aprovaçõesdeorçamento), [Marketing › Promoções](telas.md#s-marketing-promoções), [Recursos Humanos › Treinamentos](telas.md#s-rh-treinamentos), [Matriz › Governança › Cliente Especial](telas.md#s-vendas-clienteespecial), [Vendas › Orçamentos](telas.md#s-vendas-orçamentos)
 - **RPCs que leem:** [lembrar_avaliacoes_pendentes](funcoes.md#f-lembrar_avaliacoes_pendentes), [marcar_notificacoes_lidas](funcoes.md#f-marcar_notificacoes_lidas), [marcar_todas_lidas](funcoes.md#f-marcar_todas_lidas)
 - **Ao apagar uma linha daqui:** [notificacoes_lidas](tabelas.md#t-notificacoes_lidas).notificacao_id APAGA JUNTO (CASCADE)
@@ -1800,7 +1805,7 @@ Para cada tabela: quem grava (tela, RPC, gatilho, servidor), quem lê, os gatilh
 - **RPCs que gravam:** —
 - **Telas que leem:** —
 - **Aponta para:** categoria_id → [categorias_produto](tabelas.md#t-categorias_produto)
-- **RLS:** DELETE `orcamento_mensal_delete` (setores: financeiro · gerente da filial · Matriz/professor); INSERT `orcamento_mensal_insert` (setores: financeiro · gerente da filial · Matriz/professor); SELECT `orcamento_mensal_select` (setores: financeiro · gerente da filial · Matriz/professor); UPDATE `orcamento_mensal_update` (setores: financeiro · gerente da filial · Matriz/professor)
+- **RLS:** DELETE `orcamento_mensal_delete` (setores: financeiro · Matriz/professor); INSERT `orcamento_mensal_insert` (setores: financeiro · Matriz/professor); SELECT `orcamento_mensal_select` (setores: financeiro · Matriz/professor); UPDATE `orcamento_mensal_update` (setores: financeiro · Matriz/professor)
 
 <a id="t-orcamentos"></a>
 ## orcamentos
@@ -1818,7 +1823,7 @@ Para cada tabela: quem grava (tela, RPC, gatilho, servidor), quem lê, os gatilh
   - `trg_sem_exclusao` — BEFORE UPDATE → [documento_sem_exclusao](funcoes.md#f-documento_sem_exclusao)
 - **Ao apagar uma linha daqui:** [pedidos_venda](tabelas.md#t-pedidos_venda).orcamento_id zera o vínculo (SET NULL)
 - **Aponta para:** cliente_id → [clientes](tabelas.md#t-clientes); forma_pagamento_id → [formas_pagamento](tabelas.md#t-formas_pagamento)
-- **RLS:** DELETE `orc_delete` (setores: vendas · gerente da filial · Matriz/professor); INSERT `orc_insert` (setores: vendas · gerente da filial · Matriz/professor); SELECT `orc_select` (setores: financeiro, vendas · gerente da filial · Matriz/professor); UPDATE `orc_update` (setores: financeiro, vendas · gerente da filial · Matriz/professor)
+- **RLS:** DELETE `orc_delete` (setores: vendas · Matriz/professor); INSERT `orc_insert` (setores: vendas · Matriz/professor); SELECT `orc_select` (setores: financeiro, vendas · Matriz/professor); UPDATE `orc_update` (setores: financeiro, vendas · Matriz/professor)
 
 <a id="t-orcamentos_periodo"></a>
 ## orcamentos_periodo
@@ -1880,7 +1885,7 @@ Para cada tabela: quem grava (tela, RPC, gatilho, servidor), quem lê, os gatilh
   - `trg_sem_exclusao` — BEFORE UPDATE → [documento_sem_exclusao](funcoes.md#f-documento_sem_exclusao)
 - **Ao apagar uma linha daqui:** [ajustes_custo_compra](tabelas.md#t-ajustes_custo_compra).pedido_id APAGA JUNTO (CASCADE); [contas_pagar](tabelas.md#t-contas_pagar).pedido_id zera o vínculo (SET NULL); [devolucoes_fornecedor](tabelas.md#t-devolucoes_fornecedor).pedido_id APAGA JUNTO (CASCADE); [fretes_compra_rateio](tabelas.md#t-fretes_compra_rateio).pedido_id APAGA JUNTO (CASCADE); [recebimentos](tabelas.md#t-recebimentos).pedido_id zera o vínculo (SET NULL)
 - **Aponta para:** cotacao_id → [cotacoes](tabelas.md#t-cotacoes); fornecedor_id → [fornecedores](tabelas.md#t-fornecedores); produto_id → [produtos](tabelas.md#t-produtos); requisicao_id → [requisicoes](tabelas.md#t-requisicoes); servico_id → [servicos](tabelas.md#t-servicos)
-- **RLS:** SELECT `compras_select` (setores: compras, financeiro, logistica · gerente da filial · Matriz/professor); UPDATE `compras_update` (setores: compras, logistica · gerente da filial · Matriz/professor)
+- **RLS:** SELECT `compras_select` (setores: compras, financeiro, logistica · Matriz/professor); UPDATE `compras_update` (setores: compras, logistica · Matriz/professor)
 
 <a id="t-pedidos_online"></a>
 ## pedidos_online
@@ -1926,7 +1931,7 @@ Para cada tabela: quem grava (tela, RPC, gatilho, servidor), quem lê, os gatilh
   - `trg_sem_exclusao` — BEFORE UPDATE → [documento_sem_exclusao](funcoes.md#f-documento_sem_exclusao)
 - **Ao apagar uma linha daqui:** [contas_receber](tabelas.md#t-contas_receber).pedido_venda_id zera o vínculo (SET NULL); [movimentacoes_estoque](tabelas.md#t-movimentacoes_estoque).pedido_venda_id bloqueia (NO ACTION); [vendas](tabelas.md#t-vendas).pedido_venda_id zera o vínculo (SET NULL)
 - **Aponta para:** cliente_id → [clientes](tabelas.md#t-clientes); conta_receber_id → [contas_receber](tabelas.md#t-contas_receber); orcamento_id → [orcamentos](tabelas.md#t-orcamentos)
-- **RLS:** DELETE `pv_delete` (setores: vendas · gerente da filial · Matriz/professor); INSERT `pv_insert` (setores: vendas · gerente da filial · Matriz/professor); SELECT `pv_select` (setores: financeiro, logistica, vendas · gerente da filial · Matriz/professor); UPDATE `pv_update` (setores: financeiro, logistica, vendas · gerente da filial · Matriz/professor)
+- **RLS:** DELETE `pv_delete` (setores: vendas · Matriz/professor); INSERT `pv_insert` (setores: vendas · Matriz/professor); SELECT `pv_select` (setores: financeiro, logistica, vendas · Matriz/professor); UPDATE `pv_update` (setores: financeiro, logistica, vendas · Matriz/professor)
 
 <a id="t-pesquisa_perguntas"></a>
 ## pesquisa_perguntas
@@ -2132,7 +2137,7 @@ Para cada tabela: quem grava (tela, RPC, gatilho, servidor), quem lê, os gatilh
   - `trg_unidade_imutavel_com_saldo` — BEFORE UPDATE → [fn_unidade_imutavel_com_saldo](funcoes.md#f-fn_unidade_imutavel_com_saldo)
 - **Ao apagar uma linha daqui:** [ajustes_custo_compra](tabelas.md#t-ajustes_custo_compra).produto_id zera o vínculo (SET NULL); [consumos_material](tabelas.md#t-consumos_material).produto_id bloqueia (NO ACTION); [contas_receber](tabelas.md#t-contas_receber).produto_patrimonio_id bloqueia (NO ACTION); [devolucoes_fornecedor](tabelas.md#t-devolucoes_fornecedor).produto_id zera o vínculo (SET NULL); [expedicao](tabelas.md#t-expedicao).produto_id zera o vínculo (SET NULL); [filial_investimentos](tabelas.md#t-filial_investimentos).produto_patrimonio_id zera o vínculo (SET NULL); [inventarios](tabelas.md#t-inventarios).produto_id zera o vínculo (SET NULL); [itens_campanha](tabelas.md#t-itens_campanha).produto_id APAGA JUNTO (CASCADE); [itens_devolucao](tabelas.md#t-itens_devolucao).produto_id bloqueia (NO ACTION); [itens_venda](tabelas.md#t-itens_venda).produto_id zera o vínculo (SET NULL); [marketing_promocoes](tabelas.md#t-marketing_promocoes).produto_id zera o vínculo (SET NULL); [movimentacoes_estoque](tabelas.md#t-movimentacoes_estoque).produto_id zera o vínculo (SET NULL); [pedidos](tabelas.md#t-pedidos).produto_id bloqueia (NO ACTION); [pedidos_online_itens](tabelas.md#t-pedidos_online_itens).produto_id bloqueia (RESTRICT); [produto_unidades](tabelas.md#t-produto_unidades).produto_id APAGA JUNTO (CASCADE); [produtos](tabelas.md#t-produtos).patrimonio_origem_id zera o vínculo (SET NULL); [produtos_custo](tabelas.md#t-produtos_custo).produto_id APAGA JUNTO (CASCADE); [requisicoes](tabelas.md#t-requisicoes).produto_id bloqueia (NO ACTION); [requisicoes_estoque](tabelas.md#t-requisicoes_estoque).produto_id zera o vínculo (SET NULL); [vencimentos_estoque](tabelas.md#t-vencimentos_estoque).produto_id zera o vínculo (SET NULL)
 - **Aponta para:** categoria_id → [categorias_produto](tabelas.md#t-categorias_produto); fornecedor_id → [fornecedores](tabelas.md#t-fornecedores); patrimonio_origem_id → [produtos](tabelas.md#t-produtos); subcategoria_id → [subcategorias_produto](tabelas.md#t-subcategorias_produto); correcao_responsavel_id → [user_profiles](tabelas.md#t-user_profiles); correcao_solicitada_por → [user_profiles](tabelas.md#t-user_profiles)
-- **RLS:** DELETE `delete_produtos` (setores: compras, logistica · gerente da filial · Matriz/professor); INSERT `write_produtos` (setores: compras, logistica · gerente da filial · Matriz/professor); SELECT `produtos_select_filial` (qualquer um da própria filial · Matriz/professor); UPDATE `update_produtos` (setores: compras, logistica, vendas · gerente da filial · Matriz/professor)
+- **RLS:** DELETE `delete_produtos` (setores: compras, logistica · Matriz/professor); INSERT `write_produtos` (setores: compras, logistica · Matriz/professor); SELECT `produtos_select_filial` (qualquer um da própria filial · Matriz/professor); UPDATE `update_produtos` (setores: compras, logistica, vendas · Matriz/professor)
 
 <a id="t-produtos_codigo_reserva"></a>
 ## produtos_codigo_reserva
@@ -2174,7 +2179,7 @@ Para cada tabela: quem grava (tela, RPC, gatilho, servidor), quem lê, os gatilh
   - `trg_auditoria` — BEFORE INSERT/UPDATE → [set_auditoria_campos](funcoes.md#f-set_auditoria_campos)
   - `trg_historico` — AFTER INSERT/UPDATE → [registrar_historico](funcoes.md#f-registrar_historico) · grava em [historico_operacoes](tabelas.md#t-historico_operacoes)
 - **Aponta para:** cliente_id → [clientes](tabelas.md#t-clientes)
-- **RLS:** ALL `projetos_write` (setores: financeiro · gerente da filial · Matriz/professor); SELECT `projetos_select` (qualquer um da própria filial · Matriz/professor)
+- **RLS:** ALL `projetos_write` (setores: financeiro · Matriz/professor); SELECT `projetos_select` (qualquer um da própria filial · Matriz/professor)
 
 <a id="t-rateio_administrativo"></a>
 ## rateio_administrativo
@@ -2186,7 +2191,7 @@ Para cada tabela: quem grava (tela, RPC, gatilho, servidor), quem lê, os gatilh
 - **RPCs que leem:** [apurar_rateio_administrativo](funcoes.md#f-apurar_rateio_administrativo), [reverter_rateio_administrativo](funcoes.md#f-reverter_rateio_administrativo)
 - **Ao apagar uma linha daqui:** [rateio_administrativo_itens](tabelas.md#t-rateio_administrativo_itens).rateio_id APAGA JUNTO (CASCADE)
 - **Aponta para:** criado_por → [user_profiles](tabelas.md#t-user_profiles)
-- **RLS:** SELECT `rateio_select` (setores: financeiro · gerente da filial)
+- **RLS:** SELECT `rateio_select` (setores: financeiro)
 
 <a id="t-rateio_administrativo_itens"></a>
 ## rateio_administrativo_itens
@@ -2197,7 +2202,7 @@ Para cada tabela: quem grava (tela, RPC, gatilho, servidor), quem lê, os gatilh
 - **Telas que leem:** [Financeiro › Rateioadministrativo *(rota financeiro-rateioadministrativo)*](telas.md#s-financeiro-rateioadministrativo)
 - **RPCs que leem:** [reverter_rateio_administrativo](funcoes.md#f-reverter_rateio_administrativo)
 - **Aponta para:** conta_pagar_id → [contas_pagar](tabelas.md#t-contas_pagar); conta_receber_id → [contas_receber](tabelas.md#t-contas_receber); rateio_id → [rateio_administrativo](tabelas.md#t-rateio_administrativo)
-- **RLS:** SELECT `rateio_itens_select` (setores: financeiro · gerente da filial · Matriz/professor)
+- **RLS:** SELECT `rateio_itens_select` (setores: financeiro · Matriz/professor)
 
 <a id="t-recebimentos"></a>
 ## recebimentos
@@ -2234,7 +2239,7 @@ Para cada tabela: quem grava (tela, RPC, gatilho, servidor), quem lê, os gatilh
   -   2. [movimentacoes_estoque](tabelas.md#t-movimentacoes_estoque) → [fn_custo_medio_da_entrada](funcoes.md#f-fn_custo_medio_da_entrada) → [produtos_custo](tabelas.md#t-produtos_custo)
 - **Ao apagar uma linha daqui:** [devolucoes_fornecedor](tabelas.md#t-devolucoes_fornecedor).recebimento_id APAGA JUNTO (CASCADE); [movimentacoes_estoque](tabelas.md#t-movimentacoes_estoque).recebimento_id zera o vínculo (SET NULL); [produto_unidades](tabelas.md#t-produto_unidades).recebimento_id zera o vínculo (SET NULL); [vencimentos_estoque](tabelas.md#t-vencimentos_estoque).recebimento_id zera o vínculo (SET NULL)
 - **Aponta para:** pedido_id → [pedidos](tabelas.md#t-pedidos)
-- **RLS:** ALL `estoque_all` (setores: estoque, logistica · gerente da filial · Matriz/professor)
+- **RLS:** ALL `estoque_all` (setores: estoque, logistica · Matriz/professor)
 
 <a id="t-redes_sociais_links"></a>
 ## redes_sociais_links
@@ -2252,7 +2257,7 @@ Para cada tabela: quem grava (tela, RPC, gatilho, servidor), quem lê, os gatilh
 - **Servidor (api/) grava:** `api/ai-bi.ts`
 - **Telas que leem:** [Matriz › Painel de BI](telas.md#s-painel-bi)
 - **Servidor (api/) lê:** `api/ai-bi.ts`
-- **RLS:** DELETE `relatorios_bi_delete` (Matriz/professor); INSERT `relatorios_bi_insert` (gerente da filial · Matriz/professor); SELECT `relatorios_bi_read` (Matriz/professor)
+- **RLS:** DELETE `relatorios_bi_delete` (Matriz/professor); INSERT `relatorios_bi_insert` (Matriz/professor); SELECT `relatorios_bi_read` (Matriz/professor)
 
 <a id="t-requerimentos"></a>
 ## requerimentos
@@ -2303,7 +2308,7 @@ Para cada tabela: quem grava (tela, RPC, gatilho, servidor), quem lê, os gatilh
   - 1. [requisicoes](tabelas.md#t-requisicoes) → [aprovacao_segue_a_requisicao](funcoes.md#f-aprovacao_segue_a_requisicao) → [aprovacoes_compras](tabelas.md#t-aprovacoes_compras)
 - **Ao apagar uma linha daqui:** [aprovacoes_compras](tabelas.md#t-aprovacoes_compras).requisicao_id APAGA JUNTO (CASCADE); [cotacoes](tabelas.md#t-cotacoes).requisicao_id zera o vínculo (SET NULL); [pedidos](tabelas.md#t-pedidos).requisicao_id zera o vínculo (SET NULL); [requisicao_ciencia](tabelas.md#t-requisicao_ciencia).requisicao_id APAGA JUNTO (CASCADE)
 - **Aponta para:** produto_id → [produtos](tabelas.md#t-produtos); servico_id → [servicos](tabelas.md#t-servicos); correcao_solicitada_por → [user_profiles](tabelas.md#t-user_profiles)
-- **RLS:** DELETE `compras_delete` (Matriz/professor); SELECT `compras_select` (setores: compras, financeiro, logistica · gerente da filial · Matriz/professor); UPDATE `compras_update` (setores: compras · gerente da filial · Matriz/professor)
+- **RLS:** DELETE `compras_delete` (Matriz/professor); SELECT `compras_select` (setores: compras, financeiro, logistica · Matriz/professor); UPDATE `compras_update` (setores: compras · Matriz/professor)
 
 <a id="t-requisicoes_estoque"></a>
 ## requisicoes_estoque
@@ -2324,7 +2329,7 @@ Para cada tabela: quem grava (tela, RPC, gatilho, servidor), quem lê, os gatilh
   - 1. [requisicoes_estoque](tabelas.md#t-requisicoes_estoque) → [aprovacao_estoque_segue_a_requisicao](funcoes.md#f-aprovacao_estoque_segue_a_requisicao) → [aprovacoes_estoque](tabelas.md#t-aprovacoes_estoque)
 - **Ao apagar uma linha daqui:** [aprovacoes_estoque](tabelas.md#t-aprovacoes_estoque).requisicao_estoque_id APAGA JUNTO (CASCADE); [consumos_material](tabelas.md#t-consumos_material).requisicao_estoque_id APAGA JUNTO (CASCADE); [expedicao](tabelas.md#t-expedicao).requisicao_id zera o vínculo (SET NULL); [movimentacoes_estoque](tabelas.md#t-movimentacoes_estoque).requisicao_estoque_id zera o vínculo (SET NULL); [requisicao_estoque_ciencia](tabelas.md#t-requisicao_estoque_ciencia).requisicao_estoque_id APAGA JUNTO (CASCADE)
 - **Aponta para:** centro_custo_id → [centros_custo](tabelas.md#t-centros_custo); produto_id → [produtos](tabelas.md#t-produtos); correcao_solicitada_por → [user_profiles](tabelas.md#t-user_profiles)
-- **RLS:** DELETE `logist_delete` (setores: logistica · gerente da filial · Matriz/professor); SELECT `logist_select` (setores: logistica · gerente da filial · Matriz/professor); UPDATE `logist_update` (setores: logistica · gerente da filial · Matriz/professor)
+- **RLS:** DELETE `logist_delete` (setores: logistica · Matriz/professor); SELECT `logist_select` (setores: logistica · Matriz/professor); UPDATE `logist_update` (setores: logistica · Matriz/professor)
 
 <a id="t-rescisoes"></a>
 ## rescisoes
@@ -2423,7 +2428,7 @@ Para cada tabela: quem grava (tela, RPC, gatilho, servidor), quem lê, os gatilh
   - `trg_auditoria` — BEFORE INSERT/UPDATE → [set_auditoria_campos](funcoes.md#f-set_auditoria_campos)
   - `trg_carimba_exclusao` — BEFORE UPDATE → [fn_carimba_exclusao](funcoes.md#f-fn_carimba_exclusao)
 - **Ao apagar uma linha daqui:** [itens_devolucao](tabelas.md#t-itens_devolucao).servico_id zera o vínculo (SET NULL); [itens_venda](tabelas.md#t-itens_venda).servico_id zera o vínculo (SET NULL); [pedidos](tabelas.md#t-pedidos).servico_id bloqueia (NO ACTION); [requisicoes](tabelas.md#t-requisicoes).servico_id bloqueia (NO ACTION)
-- **RLS:** ALL `write_servicos` (setores: logistica · gerente da filial · Matriz/professor); SELECT `read_servicos` (qualquer um da própria filial · Matriz/professor)
+- **RLS:** ALL `write_servicos` (setores: logistica · Matriz/professor); SELECT `read_servicos` (qualquer um da própria filial · Matriz/professor)
 
 <a id="t-subcategorias_produto"></a>
 ## subcategorias_produto
@@ -2437,7 +2442,7 @@ Para cada tabela: quem grava (tela, RPC, gatilho, servidor), quem lê, os gatilh
   - `trg_taxonomia_padrao_protege` — BEFORE INSERT/UPDATE/DELETE → [fn_taxonomia_padrao_protege](funcoes.md#f-fn_taxonomia_padrao_protege)
 - **Ao apagar uma linha daqui:** [produtos](tabelas.md#t-produtos).subcategoria_id zera o vínculo (SET NULL)
 - **Aponta para:** categoria_id → [categorias_produto](tabelas.md#t-categorias_produto)
-- **RLS:** ALL `subcategorias_write` (setores: compras, logistica · gerente da filial · Matriz/professor); SELECT `subcategorias_select` (Matriz/professor)
+- **RLS:** ALL `subcategorias_write` (setores: compras, logistica · Matriz/professor); SELECT `subcategorias_select` (Matriz/professor)
 
 <a id="t-tarefas"></a>
 ## tarefas
@@ -2528,11 +2533,12 @@ Para cada tabela: quem grava (tela, RPC, gatilho, servidor), quem lê, os gatilh
 - **Telas que gravam via RPC:** [Recursos Humanos › Desligamento](telas.md#s-rh-desligamento), [Recursos Humanos › Mandatos](telas.md#s-rh-mandatos)
 - **RPCs que gravam:** [_aplicar_desligado_em](funcoes.md#f-_aplicar_desligado_em), [atualizar_foto_usuario](funcoes.md#f-atualizar_foto_usuario), [encerrar_mandato](funcoes.md#f-encerrar_mandato), [nomear_mandato](funcoes.md#f-nomear_mandato), [resetar_geral_admin](funcoes.md#f-resetar_geral_admin)
 - **Servidor (api/) grava:** `api/users.ts`
-- **Telas que leem:** [Análise com IA](telas.md#s-analise-ia), [Atividade da aula](telas.md#s-aula-atividade), [Modo Aula](telas.md#s-aula-modo), [Central de Avaliação](telas.md#s-avaliacoes), [Matriz › Briefing Diário](telas.md#s-briefing-diario), [Cadastros › Produtos](telas.md#s-cadastros-produtos), [Catálogo](telas.md#s-catalogo-produtos), [Central tempo *(rota central-tempo)*](telas.md#s-central-tempo), [Compras › Cotações](telas.md#s-compras-cotações), [Compras › Requisições de Compra](telas.md#s-compras-requisiçõesdecompra), [Contratos](telas.md#s-contratos), [Crachá Virtual](telas.md#s-cracha-virtual), [Dashboard](telas.md#s-dashboard), [Demandas](telas.md#s-demandas), [Demandas conselho *(rota demandas-conselho)*](telas.md#s-demandas-conselho), [Demandas metas *(rota demandas-metas)*](telas.md#s-demandas-metas), [Documentos](telas.md#s-documentos), [Empresa › Filiais](telas.md#s-empresa-filiais), [Estoque › Liberar Requisições](telas.md#s-estoque-liberarrequisições), [Estoque › Movimentações](telas.md#s-estoque-movimentações), [Estoque › Pedidos de Venda](telas.md#s-estoque-pedidosdevenda), [Feedback & Requerimentos](telas.md#s-feedback-org), [Financeiro › Alçadas](telas.md#s-financeiro-alçadas), [Financeiro › Aprovações de Cotação](telas.md#s-financeiro-aprovaçõesdecotação), [Financeiro › Aprovações de Orçamento](telas.md#s-financeiro-aprovaçõesdeorçamento), [Financeiro › Caixa / Bancos](telas.md#s-financeiro-caixabancos), [Financeiro › Capital](telas.md#s-financeiro-capital), [Financeiro › Conciliação da Maquininha](telas.md#s-financeiro-conciliaçãodamaquininha), [Financeiro › Controle de Caixa](telas.md#s-financeiro-controledecaixa), [Financeiro › Gerenciamento](telas.md#s-financeiro-gerenciamento), [Financeiro › Notas Emitidas](telas.md#s-financeiro-notasemitidas), [Financeiro › Patrimônio](telas.md#s-financeiro-patrimônio), [Financeiro › Pedidos de Venda](telas.md#s-financeiro-pedidosdevenda), [Financeiro › Rateioadministrativo *(rota financeiro-rateioadministrativo)*](telas.md#s-financeiro-rateioadministrativo), [Financeiro › Recibos de Vendas](telas.md#s-financeiro-recibosdevendas), [Início](telas.md#s-inicio), [Marketing › Calendário](telas.md#s-marketing-calendário), [Marketing › Campanhas](telas.md#s-marketing-campanhas), [Marketing › Cupons](telas.md#s-marketing-cupons), [Marketing › Promoções](telas.md#s-marketing-promoções), [Marketing › Redes Sociais](telas.md#s-marketing-redessociais), [Matriz avaliacoes *(rota matriz-avaliacoes)*](telas.md#s-matriz-avaliacoes), [Capital](telas.md#s-matriz-capital), [Competição](telas.md#s-matriz-competicao), [Conteúdo](telas.md#s-matriz-conteudo), [Max Show](telas.md#s-max-show), [Max work show *(rota max-work-show)*](telas.md#s-max-work-show), [Mesa gestor *(rota mesa-gestor)*](telas.md#s-mesa-gestor), [Metas *(rota metas)*](telas.md#s-metas), [Meu Crachá](telas.md#s-meu-cracha), [Minhas pesquisas *(rota minhas-pesquisas)*](telas.md#s-minhas-pesquisas), [Matriz › Painel de BI](telas.md#s-painel-bi), [Pendências](telas.md#s-pendencias), [Requisições › Aprovações](telas.md#s-requisicoes-aprovações), [Requisições › Do Setor](telas.md#s-requisicoes-dosetor), [Recursos Humanos › Afastamentos](telas.md#s-rh-afastamentos), [Recursos Humanos › Desligamento](telas.md#s-rh-desligamento), [Recursos Humanos › Férias](telas.md#s-rh-férias), [Recursos Humanos › Folha de Pagamento](telas.md#s-rh-folhadepagamento), [Recursos Humanos › Funcionários](telas.md#s-rh-funcionários), [Recursos Humanos › Mandatos](telas.md#s-rh-mandatos), [Recursos Humanos › Pesquisas](telas.md#s-rh-pesquisas), [Recursos Humanos › Recrutamento e Seleção](telas.md#s-rh-recrutamentoeseleção), [Recursos Humanos › Registro de Ponto](telas.md#s-rh-registrodeponto), [Recursos Humanos › Treinamentos](telas.md#s-rh-treinamentos), [Sessões Gerais](telas.md#s-sessoes-gerais), [TI & Suporte › Desenvolvimento com IA](telas.md#s-ti-desenvolvimentocomia), [TI & Suporte › Relógiodasmáquinas *(rota ti-relógiodasmáquinas)*](telas.md#s-ti-relógiodasmáquinas), [Usuários](telas.md#s-usuarios), [Matriz › Governança › Cliente Especial](telas.md#s-vendas-clienteespecial), [Vendas › Devoluções](telas.md#s-vendas-devoluções), [Vendas › Orçamentos](telas.md#s-vendas-orçamentos), [Vendas › PDV](telas.md#s-vendas-pdv), [Vendas › Pedidos de Venda](telas.md#s-vendas-pedidosdevenda)
-- **RPCs que leem:** [_aplicar_desligado_em](funcoes.md#f-_aplicar_desligado_em), [_assert_ciclo_tarefa_avaliador](funcoes.md#f-_assert_ciclo_tarefa_avaliador), [_assert_ciclo_tarefa_gestor](funcoes.md#f-_assert_ciclo_tarefa_gestor), [_assert_matriz_admin](funcoes.md#f-_assert_matriz_admin), [_assert_matriz_tarefa_gestor](funcoes.md#f-_assert_matriz_tarefa_gestor), [_assert_pode_avaliar_ciclo_tarefa](funcoes.md#f-_assert_pode_avaliar_ciclo_tarefa), [_calcular_placar_competicao_raw](funcoes.md#f-_calcular_placar_competicao_raw), [_competicao_votos_validos](funcoes.md#f-_competicao_votos_validos), [_funcionario_da_conta](funcoes.md#f-_funcionario_da_conta), [_funcionario_desligado](funcoes.md#f-_funcionario_desligado), [_maxbank_pode_reverter](funcoes.md#f-_maxbank_pode_reverter), [_pendencia_responsaveis](funcoes.md#f-_pendencia_responsaveis), [abrir_vaga](funcoes.md#f-abrir_vaga), [abrir_vaga_interna](funcoes.md#f-abrir_vaga_interna), [alternar_simulacao_perda](funcoes.md#f-alternar_simulacao_perda), [analisar_promocao_financeiro](funcoes.md#f-analisar_promocao_financeiro), [antecipar_parcela_emprestimo](funcoes.md#f-antecipar_parcela_emprestimo), [apagar_emprestimo](funcoes.md#f-apagar_emprestimo), [apagar_meta_estrategica](funcoes.md#f-apagar_meta_estrategica), [aplicar_em_banco](funcoes.md#f-aplicar_em_banco), [aplicar_rateio_administrativo](funcoes.md#f-aplicar_rateio_administrativo), [aprovar_emprestimo](funcoes.md#f-aprovar_emprestimo), [aprovar_meta_maxbank](funcoes.md#f-aprovar_meta_maxbank), [aprovar_tarefa_tatica](funcoes.md#f-aprovar_tarefa_tatica), [assinar_contrato](funcoes.md#f-assinar_contrato), [atualizar_avaliacao](funcoes.md#f-atualizar_avaliacao), [atualizar_foto_usuario](funcoes.md#f-atualizar_foto_usuario), [auditar_fluxo_compras](funcoes.md#f-auditar_fluxo_compras), [auth_aula_setores](funcoes.md#f-auth_aula_setores), [auth_desligado](funcoes.md#f-auth_desligado), [auth_is_admin](funcoes.md#f-auth_is_admin), [auth_is_conselho](funcoes.md#f-auth_is_conselho), [auth_registra_frequencia](funcoes.md#f-auth_registra_frequencia), [auth_user_filial](funcoes.md#f-auth_user_filial), [auth_user_role](funcoes.md#f-auth_user_role), [auth_user_setor](funcoes.md#f-auth_user_setor), [auth_user_setores](funcoes.md#f-auth_user_setores), [avaliar_item_matriz](funcoes.md#f-avaliar_item_matriz), [buscar_destinatario_pix](funcoes.md#f-buscar_destinatario_pix), [calcular_placar_competicao](funcoes.md#f-calcular_placar_competicao), [calcular_placar_padrao](funcoes.md#f-calcular_placar_padrao), [cancelar_pedido_online](funcoes.md#f-cancelar_pedido_online), [coletar_textos_fluxo](funcoes.md#f-coletar_textos_fluxo), [conceder_mutuo_capital](funcoes.md#f-conceder_mutuo_capital), [concluir_meta_estrategica](funcoes.md#f-concluir_meta_estrategica), [confirmar_fechamento_caixa](funcoes.md#f-confirmar_fechamento_caixa), [confirmar_pedido_online](funcoes.md#f-confirmar_pedido_online), [contar_votantes_matriz](funcoes.md#f-contar_votantes_matriz), [contrato_representa](funcoes.md#f-contrato_representa), [convocar_para_vaga](funcoes.md#f-convocar_para_vaga), [corrigir_requisicao_compra](funcoes.md#f-corrigir_requisicao_compra), [criar_aviso_matriz](funcoes.md#f-criar_aviso_matriz), [criar_devolucao_venda](funcoes.md#f-criar_devolucao_venda), [criar_matriz_tarefa](funcoes.md#f-criar_matriz_tarefa), [criar_meta_estrategica](funcoes.md#f-criar_meta_estrategica), [criar_meta_maxbank](funcoes.md#f-criar_meta_maxbank), [criar_requisicao_compra](funcoes.md#f-criar_requisicao_compra), [criar_requisicao_estoque](funcoes.md#f-criar_requisicao_estoque), [criar_requisicoes_compra_lote](funcoes.md#f-criar_requisicoes_compra_lote), [criar_tarefa_tatica](funcoes.md#f-criar_tarefa_tatica), [dar_ciencia_atividade](funcoes.md#f-dar_ciencia_atividade), [dar_ciencia_aviso](funcoes.md#f-dar_ciencia_aviso), [dar_feedback_arte](funcoes.md#f-dar_feedback_arte), [decidir_desligamento](funcoes.md#f-decidir_desligamento), [decidir_justificativa_falta](funcoes.md#f-decidir_justificativa_falta), [decidir_requisicao_compra](funcoes.md#f-decidir_requisicao_compra), [decidir_vaga](funcoes.md#f-decidir_vaga), [definir_avaliadores_ciclo_tarefa](funcoes.md#f-definir_avaliadores_ciclo_tarefa), [demitir_funcionario](funcoes.md#f-demitir_funcionario), [descartar_tarefa_briefing](funcoes.md#f-descartar_tarefa_briefing), [devolver_cotacao_para_correcao](funcoes.md#f-devolver_cotacao_para_correcao), [distribuir_lucro_filial](funcoes.md#f-distribuir_lucro_filial), [documento_alcanca](funcoes.md#f-documento_alcanca), [documento_pode_emitir](funcoes.md#f-documento_pode_emitir), [editar_emprestimo](funcoes.md#f-editar_emprestimo), [editar_meta_estrategica](funcoes.md#f-editar_meta_estrategica), [editar_tarefa_briefing](funcoes.md#f-editar_tarefa_briefing), [efetivar_contratacao](funcoes.md#f-efetivar_contratacao), [efetivar_promocao](funcoes.md#f-efetivar_promocao), [eh_perfil_admin](funcoes.md#f-eh_perfil_admin), [encerrar_contrato](funcoes.md#f-encerrar_contrato), [encerrar_mandato](funcoes.md#f-encerrar_mandato), [encerrar_meta_estrategica](funcoes.md#f-encerrar_meta_estrategica), [encerrar_promocao](funcoes.md#f-encerrar_promocao), [encerrar_tarefa_tatica](funcoes.md#f-encerrar_tarefa_tatica), [enviar_justificativa_falta](funcoes.md#f-enviar_justificativa_falta), [estornar_aporte_capital](funcoes.md#f-estornar_aporte_capital), [excluir_briefing_cascade](funcoes.md#f-excluir_briefing_cascade), [fechar_caixa_conferido](funcoes.md#f-fechar_caixa_conferido), [fechar_mes_aplicacoes](funcoes.md#f-fechar_mes_aplicacoes), [frequencia_filiais_competicao](funcoes.md#f-frequencia_filiais_competicao), [liberar_ciclo_tarefa](funcoes.md#f-liberar_ciclo_tarefa), [liberar_requisicao_estoque](funcoes.md#f-liberar_requisicao_estoque), [liberar_trabalho_forcado](funcoes.md#f-liberar_trabalho_forcado), [listar_pendencias](funcoes.md#f-listar_pendencias), [listar_pessoas_treinamento_ia](funcoes.md#f-listar_pessoas_treinamento_ia), [listar_vitrine_candidatos](funcoes.md#f-listar_vitrine_candidatos), [lixeira_listar](funcoes.md#f-lixeira_listar), [mapa_fluxo_compras](funcoes.md#f-mapa_fluxo_compras), [marcar_acesso_ajustado](funcoes.md#f-marcar_acesso_ajustado), [marcar_documento_lido](funcoes.md#f-marcar_documento_lido), [marcar_tarefa_aula](funcoes.md#f-marcar_tarefa_aula), [marcar_vitrine](funcoes.md#f-marcar_vitrine), [max_work_is_docente](funcoes.md#f-max_work_is_docente), [media_participantes_ciclo](funcoes.md#f-media_participantes_ciclo), [media_participantes_competicao](funcoes.md#f-media_participantes_competicao), [minha_frequencia](funcoes.md#f-minha_frequencia), [minha_mesa](funcoes.md#f-minha_mesa), [mover_candidatura](funcoes.md#f-mover_candidatura), [negar_emprestimo](funcoes.md#f-negar_emprestimo), [nomear_mandato](funcoes.md#f-nomear_mandato), [parecer_justificativa_falta](funcoes.md#f-parecer_justificativa_falta), [participantes_sem_nota_competicao](funcoes.md#f-participantes_sem_nota_competicao), [pausar_meta_estrategica](funcoes.md#f-pausar_meta_estrategica), [pausar_tarefa_tatica](funcoes.md#f-pausar_tarefa_tatica), [perfil_filial](funcoes.md#f-perfil_filial), [progresso_avaliacao_matriz](funcoes.md#f-progresso_avaliacao_matriz), [progresso_votacao_competicao](funcoes.md#f-progresso_votacao_competicao), [publicar_atividade_aula](funcoes.md#f-publicar_atividade_aula), [publicar_documento](funcoes.md#f-publicar_documento), [publicar_meta_estrategica](funcoes.md#f-publicar_meta_estrategica), [publicar_tarefa_tatica](funcoes.md#f-publicar_tarefa_tatica), [reabrir_caixa](funcoes.md#f-reabrir_caixa), [reabrir_meta_estrategica](funcoes.md#f-reabrir_meta_estrategica), [reabrir_requisicao](funcoes.md#f-reabrir_requisicao), [reabrir_requisicao_estoque](funcoes.md#f-reabrir_requisicao_estoque), [reabrir_tarefa_tatica](funcoes.md#f-reabrir_tarefa_tatica), [recusar_contrato](funcoes.md#f-recusar_contrato), [registrar_aporte_capital](funcoes.md#f-registrar_aporte_capital), [registrar_candidatura](funcoes.md#f-registrar_candidatura), [registrar_candidatura_interna](funcoes.md#f-registrar_candidatura_interna), [registrar_movimentacao_caixa](funcoes.md#f-registrar_movimentacao_caixa), [registrar_ponto_manual](funcoes.md#f-registrar_ponto_manual), [registrar_relogio_maquina](funcoes.md#f-registrar_relogio_maquina), [registrar_voto](funcoes.md#f-registrar_voto), [rejeitar_meta_maxbank](funcoes.md#f-rejeitar_meta_maxbank), [rejeitar_tarefa_tatica](funcoes.md#f-rejeitar_tarefa_tatica), [remover_avaliacao_matriz](funcoes.md#f-remover_avaliacao_matriz), [reservar_trabalho](funcoes.md#f-reservar_trabalho), [resetar_dados_da_filial](funcoes.md#f-resetar_dados_da_filial), [resetar_dados_operacionais](funcoes.md#f-resetar_dados_operacionais), [resetar_geral_admin](funcoes.md#f-resetar_geral_admin), [resgatar_aplicacao](funcoes.md#f-resgatar_aplicacao), [responder_pesquisa](funcoes.md#f-responder_pesquisa), [revisar_risco](funcoes.md#f-revisar_risco), [separar_pedido_venda](funcoes.md#f-separar_pedido_venda), [set_maxbank_threshold](funcoes.md#f-set_maxbank_threshold), [solicitar_desligamento](funcoes.md#f-solicitar_desligamento), [solicitar_fechamento_caixa](funcoes.md#f-solicitar_fechamento_caixa), [suspender_caixa](funcoes.md#f-suspender_caixa), [transferir_pix_maxbank](funcoes.md#f-transferir_pix_maxbank), [usuarios_visiveis_para_auditoria](funcoes.md#f-usuarios_visiveis_para_auditoria), [vincular_acesso_funcionario](funcoes.md#f-vincular_acesso_funcionario)
+- **Telas que leem:** [Análise com IA](telas.md#s-analise-ia), [Atividade da aula](telas.md#s-aula-atividade), [Modo Aula](telas.md#s-aula-modo), [Central de Avaliação](telas.md#s-avaliacoes), [Matriz › Briefing Diário](telas.md#s-briefing-diario), [Cadastros › Produtos](telas.md#s-cadastros-produtos), [Catálogo](telas.md#s-catalogo-produtos), [Central tempo *(rota central-tempo)*](telas.md#s-central-tempo), [Compras › Cotações](telas.md#s-compras-cotações), [Compras › Requisições de Compra](telas.md#s-compras-requisiçõesdecompra), [Contratos](telas.md#s-contratos), [Crachá Virtual](telas.md#s-cracha-virtual), [Dashboard](telas.md#s-dashboard), [Demandas](telas.md#s-demandas), [Demandas conselho *(rota demandas-conselho)*](telas.md#s-demandas-conselho), [Demandas metas *(rota demandas-metas)*](telas.md#s-demandas-metas), [Documentos](telas.md#s-documentos), [Empresa › Filiais](telas.md#s-empresa-filiais), [Estoque › Liberar Requisições](telas.md#s-estoque-liberarrequisições), [Estoque › Movimentações](telas.md#s-estoque-movimentações), [Estoque › Pedidos de Venda](telas.md#s-estoque-pedidosdevenda), [Feedback & Requerimentos](telas.md#s-feedback-org), [Financeiro › Alçadas](telas.md#s-financeiro-alçadas), [Financeiro › Aprovações de Cotação](telas.md#s-financeiro-aprovaçõesdecotação), [Financeiro › Aprovações de Orçamento](telas.md#s-financeiro-aprovaçõesdeorçamento), [Financeiro › Caixa / Bancos](telas.md#s-financeiro-caixabancos), [Financeiro › Capital](telas.md#s-financeiro-capital), [Financeiro › Conciliação da Maquininha](telas.md#s-financeiro-conciliaçãodamaquininha), [Financeiro › Controle de Caixa](telas.md#s-financeiro-controledecaixa), [Financeiro › Gerenciamento](telas.md#s-financeiro-gerenciamento), [Financeiro › Notas Emitidas](telas.md#s-financeiro-notasemitidas), [Financeiro › Patrimônio](telas.md#s-financeiro-patrimônio), [Financeiro › Pedidos de Venda](telas.md#s-financeiro-pedidosdevenda), [Financeiro › Rateioadministrativo *(rota financeiro-rateioadministrativo)*](telas.md#s-financeiro-rateioadministrativo), [Financeiro › Recibos de Vendas](telas.md#s-financeiro-recibosdevendas), [Início](telas.md#s-inicio), [Marketing › Calendário](telas.md#s-marketing-calendário), [Marketing › Campanhas](telas.md#s-marketing-campanhas), [Marketing › Cupons](telas.md#s-marketing-cupons), [Marketing › Promoções](telas.md#s-marketing-promoções), [Marketing › Redes Sociais](telas.md#s-marketing-redessociais), [Matriz avaliacoes *(rota matriz-avaliacoes)*](telas.md#s-matriz-avaliacoes), [Capital](telas.md#s-matriz-capital), [Competição](telas.md#s-matriz-competicao), [Conteúdo](telas.md#s-matriz-conteudo), [Max Show](telas.md#s-max-show), [Max work show *(rota max-work-show)*](telas.md#s-max-work-show), [Mesa gestor *(rota mesa-gestor)*](telas.md#s-mesa-gestor), [Metas *(rota metas)*](telas.md#s-metas), [Meu Crachá](telas.md#s-meu-cracha), [Minhas pesquisas *(rota minhas-pesquisas)*](telas.md#s-minhas-pesquisas), [Matriz › Painel de BI](telas.md#s-painel-bi), [Pendências](telas.md#s-pendencias), [Requisições › Aprovações](telas.md#s-requisicoes-aprovações), [Requisições › Do Setor](telas.md#s-requisicoes-dosetor), [Recursos Humanos › Afastamentos](telas.md#s-rh-afastamentos), [Recursos Humanos › Desligamento](telas.md#s-rh-desligamento), [Recursos Humanos › Férias](telas.md#s-rh-férias), [Recursos Humanos › Folha de Pagamento](telas.md#s-rh-folhadepagamento), [Recursos Humanos › Funcionários](telas.md#s-rh-funcionários), [Recursos Humanos › Mandatos](telas.md#s-rh-mandatos), [Recursos Humanos › Pesquisas](telas.md#s-rh-pesquisas), [Recursos Humanos › Recrutamento e Seleção](telas.md#s-rh-recrutamentoeseleção), [Recursos Humanos › Registro de Ponto](telas.md#s-rh-registrodeponto), [Recursos Humanos › Treinamentos](telas.md#s-rh-treinamentos), [Sessões Gerais](telas.md#s-sessoes-gerais), [TI & Suporte › Desenvolvimento com IA](telas.md#s-ti-desenvolvimentocomia), [TI & Suporte › Relógiodasmáquinas *(rota ti-relógiodasmáquinas)*](telas.md#s-ti-relógiodasmáquinas), [Usuários](telas.md#s-usuarios), [Matriz › Governança › Cliente Especial](telas.md#s-vendas-clienteespecial), [Vendas › Devoluções](telas.md#s-vendas-devoluções), [Vendas › Orçamentos](telas.md#s-vendas-orçamentos), [Vendas › PDV](telas.md#s-vendas-pdv), [Vendas › Pedidos de Venda](telas.md#s-vendas-pedidosdevenda), [Vendas › Pedidos Online](telas.md#s-vendas-pedidosonline)
+- **RPCs que leem:** [_aplicar_desligado_em](funcoes.md#f-_aplicar_desligado_em), [_assert_ciclo_tarefa_avaliador](funcoes.md#f-_assert_ciclo_tarefa_avaliador), [_assert_ciclo_tarefa_gestor](funcoes.md#f-_assert_ciclo_tarefa_gestor), [_assert_matriz_admin](funcoes.md#f-_assert_matriz_admin), [_assert_matriz_tarefa_gestor](funcoes.md#f-_assert_matriz_tarefa_gestor), [_assert_pode_avaliar_ciclo_tarefa](funcoes.md#f-_assert_pode_avaliar_ciclo_tarefa), [_calcular_placar_competicao_raw](funcoes.md#f-_calcular_placar_competicao_raw), [_competicao_votos_validos](funcoes.md#f-_competicao_votos_validos), [_funcionario_da_conta](funcoes.md#f-_funcionario_da_conta), [_funcionario_desligado](funcoes.md#f-_funcionario_desligado), [_maxbank_pode_reverter](funcoes.md#f-_maxbank_pode_reverter), [_pendencia_responsaveis](funcoes.md#f-_pendencia_responsaveis), [abrir_vaga](funcoes.md#f-abrir_vaga), [abrir_vaga_interna](funcoes.md#f-abrir_vaga_interna), [alternar_simulacao_perda](funcoes.md#f-alternar_simulacao_perda), [analisar_promocao_financeiro](funcoes.md#f-analisar_promocao_financeiro), [antecipar_parcela_emprestimo](funcoes.md#f-antecipar_parcela_emprestimo), [apagar_emprestimo](funcoes.md#f-apagar_emprestimo), [apagar_meta_estrategica](funcoes.md#f-apagar_meta_estrategica), [aplicar_em_banco](funcoes.md#f-aplicar_em_banco), [aplicar_rateio_administrativo](funcoes.md#f-aplicar_rateio_administrativo), [aprovar_emprestimo](funcoes.md#f-aprovar_emprestimo), [aprovar_meta_maxbank](funcoes.md#f-aprovar_meta_maxbank), [aprovar_tarefa_tatica](funcoes.md#f-aprovar_tarefa_tatica), [assinar_contrato](funcoes.md#f-assinar_contrato), [atualizar_avaliacao](funcoes.md#f-atualizar_avaliacao), [atualizar_foto_usuario](funcoes.md#f-atualizar_foto_usuario), [auditar_fluxo_compras](funcoes.md#f-auditar_fluxo_compras), [auth_aula_setores](funcoes.md#f-auth_aula_setores), [auth_desligado](funcoes.md#f-auth_desligado), [auth_e_gerencia](funcoes.md#f-auth_e_gerencia), [auth_e_gerente_assistente](funcoes.md#f-auth_e_gerente_assistente), [auth_head_comunicacao_da](funcoes.md#f-auth_head_comunicacao_da), [auth_is_admin](funcoes.md#f-auth_is_admin), [auth_is_conselho](funcoes.md#f-auth_is_conselho), [auth_registra_frequencia](funcoes.md#f-auth_registra_frequencia), [auth_user_filial](funcoes.md#f-auth_user_filial), [auth_user_role](funcoes.md#f-auth_user_role), [auth_user_setor](funcoes.md#f-auth_user_setor), [auth_user_setores](funcoes.md#f-auth_user_setores), [avaliar_item_matriz](funcoes.md#f-avaliar_item_matriz), [buscar_destinatario_pix](funcoes.md#f-buscar_destinatario_pix), [calcular_placar_competicao](funcoes.md#f-calcular_placar_competicao), [calcular_placar_padrao](funcoes.md#f-calcular_placar_padrao), [cancelar_pedido_online](funcoes.md#f-cancelar_pedido_online), [coletar_textos_fluxo](funcoes.md#f-coletar_textos_fluxo), [conceder_mutuo_capital](funcoes.md#f-conceder_mutuo_capital), [concluir_meta_estrategica](funcoes.md#f-concluir_meta_estrategica), [confirmar_fechamento_caixa](funcoes.md#f-confirmar_fechamento_caixa), [confirmar_pedido_online](funcoes.md#f-confirmar_pedido_online), [contar_votantes_matriz](funcoes.md#f-contar_votantes_matriz), [contrato_representa](funcoes.md#f-contrato_representa), [convocar_para_vaga](funcoes.md#f-convocar_para_vaga), [corrigir_requisicao_compra](funcoes.md#f-corrigir_requisicao_compra), [criar_aviso_matriz](funcoes.md#f-criar_aviso_matriz), [criar_devolucao_venda](funcoes.md#f-criar_devolucao_venda), [criar_matriz_tarefa](funcoes.md#f-criar_matriz_tarefa), [criar_meta_estrategica](funcoes.md#f-criar_meta_estrategica), [criar_meta_maxbank](funcoes.md#f-criar_meta_maxbank), [criar_requisicao_compra](funcoes.md#f-criar_requisicao_compra), [criar_requisicao_estoque](funcoes.md#f-criar_requisicao_estoque), [criar_requisicoes_compra_lote](funcoes.md#f-criar_requisicoes_compra_lote), [criar_tarefa_tatica](funcoes.md#f-criar_tarefa_tatica), [dar_ciencia_atividade](funcoes.md#f-dar_ciencia_atividade), [dar_ciencia_aviso](funcoes.md#f-dar_ciencia_aviso), [dar_feedback_arte](funcoes.md#f-dar_feedback_arte), [decidir_conteudo](funcoes.md#f-decidir_conteudo), [decidir_desligamento](funcoes.md#f-decidir_desligamento), [decidir_justificativa_falta](funcoes.md#f-decidir_justificativa_falta), [decidir_requisicao_compra](funcoes.md#f-decidir_requisicao_compra), [decidir_vaga](funcoes.md#f-decidir_vaga), [definir_avaliadores_ciclo_tarefa](funcoes.md#f-definir_avaliadores_ciclo_tarefa), [demitir_funcionario](funcoes.md#f-demitir_funcionario), [descartar_tarefa_briefing](funcoes.md#f-descartar_tarefa_briefing), [devolver_cotacao_para_correcao](funcoes.md#f-devolver_cotacao_para_correcao), [distribuir_lucro_filial](funcoes.md#f-distribuir_lucro_filial), [documento_alcanca](funcoes.md#f-documento_alcanca), [documento_pode_emitir](funcoes.md#f-documento_pode_emitir), [editar_emprestimo](funcoes.md#f-editar_emprestimo), [editar_meta_estrategica](funcoes.md#f-editar_meta_estrategica), [editar_tarefa_briefing](funcoes.md#f-editar_tarefa_briefing), [efetivar_contratacao](funcoes.md#f-efetivar_contratacao), [efetivar_promocao](funcoes.md#f-efetivar_promocao), [eh_perfil_admin](funcoes.md#f-eh_perfil_admin), [encerrar_contrato](funcoes.md#f-encerrar_contrato), [encerrar_mandato](funcoes.md#f-encerrar_mandato), [encerrar_meta_estrategica](funcoes.md#f-encerrar_meta_estrategica), [encerrar_promocao](funcoes.md#f-encerrar_promocao), [encerrar_tarefa_tatica](funcoes.md#f-encerrar_tarefa_tatica), [enviar_justificativa_falta](funcoes.md#f-enviar_justificativa_falta), [estornar_aporte_capital](funcoes.md#f-estornar_aporte_capital), [excluir_briefing_cascade](funcoes.md#f-excluir_briefing_cascade), [fechar_caixa_conferido](funcoes.md#f-fechar_caixa_conferido), [fechar_mes_aplicacoes](funcoes.md#f-fechar_mes_aplicacoes), [frequencia_filiais_competicao](funcoes.md#f-frequencia_filiais_competicao), [liberar_ciclo_tarefa](funcoes.md#f-liberar_ciclo_tarefa), [liberar_requisicao_estoque](funcoes.md#f-liberar_requisicao_estoque), [liberar_trabalho_forcado](funcoes.md#f-liberar_trabalho_forcado), [listar_pendencias](funcoes.md#f-listar_pendencias), [listar_pessoas_treinamento_ia](funcoes.md#f-listar_pessoas_treinamento_ia), [listar_vitrine_candidatos](funcoes.md#f-listar_vitrine_candidatos), [lixeira_listar](funcoes.md#f-lixeira_listar), [mapa_fluxo_compras](funcoes.md#f-mapa_fluxo_compras), [marcar_acesso_ajustado](funcoes.md#f-marcar_acesso_ajustado), [marcar_documento_lido](funcoes.md#f-marcar_documento_lido), [marcar_tarefa_aula](funcoes.md#f-marcar_tarefa_aula), [marcar_vitrine](funcoes.md#f-marcar_vitrine), [max_work_is_docente](funcoes.md#f-max_work_is_docente), [media_participantes_ciclo](funcoes.md#f-media_participantes_ciclo), [media_participantes_competicao](funcoes.md#f-media_participantes_competicao), [minha_frequencia](funcoes.md#f-minha_frequencia), [minha_mesa](funcoes.md#f-minha_mesa), [mover_candidatura](funcoes.md#f-mover_candidatura), [negar_emprestimo](funcoes.md#f-negar_emprestimo), [nomear_mandato](funcoes.md#f-nomear_mandato), [parecer_justificativa_falta](funcoes.md#f-parecer_justificativa_falta), [participantes_sem_nota_competicao](funcoes.md#f-participantes_sem_nota_competicao), [pausar_meta_estrategica](funcoes.md#f-pausar_meta_estrategica), [pausar_tarefa_tatica](funcoes.md#f-pausar_tarefa_tatica), [perfil_filial](funcoes.md#f-perfil_filial), [progresso_avaliacao_matriz](funcoes.md#f-progresso_avaliacao_matriz), [progresso_votacao_competicao](funcoes.md#f-progresso_votacao_competicao), [publicar_atividade_aula](funcoes.md#f-publicar_atividade_aula), [publicar_documento](funcoes.md#f-publicar_documento), [publicar_meta_estrategica](funcoes.md#f-publicar_meta_estrategica), [publicar_tarefa_tatica](funcoes.md#f-publicar_tarefa_tatica), [reabrir_caixa](funcoes.md#f-reabrir_caixa), [reabrir_meta_estrategica](funcoes.md#f-reabrir_meta_estrategica), [reabrir_requisicao](funcoes.md#f-reabrir_requisicao), [reabrir_requisicao_estoque](funcoes.md#f-reabrir_requisicao_estoque), [reabrir_tarefa_tatica](funcoes.md#f-reabrir_tarefa_tatica), [recusar_contrato](funcoes.md#f-recusar_contrato), [registrar_aporte_capital](funcoes.md#f-registrar_aporte_capital), [registrar_candidatura](funcoes.md#f-registrar_candidatura), [registrar_candidatura_interna](funcoes.md#f-registrar_candidatura_interna), [registrar_movimentacao_caixa](funcoes.md#f-registrar_movimentacao_caixa), [registrar_ponto_manual](funcoes.md#f-registrar_ponto_manual), [registrar_relogio_maquina](funcoes.md#f-registrar_relogio_maquina), [registrar_voto](funcoes.md#f-registrar_voto), [rejeitar_meta_maxbank](funcoes.md#f-rejeitar_meta_maxbank), [rejeitar_tarefa_tatica](funcoes.md#f-rejeitar_tarefa_tatica), [remover_avaliacao_matriz](funcoes.md#f-remover_avaliacao_matriz), [reservar_trabalho](funcoes.md#f-reservar_trabalho), [resetar_dados_da_filial](funcoes.md#f-resetar_dados_da_filial), [resetar_dados_operacionais](funcoes.md#f-resetar_dados_operacionais), [resetar_geral_admin](funcoes.md#f-resetar_geral_admin), [resgatar_aplicacao](funcoes.md#f-resgatar_aplicacao), [responder_pesquisa](funcoes.md#f-responder_pesquisa), [revisar_risco](funcoes.md#f-revisar_risco), [separar_pedido_venda](funcoes.md#f-separar_pedido_venda), [set_maxbank_threshold](funcoes.md#f-set_maxbank_threshold), [solicitar_desligamento](funcoes.md#f-solicitar_desligamento), [solicitar_fechamento_caixa](funcoes.md#f-solicitar_fechamento_caixa), [suspender_caixa](funcoes.md#f-suspender_caixa), [transferir_pix_maxbank](funcoes.md#f-transferir_pix_maxbank), [usuarios_visiveis_para_auditoria](funcoes.md#f-usuarios_visiveis_para_auditoria), [vincular_acesso_funcionario](funcoes.md#f-vincular_acesso_funcionario)
 - **Servidor (api/) lê:** `api/ai-aula-atividade.ts`, `api/users.ts`
 - **Gatilhos nesta tabela:**
   - `trg_perfil_desligado_sincroniza_tarefas` — AFTER UPDATE → [fn_perfil_desligado_sincroniza_tarefas](funcoes.md#f-fn_perfil_desligado_sincroniza_tarefas) · grava em [avaliacoes_matriz](tabelas.md#t-avaliacoes_matriz), [ciclo_tarefa_avaliacoes](tabelas.md#t-ciclo_tarefa_avaliacoes), [ciclo_tarefa_participantes](tabelas.md#t-ciclo_tarefa_participantes), [funcionario_tarefas_suspensas](tabelas.md#t-funcionario_tarefas_suspensas), [matriz_tarefa_participantes](tabelas.md#t-matriz_tarefa_participantes)
+  - `trg_user_profile_funcoes_normaliza` — BEFORE INSERT/UPDATE → [fn_user_profile_funcoes_normaliza](funcoes.md#f-fn_user_profile_funcoes_normaliza)
   - `trg_user_profiles_bloquear_privesc` — BEFORE UPDATE → [user_profiles_bloquear_privesc](funcoes.md#f-user_profiles_bloquear_privesc)
   - `trg_user_profiles_conselho_e_da_matriz` — BEFORE INSERT/UPDATE → [fn_conselho_e_da_matriz](funcoes.md#f-fn_conselho_e_da_matriz)
   - `trg_user_profiles_maxbank_conta` — AFTER INSERT → [criar_maxbank_conta_para_colaborador](funcoes.md#f-criar_maxbank_conta_para_colaborador) · grava em [maxbank_contas](tabelas.md#t-maxbank_contas)
@@ -2625,7 +2631,7 @@ Para cada tabela: quem grava (tela, RPC, gatilho, servidor), quem lê, os gatilh
   - `trg_auditoria` — BEFORE INSERT/UPDATE → [set_auditoria_campos](funcoes.md#f-set_auditoria_campos)
   - `trg_historico` — AFTER INSERT/UPDATE → [registrar_historico](funcoes.md#f-registrar_historico) · grava em [historico_operacoes](tabelas.md#t-historico_operacoes)
 - **Aponta para:** produto_id → [produtos](tabelas.md#t-produtos); recebimento_id → [recebimentos](tabelas.md#t-recebimentos)
-- **RLS:** ALL `venc_write` (setores: logistica · gerente da filial · Matriz/professor); SELECT `venc_select` (qualquer um da própria filial · Matriz/professor)
+- **RLS:** ALL `venc_write` (setores: logistica · Matriz/professor); SELECT `venc_select` (qualquer um da própria filial · Matriz/professor)
 
 <a id="t-vendas"></a>
 ## vendas
@@ -2657,7 +2663,7 @@ Para cada tabela: quem grava (tela, RPC, gatilho, servidor), quem lê, os gatilh
   -   2. [contas_receber](tabelas.md#t-contas_receber) → [_conta_receber_fecha_pedido_venda](funcoes.md#f-_conta_receber_fecha_pedido_venda) → [pedidos_venda](tabelas.md#t-pedidos_venda)
 - **Ao apagar uma linha daqui:** [contas_receber](tabelas.md#t-contas_receber).venda_id zera o vínculo (SET NULL); [devolucoes](tabelas.md#t-devolucoes).venda_id bloqueia (NO ACTION); [itens_venda](tabelas.md#t-itens_venda).venda_id APAGA JUNTO (CASCADE); [notas_emitidas](tabelas.md#t-notas_emitidas).venda_id zera o vínculo (SET NULL); [pedidos_online](tabelas.md#t-pedidos_online).venda_id zera o vínculo (SET NULL); [produto_unidades](tabelas.md#t-produto_unidades).venda_id zera o vínculo (SET NULL); [vendas_pagamentos](tabelas.md#t-vendas_pagamentos).venda_id APAGA JUNTO (CASCADE)
 - **Aponta para:** cliente_id → [clientes](tabelas.md#t-clientes); cupom_id → [marketing_cupons](tabelas.md#t-marketing_cupons); pedido_venda_id → [pedidos_venda](tabelas.md#t-pedidos_venda)
-- **RLS:** ALL `vendas_write` (setores: vendas · gerente da filial · Matriz/professor); SELECT `vendas_select` (setores: financeiro, vendas · gerente da filial · Matriz/professor)
+- **RLS:** ALL `vendas_write` (setores: vendas · Matriz/professor); SELECT `vendas_select` (setores: financeiro, vendas · Matriz/professor)
 
 <a id="t-vendas_pagamentos"></a>
 ## vendas_pagamentos
@@ -2668,7 +2674,7 @@ Para cada tabela: quem grava (tela, RPC, gatilho, servidor), quem lê, os gatilh
 - **Telas que leem:** —
 - **RPCs que leem:** [_taxa_pelo_mix](funcoes.md#f-_taxa_pelo_mix)
 - **Aponta para:** venda_id → [vendas](tabelas.md#t-vendas)
-- **RLS:** SELECT `vendas_pagamentos_select` (setores: financeiro, vendas · gerente da filial · Matriz/professor)
+- **RLS:** SELECT `vendas_pagamentos_select` (setores: financeiro, vendas · Matriz/professor)
 
 <a id="t-vitrine_institucional"></a>
 ## vitrine_institucional

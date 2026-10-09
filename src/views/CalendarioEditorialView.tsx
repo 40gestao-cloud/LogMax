@@ -5,7 +5,7 @@ import { Plus, X, Trash2, Edit3, Calendar, ChevronRight, ExternalLink, Filter, S
 import { useFetchData, dbInsert, dbUpdate, dbDelete } from '../hooks/useSupabaseData';
 import { LoadingSpinner, EmptyState, NeuButtonAccent, CardContador, type TomContador, corDoStatus, ModalFormulario } from '../components/ui';
 import { formatDataHoraBR } from '../lib/dates';
-import { hasSetor } from '../lib/rbac';
+import { hasSetor, isGerencia } from '../lib/rbac';
 import { freshToken, lerJsonDaApi } from '../lib/authFetch';
 import { useConfirm } from '../contexts/ConfirmContext';
 
@@ -21,7 +21,16 @@ const CANAIS = [
   'Outros',
 ] as const;
 
-const STATUS_FLOW = ['Rascunho', 'Agendado', 'Publicado', 'Cancelado'] as const;
+// 'Em aprovação' (migr. 691): o post só fica Agendado quando o Head de
+// Comunicação da unidade aprova (sem Head, a gerência) — Marketing › Aprovações
+// de Conteúdo. O banco recusa Rascunho → Agendado direto.
+const STATUS_FLOW = ['Rascunho', 'Em aprovação', 'Agendado', 'Publicado', 'Cancelado'] as const;
+// O que o formulário oferece: antes da aprovação só se envia ou se guarda; depois
+// dela, só publicar ou cancelar.
+const statusDoForm = (atual?: string | null): readonly string[] =>
+  atual === 'Agendado' || atual === 'Publicado'
+    ? ['Agendado', 'Publicado', 'Cancelado']
+    : ['Rascunho', 'Em aprovação', 'Cancelado'];
 type Status = typeof STATUS_FLOW[number];
 
 const CANAL_BADGE: Record<string, string> = {
@@ -46,6 +55,8 @@ type Post = {
   nome_responsavel: string | null;
   status: Status;
   conteudo: string | null;
+  /** Migr. 691: motivo da reprovação (ou comentário da aprovação). */
+  aprovacao_obs?: string | null;
   link_arte: string | null;
   promocao_id: string | null;
   nome_criador: string | null;
@@ -110,7 +121,7 @@ const CalendarioEditorialViewInner = ({ showToast, profile, filial }: any) => {
   }>(null);
   const [legendaCopiada, setLegendaCopiada] = useState<number | null>(null);
 
-  const canCRUD = hasSetor(profile, 'marketing') || profile?.role === 'gerente';
+  const canCRUD = hasSetor(profile, 'marketing') || isGerencia(profile);
 
   const promocoesAprovadas = useMemo(
     () => (promocoes ?? []).filter((p: any) => p.status === 'Aprovado'),
@@ -166,7 +177,7 @@ const CalendarioEditorialViewInner = ({ showToast, profile, filial }: any) => {
         payload.filial           = filial;
         const created = await dbInsert('/api/marketingcalendarioview', payload);
         setData((prev: any[]) => [created, ...prev]);
-        showToast('Post agendado.', 'success');
+        showToast(payload.status === 'Em aprovação' ? 'Post enviado para aprovação.' : 'Post salvo como rascunho.', 'success');
       }
       resetForm();
     } catch (err: any) {
@@ -177,15 +188,17 @@ const CalendarioEditorialViewInner = ({ showToast, profile, filial }: any) => {
   };
 
   const handleAdvance = async (p: Post) => {
-    // Rascunho → Agendado → Publicado. Cancelado fica fora do fluxo.
+    // Rascunho → Em aprovação (o Head decide) · Em aprovação → Rascunho
+    // (retirar para editar) · Agendado → Publicado. Cancelado fica fora.
     const proximo: Status | null =
-      p.status === 'Rascunho' ? 'Agendado' :
+      p.status === 'Rascunho' ? 'Em aprovação' :
+      p.status === 'Em aprovação' ? 'Rascunho' :
       p.status === 'Agendado' ? 'Publicado' : null;
     if (!proximo) return;
     try {
       const updated = await dbUpdate('/api/marketingcalendarioview', p.id, { status: proximo } as any);
       setData((prev: any[]) => prev.map((x: any) => x.id === p.id ? { ...x, ...updated } : x));
-      showToast(`Status: ${proximo}`, 'success');
+      showToast(proximo === 'Em aprovação' ? 'Enviado para aprovação.' : proximo === 'Rascunho' ? 'Retirado da aprovação — pode editar.' : `Status: ${proximo}`, 'success');
     } catch (err: any) {
       showToast(`Erro: ${err?.message ?? 'verifique o console'}`, 'error');
     }
@@ -273,12 +286,14 @@ const CalendarioEditorialViewInner = ({ showToast, profile, filial }: any) => {
     return diffDias >= 0 && diffDias <= 7 && p.status !== 'Cancelado';
   }).length;
   const rascunhos = posts.filter((p: any) => p.status === 'Rascunho').length;
+  const emAprovacao = posts.filter((p: any) => p.status === 'Em aprovação').length;
   const agendados = posts.filter((p: any) => p.status === 'Agendado').length;
   const publicados = posts.filter((p: any) => p.status === 'Publicado').length;
 
   const kpis = [
     { tom: 'azul' as TomContador, label: 'Próximos 7 dias', value: proximos7, warn: proximos7 === 0 },
     { tom: 'amarelo' as TomContador, label: 'Rascunhos',       value: rascunhos, warn: false },
+    { tom: 'laranja' as TomContador, label: 'Em aprovação',    value: emAprovacao, warn: false },
     { tom: 'roxo' as TomContador, label: 'Agendados',       value: agendados, warn: false },
     { tom: 'verde' as TomContador, label: 'Publicados',      value: publicados, warn: false },
   ];
@@ -292,7 +307,7 @@ const CalendarioEditorialViewInner = ({ showToast, profile, filial }: any) => {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 shrink-0">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4 shrink-0">
         {kpis.map((k: any) => (
           <CardContador key={k.label} label={k.label} value={k.value} sub={k.sub} tom={k.tom} />
         ))}
@@ -362,7 +377,7 @@ const CalendarioEditorialViewInner = ({ showToast, profile, filial }: any) => {
               <select id="cal-status" value={form.status}
                 onChange={e => setForm(f => ({ ...f, status: e.target.value as Status }))}
                 className="neu-input rounded-xl px-3 py-2.5 text-sm">
-                {STATUS_FLOW.map(s => <option key={s} value={s}>{s}</option>)}
+                {statusDoForm(editing?.status).map(s => <option key={s} value={s}>{s}</option>)}
               </select>
             </div>
             <div className="flex flex-col gap-1.5">
@@ -416,7 +431,7 @@ const CalendarioEditorialViewInner = ({ showToast, profile, filial }: any) => {
           <AnimatePresence>
             {postsFiltrados.map((p: any) => {
               const status = p.status as Status;
-              const podeAvancar = status === 'Rascunho' || status === 'Agendado';
+              const podeAvancar = status === 'Rascunho' || status === 'Em aprovação' || status === 'Agendado';
               const atrasado = status === 'Agendado' && new Date(p.data_post) < new Date();
               return (
                 <motion.div key={p.id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
@@ -452,18 +467,22 @@ const CalendarioEditorialViewInner = ({ showToast, profile, filial }: any) => {
                     {p.conteudo && (
                       <p className="text-xs text-gray-400 mt-2 line-clamp-2 whitespace-pre-wrap">{p.conteudo}</p>
                     )}
+                    {status === 'Rascunho' && p.aprovacao_obs && (
+                      <p className="text-[11px] text-red-400 mt-1.5">Reprovado: {p.aprovacao_obs}</p>
+                    )}
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
                     {podeAvancar && (canCRUD || p.responsavel_id === profile?.id) && (
                       <button onClick={() => handleAdvance(p)}
                         className="neu-button py-1.5 px-3 rounded-xl text-xs font-bold text-accent border border-accent/20 hover:bg-accent/10 transition-all flex items-center gap-1.5">
                         <ChevronRight size={12} />
-                        {status === 'Rascunho' ? 'Agendar' : 'Publicar'}
+                        {status === 'Rascunho' ? 'Enviar p/ aprovação' : status === 'Em aprovação' ? 'Retirar' : 'Publicar'}
                       </button>
                     )}
                     {canCRUD && (
                       <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <button onClick={() => openEdit(p)} title="Editar" className="action-btn-edit">
+                        <button onClick={() => openEdit(p)} disabled={status === 'Em aprovação'}
+                          title={status === 'Em aprovação' ? 'Em aprovação não se edita — use Retirar' : 'Editar'} className="action-btn-edit disabled:opacity-40">
                           <Edit3 size={12} />
                         </button>
                         <button onClick={() => handleDelete(p)} title="Inativar" className="action-btn-delete">

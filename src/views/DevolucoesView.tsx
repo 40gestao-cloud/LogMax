@@ -9,6 +9,7 @@ import { LoadingSpinner, EmptyState, FormField, NeuButtonAccent, StatusBadge } f
 import { HistoricoOperacoes } from '../components/HistoricoOperacoes';
 import { formatBRL, formatQtd, parseQtd, handleQtdKeyDown } from '../lib/viewUtils';
 import type { UserProfile } from '../hooks/useUserProfile';
+import { isGerencia } from '../lib/rbac';
 
 // Devolução parcial de venda PDV (1 passo, autorizada por gerente+).
 // Motor no DB: RPC criar_devolucao_venda (migração 203) — valida saldo,
@@ -29,7 +30,7 @@ type FormaEstorno = 'cancela_pendencias' | 'devolve_caixa';
 
 const DevolucoesViewInner = ({ showToast, profile, filial }: { showToast: any; profile: UserProfile; filial: FilialOp }) => {
   // Gate RBAC — colaborador não devolve. Régua canônica: admin/CEO ou gerente.
-  const podeDevolver = profile.role === 'admin' || profile.role === 'ceo' || profile.role === 'gerente';
+  const podeDevolver = profile.role === 'admin' || profile.role === 'ceo' || isGerencia(profile);
 
   // Busca de venda (últimos 6 chars do UUID, como aparece em Histórico).
   const [vendaBusca, setVendaBusca] = useState('');

@@ -19,7 +19,7 @@ import { etapaDaRequisicao } from '../lib/fluxoCompra';
 import { numeroRequisicao } from '../lib/documentos';
 import { formatDataHoraBR } from '../lib/dates';
 import type { UserProfile } from '../hooks/useUserProfile';
-import { isConselheiro } from '../lib/rbac';
+import { isConselheiro, isGerencia } from '../lib/rbac';
 import type { AprovacaoCompras, AprovacaoEstoque, Requisicao } from '../types/domain';
 import { AprovacoesEstoqueBloco, POR_PAGINA_DECIDIDAS, type FiltroDecisao } from './AprovacoesEstoqueView';
 import { FiltroSolicitante, chaveSolicitante } from '../components/FiltroSolicitante';
@@ -181,7 +181,7 @@ const AprovacoesComprasViewInner = ({ showToast, profile, filial }: { showToast:
   const podeDecidir = (ap: EnrichedAp): boolean => {
     if (isMatriz) return true;
     if (ap.req.criado_por && ap.req.criado_por === profile.id) return false;
-    return profile.role === 'gerente';
+    return isGerencia(profile);
   };
 
   // Decisão da requisição: uma RPC, uma transação (migr. 282).

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef, lazy, Suspense } from 'react';
 import { useAuth } from './hooks/useAuth';
 import { useUserProfile } from './hooks/useUserProfile';
-import { hasSetor, allSetores, isConselheiro, setAulaSetoresConcedidos } from './lib/rbac';
+import { hasSetor, allSetores, isConselheiro, setAulaSetoresConcedidos, isGerencia, isGerenteAssistente, podeAprovarConteudo } from './lib/rbac';
 import { useSidebarBadges } from './hooks/useSidebarBadges';
 import { useContadorMesa } from './hooks/useContadorMesa';
 import { nomeDaMesa } from './lib/mesaGestor';
@@ -237,7 +237,7 @@ const PREFETCH_VIEW: Record<string, { preload: () => Promise<unknown> }> = {
   'financeiro-juros&multa': ConfigJurosView,
   'financeiro-aprovaçõesdecotação': CotacoesView,
   'financeiro-aprovaçõesdepromoções': AprovacoesPromocaoFinanceiroView,
-  'financeiro-aprovaçõesdeconteúdo': AprovacoesConteudoMarketingView,
+  'marketing-aprovaçõesdeconteúdo': AprovacoesConteudoMarketingView,
   'financeiro-gerenciamento': GerenciamentoFinanceiroView,
   'financeiro-relatórios': RelatoriosFinanceirosView,
   'financeiro-recibosdevendas': RecibosVendasView,
@@ -351,7 +351,8 @@ function prefetchView(view: string) {
 // `requireMatriz` esconde a linha quando há filial ativa: é ato da Matriz, não
 // operação da unidade. Não confundir com requireRole — o mesmo admin/CEO vê o
 // item na Matriz e não vê depois de entrar numa filial.
-type SubmenuItem = string | { label: string; requireRole?: string[]; requireSetor?: string[]; requireMatriz?: boolean };
+// `requireAprovaConteudo` (migr. 691): Head de Comunicação, gerência ou admin.
+type SubmenuItem = string | { label: string; requireRole?: string[]; requireSetor?: string[]; requireMatriz?: boolean; requireAprovaConteudo?: boolean };
 const menuModules: { id: string; label: string; icon: any; submenus: SubmenuItem[]; isNew?: boolean; color?: string }[] = [
   {
     // Empresa é parametrização: filiais, formas e condições de pagamento,
@@ -450,7 +451,9 @@ const menuModules: { id: string; label: string; icon: any; submenus: SubmenuItem
       // desejado por categoria — o markup divisor que o cadastro de produto usa.
       'Precificação',
       { label: 'Juros & Multa', requireSetor: ['financeiro'] },
-      'Aprovações de Cotação', 'Aprovações de Orçamento', 'Aprovações de Promoções', 'Aprovações de Conteúdo',
+      'Aprovações de Cotação', 'Aprovações de Orçamento', 'Aprovações de Promoções',
+      // Aprovações de Conteúdo foi para o Marketing (migr. 691): quem aprova é o
+      // Head de Comunicação da unidade, não o Financeiro.
       { label: 'Alçadas', requireRole: ['admin', 'ceo'] },
       { label: 'Pedidos de Venda', requireSetor: ['financeiro'] },
       { label: 'Recibos de Vendas', requireSetor: ['financeiro'] },
@@ -532,6 +535,9 @@ const menuModules: { id: string; label: string; icon: any; submenus: SubmenuItem
     submenus: [
       'Redes Sociais',
       'Campanhas', 'Promoções', 'Cupons', 'Calendário',
+      // Migr. 691: o Head de Comunicação aprova o que o Calendário envia (sem
+      // Head na unidade, a gerência).
+      { label: 'Aprovações de Conteúdo', requireAprovaConteudo: true },
     ],
   },
   {
@@ -554,13 +560,18 @@ const subPermitido = (s: SubmenuItem, profile: any, aulaAberta = false, matrizMo
   // Modo, antes de papel: nomear é ato da Matriz. Vale inclusive na aula — a
   // whitelist escolhe QUAIS telas aparecem, não em que contexto elas existem.
   if (s.requireMatriz && !matrizMode) return false;
-  if (s.requireRole && !s.requireRole.includes(profile?.role)) return false;
+  // Migr. 690: item liberado ao gerente também é do Gerente Assistente.
+  if (s.requireRole && !s.requireRole.includes(profile?.role)
+      && !(s.requireRole.includes('gerente') && isGerenteAssistente(profile))) return false;
+  if (s.requireAprovaConteudo && !podeAprovarConteudo(profile)) return false;
   if (s.requireSetor) {
     if (aulaAberta) return true;
     // admin/CEO/gerente sempre passam (gerente vê tudo da própria filial —
     // RLS confina via auth_gerente_da, ver 20260713i_gerente_ve_tudo_da_filial_v2).
     if (profile?.role === 'admin' || profile?.role === 'ceo' || profile?.role === 'gerente') return true;
-    const setores = [profile?.setor, ...(profile?.setores_extras ?? [])].filter(Boolean);
+    // allSetores inclui os setores da função (migr. 690): o assistente não
+    // passa nos itens de RH, que são do titular.
+    const setores = allSetores(profile).filter(Boolean) as string[];
     if (!s.requireSetor.some((sec: string) => setores.includes(sec))) return false;
   }
   return true;
@@ -693,7 +704,7 @@ const SidebarNav = ({ activeView, navigate, openModules, toggleModule, handleSig
           </button>
         )}
         {aulaAllow('dashboard') && (profile?.role === 'admin' || profile?.role === 'ceo' || isConselheiro(profile)
-          || profile?.role === 'gerente') && (
+          || isGerencia(profile)) && (
           <button onPointerEnter={() => prefetchOnHover('dashboard')} onPointerLeave={cancelPrefetchHover} onPointerDown={() => prefetchView('dashboard')} onClick={() => { navigate('dashboard'); onClose?.(); }} className={`flex items-center gap-3 p-2.5 rounded-xl text-sm font-semibold ${activeView === 'dashboard' ? 'nav-item neu-pressed text-accent is-active' : 'nav-item neu-button text-gray-100'}`}>
             <BarChart3 size={18} /><span>Dashboard</span>
           </button>
@@ -1569,7 +1580,7 @@ function LogMaxAppInner() {
     const st = showToast;
     // Formas de pagamento e Projetos: todo setor abre, só Financeiro
     // e gerente gravam (migr. 649). hasSetor já deixa admin/CEO passar.
-    const podeEditarEmpresa = hasSetor(profile, 'financeiro') || profile?.role === 'gerente';
+    const podeEditarEmpresa = hasSetor(profile, 'financeiro') || isGerencia(profile);
     // Terceira camada de defesa do Modo Aula: se por qualquer motivo a view
     // atual está fora da whitelist (navigate/goBack já filtram; useEffect
     // defensivo redireciona), mostra a tela dedicada em vez de tentar
@@ -1653,7 +1664,7 @@ function LogMaxAppInner() {
       case 'financeiro-juros&multa':                return <ConfigJurosView showToast={st} />;
       case 'financeiro-aprovaçõesdecotação':       return <CotacoesView showToast={st} profile={profile} mode="financeiro" />;
       case 'financeiro-aprovaçõesdepromoções':   return <AprovacoesPromocaoFinanceiroView showToast={st} />;
-      case 'financeiro-aprovaçõesdeconteúdo':   return <AprovacoesConteudoMarketingView showToast={st} />;
+      case 'marketing-aprovaçõesdeconteúdo':    return <AprovacoesConteudoMarketingView showToast={st} />;
       case 'financeiro-gerenciamento':            return <GerenciamentoFinanceiroView profile={profile} />;
       case 'financeiro-relatórios':               return <RelatoriosFinanceirosView showToast={st} />;
       case 'financeiro-recibosdevendas':          return <RecibosVendasView showToast={st} profile={profile} />;

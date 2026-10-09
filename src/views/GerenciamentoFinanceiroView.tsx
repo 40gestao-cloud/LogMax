@@ -4,7 +4,7 @@ import { Landmark, Clock, ArrowUpRight, ArrowDownRight, Lock } from 'lucide-reac
 import { useFetchData } from '../hooks/useSupabaseData';
 import { useFilial } from '../contexts/FilialContext';
 import { LoadingSpinner, BancoThumb, FilialBadge } from '../components/ui';
-import { hasSetor } from '../lib/rbac';
+import { hasSetor, isGerencia } from '../lib/rbac';
 import type { UserProfile } from '../hooks/useUserProfile';
 
 // Tom do contador a partir da cor do ícone, para o card seguir a mesma cor.
@@ -35,7 +35,7 @@ const PipelineCard = ({ icon: Icon, label, total, breakdown, color }: any) => (
 export const GerenciamentoFinanceiroView = ({ profile }: { profile: UserProfile }) => {
   // Guard: RLS já bloqueia as queries, mas a UI ficaria com tudo zerado
   // sem feedback claro. Mostra estado de "sem acesso" antes de tudo.
-  if (!hasSetor(profile, 'financeiro') && profile?.role !== 'gerente') {
+  if (!hasSetor(profile, 'financeiro') && !isGerencia(profile)) {
     return (
       <div className="flex-1 flex items-center justify-center flex-col gap-4 text-center">
         <Lock size={36} className="text-gray-600" />
