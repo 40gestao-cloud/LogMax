@@ -24,30 +24,44 @@ export const Header = ({
     {/* Uma linha só, como no MaxPOS: o que não cabe é cortado. Com flex-wrap a
         última etiqueta caía para a linha de baixo e engordava a faixa. */}
     <div className="flex items-center gap-3 min-w-0 flex-1 overflow-hidden">
+      {/* Marca MaxPOS em arte, como no cabeçalho do MaxPOS (mesmo arquivo,
+          482x180 transparente, e mesma altura). -my-1 para a faixa não
+          engordar só por causa dela. */}
+      <img
+        src="/icon-maxpos-header.png"
+        alt="MaxPOS"
+        className="h-14 -my-1 w-auto shrink-0 select-none"
+        draggable={false}
+      />
       {/* Selo da unidade, igual ao do MaxPOS: navy com a logo e o nome. */}
       <span
         className="shrink-0 pl-1 pr-3 py-1 rounded-md text-base font-black tracking-wide border-2 flex items-center gap-2"
-        style={{ background: NAVY_DARK, color: YELLOW, borderColor: YELLOW_DARK }}
+        style={{ background: NAVY_DARK, color: YELLOW, borderColor: '#ffffff' }}
         title="Você está operando o PDV SuperMax"
       >
-        {/* Recorte quadrado (-view), não o icon-supermax.png: aquele é 16:9 com
-            margem larga e o brasão encolhia a um ponto. Placa branca porque a
+        {/* Selo leve (icon-supermax.png, 503x388), não o
+            logo-supermax-agradecimento.png: aquele é o de 1571x1215 da tela de
+            agradecimento, pesado para 36px. Mesmos nomes do MaxPOS. Placa branca porque a
             arte é azul-marinho e sumia sobre o navy do selo. */}
-        <img src="/icon-supermax-view.png" alt="" className="w-9 h-9 object-contain rounded bg-white" />
+        <img src="/icon-supermax.png" alt="" className="w-9 h-9 object-contain rounded bg-white" />
         SUPERMAX
       </span>
-      <span className="shrink-0 px-3 py-1.5 rounded-md text-sm font-bold border" style={{ background: 'rgba(255,255,255,0.92)', color: NAVY_DARK, borderColor: 'rgba(23,37,84,0.15)' }}>
-        CAIXA 01
-      </span>
-      <span className="shrink-0 px-3 py-1.5 rounded-md text-sm font-bold border truncate max-w-[260px]" style={{ background: 'rgba(255,255,255,0.92)', color: NAVY_DARK, borderColor: 'rgba(23,37,84,0.15)' }}>
-        OP: {operadorNome}
-      </span>
-      <span className="shrink-0 px-3 py-1.5 rounded-md text-sm font-bold border" style={{ background: 'rgba(255,255,255,0.92)', color: NAVY_DARK, borderColor: 'rgba(23,37,84,0.15)' }}>
-        CUPOM: {cupomSeq}
-      </span>
-      <span className="hidden lg:inline-flex shrink-0 px-3 py-1.5 rounded-md text-sm font-bold tabular-nums border" style={{ background: 'rgba(255,255,255,0.92)', color: NAVY_DARK, borderColor: 'rgba(23,37,84,0.15)' }}>
-        {datetime}
-      </span>
+      {/* Etiquetas do caixa encostadas à direita, junto dos botões; marca e
+          selo ficam à esquerda. */}
+      <div className="ml-auto flex items-center gap-3 min-w-0 overflow-hidden">
+        <span className="shrink-0 px-3 py-1.5 rounded-md text-sm font-bold border-2" style={{ background: '#ffffff', color: NAVY_DARK, borderColor: NAVY_DARK }}>
+          CAIXA 01
+        </span>
+        <span className="shrink-0 px-3 py-1.5 rounded-md text-sm font-bold border-2 truncate max-w-[260px]" style={{ background: '#ffffff', color: NAVY_DARK, borderColor: NAVY_DARK }}>
+          OP: {operadorNome}
+        </span>
+        <span className="shrink-0 px-3 py-1.5 rounded-md text-sm font-bold border-2" style={{ background: '#ffffff', color: NAVY_DARK, borderColor: NAVY_DARK }}>
+          CUPOM: {cupomSeq}
+        </span>
+        <span className="hidden lg:inline-flex shrink-0 px-3 py-1.5 rounded-md text-sm font-bold tabular-nums border-2" style={{ background: '#ffffff', color: NAVY_DARK, borderColor: NAVY_DARK }}>
+          {datetime}
+        </span>
+      </div>
     </div>
     <div className="flex items-center gap-2 shrink-0">
       {extraActions}
