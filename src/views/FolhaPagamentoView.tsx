@@ -520,11 +520,13 @@ const FolhaPagamentoViewInner = ({ showToast, profile, filial }: { showToast: an
   // `ponto_jornada` quando confirmado (migr. 350) e do env do site enquanto
   // não estiver — mesma fonte que a tela de Frequência e o placar da
   // competição usam, pra folha e frequência não discordarem de quem atrasou.
-  const handleRecalcular = async (f: any) => {
-    if (!supabase) return;
+  // `silencioso`: chamado pelo Processar (migr. 686) — calcula sem abrir o
+  // detalhamento. Devolve o resultado, ou null se falhou (o toast já saiu).
+  const handleRecalcular = async (f: any, silencioso = false): Promise<RecalcBreakdown | null> => {
+    if (!supabase) return null;
     if (f.status !== 'Pendente') {
       showToast('Recálculo só é permitido em folhas Pendente.', 'error');
-      return;
+      return null;
     }
     setRecalcLoading(f.id);
     try {
@@ -555,11 +557,13 @@ const FolhaPagamentoViewInner = ({ showToast, profile, filial }: { showToast: an
         fgts_deposito:   breakdown.fgts_deposito,
       } : x));
       const func = funcionarios.find(fn => fn.id === f.funcionario_id);
-      setRecalcBreakdown({ folhaNome: `${func?.nome ?? 'Funcionário'} — ${f.mes_ref}`, data: breakdown });
+      if (!silencioso) setRecalcBreakdown({ folhaNome: `${func?.nome ?? 'Funcionário'} — ${f.mes_ref}`, data: breakdown });
+      return breakdown;
     } catch (err: any) {
       const msg = err?.message ?? String(err);
       console.error('[FolhaPagamento] erro ao recalcular:', err);
       showToast(`Erro ao recalcular: ${msg}`, 'error');
+      return null;
     } finally {
       setRecalcLoading(null);
     }
@@ -616,6 +620,11 @@ const FolhaPagamentoViewInner = ({ showToast, profile, filial }: { showToast: an
       // avançava mesmo assim e a despesa nunca chegava ao Financeiro.
       if (next === 'Processada') {
         if (!supabase) return;
+        // Migr. 686: só se processa folha calculada (rubricas de INSS, IRRF e
+        // FGTS fechando com o líquido). O Processar calcula antes — sem isso a
+        // turma que nunca abria o "Recalcular" pagava o bruto como líquido.
+        const calc = await handleRecalcular(f, true);
+        if (!calc) return;
         const { data, error } = await supabase.rpc('processar_folha', { p_folha_id: f.id });
         if (error) {
           showToast(`Não foi possível processar a folha: ${error.message}`, 'error');
@@ -623,7 +632,8 @@ const FolhaPagamentoViewInner = ({ showToast, profile, filial }: { showToast: an
         }
         const res = data as any;
         setData(prev => prev.map(x => x.id === f.id ? { ...x, status: 'Processada' } : x));
-        showToast(`Folha processada — Conta a Pagar de R$ ${Number(res?.valor ?? 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })} gerada em ${res?.filial ?? f.filial}.`, 'success');
+        const brl = (v: any) => Number(v ?? 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 });
+        showToast(`Folha calculada e processada — líquido R$ ${brl(res?.valor)} (INSS R$ ${brl(calc.desconto_inss)}, IRRF R$ ${brl(calc.desconto_irrf)}, FGTS R$ ${brl(calc.fgts_deposito)}). Conta a pagar gerada em ${res?.filial ?? f.filial}.`, 'success');
         return;
       }
 

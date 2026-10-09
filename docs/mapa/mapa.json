@@ -322,7 +322,8 @@
     "reabrir_cotacao",
     "reenviar_cotacao_corrigida",
     "renovar_trabalho",
-    "reservar_trabalho"
+    "reservar_trabalho",
+    "revalidar_cotacao_vencida"
    ],
    "grava_via_rpc": [
     "contas_pagar",
@@ -936,7 +937,8 @@
     "reabrir_cotacao",
     "reenviar_cotacao_corrigida",
     "renovar_trabalho",
-    "reservar_trabalho"
+    "reservar_trabalho",
+    "revalidar_cotacao_vencida"
    ],
    "grava_via_rpc": [
     "contas_pagar",
@@ -2965,6 +2967,21 @@
     "auth_user_role"
    ]
   },
+  "_apurar_encargos_folha": {
+   "gatilho": false,
+   "secdef": true,
+   "grava": [
+    "contas_pagar"
+   ],
+   "le": [
+    "contas_pagar",
+    "folha_pagamento"
+   ],
+   "chama": [
+    "_centro_custo_pessoal",
+    "_vencimento_encargo_folha"
+   ]
+  },
   "_assert_blackout": {
    "gatilho": false,
    "secdef": true,
@@ -3154,6 +3171,15 @@
     "_ajustar_custo_pela_nota"
    ]
   },
+  "_centro_custo_pessoal": {
+   "gatilho": false,
+   "secdef": true,
+   "grava": [],
+   "le": [
+    "centros_custo"
+   ],
+   "chama": []
+  },
   "_competicao_empatada": {
    "gatilho": false,
    "secdef": true,
@@ -3242,6 +3268,23 @@
    ],
    "chama": [
     "_simples_periodo"
+   ]
+  },
+  "_encerrar_folhas_da_rescisao": {
+   "gatilho": false,
+   "secdef": true,
+   "grava": [
+    "contas_pagar",
+    "folha_pagamento"
+   ],
+   "le": [
+    "folha_pagamento",
+    "funcionarios",
+    "rescisoes"
+   ],
+   "chama": [
+    "notificar_setor",
+    "ponto_corte_turma"
    ]
   },
   "_folha_creditar_e_avancar": {
@@ -3420,6 +3463,15 @@
    ],
    "chama": []
   },
+  "_rescisao_cobre_folha": {
+   "gatilho": false,
+   "secdef": true,
+   "grava": [],
+   "le": [
+    "rescisoes"
+   ],
+   "chama": []
+  },
   "_reverter_ponto_do_afastamento": {
    "gatilho": false,
    "secdef": true,
@@ -3526,6 +3578,13 @@
     "matriz_tarefa_participantes",
     "matriz_tarefas"
    ],
+   "chama": []
+  },
+  "_vencimento_encargo_folha": {
+   "gatilho": false,
+   "secdef": false,
+   "grava": [],
+   "le": [],
    "chama": []
   },
   "abrir_revisao_auditoria": {
@@ -6641,6 +6700,15 @@
     "auth_is_service_role"
    ]
   },
+  "fn_conta_de_pessoal_centro_custo": {
+   "gatilho": true,
+   "secdef": true,
+   "grava": [],
+   "le": [],
+   "chama": [
+    "_centro_custo_pessoal"
+   ]
+  },
   "fn_conta_pagar_fatura_antes_de_pagar": {
    "gatilho": true,
    "secdef": false,
@@ -6697,6 +6765,17 @@
    ],
    "chama": []
   },
+  "fn_custo_de_compra_passa_do_preco": {
+   "gatilho": true,
+   "secdef": true,
+   "grava": [],
+   "le": [
+    "produtos"
+   ],
+   "chama": [
+    "notificar_setor"
+   ]
+  },
   "fn_custo_medio_da_entrada": {
    "gatilho": true,
    "secdef": true,
@@ -6735,6 +6814,24 @@
    "grava": [],
    "le": [],
    "chama": []
+  },
+  "fn_folha_coberta_pela_rescisao": {
+   "gatilho": true,
+   "secdef": true,
+   "grava": [],
+   "le": [],
+   "chama": [
+    "_rescisao_cobre_folha"
+   ]
+  },
+  "fn_folha_reapura_encargos": {
+   "gatilho": true,
+   "secdef": true,
+   "grava": [],
+   "le": [],
+   "chama": [
+    "_apurar_encargos_folha"
+   ]
   },
   "fn_formas_pagamento_normaliza": {
    "gatilho": true,
@@ -7104,6 +7201,15 @@
     "user_profiles"
    ],
    "chama": []
+  },
+  "fn_rescisao_encerra_folhas": {
+   "gatilho": true,
+   "secdef": true,
+   "grava": [],
+   "le": [],
+   "chama": [
+    "_encerrar_folhas_da_rescisao"
+   ]
   },
   "fn_sync_ponto_eletronico": {
    "gatilho": true,
@@ -8473,6 +8579,7 @@
    "le": [
     "contas_pagar",
     "folha_pagamento",
+    "folha_rubricas",
     "funcionarios"
    ],
    "chama": [
@@ -9556,6 +9663,22 @@
    ],
    "chama": []
   },
+  "revalidar_cotacao_vencida": {
+   "gatilho": false,
+   "secdef": true,
+   "grava": [
+    "cotacoes"
+   ],
+   "le": [
+    "cotacoes",
+    "pedidos"
+   ],
+   "chama": [
+    "_assert_rpc",
+    "acre_today",
+    "auth_pode_filial"
+   ]
+  },
   "reverter_afastamento_no_ponto": {
    "gatilho": false,
    "secdef": true,
@@ -10402,6 +10525,7 @@
    "trg_conta_de_frete_inativa:fn_conta_de_frete_inativa",
    "trg_conta_de_pedido_congela:fn_conta_de_pedido_congela",
    "trg_conta_de_pedido_nao_exclui:fn_conta_de_pedido_nao_exclui",
+   "trg_conta_de_pessoal_centro_custo:fn_conta_de_pessoal_centro_custo",
    "trg_conta_pagar_exige_recebimento:conta_pagar_exige_recebimento",
    "trg_conta_pagar_fatura_antes_de_pagar:fn_conta_pagar_fatura_antes_de_pagar",
    "trg_conta_pagar_nao_exclui:conta_com_dinheiro_nao_exclui",
@@ -10492,8 +10616,10 @@
   ],
   "folha_pagamento": [
    "trg_auditoria:set_auditoria_campos",
+   "trg_folha_coberta_pela_rescisao:fn_folha_coberta_pela_rescisao",
    "trg_folha_historico_fechado:folha_historico_fechado",
    "trg_folha_pagamento_set_salario_base:folha_pagamento_set_salario_base",
+   "trg_folha_reapura_encargos:fn_folha_reapura_encargos",
    "trg_historico:registrar_historico"
   ],
   "formas_pagamento": [
@@ -10691,6 +10817,7 @@
    "trg_unidade_imutavel_com_saldo:fn_unidade_imutavel_com_saldo"
   ],
   "produtos_custo": [
+   "trg_custo_de_compra_passa_do_preco:fn_custo_de_compra_passa_do_preco",
    "trg_custo_manual_acima_do_preco:custo_manual_nao_passa_do_preco_de_venda"
   ],
   "projetos": [
@@ -10730,7 +10857,8 @@
    "trg_sem_exclusao:documento_sem_exclusao"
   ],
   "rescisoes": [
-   "trg_historico:registrar_historico"
+   "trg_historico:registrar_historico",
+   "trg_rescisao_encerra_folhas:fn_rescisao_encerra_folhas"
   ],
   "riscos": [
    "trg_historico:registrar_historico"

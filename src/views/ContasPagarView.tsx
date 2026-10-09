@@ -171,6 +171,19 @@ const ContasPagarViewInner = ({ showToast, filial }: { showToast: any; filial: F
   // cobrado). Sem ela o pagamento é recusado pelo banco — e pagava-se o valor
   // do PEDIDO, que era só a previsão feita na cotação.
   const [conferindo, setConferindo] = useState<any | null>(null);
+  // Notas das cargas conferidas do pedido em conferência (uma por carga).
+  const notasDoPedido = useMemo(() => {
+    if (!conferindo?.pedido_id) return [];
+    const m = new Map<string, { chave: string; numero: string; serie: string; emissao: string; qtd: number }>();
+    for (const r of recebimentosPorPedido.get(conferindo.pedido_id) ?? []) {
+      if (!r.nf_numero || !['Concluído', 'Parcial'].includes(r.status)) continue;
+      const chave = `${r.nf_numero}|${r.nf_serie ?? ''}`;
+      const n = m.get(chave) ?? { chave, numero: r.nf_numero, serie: r.nf_serie ?? '', emissao: r.nf_emissao ?? '', qtd: 0 };
+      n.qtd += Number(r.qtd_recebida ?? 0);
+      m.set(chave, n);
+    }
+    return [...m.values()];
+  }, [conferindo, recebimentosPorPedido]);
   // Migr. 657: frete de transportadora (CT-e), rateado no custo dos pedidos.
   const [freteAberto, setFreteAberto] = useState(false);
   const [nfValor, setNfValor] = useState('');
@@ -933,9 +946,25 @@ const ContasPagarViewInner = ({ showToast, filial }: { showToast: any; filial: F
                     <span>Entregue em: <strong className="text-gray-200">{String(conferindo.ped.recebido_em).split('-').reverse().join('/')}</strong></span>
                   )}
                 </div>
+                {/* Entrega em mais de uma carga traz uma nota por carga. A conta
+                    é do pedido inteiro, então o valor conferido é a SOMA — a
+                    lista evita conferir só a última nota e reduzir a dívida. */}
+                {notasDoPedido.length > 0 && (
+                  <div className="flex flex-col gap-0.5 text-[11px] text-gray-400">
+                    {notasDoPedido.map(n => (
+                      <span key={n.chave}>
+                        NF <strong className="text-gray-200">{n.numero}</strong>{n.serie ? ` série ${n.serie}` : ''}
+                        {n.emissao ? ` · emitida ${n.emissao.split('-').reverse().join('/')}` : ''}
+                        {` · ${n.qtd.toLocaleString('pt-BR')} recebida(s)`}
+                      </span>
+                    ))}
+                  </div>
+                )}
               </div>
 
-              <FormField label="Valor da nota fiscal (R$) *">
+              <FormField label={notasDoPedido.length > 1
+                ? `Soma das ${notasDoPedido.length} notas fiscais (R$) *`
+                : 'Valor da nota fiscal (R$) *'}>
                 <input type="text" inputMode="numeric"
                   className="neu-input py-2 px-3 rounded-xl text-sm text-right tabular-nums font-bold"
                   value={nfValor}
