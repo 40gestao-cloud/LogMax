@@ -7,6 +7,7 @@ const NOMES: Record<string, string> = {
   ceo: 'Mesa do CEO',
   conselheiro: 'Mesa do Conselheiro',
   gerente: 'Mesa do Gerente',
+  gerente_assistente: 'Mesa do Gerente Assistente',
 };
 
 export const nomeDaMesa = (role?: string | null): string => NOMES[role ?? ''] ?? 'Mesa do Gestor';

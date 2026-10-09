@@ -33,6 +33,7 @@ import { authFetch } from '../lib/authFetch';
 import { formatDataHoraBR } from '../lib/dates';
 import { exportPendenciasPDF, type PendenciaLinha, type PendenciaLeitura } from '../lib/pendenciasPdf';
 import { LeituraPendencias } from '../components/LeituraPendencias';
+import { isGerencia, isGerenteAssistente } from '../lib/rbac';
 
 type Coluna = 'mim' | 'equipe' | 'feito';
 type Gravidade = 'alta' | 'media' | 'baixa';
@@ -267,8 +268,9 @@ export const MesaGestorView = ({ profile, showToast, onNavigate, onNavegarNaUnid
   onNavegarNaUnidade?: (view: string, unidade: FilialOp | null) => void;
 }) => {
   const { filialAtiva } = useFilial();
-  const papel = profile?.role ?? '';
-  const ehGerente = papel === 'gerente';
+  // Migr. 693: o Gerente Assistente usa a mesa do gerente, com o próprio nome.
+  const papel = isGerenteAssistente(profile) ? 'gerente_assistente' : (profile?.role ?? '');
+  const ehGerente = isGerencia(profile);
   const ehAdmin = papel === 'admin';
   // Na Matriz (filialAtiva null) admin/CEO/conselheiro escolhem a unidade aqui;
   // dentro de uma filial, a mesa é dela. Gerente: a RPC já recorta.

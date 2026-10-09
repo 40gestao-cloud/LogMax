@@ -3,6 +3,7 @@ import { supabase } from '../lib/supabase';
 import { freshToken } from '../lib/authFetch';
 import { podeLerPorAutomacao } from '../lib/disjuntor';
 import type { UserProfile } from './useUserProfile';
+import { isGerencia, isGerenteAssistente } from '../lib/rbac';
 
 // Número da coluna "Precisa de mim" da Mesa do Gestor, para a bolinha do menu
 // (migr. 668, `contar_minha_mesa`).
@@ -19,11 +20,12 @@ const FOCO_INTERVALO_MIN_MS = 120_000;
 
 export function useContadorMesa(profile: UserProfile | null, filialAtiva: string | null): number {
   const [n, setN] = useState(0);
-  const ativo = !!profile && PAPEIS_DA_MESA.has(String(profile.role));
+  // Migr. 693: o Gerente Assistente também tem a mesa (a do gerente, sem pessoas).
+  const ativo = !!profile && (PAPEIS_DA_MESA.has(String(profile.role)) || isGerenteAssistente(profile));
   const reqId = useRef(0);
   const ultimo = useRef(0);
   // Gerente: a RPC já recorta pela unidade dele; os demais seguem a unidade ativa.
-  const filial = profile?.role === 'gerente' ? null : filialAtiva;
+  const filial = isGerencia(profile) ? null : filialAtiva;
 
   const contar = useCallback(async () => {
     if (!ativo || !supabase) { setN(0); return; }

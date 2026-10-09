@@ -848,6 +848,7 @@ Para cada função: quem a chama (tela, servidor, outra função, gatilho), o qu
 ## auth_e_gerente_assistente (RPC, SECURITY DEFINER)
 
 - **Telas que chamam:** —
+- **Chamada por outras funções:** [listar_pendencias](funcoes.md#f-listar_pendencias), [minha_mesa](funcoes.md#f-minha_mesa)
 - **Grava:** —
 - **Lê:** [user_profiles](tabelas.md#t-user_profiles)
 
@@ -3206,7 +3207,7 @@ Para cada função: quem a chama (tela, servidor, outra função, gatilho), o qu
 - **Chamada por outras funções:** [minha_mesa](funcoes.md#f-minha_mesa)
 - **Grava:** —
 - **Lê:** [contas_pagar](tabelas.md#t-contas_pagar), [contas_receber](tabelas.md#t-contas_receber), [controle_caixa](tabelas.md#t-controle_caixa), [cotacoes](tabelas.md#t-cotacoes), [marketing_calendario](tabelas.md#t-marketing_calendario), [marketing_promocoes](tabelas.md#t-marketing_promocoes), [orcamentos](tabelas.md#t-orcamentos), [pedidos](tabelas.md#t-pedidos), [recebimentos](tabelas.md#t-recebimentos), [requisicoes](tabelas.md#t-requisicoes), [user_profiles](tabelas.md#t-user_profiles)
-- **Chama:** [_pendencia_responsaveis](funcoes.md#f-_pendencia_responsaveis), [auth_user_filial](funcoes.md#f-auth_user_filial)
+- **Chama:** [_pendencia_responsaveis](funcoes.md#f-_pendencia_responsaveis), [auth_e_gerente_assistente](funcoes.md#f-auth_e_gerente_assistente), [auth_user_filial](funcoes.md#f-auth_user_filial)
 
 <a id="f-listar_pessoas_treinamento_ia"></a>
 ## listar_pessoas_treinamento_ia (RPC, SECURITY DEFINER)
@@ -3405,7 +3406,7 @@ Para cada função: quem a chama (tela, servidor, outra função, gatilho), o qu
 - **Chamada por outras funções:** [contar_minha_mesa](funcoes.md#f-contar_minha_mesa)
 - **Grava:** —
 - **Lê:** [aprovacoes_compras](tabelas.md#t-aprovacoes_compras), [aprovacoes_estoque](tabelas.md#t-aprovacoes_estoque), [avaliacoes_matriz](tabelas.md#t-avaliacoes_matriz), [candidaturas](tabelas.md#t-candidaturas), [ciclo_tarefa_avaliacoes](tabelas.md#t-ciclo_tarefa_avaliacoes), [ciclo_tarefa_participantes](tabelas.md#t-ciclo_tarefa_participantes), [ciclo_tarefas](tabelas.md#t-ciclo_tarefas), [competicoes_matriz](tabelas.md#t-competicoes_matriz), [contratos](tabelas.md#t-contratos), [demissoes](tabelas.md#t-demissoes), [ferias](tabelas.md#t-ferias), [funcionarios](tabelas.md#t-funcionarios), [justificativas_falta](tabelas.md#t-justificativas_falta), [marketing_promocoes](tabelas.md#t-marketing_promocoes), [matriz_tarefa_participantes](tabelas.md#t-matriz_tarefa_participantes), [matriz_tarefas](tabelas.md#t-matriz_tarefas), [movimentacoes_carreira](tabelas.md#t-movimentacoes_carreira), [orcamentos](tabelas.md#t-orcamentos), [pedidos_venda](tabelas.md#t-pedidos_venda), [produtos](tabelas.md#t-produtos), [requerimentos](tabelas.md#t-requerimentos), [requisicoes](tabelas.md#t-requisicoes), [requisicoes_estoque](tabelas.md#t-requisicoes_estoque), [user_profiles](tabelas.md#t-user_profiles), [vagas](tabelas.md#t-vagas)
-- **Chama:** [_funcionario_desligado](funcoes.md#f-_funcionario_desligado), [_pendencia_responsaveis](funcoes.md#f-_pendencia_responsaveis), [auth_user_filial](funcoes.md#f-auth_user_filial), [auth_user_role](funcoes.md#f-auth_user_role), [contrato_representa](funcoes.md#f-contrato_representa), [listar_pendencias](funcoes.md#f-listar_pendencias)
+- **Chama:** [_funcionario_desligado](funcoes.md#f-_funcionario_desligado), [_pendencia_responsaveis](funcoes.md#f-_pendencia_responsaveis), [auth_e_gerente_assistente](funcoes.md#f-auth_e_gerente_assistente), [auth_user_filial](funcoes.md#f-auth_user_filial), [auth_user_role](funcoes.md#f-auth_user_role), [contrato_representa](funcoes.md#f-contrato_representa), [listar_pendencias](funcoes.md#f-listar_pendencias)
 
 <a id="f-mov_estoque_delta"></a>
 ## mov_estoque_delta (RPC)

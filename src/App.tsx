@@ -723,7 +723,7 @@ const SidebarNav = ({ activeView, navigate, openModules, toggleModule, handleSig
             resolvido) e as anotações do gestor. Os quatro papéis de gestão, nos
             dois modos: a RPC recorta (gerente só a unidade dele). Logo abaixo
             de Usuários, e o nome segue o cargo (Mesa do CEO, do Gerente…). */}
-        {['admin', 'ceo', 'conselheiro', 'gerente'].includes(profile?.role) && (
+        {(['admin', 'ceo', 'conselheiro', 'gerente'].includes(profile?.role) || isGerenteAssistente(profile)) && (
           <button onPointerEnter={() => prefetchOnHover('mesa-gestor')} onPointerLeave={cancelPrefetchHover} onPointerDown={() => prefetchView('mesa-gestor')} onClick={() => { navigate('mesa-gestor'); onClose?.(); }} className={`flex items-center gap-3 p-2.5 rounded-xl text-sm font-semibold ${activeView === 'mesa-gestor' ? 'nav-item neu-pressed text-accent is-active' : 'nav-item neu-button text-gray-100'}`}>
             <SquareKanban size={18} /><span className="flex-1 text-left">{nomeDaMesa(profile?.role)}</span>
             {(badges?.['mesa-gestor'] ?? 0) > 0 && (
@@ -802,8 +802,9 @@ const SidebarNav = ({ activeView, navigate, openModules, toggleModule, handleSig
             repete a mesma régua — o menu não é a única porta. */}
         {/* 2026-09-30: o professor deixou de ter este item — a Mesa do Gestor
             dele (mesmo dado, leitura do MaxAI e PDF) tomou o lugar. Continua
-            para o gerente, na filial, e como aba do Modo Aula. */}
-        {profile?.role === 'gerente' && (
+            para o gerente, na filial, e como aba do Modo Aula. Migr. 693: e
+            para o Gerente Assistente. */}
+        {isGerencia(profile) && (
           <button onPointerEnter={() => prefetchOnHover('pendencias')} onPointerLeave={cancelPrefetchHover} onPointerDown={() => prefetchView('pendencias')} onClick={() => { navigate('pendencias'); onClose?.(); }} className={`flex items-center gap-3 p-2.5 rounded-xl text-sm font-semibold ${activeView === 'pendencias' ? 'nav-item neu-pressed text-accent is-active' : 'nav-item neu-button text-gray-100'}`}>
             <Hourglass size={18} /><span>Pendências</span>
           </button>
@@ -1546,8 +1547,10 @@ function LogMaxAppInner() {
   // botão Voltar), uma view exclusiva do outro modo cai em 'inicio' aqui —
   // durante o render, antes do commit, então não há flash. 'inicio' é
   // permitida nos dois modos, o que garante que isto converge.
-  if (!viewPermitidaNoModo(activeView, matrizMode, profile?.role)) setActiveView('inicio');
-  modoGuardRef.current = (v: string) => viewPermitidaNoModo(v, matrizMode, profile?.role);
+  // Migr. 693: o Gerente Assistente segue a régua do gerente (Pendências na filial).
+  const papelDoModo = isGerenteAssistente(profile) ? 'gerente' : profile?.role;
+  if (!viewPermitidaNoModo(activeView, matrizMode, papelDoModo)) setActiveView('inicio');
+  modoGuardRef.current = (v: string) => viewPermitidaNoModo(v, matrizMode, papelDoModo);
 
   const visibleModulesBase = matrizMode
     // Em Matriz, TODOS os módulos operacionais vivem nos 3 hubs (Sessões Gerais,

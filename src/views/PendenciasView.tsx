@@ -30,6 +30,7 @@ import { formatDataHoraBR } from '../lib/dates';
 import { exportPendenciasPDF, type PendenciaLinha, type PendenciaLeitura } from '../lib/pendenciasPdf';
 import { LeituraPendencias } from '../components/LeituraPendencias';
 import type { UserProfile } from '../hooks/useUserProfile';
+import { isGerencia } from '../lib/rbac';
 
 const UNIDADES = ['SuperMax', 'MaxLook', 'TechMax', 'Matriz'] as const;
 
@@ -64,7 +65,7 @@ export const PendenciasView: React.FC<Props> = ({ showToast, profile }) => {
   // Migr. 527: o professor atravessa as unidades; o gerente vê a dele. O
   // seletor nasce travado na unidade do gerente porque a RPC recusa qualquer
   // outra — deixar o select aberto seria oferecer um caminho que dá 42501.
-  const ehGerente = profile?.role === 'gerente';
+  const ehGerente = isGerencia(profile);
   const minhaFilial = String(profile?.filial ?? '');
   const [filial, setFilial] = useState<string>(ehGerente ? minhaFilial : '');
   const [linhas, setLinhas] = useState<PendenciaLinha[] | null>(null);

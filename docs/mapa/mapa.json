@@ -7993,6 +7993,7 @@
    ],
    "chama": [
     "_pendencia_responsaveis",
+    "auth_e_gerente_assistente",
     "auth_user_filial"
    ]
   },
@@ -8331,6 +8332,7 @@
    "chama": [
     "_funcionario_desligado",
     "_pendencia_responsaveis",
+    "auth_e_gerente_assistente",
     "auth_user_filial",
     "auth_user_role",
     "contrato_representa",
