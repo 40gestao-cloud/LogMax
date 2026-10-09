@@ -35,8 +35,10 @@ export const Header = ({
     style={{ background: YELLOW, borderColor: YELLOW_DARK }}
   >
     {/* Uma linha só, como no MaxPOS: o que não cabe é cortado. Com flex-wrap a
-        última etiqueta caía para a linha de baixo e engordava a faixa. */}
-    <div className="flex items-center gap-3 min-w-0 flex-1 overflow-hidden">
+        última etiqueta caía para a linha de baixo e engordava a faixa.
+        pl-6 e gap-4: sem o botão MENU do MaxPOS na frente, a marca colava na
+        borda da tela e o selo vinha logo atrás, espremido. */}
+    <div className="flex items-center gap-4 pl-6 min-w-0 flex-1 overflow-hidden">
       {/* Marca MaxPOS em arte, como no cabeçalho do MaxPOS (mesmo arquivo,
           482x180 transparente, e mesma altura). -my-1 para a faixa não
           engordar só por causa dela. */}
